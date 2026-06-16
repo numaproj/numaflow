@@ -29,42 +29,65 @@ var (
 	cleanupFields = []string{"managedFields"}
 )
 
-// customResponseWriter wraps gin.ResponseWriter to capture the response body.
+// customResponseWriter wraps gin.ResponseWriter to buffer the response body for
+// post-processing. A handler that calls Flush() is treated as streaming: the
+// writer drains any buffered bytes, flips into pass-through mode, and forwards
+// every subsequent Write directly to the underlying ResponseWriter. Handlers
+// that never call Flush() remain fully buffered so the middleware can rewrite
+// the response (e.g. stripping managedFields).
+//
+// Note: a handler that streams without ever calling Flush() would still be
+// buffered. All current streaming endpoints (pod logs follow, c.Stream-based
+// handlers) call Flush(), so this is sufficient in practice. Hijacked
+// connections (e.g. websockets) bypass Write entirely and are unaffected.
 type customResponseWriter struct {
 	gin.ResponseWriter
-	body *bytes.Buffer
+	body      *bytes.Buffer
+	streaming bool
 }
 
-// cleanResponseSkipper reports whether cleanResponseMiddleware should leave the response writer untouched.
-type cleanResponseSkipper func(*gin.Context) bool
-
-func (w customResponseWriter) Write(b []byte) (int, error) {
+func (w *customResponseWriter) Write(b []byte) (int, error) {
+	if w.streaming {
+		return w.ResponseWriter.Write(b)
+	}
 	return w.body.Write(b)
 }
 
-func (w customResponseWriter) WriteString(s string) (int, error) {
+func (w *customResponseWriter) WriteString(s string) (int, error) {
+	if w.streaming {
+		return w.ResponseWriter.Write([]byte(s))
+	}
 	return w.body.WriteString(s)
 }
 
-// cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
-func cleanResponseMiddleware(skippers ...cleanResponseSkipper) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Skip buffering for streaming endpoints (e.g. pod logs with follow=true),
-		// otherwise the response would never be written to the client.
-		for _, skip := range skippers {
-			if skip != nil && skip(c) {
-				c.Next()
-				return
-			}
+// Flush is the streaming signal. On the first call we drain any bytes that
+// were buffered before the handler decided to stream, flip into pass-through
+// mode, and then forward to the underlying writer's Flush.
+func (w *customResponseWriter) Flush() {
+	if !w.streaming {
+		w.streaming = true
+		if w.body.Len() > 0 {
+			_, _ = w.ResponseWriter.Write(w.body.Bytes())
+			w.body.Reset()
 		}
-		// Replace the original response writer with our custom one
+	}
+	w.ResponseWriter.Flush()
+}
+
+// cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
+func cleanResponseMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
 		w := &customResponseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = w
 
 		c.Next()
 
-		// At this point, the original handler has written to our customResponseWriter's body buffer.
-		// We can now access and modify the response data.
+		// If the handler streamed (called Flush at any point), bytes have
+		// already been sent to the client and no cleanup is possible.
+		if w.streaming {
+			return
+		}
+
 		originalBody := w.body.Bytes()
 
 		// Only process JSON responses
@@ -85,18 +108,6 @@ func cleanResponseMiddleware(skippers ...cleanResponseSkipper) gin.HandlerFunc {
 			}
 		}
 		_, _ = w.ResponseWriter.Write(originalBody)
-	}
-}
-
-// skipCleanResponseForRoutes matches Gin route patterns returned by c.FullPath().
-func skipCleanResponseForRoutes(routes ...string) cleanResponseSkipper {
-	routeSet := make(map[string]struct{}, len(routes))
-	for _, route := range routes {
-		routeSet[route] = struct{}{}
-	}
-	return func(c *gin.Context) bool {
-		_, ok := routeSet[c.FullPath()]
-		return ok
 	}
 }
 

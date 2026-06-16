@@ -41,8 +41,6 @@ type AuthInfo struct {
 	ServerAddr    string `json:"serverAddr"`
 }
 
-const podLogsRoute = "/namespaces/:namespace/pods/:pod/logs"
-
 func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string, authRouteMap authz.RouteMap) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
@@ -72,9 +70,8 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
-	apiV1Route := baseHref + "api/v1"
-	r1Group := r.Group(apiV1Route)
-	r1Group.Use(cleanResponseMiddleware(skipCleanResponseForRoutes(apiV1Route + podLogsRoute)))
+	r1Group := r.Group(baseHref + "api/v1")
+	r1Group.Use(cleanResponseMiddleware())
 	if !authInfo.DisableAuth {
 		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
 		if err != nil {
@@ -162,7 +159,7 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	// Get the metrics such as cpu, memory usage for a pod.
 	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
 	// Get pod logs.
-	r.GET(podLogsRoute, handler.PodLogs)
+	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// Get the pod metrics for a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods-info", handler.GetMonoVertexPodsInfo)
 	// Get the pod metrics for a pipeline vertex.
