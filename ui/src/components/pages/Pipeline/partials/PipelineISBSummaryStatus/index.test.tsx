@@ -4,6 +4,8 @@ import "@testing-library/jest-dom";
 import { AppContext } from "../../../../../App";
 import { BrowserRouter } from "react-router-dom";
 import { PipelineISBSummaryStatus } from "./index";
+import userEvent from "@testing-library/user-event";
+import { SidebarType } from "../../../../common/SlidingSidebar";
 
 const mockData = {
   name: "default",
@@ -160,11 +162,20 @@ const mockData = {
 };
 
 describe("PipelineISBSummaryStatus", () => {
+  const mockSetSidebarProps = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("should render the ISB summary status", () => {
     render(
-      <AppContext.Provider value={{ isbData: mockData }}>
+      <AppContext.Provider value={{ setSidebarProps: mockSetSidebarProps }}>
         <BrowserRouter>
-          <PipelineISBSummaryStatus isbData={mockData} />
+          <PipelineISBSummaryStatus
+            isbData={mockData}
+            namespaceId="numaflow-system"
+          />
         </BrowserRouter>
       </AppContext.Provider>
     );
@@ -172,16 +183,46 @@ describe("PipelineISBSummaryStatus", () => {
     expect(screen.getByText("default")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("jetstream")).toBeInTheDocument();
+    expect(screen.getByText("View More")).toBeInTheDocument();
   });
 
   it("should render the ISB summary status with unknown values", () => {
     render(
-      <AppContext.Provider value={{ isbData: mockData }}>
+      <AppContext.Provider value={{ setSidebarProps: mockSetSidebarProps }}>
         <BrowserRouter>
           <PipelineISBSummaryStatus isbData={null} />
         </BrowserRouter>
       </AppContext.Provider>
     );
     expect(screen.getByText("ISB SERVICES SUMMARY")).toBeInTheDocument();
+    expect(screen.queryByText("View More")).not.toBeInTheDocument();
+  });
+
+  it("should open ISB details sidebar when View More is clicked", async () => {
+    render(
+      <AppContext.Provider value={{ setSidebarProps: mockSetSidebarProps }}>
+        <BrowserRouter>
+          <PipelineISBSummaryStatus
+            isbData={mockData}
+            namespaceId="numaflow-system"
+          />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+
+    await userEvent.click(screen.getByTestId("pipeline-isb-view-more"));
+
+    expect(mockSetSidebarProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: SidebarType.ISB_UPDATE,
+        specEditorProps: expect.objectContaining({
+          titleOverride: "ISB Service Details: default",
+          initialYaml: mockData.isbService,
+          namespaceId: "numaflow-system",
+          isbId: "default",
+          viewType: 0,
+        }),
+      })
+    );
   });
 });

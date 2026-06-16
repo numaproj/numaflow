@@ -101,7 +101,9 @@ type handler struct {
 	dexObj                *DexObject
 	localUsersAuthObject  *LocalUsersAuthObject
 	healthChecker         *HealthChecker
-	opts                  *handlerOptions
+	// httpClient is used for direct calls to pod-local monitor endpoints.
+	httpClient *http.Client
+	opts       *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -143,6 +145,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		dexObj:                dexObj,
 		localUsersAuthObject:  localUsersAuthObject,
 		healthChecker:         NewHealthChecker(ctx),
+		httpClient:            &http.Client{Timeout: 5 * time.Second},
 		opts:                  o,
 	}, nil
 }

@@ -167,6 +167,53 @@ func TestValidateMonoVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid maxUnavailable")
 	})
 
+	t.Run("streaming with built-in Kafka source is rejected", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		// Replace UDSource with Kafka-only source (no UDSource/UDTransformer to avoid other validation errors)
+		streaming := true
+		testObj.Spec.Streaming = &streaming
+		testObj.Spec.Source = &dfv1.Source{
+			Kafka: &dfv1.KafkaSource{Brokers: []string{"broker:9092"}, Topic: "test-topic"},
+		}
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "built-in Kafka source is not supported with streaming=true")
+	})
+
+	t.Run("streaming with non-Kafka source is accepted", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		streaming := true
+		testObj.Spec.Streaming = &streaming
+		// testMvtx already uses UDSource (non-Kafka), so no source change needed
+		err := ValidateMonoVertex(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("non-streaming with Kafka source is accepted", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		// No streaming set; Kafka source alone must not be rejected by the streaming gate
+		testObj.Spec.Source = &dfv1.Source{
+			Kafka: &dfv1.KafkaSource{Brokers: []string{"broker:9092"}, Topic: "test-topic"},
+		}
+		err := ValidateMonoVertex(testObj)
+		// Should not fail on the streaming gate; any other error is unrelated to this gate
+		if err != nil {
+			assert.NotContains(t, err.Error(), "built-in Kafka source is not supported with streaming=true")
+		}
+	})
+
+	t.Run("nil streaming with Kafka source is accepted", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Streaming = nil
+		testObj.Spec.Source = &dfv1.Source{
+			Kafka: &dfv1.KafkaSource{Brokers: []string{"broker:9092"}, Topic: "test-topic"},
+		}
+		err := ValidateMonoVertex(testObj)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "built-in Kafka source is not supported with streaming=true")
+		}
+	})
+
 	t.Run("test udf spec validation", func(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		err := ValidateMonoVertex(testObj)

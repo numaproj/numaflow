@@ -293,6 +293,7 @@ pub mod tests {
             None,
             cln_token.clone(),
             None,
+            false,
         )
         .await;
 

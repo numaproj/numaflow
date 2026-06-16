@@ -140,6 +140,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/isb-services", handler.ListInterStepBufferServices)
 	// Get an InterStepBufferService object.
 	r.GET("/namespaces/:namespace/isb-services/:isb-service", handler.GetInterStepBufferService)
+	// Get JetStream monitor information for an InterStepBufferService object.
+	r.GET("/namespaces/:namespace/isb-services/:isb-service/jetstream", handler.GetISBServiceJetStream)
 	// Update an InterStepBufferService object.
 	r.PUT("/namespaces/:namespace/isb-services/:isb-service", handler.UpdateInterStepBufferService)
 	// Delete an InterStepBufferService object.

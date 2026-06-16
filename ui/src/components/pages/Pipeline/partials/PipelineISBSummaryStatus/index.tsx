@@ -1,9 +1,49 @@
-import React from "react";
+import React, { useCallback, useContext } from "react";
 import Box from "@mui/material/Box";
 import { GetISBType, UNKNOWN } from "../../../../../utils";
+import { AppContext } from "../../../../../App";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { IsbSummary } from "../../../../../types/declarations/pipeline";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 
-export function PipelineISBSummaryStatus({ isbData }: any) {
-  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+interface PipelineISBSummaryStatusProps {
+  isbData?: IsbSummary | null;
+  namespaceId?: string;
+}
+
+interface IsbSpecWithReplicas {
+  [key: string]: { replicas?: number } | undefined;
+}
+
+export function PipelineISBSummaryStatus({
+  isbData,
+  namespaceId,
+}: PipelineISBSummaryStatusProps) {
+  const isbSpec = isbData?.isbService?.spec as unknown as
+    | IsbSpecWithReplicas
+    | undefined;
+  const isbType = isbData?.isbService?.spec
+    ? GetISBType(isbData.isbService.spec) || UNKNOWN
+    : UNKNOWN;
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+
+  const handleViewMoreClick = useCallback(() => {
+    if (!namespaceId || !isbData?.name || !setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `ISB Service Details: ${isbData.name}`,
+        initialYaml: isbData.isbService,
+        namespaceId,
+        isbId: isbData.name,
+        viewType: ViewType.READ_ONLY,
+      },
+    });
+  }, [namespaceId, isbData, setSidebarProps]);
+
   return (
     <Box
       sx={{
@@ -64,13 +104,26 @@ export function PipelineISBSummaryStatus({ isbData }: any) {
                   <div className="pipeline-summary-text">
                     <span className="pipeline-summary-subtitle">Size: </span>
                     <span>
-                      {isbType && isbData?.isbService?.spec[isbType]
-                        ? isbData?.isbService?.spec[isbType].replicas
+                      {isbType && isbSpec?.[isbType]?.replicas
+                        ? isbSpec[isbType]?.replicas
                         : UNKNOWN}
                     </span>
                   </div>
                 </span>
               </div>
+              {isbData?.name && (
+                <div className="pipeline-summary-text">
+                  <span className="pipeline-summary-subtitle">
+                    <div
+                      className="pipeline-onclick-events"
+                      onClick={handleViewMoreClick}
+                      data-testid="pipeline-isb-view-more"
+                    >
+                      View More
+                    </div>
+                  </span>
+                </div>
+              )}
             </Box>
           </Box>
         </Box>
