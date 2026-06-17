@@ -1712,4 +1712,63 @@ mod tests {
         let resp_ok: ResponseFromSink = r_ok.into();
         assert_eq!(resp_ok.status, ResponseStatusFromSink::Success);
     }
+
+    #[tokio::test]
+    async fn test_split_batch_handles_acked_and_nacked() {
+        use crate::message::{IntOffset, MessageID, NackOptions, Offset};
+
+        let mk = |id: i64| {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let message = Message {
+                offset: Offset::Int(IntOffset::new(id, 0)),
+                id: MessageID {
+                    vertex_name: "v".to_string().into(),
+                    offset: format!("o-{id}").into(),
+                    index: id as i32,
+                },
+                ..Default::default()
+            };
+            (MessageHandle::new(message, ack_tx), ack_rx)
+        };
+
+        let (h0, rx0) = mk(0);
+        let (h1, rx1) = mk(1);
+        let (h2, rx2) = mk(2);
+        let id1 = h1.message().id.clone();
+
+        let opts = NackOptions {
+            delay: Some(500),
+            max_deliveries: None,
+            reason: Some("n".to_string()),
+        };
+        // processed batch reports h1 as nacked, carrying options on the message.
+        let nacked_msg = Message {
+            id: id1.clone(),
+            nack_options: Some(opts.clone()),
+            ..Default::default()
+        };
+        let processed = ProcessedSinkBatch::new().with_nacked(vec![nacked_msg]);
+
+        let (acked, nacked) = SinkWriter::split_batch_handles(vec![h0, h1, h2], processed);
+
+        assert_eq!(nacked.len(), 1, "exactly one nacked handle");
+        assert_eq!(nacked.first().map(|h| h.message().id.clone()), Some(id1));
+        assert_eq!(
+            nacked.first().and_then(|h| h.message().nack_options.clone()),
+            Some(opts.clone())
+        );
+        assert_eq!(acked.len(), 2, "the other two are acked (complement)");
+
+        // Settle and confirm the ReadAcks (totality: every handle settled exactly once).
+        for h in acked {
+            h.mark_success();
+        }
+        for h in nacked {
+            let o = h.message().nack_options.clone();
+            h.mark_failed("message nacked", o);
+        }
+        assert_eq!(rx0.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx2.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx1.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
 }
