@@ -1658,6 +1658,103 @@ mod tests {
         );
     }
 
+    // Build a MessageHandle whose message has the given tags + optional nack options.
+    fn sink_handle(
+        id: i64,
+        tags: Option<Vec<&str>>,
+        nack_options: Option<crate::message::NackOptions>,
+    ) -> (MessageHandle, oneshot::Receiver<ReadAck>) {
+        use crate::message::{IntOffset, MessageID, Offset};
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message {
+            keys: Arc::from(vec![format!("key-{id}")]),
+            tags: tags.map(|t| Arc::from(t.into_iter().map(String::from).collect::<Vec<_>>())),
+            value: format!("v-{id}").into_bytes().into(),
+            offset: Offset::Int(IntOffset::new(id, 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "v".to_string().into(),
+                offset: format!("o-{id}").into(),
+                index: id as i32,
+            },
+            nack_options,
+            ..Default::default()
+        };
+        (MessageHandle::new(message, ack_tx), ack_rx)
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_input_tagged_nack() {
+        use crate::message::NackOptions;
+        let cln = CancellationToken::new();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Blackhole)
+                .build()
+                .await
+                .unwrap();
+
+        let opts = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("upstream nack".to_string()),
+        };
+        let (h_ok, rx_ok) = sink_handle(0, None, None);
+        let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
+        let (h_drop, rx_drop) = sink_handle(2, Some(vec!["U+005C__DROP__"]), None);
+
+        let (tx, rx) = mpsc::channel(10);
+        for h in [h_ok, h_nack, h_drop] {
+            tx.send(h).await.unwrap();
+        }
+        drop(tx);
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln)
+            .await
+            .unwrap();
+        handle.await.unwrap().unwrap();
+
+        assert_eq!(rx_ok.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx_drop.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx_nack.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_all_dropped_preserves_nack_options() {
+        // Regression: a batch with only dropped + nacked (nothing to write) must
+        // still carry the nacked options, not collapse to Nak(None).
+        use crate::message::NackOptions;
+        let cln = CancellationToken::new();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Blackhole)
+                .build()
+                .await
+                .unwrap();
+
+        let opts = NackOptions {
+            delay: Some(2500),
+            max_deliveries: Some(4),
+            reason: Some("all-dropped batch".to_string()),
+        };
+        let (h_drop, rx_drop) = sink_handle(0, Some(vec!["U+005C__DROP__"]), None);
+        let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
+
+        let (tx, rx) = mpsc::channel(10);
+        for h in [h_drop, h_nack] {
+            tx.send(h).await.unwrap();
+        }
+        drop(tx);
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln)
+            .await
+            .unwrap();
+        handle.await.unwrap().unwrap();
+
+        assert_eq!(rx_drop.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx_nack.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
     #[test]
     fn test_sink_response_nack_status_conversion() {
         use crate::message::NackOptions;
@@ -1754,7 +1851,9 @@ mod tests {
         assert_eq!(nacked.len(), 1, "exactly one nacked handle");
         assert_eq!(nacked.first().map(|h| h.message().id.clone()), Some(id1));
         assert_eq!(
-            nacked.first().and_then(|h| h.message().nack_options.clone()),
+            nacked
+                .first()
+                .and_then(|h| h.message().nack_options.clone()),
             Some(opts.clone())
         );
         assert_eq!(acked.len(), 2, "the other two are acked (complement)");
