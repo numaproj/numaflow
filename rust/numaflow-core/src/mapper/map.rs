@@ -1679,4 +1679,49 @@ mod tests {
         // Currently only ensuring that this should not panic
         update_udf_process_time_metric(false);
     }
+
+    #[test]
+    fn test_map_response_result_carries_nack_tag_and_options() {
+        use crate::message::NackOptions;
+        use numaflow_pb::clients::map::map_response;
+        use numaflow_pb::common::nack_options::NackOptions as PbNackOptions;
+
+        let parent_msg = Message::default();
+        let parent_info = ParentMessageInfo::from(&parent_msg);
+
+        // With NACK tag + options -> nacked() true and options carried.
+        let result = map_response::Result {
+            keys: vec!["k".to_string()],
+            value: b"v".to_vec(),
+            tags: vec!["U+005C__NACK__".to_string()], // must match message.rs NACK const
+            metadata: None,
+            nack_options: Some(PbNackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            }),
+        };
+        let msg: Message = UserDefinedMessage(result, &parent_info, 0).into();
+        assert!(msg.nacked(), "NACK tag must make the message nacked()");
+        assert_eq!(
+            msg.nack_options,
+            Some(NackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            })
+        );
+
+        // No options -> None and not nacked.
+        let result_plain = map_response::Result {
+            keys: vec![],
+            value: vec![],
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+        let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
+        assert!(!msg_plain.nacked());
+        assert_eq!(msg_plain.nack_options, None);
+    }
 }
