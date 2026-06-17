@@ -25,21 +25,13 @@ import (
 )
 
 var (
-	// "managedFields" is too annoying
+	// Fields stripped from buffered JSON responses.
 	cleanupFields = []string{"managedFields"}
 )
 
-// customResponseWriter wraps gin.ResponseWriter to buffer the response body for
-// post-processing. A handler that calls Flush() is treated as streaming: the
-// writer drains any buffered bytes, flips into pass-through mode, and forwards
-// every subsequent Write directly to the underlying ResponseWriter. Handlers
-// that never call Flush() remain fully buffered so the middleware can rewrite
-// the response (e.g. stripping managedFields).
-//
-// Note: a handler that streams without ever calling Flush() would still be
-// buffered. All current streaming endpoints (pod logs follow, c.Stream-based
-// handlers) call Flush(), so this is sufficient in practice. Hijacked
-// connections (e.g. websockets) bypass Write entirely and are unaffected.
+// customResponseWriter buffers non-streaming responses so the middleware can
+// rewrite them. Calling Flush marks the response as streaming: buffered bytes
+// are drained and subsequent writes pass through directly.
 type customResponseWriter struct {
 	gin.ResponseWriter
 	body      *bytes.Buffer
@@ -55,14 +47,12 @@ func (w *customResponseWriter) Write(b []byte) (int, error) {
 
 func (w *customResponseWriter) WriteString(s string) (int, error) {
 	if w.streaming {
-		return w.ResponseWriter.Write([]byte(s))
+		return w.ResponseWriter.WriteString(s)
 	}
 	return w.body.WriteString(s)
 }
 
-// Flush is the streaming signal. On the first call we drain any bytes that
-// were buffered before the handler decided to stream, flip into pass-through
-// mode, and then forward to the underlying writer's Flush.
+// Flush switches to streaming mode and forwards the flush to the underlying writer.
 func (w *customResponseWriter) Flush() {
 	if !w.streaming {
 		w.streaming = true
@@ -111,7 +101,7 @@ func cleanResponseMiddleware() gin.HandlerFunc {
 	}
 }
 
-// removeFieldRecursively removes all occurrences of the given field from a (possibly nested) JSON structure represented as map[string]interface{} or []interface{}.
+// removeFieldsRecursively removes fields from nested JSON objects and arrays.
 func removeFieldsRecursively(data interface{}, fields ...string) {
 	switch val := data.(type) {
 	case map[string]interface{}:
