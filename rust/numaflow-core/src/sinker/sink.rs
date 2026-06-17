@@ -1657,4 +1657,59 @@ mod tests {
             "pipeline drop_total should be incremented by 3"
         );
     }
+
+    #[test]
+    fn test_sink_response_nack_status_conversion() {
+        use crate::message::NackOptions;
+        use numaflow_pb::clients::sink::Status;
+        use numaflow_pb::common::nack_options::NackOptions as PbNackOptions;
+
+        // NACK + options -> Nack(Some(..))
+        let r = sink_response::Result {
+            id: "id-1".to_string(),
+            status: Status::Nack as i32,
+            err_msg: String::new(),
+            serve_response: None,
+            on_success_msg: None,
+            nack_options: Some(PbNackOptions {
+                reason: Some("rate limited".to_string()),
+                max_deliveries: None,
+                delay: Some(3000),
+            }),
+        };
+        let resp: ResponseFromSink = r.into();
+        assert_eq!(resp.id, "id-1");
+        assert_eq!(
+            resp.status,
+            ResponseStatusFromSink::Nack(Some(NackOptions {
+                reason: Some("rate limited".to_string()),
+                max_deliveries: None,
+                delay: Some(3000),
+            }))
+        );
+
+        // NACK without options -> Nack(None)
+        let r_none = sink_response::Result {
+            id: "id-2".to_string(),
+            status: Status::Nack as i32,
+            err_msg: String::new(),
+            serve_response: None,
+            on_success_msg: None,
+            nack_options: None,
+        };
+        let resp_none: ResponseFromSink = r_none.into();
+        assert_eq!(resp_none.status, ResponseStatusFromSink::Nack(None));
+
+        // Regression guard: SUCCESS still maps to Success.
+        let r_ok = sink_response::Result {
+            id: "id-3".to_string(),
+            status: Status::Success as i32,
+            err_msg: String::new(),
+            serve_response: None,
+            on_success_msg: None,
+            nack_options: None,
+        };
+        let resp_ok: ResponseFromSink = r_ok.into();
+        assert_eq!(resp_ok.status, ResponseStatusFromSink::Success);
+    }
 }
