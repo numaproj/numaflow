@@ -2381,6 +2381,107 @@ mod tests {
         let _ = server_handle.await;
     }
 
+    #[tokio::test]
+    async fn test_invoke_ack_groups_nacks_by_options() {
+        use crate::message::{NackOptions, ReadAck};
+        use crate::tracker::Tracker;
+        use std::sync::{Arc, Mutex};
+        use tokio::sync::{Semaphore, oneshot};
+        use tokio_util::sync::CancellationToken;
+
+        // Recording consumer of ActorMessages on the source side.
+        let (source_tx, mut source_rx) = tokio::sync::mpsc::channel::<super::ActorMessage>(16);
+        let acked: Arc<Mutex<Vec<CoreOffset>>> = Arc::new(Mutex::new(vec![]));
+        #[allow(clippy::type_complexity)]
+        let nacked: Arc<Mutex<Vec<(Vec<CoreOffset>, Option<NackOptions>)>>> =
+            Arc::new(Mutex::new(vec![]));
+        let acked_c = Arc::clone(&acked);
+        let nacked_c = Arc::clone(&nacked);
+        let consumer = tokio::spawn(async move {
+            while let Some(msg) = source_rx.recv().await {
+                match msg {
+                    super::ActorMessage::Ack {
+                        respond_to,
+                        offsets,
+                    } => {
+                        acked_c.lock().unwrap().extend(offsets);
+                        let _ = respond_to.send(Ok(()));
+                    }
+                    super::ActorMessage::Nack {
+                        respond_to,
+                        offsets,
+                        options,
+                    } => {
+                        nacked_c.lock().unwrap().push((offsets, options));
+                        let _ = respond_to.send(Ok(()));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        let opts_a = NackOptions {
+            delay: Some(100),
+            max_deliveries: None,
+            reason: Some("a".to_string()),
+        };
+        let opts_b = NackOptions {
+            delay: Some(200),
+            max_deliveries: None,
+            reason: Some("b".to_string()),
+        };
+
+        // Build (offset, ReadAck) -> oneshot batch.
+        let mk = |seq: i64, ack: ReadAck| {
+            let off = CoreOffset::Int(CoreIntOffset::new(seq, 0));
+            let (tx, rx) = oneshot::channel();
+            tx.send(ack).unwrap();
+            (off, rx)
+        };
+        let batch = vec![
+            mk(1, ReadAck::Ack),
+            mk(2, ReadAck::Nak(Some(opts_a.clone()))),
+            mk(3, ReadAck::Nak(Some(opts_b.clone()))),
+            mk(4, ReadAck::Nak(Some(opts_a.clone()))),
+            mk(5, ReadAck::Nak(None)),
+        ];
+
+        let cln = CancellationToken::new();
+        let tracker = Tracker::new(None, cln.clone());
+        let sem = Arc::new(Semaphore::new(1));
+        let permit = sem.acquire_owned().await.unwrap();
+
+        Source::<crate::typ::WithoutRateLimiter>::invoke_ack(
+            tokio::time::Instant::now(),
+            source_tx.clone(),
+            batch,
+            permit,
+            tracker,
+            cln.clone(),
+        )
+        .await
+        .unwrap();
+
+        drop(source_tx);
+        consumer.await.unwrap();
+
+        // Ack: only offset 1.
+        assert_eq!(acked.lock().unwrap().len(), 1);
+
+        // Nack: grouped into 3 buckets (opts_a -> [2,4], opts_b -> [3], None -> [5]).
+        let nacks = nacked.lock().unwrap();
+        assert_eq!(nacks.len(), 3, "one backend nack call per distinct options");
+        let find = |o: &Option<NackOptions>| {
+            nacks
+                .iter()
+                .find(|(_, opt)| opt == o)
+                .map(|(offs, _)| offs.len())
+        };
+        assert_eq!(find(&Some(opts_a)), Some(2));
+        assert_eq!(find(&Some(opts_b)), Some(1));
+        assert_eq!(find(&None), Some(1));
+    }
+
     /// Streaming with a bypass router present: exercises the
     /// `if let Some(ref bypass_router) => try_bypass(...)` branch of `streaming_source`.
     /// The bypass condition requires a tag the generator never sets, so no message is
