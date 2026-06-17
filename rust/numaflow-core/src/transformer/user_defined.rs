@@ -340,4 +340,57 @@ mod tests {
     }
 
     // TODO(ajain60): add unit test for metadata once rust sdk supports it
+
+    #[test]
+    fn test_transform_response_result_carries_nack_tag_and_options() {
+        use crate::message::{IntOffset, NackOptions, Offset};
+        use crate::shared::grpc::prost_timestamp_from_utc;
+        use numaflow_pb::common::nack_options::NackOptions as PbNackOptions;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let parent_info = ParentMessageInfo {
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+
+        // event_time must be Some — the From impl .expect()s it.
+        let result = source_transform_response::Result {
+            keys: vec!["k".to_string()],
+            value: b"v".to_vec(),
+            event_time: Some(prost_timestamp_from_utc(chrono::Utc::now())),
+            tags: vec!["U+005C__NACK__".to_string()], // must match message.rs NACK const
+            metadata: None,
+            nack_options: Some(PbNackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(2),
+                delay: Some(1000),
+            }),
+        };
+        let msg: Message = UserDefinedTransformerMessage(result, &parent_info, 0).into();
+        assert!(msg.nacked());
+        assert_eq!(
+            msg.nack_options,
+            Some(NackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(2),
+                delay: Some(1000),
+            })
+        );
+
+        let result_plain = source_transform_response::Result {
+            keys: vec![],
+            value: vec![],
+            event_time: Some(prost_timestamp_from_utc(chrono::Utc::now())),
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+        let msg_plain: Message =
+            UserDefinedTransformerMessage(result_plain, &parent_info, 1).into();
+        assert!(!msg_plain.nacked());
+        assert_eq!(msg_plain.nack_options, None);
+    }
 }
