@@ -37,7 +37,8 @@ use chrono::{DateTime, Utc};
 /// Represents the key global state of an accumulator window.
 #[derive(Debug, Clone)]
 struct WindowState {
-    /// The window this state belongs to and this Window is a per key Global Window from -oo to +oo.
+    /// The window this state belongs to and this Window is a per key Global Window from event-time
+    /// of the first message to +oo (end time is [`DateTime::<Utc>::MAX_UTC`]).
     window: Window,
     /// Sorted list of all the message timestamps for this particular window till the chunk of data is
     /// written to ISB (events for a chunk is done because the watermark has progressed as SDK has processed/sorted
@@ -47,10 +48,12 @@ struct WindowState {
     /// Watermark is published using this message_timestamps, and the published watermark will be
     /// <= the oldest timestamp in this list after the truncation.
     message_timestamps: Arc<RwLock<BTreeSet<DateTime<Utc>>>>,
-    /// lastSeenEventTime is to see what was latest we have event time ever seen. This cannot be
-    /// messageTimestamps\[0] because that list will be cleared due to timeout. Since WM is global (across keys)
-    /// we need to trigger a close window to the UDF once the timeout has passed (WM > last-seen + timeout).
-    last_seen_event_time: Arc<RwLock<DateTime<Utc>>>,
+    /// maxEventTime is the maximum (latest) event time we have ever seen for this window. This cannot
+    /// be messageTimestamps\[last] because that list will be truncated as the watermark progresses, so
+    /// we track it separately and it never decreases. Since WM is global (across keys) we need to
+    /// trigger a close window to the UDF once the timeout has passed (WM > max-event-time + timeout),
+    /// and the close request carries (max-event-time + timeout) as the window end time.
+    max_event_time: Arc<RwLock<DateTime<Utc>>>,
 }
 
 impl WindowState {
@@ -58,9 +61,7 @@ impl WindowState {
         Self {
             window,
             message_timestamps: Arc::new(RwLock::new(BTreeSet::new())),
-            last_seen_event_time: Arc::new(RwLock::new(
-                DateTime::from_timestamp_millis(0).unwrap(),
-            )),
+            max_event_time: Arc::new(RwLock::new(DateTime::from_timestamp_millis(0).unwrap())),
         }
     }
 
@@ -71,40 +72,37 @@ impl WindowState {
             timestamps.insert(event_time);
         }
 
-        // Update last seen event time if this is newer
-        let mut last_seen = self.last_seen_event_time.write().expect("Poisoned lock");
-        if event_time > *last_seen {
-            *last_seen = event_time;
+        // Update max event time if this is newer. This is monotonic and never decreases.
+        let mut max_event_time = self.max_event_time.write().expect("Poisoned lock");
+        if event_time > *max_event_time {
+            *max_event_time = event_time;
         }
     }
 
-    /// Deletes event times before the given end time.
-    fn delete_timestamps_before(&self, end_time: DateTime<Utc>) {
-        let latest_timestamp = {
-            let mut timestamps = self
-                .message_timestamps
-                .write()
-                .expect("Failed to acquire write lock on message_timestamps");
-
-            // Retain timestamps greater than or equal to the end time
-            timestamps.retain(|&ts| ts >= end_time);
-            timestamps.iter().last().cloned()
-        };
-
-        let mut last_seen = self
-            .last_seen_event_time
+    /// Deletes event times before the given end time. Unlike [`Self::append_timestamp`], this does
+    /// not touch [`Self::max_event_time`] since that has to reflect the latest event time ever seen
+    /// (used to compute the close request's window end time) and must not be lowered by truncation.
+    /// Returns true if there are no timestamps left after the truncation.
+    fn delete_timestamps_before(&self, end_time: DateTime<Utc>) -> bool {
+        let mut timestamps = self
+            .message_timestamps
             .write()
-            .expect("Failed to acquire write lock on last_seen_event_time");
+            .expect("Failed to acquire write lock on message_timestamps");
 
-        if let Some(latest_timestamp) = latest_timestamp {
-            *last_seen = latest_timestamp;
-        }
+        // Retain timestamps greater than or equal to the end time
+        timestamps.retain(|&ts| ts >= end_time);
+        timestamps.is_empty()
     }
 
     /// Gets the oldest timestamp in this window state.
     fn oldest_timestamp(&self) -> Option<DateTime<Utc>> {
         let timestamps = self.message_timestamps.read().expect("Poisoned lock");
         timestamps.iter().next().cloned()
+    }
+
+    /// Returns the maximum event time ever seen for this window.
+    fn max_event_time(&self) -> DateTime<Utc> {
+        *self.max_event_time.read().expect("Poisoned lock")
     }
 }
 
@@ -116,6 +114,11 @@ pub(crate) struct AccumulatorWindowManager {
     timeout: Duration,
     /// Active windows mapped by combined key.
     active_windows: Arc<RwLock<HashMap<String, WindowState>>>,
+    /// Closed windows mapped by combined key. These windows have been closed (sent to the SDK) but
+    /// still have message timestamps that are pending GC. We keep them around so that the oldest
+    /// event time used for watermark propagation also accounts for closed-but-not-yet-GC'd windows.
+    /// An entry is removed once its timestamps are fully drained (see [`Self::delete_window`]).
+    closed_windows: Arc<RwLock<HashMap<String, WindowState>>>,
 }
 
 impl AccumulatorWindowManager {
@@ -124,6 +127,7 @@ impl AccumulatorWindowManager {
         Self {
             timeout,
             active_windows: Arc::new(RwLock::new(HashMap::new())),
+            closed_windows: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -147,12 +151,10 @@ impl AccumulatorWindowManager {
             }];
         }
 
-        // Create a new window for the key
-        let window = Window::new(
-            event_time,
-            event_time + chrono::Duration::from_std(self.timeout).unwrap(),
-            keys,
-        );
+        // Create a new window for the key. The window is global per key, so we use the event time of
+        // the first message as the start time and the max possible time as the end time. The actual
+        // end time (max-event-time + timeout) is computed lazily when the close request is sent.
+        let window = Window::new(event_time, DateTime::<Utc>::MAX_UTC, keys);
 
         let window_state = WindowState::new(window.clone());
         window_state.append_timestamp(event_time);
@@ -172,42 +174,84 @@ impl AccumulatorWindowManager {
     /// when the watermark has progressed, and we need to close the windows that are inactive for
     /// longer than the timeout.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+        let timeout = chrono::Duration::from_std(self.timeout).expect("valid timeout duration");
 
-        active_windows
-            .extract_if(|_, window_state| {
-                let last_seen = *window_state
-                    .last_seen_event_time
-                    .read()
-                    .expect("Poisoned lock");
-                watermark > last_seen + self.timeout
-            })
-            .map(|(_, window_state)| UnalignedWindowMessage {
+        // Extract windows that have been inactive for longer than the timeout from the active set.
+        let expired: Vec<(String, WindowState)> = {
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            active_windows
+                .extract_if(|_, window_state| watermark > window_state.max_event_time() + timeout)
+                .collect()
+        };
+
+        if expired.is_empty() {
+            return vec![];
+        }
+
+        let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
+        let mut messages = Vec::with_capacity(expired.len());
+
+        for (combined_key, window_state) in expired {
+            // The close request carries the actual window end time, which is max-event-time + timeout
+            // (the stored window has MAX_UTC as the end time since it is a global window).
+            let close_window = Window::new(
+                window_state.window.start_time,
+                window_state.max_event_time() + timeout,
+                Arc::clone(&window_state.window.keys),
+            );
+
+            messages.push(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Close {
-                    window: window_state.window.clone(),
+                    window: close_window,
                 },
                 pnf_slot: SHARED_PNF_SLOT,
-            })
-            .collect()
+            });
+
+            // Move the closed window to the closed set so that it is still accounted for in
+            // watermark propagation until its timestamps are GC'd.
+            closed_windows.insert(combined_key, window_state);
+        }
+
+        messages
     }
 
-    /// Deletes all the timestamps before the given end time for the window, actual delete happens
-    /// when the window is closed because of inactivity.
+    /// Deletes all the timestamps before the given end time for the window. The window can either be
+    /// still active or already closed (closed but not yet GC'd). For a closed window, once all of its
+    /// timestamps are drained, its entry is removed from the closed windows map.
     pub(crate) fn delete_window(&self, window: Window) {
         let combined_key = combine_keys(&window.keys);
 
-        let active_windows = self.active_windows.read().expect("Poisoned lock");
-        if let Some(window_state) = active_windows.get(&combined_key) {
-            window_state.delete_timestamps_before(window.end_time);
+        // First try the active windows. Active windows are never removed here; they are only
+        // truncated and removed when they are closed because of inactivity.
+        {
+            let active_windows = self.active_windows.read().expect("Poisoned lock");
+            if let Some(window_state) = active_windows.get(&combined_key) {
+                window_state.delete_timestamps_before(window.end_time);
+                return;
+            }
+        }
+
+        // Otherwise the window must be in the closed set. Truncate its timestamps and drop the entry
+        // once it is fully drained so that it no longer participates in watermark propagation.
+        let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
+        if let Some(window_state) = closed_windows.get(&combined_key) {
+            let drained = window_state.delete_timestamps_before(window.end_time);
+            if drained {
+                closed_windows.remove(&combined_key);
+            }
         }
     }
 
-    /// Returns the oldest event time across all windows.
+    /// Returns the oldest event time across all windows, both active and closed-but-not-yet-GC'd.
+    /// This is used for watermark propagation so that the watermark does not advance past data that
+    /// is still pending in a closed window.
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
         let active_windows = self.active_windows.read().expect("Poisoned lock");
+        let closed_windows = self.closed_windows.read().expect("Poisoned lock");
 
         active_windows
             .values()
+            .chain(closed_windows.values())
             .filter_map(|window_state| window_state.oldest_timestamp())
             .min()
     }
@@ -215,6 +259,11 @@ impl AccumulatorWindowManager {
     /// Returns the number of currently active windows (unique key slots).
     pub(crate) fn active_window_count(&self) -> usize {
         self.active_windows.read().expect("Poisoned lock").len()
+    }
+
+    /// Returns the number of closed windows that are awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        self.closed_windows.read().expect("Poisoned lock").len()
     }
 }
 
