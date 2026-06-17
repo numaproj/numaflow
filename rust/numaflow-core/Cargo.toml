@@ -68,7 +68,7 @@ tracing-subscriber = "0.3.20"
 [dev-dependencies]
 numaflow-testing = { path = "../numaflow-testing" }
 tempfile = "3.11.0"
-numaflow = "0.5.0"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "4e0c555b84e71065edbaeb09ef63aa7a9dc533da" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
