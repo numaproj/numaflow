@@ -871,6 +871,30 @@ mod tests {
         assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
     }
 
+    #[tokio::test]
+    async fn test_fanout_nack_one_ref_failed_with_options() {
+        // A fanned-out handle (map/transform) shares one AckHandle. If one downstream
+        // ref is marked failed-with-options while the rest succeed, the shared handle
+        // must NAK with those options.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let parent = MessageHandle::new(Message::default(), ack_tx);
+
+        let child_a = parent.with_message(Message::default());
+        let child_b = parent.with_message(Message::default());
+
+        let opts = NackOptions {
+            delay: Some(2000),
+            max_deliveries: Some(3),
+            reason: Some("downstream nack".to_string()),
+        };
+
+        parent.mark_success();
+        child_a.mark_success();
+        child_b.mark_failed("message nacked", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
     #[test]
     fn test_message_nacked_tag_detection() {
         let mut message = Message::default();
