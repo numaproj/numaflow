@@ -80,7 +80,7 @@ where
 
         // Manual retry loop with backoff
         let mut backoff_iter = backoff.into_iter();
-        let mut retry_attempt = 0;
+        let mut retry_attempt: u64 = 0;
         let mut error_map = HashMap::new();
 
         loop {
@@ -88,7 +88,7 @@ where
             // that user-defined sinks can observe how many times a message has been retried.
             // It is 0 on the first attempt and incremented for every subsequent retry.
             for msg in &mut messages_to_retry {
-                msg.set_sink_retry_count(retry_attempt as u64);
+                msg.set_sink_retry_count(retry_attempt);
             }
 
             // send batch to sink

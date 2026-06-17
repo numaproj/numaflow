@@ -412,13 +412,13 @@ impl Message {
         }
     }
 
-    /// Records the sink retry attempt count in the message's system metadata so that
-    /// user-defined sinks can observe it. Metadata is created if it is absent.
+    /// Records the sink retry attempt count so user-defined sinks can observe it.
+    /// Metadata is created if it is absent.
     pub(crate) fn set_sink_retry_count(&mut self, count: u64) {
         let metadata = self
             .metadata
             .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
-        Arc::make_mut(metadata).set_retry_count(count);
+        Arc::make_mut(metadata).set_sink_retry_count(count);
     }
 }
 
@@ -858,6 +858,71 @@ mod tests {
                 .unwrap()
                 .sys_metadata
                 .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+    }
+
+    #[test]
+    fn set_sink_retry_count_preserves_existing_metadata() {
+        use crate::metadata::{KeyValueGroup, RETRY_COUNT_KEY, SINK_METADATA_GROUP};
+
+        let mut sys_metadata = HashMap::new();
+        sys_metadata.insert(
+            "existing-system-group".to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([("system-key".to_string(), Bytes::from("system-value"))]),
+            },
+        );
+
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert(
+            "existing-user-group".to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([("user-key".to_string(), Bytes::from("user-value"))]),
+            },
+        );
+
+        let mut msg = Message {
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: "source".to_string(),
+                sys_metadata,
+                user_metadata,
+            })),
+            ..Default::default()
+        };
+
+        msg.set_sink_retry_count(2);
+
+        let metadata = msg.metadata.as_ref().unwrap();
+        assert_eq!(metadata.previous_vertex, "source");
+        assert_eq!(
+            metadata
+                .sys_metadata
+                .get("existing-system-group")
+                .unwrap()
+                .key_value
+                .get("system-key")
+                .unwrap(),
+            &Bytes::from("system-value")
+        );
+        assert_eq!(
+            metadata
+                .user_metadata
+                .get("existing-user-group")
+                .unwrap()
+                .key_value
+                .get("user-key")
+                .unwrap(),
+            &Bytes::from("user-value")
+        );
+        assert_eq!(
+            metadata
+                .sys_metadata
+                .get(SINK_METADATA_GROUP)
+                .unwrap()
+                .key_value
+                .get(RETRY_COUNT_KEY)
+                .unwrap(),
+            &Bytes::from("2")
         );
     }
 }

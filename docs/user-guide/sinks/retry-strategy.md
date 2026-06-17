@@ -74,7 +74,7 @@ The `onFailure` field specifies the action to take when retries are exhausted. A
 
 For user-defined sinks, Numaflow exposes the current retry attempt count to your sink container
 through the request's system metadata. This lets your sink logic react to how many times a message
-has already been retried (for example, to emit a metric, log, or change behavior on the last attempt).
+has already been retried, for example to emit a metric or log retry attempts.
 
 The value is available under the `sink` group of the system metadata, keyed by `retry_count`, and is
 stored as a string. It is `0` on the first attempt and incremented by one for each subsequent retry.

@@ -30,20 +30,21 @@ impl Default for Metadata {
 }
 
 impl Metadata {
-    /// Records the current retry attempt count under `sys_metadata["sink"]["retry_count"]`
+    /// Records the current sink retry attempt count under `sys_metadata["sink"]`
     /// so that user-defined sinks can observe how many times a message has been retried.
-    /// The value is stored as the decimal string representation of `count`.
-    pub(crate) fn set_retry_count(&mut self, count: u64) {
-        self.sys_metadata
+    /// `retry_count` is stored as the decimal string representation of `count`.
+    pub(crate) fn set_sink_retry_count(&mut self, count: u64) {
+        let sink_metadata = self
+            .sys_metadata
             .entry(SINK_METADATA_GROUP.to_string())
             .or_insert_with(|| KeyValueGroup {
                 key_value: HashMap::new(),
-            })
-            .key_value
-            .insert(
-                RETRY_COUNT_KEY.to_string(),
-                Bytes::from(count.to_string().into_bytes()),
-            );
+            });
+
+        sink_metadata.key_value.insert(
+            RETRY_COUNT_KEY.to_string(),
+            Bytes::from(count.to_string().into_bytes()),
+        );
     }
 }
 
