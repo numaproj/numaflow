@@ -80,10 +80,17 @@ where
 
         // Manual retry loop with backoff
         let mut backoff_iter = backoff.into_iter();
-        let mut retry_attempt = 0;
+        let mut retry_attempt: u64 = 0;
         let mut error_map = HashMap::new();
 
         loop {
+            // Stamp the current retry attempt count into each message's system metadata so
+            // that user-defined sinks can observe how many times a message has been retried.
+            // It is 0 on the first attempt and incremented for every subsequent retry.
+            for msg in &mut messages_to_retry {
+                msg.set_sink_retry_count(retry_attempt);
+            }
+
             // send batch to sink
             let responses = self.sink.sink(messages_to_retry.clone()).await?;
 
@@ -328,5 +335,81 @@ mod tests {
             result,
             Err(Error::Sink(message)) if message.contains("missing response from sink")
         ));
+    }
+
+    /// A sink that fails the message until `succeed_on_attempt` calls have been made,
+    /// recording the retry_count observed in each message's system metadata on every call.
+    struct RetryCountRecordingSink {
+        attempt: usize,
+        succeed_on_attempt: usize,
+        observed_retry_counts: Arc<std::sync::Mutex<Vec<Option<String>>>>,
+    }
+
+    impl Sink for RetryCountRecordingSink {
+        async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+            // Record the retry_count observed on the first message of this batch.
+            let observed = messages.first().and_then(|m| {
+                m.metadata.as_ref().and_then(|md| {
+                    md.sys_metadata
+                        .get(crate::metadata::SINK_METADATA_GROUP)
+                        .and_then(|g| g.key_value.get(crate::metadata::RETRY_COUNT_KEY))
+                        .map(|v| String::from_utf8_lossy(v).to_string())
+                })
+            });
+            self.observed_retry_counts.lock().unwrap().push(observed);
+
+            self.attempt += 1;
+            let succeed = self.attempt >= self.succeed_on_attempt;
+            Ok(messages
+                .into_iter()
+                .map(|m| ResponseFromSink {
+                    id: m.id.to_string(),
+                    status: if succeed {
+                        ResponseStatusFromSink::Success
+                    } else {
+                        ResponseStatusFromSink::Failed("retryable".to_string())
+                    },
+                })
+                .collect())
+        }
+    }
+
+    #[tokio::test]
+    async fn retry_count_is_stamped_into_sys_metadata() {
+        let observed_retry_counts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = RetryCountRecordingSink {
+            attempt: 0,
+            // fail twice (attempts 1 and 2), succeed on the third attempt
+            succeed_on_attempt: 3,
+            observed_retry_counts: Arc::clone(&observed_retry_counts),
+        };
+
+        // Use tiny intervals so the test does not actually sleep noticeably.
+        let retry_config = RetryConfig {
+            sink_max_retry_attempts: 5,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_max_retry_interval_in_ms: 1,
+            ..RetryConfig::default()
+        };
+
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut actor = SinkActor::new(rx, sink, retry_config);
+        let result = actor
+            .write_messages_with_retry(vec![message("1")], &CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert!(result.failed.is_empty());
+
+        // The sink was invoked 3 times with retry_count 0, 1, 2 respectively.
+        let observed = observed_retry_counts.lock().unwrap().clone();
+        assert_eq!(
+            observed,
+            vec![
+                Some("0".to_string()),
+                Some("1".to_string()),
+                Some("2".to_string()),
+            ]
+        );
     }
 }
