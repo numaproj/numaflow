@@ -1107,6 +1107,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#observing-the-retry-count" class="md-nav__link">
+    Observing the Retry Count
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sink-example-with-retry-strategy" class="md-nav__link">
     Sink Example with Retry Strategy
   </a>
@@ -2839,6 +2846,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#observing-the-retry-count" class="md-nav__link">
+    Observing the Retry Count
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sink-example-with-retry-strategy" class="md-nav__link">
     Sink Example with Retry Strategy
   </a>
@@ -2951,6 +2965,17 @@ unexpected issues efficiently.</p>
 <blockquote>
 <p>Default: <code>retry</code></p>
 </blockquote>
+<h3 id="observing-the-retry-count">Observing the Retry Count<a class="headerlink" href="#observing-the-retry-count" title="Permanent link">&para;</a></h3>
+<p>For user-defined sinks, Numaflow exposes the current retry attempt count to your sink container
+through the request's system metadata. This lets your sink logic react to how many times a message
+has already been retried, for example to emit a metric or log retry attempts.</p>
+<p>The value is available under the <code>sink</code> group of the system metadata, keyed by <code>retry_count</code>, and is
+stored as a string. It is <code>0</code> on the first attempt and incremented by one for each subsequent retry.</p>
+<p>The exact accessor depends on the SDK; the value lives in the <code>Datum</code>/request system metadata under:</p>
+<ul>
+<li>Group: <code>sink</code></li>
+<li>Key: <code>retry_count</code></li>
+</ul>
 <h3 id="sink-example-with-retry-strategy">Sink Example with Retry Strategy<a class="headerlink" href="#sink-example-with-retry-strategy" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
