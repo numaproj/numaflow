@@ -1811,6 +1811,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_streaming_write_bypass_preserves_nack_options() {
+        // Regression: with a primary-sink bypass configured, process_batch returns
+        // early (before any write). A nacked input must still NAK with its options
+        // while the rest are acked (no handle leak).
+        use crate::config::monovertex::BypassConditions;
+        use crate::message::NackOptions;
+        use numaflow_models::models::{ForwardConditions, TagConditions};
+
+        // sink.is_some() is all that matters; content is ignored (`_sink`).
+        let bypass = BypassConditions {
+            sink: Some(Box::new(ForwardConditions::new(TagConditions::new(vec![])))),
+            fallback: None,
+            on_success: None,
+        };
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Blackhole)
+                .bypass_conditions(bypass)
+                .build()
+                .await
+                .unwrap();
+
+        let opts = NackOptions {
+            delay: Some(750),
+            max_deliveries: None,
+            reason: Some("bypass nack".to_string()),
+        };
+        let (h_ok, rx_ok) = sink_handle(0, None, None);
+        let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
+
+        let (tx, rx) = mpsc::channel(10);
+        for h in [h_ok, h_nack] {
+            tx.send(h).await.unwrap();
+        }
+        drop(tx);
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .await
+            .unwrap();
+        handle.await.unwrap().unwrap();
+
+        assert_eq!(rx_ok.await.unwrap(), ReadAck::Ack);
+        assert_eq!(rx_nack.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[tokio::test]
     async fn test_split_batch_handles_acked_and_nacked() {
         use crate::message::{IntOffset, MessageID, NackOptions, Offset};
 
