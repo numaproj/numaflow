@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Code, Request, Status, Streaming};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::Error;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
-use crate::error::is_udf_transport_failure;
 use crate::message::Message;
+use crate::metrics::critical_error_reasons;
 use crate::shared::grpc::{UdfReconnectConfig, create_sink_client, prost_timestamp_from_utc};
 use crate::sinker::sink::{ResponseFromSink, Sink};
 
@@ -121,6 +122,13 @@ impl UserDefinedSink {
         Ok(())
     }
 
+    fn redrive_error(status: Status) -> Error {
+        warn!(?status, "sink UDF error, redriving after reconnect");
+        critical_error!(VERTEX_TYPE_SINK, critical_error_reasons::SINK_RUNTIME_ERROR);
+        runtime::persist_application_error(status.clone());
+        Error::UdfRedrive(Box::new(status))
+    }
+
     async fn sink_once(&mut self, requests: &[SinkRequest]) -> Result<Vec<ResponseFromSink>> {
         let num_requests = requests.len();
 
@@ -128,7 +136,7 @@ impl UserDefinedSink {
             self.sink_tx
                 .send(request)
                 .await
-                .map_err(|e| Error::UdfRedrive(Box::new(Status::unavailable(e.to_string()))))?;
+                .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
         }
 
         let eot_request = SinkRequest {
@@ -139,21 +147,20 @@ impl UserDefinedSink {
         self.sink_tx
             .send(eot_request)
             .await
-            .map_err(|e| Error::UdfRedrive(Box::new(Status::unavailable(e.to_string()))))?;
+            .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
 
         let mut responses = Vec::new();
         loop {
             let response = match self.resp_stream.message().await {
                 Ok(Some(response)) => response,
                 Ok(None) => {
-                    return Err(Error::UdfRedrive(Box::new(Status::unavailable(
+                    return Err(Self::redrive_error(Status::unavailable(
                         "sink response stream closed",
-                    ))));
+                    )));
                 }
-                Err(e) if is_udf_transport_failure(&e) => {
-                    return Err(Error::UdfRedrive(Box::new(e)));
+                Err(e) => {
+                    return Err(Self::redrive_error(e));
                 }
-                Err(e) => return Err(Error::Grpc(Box::new(e))),
             };
 
             if response.status.is_some_and(|s| s.eot) {

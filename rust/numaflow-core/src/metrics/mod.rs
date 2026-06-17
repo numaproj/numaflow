@@ -89,6 +89,12 @@ const ACK_TOTAL: &str = "ack";
 const UDF_ERROR_TOTAL: &str = "udf_error";
 const CRITICAL_ERROR_TOTAL: &str = "critical_error";
 
+pub(crate) mod critical_error_reasons {
+    pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
+    pub(crate) const SOURCE_TRANSFORMER_RUNTIME_ERROR: &str = "source_transformer_runtime_error";
+    pub(crate) const SINK_RUNTIME_ERROR: &str = "sink_runtime_error";
+}
+
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
 const FALLBACK_SINK_WRITE_ERRORS_TOTAL: &str = "fbsink_write_errors";

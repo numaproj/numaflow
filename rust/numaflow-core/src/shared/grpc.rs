@@ -186,7 +186,11 @@ pub(crate) async fn create_rpc_channel_with_interval(
             return Err(Error::Cancelled());
         }
 
-        match connect_with_uds(socket_path.clone()).await {
+        let connect = connect_with_uds(socket_path.clone());
+        match tokio::select! {
+            _ = cln_token.cancelled() => return Err(Error::Cancelled()),
+            result = connect => result,
+        } {
             Ok(channel) => return Ok(channel),
             Err(e) => {
                 warn!(error = ?e, ?socket_path, "Failed to connect to UDS socket");

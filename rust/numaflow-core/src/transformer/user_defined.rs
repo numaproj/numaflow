@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
     source_transform_client::SourceTransformClient, source_transform_response,
@@ -11,9 +12,11 @@ use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
 
 use crate::config::get_vertex_name;
-use crate::error::{Error, Result, is_udf_transport_failure};
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
+use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
 use crate::metadata::Metadata;
+use crate::metrics::critical_error_reasons;
 use crate::shared::grpc::{
     UdfReconnectConfig, create_transformer_client, prost_timestamp_from_utc, utc_from_timestamp,
 };
@@ -182,24 +185,35 @@ impl UserDefinedTransformer {
         }
     }
 
+    fn record_udf_error(status: &Status) {
+        critical_error!(
+            VERTEX_TYPE_SOURCE,
+            critical_error_reasons::SOURCE_TRANSFORMER_RUNTIME_ERROR
+        );
+        runtime::persist_application_error(status.clone());
+    }
+
     // receive responses from the server and gets the corresponding oneshot sender from the map
     // and sends the response.
     async fn receive_responses(
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let error = if is_udf_transport_failure(&e) {
-                    Error::UdfRedrive(Box::new(e.clone()))
-                } else {
-                    Error::Grpc(Box::new(e.clone()))
-                };
-                Self::drain_senders(&sender_map, error).await;
-                None
-            }
-        } {
+        loop {
+            let resp = match resp_stream.message().await {
+                Ok(Some(resp)) => resp,
+                Ok(None) => {
+                    let status = Status::unavailable("source transformer stream closed");
+                    Self::record_udf_error(&status);
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(status))).await;
+                    break;
+                }
+                Err(e) => {
+                    Self::record_udf_error(&e);
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(e.clone()))).await;
+                    break;
+                }
+            };
             let msg_id = resp.id;
             if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
                 let mut response_messages = vec![];
@@ -210,14 +224,6 @@ impl UserDefinedTransformer {
                 let _ = sender.send(Ok(response_messages));
             }
         }
-
-        Self::drain_senders(
-            &sender_map,
-            Error::UdfRedrive(Box::new(Status::unavailable(
-                "source transformer stream closed",
-            ))),
-        )
-        .await;
     }
 
     async fn reconnect(&mut self) -> Result<()> {
@@ -252,6 +258,13 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
+        if self.task_handle.is_finished()
+            && let Err(e) = self.reconnect().await
+        {
+            let _ = respond_to.send(Err(e));
+            return;
+        }
+
         let key = message.offset.clone().to_string();
 
         let msg_info = ParentMessageInfo {

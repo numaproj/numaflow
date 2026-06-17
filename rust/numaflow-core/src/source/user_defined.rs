@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
@@ -14,9 +15,10 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
 
-use crate::error::is_udf_transport_failure;
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
+use crate::metrics::critical_error_reasons;
 use crate::reader::LagReader;
 use crate::shared::grpc::{UdfReconnectConfig, create_source_client, utc_from_timestamp};
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
@@ -25,6 +27,10 @@ use tracing::warn;
 
 pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
+// Read, ack, partitions, and lag/pending calls all use SourceClient clones. Keep a shared
+// handle so reconnecting either stream refreshes the unary client used by lag/partition probes.
+type SharedSourceClient = Arc<Mutex<SourceClient<Channel>>>;
+
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
 pub(crate) struct UserDefinedSourceRead {
@@ -32,7 +38,7 @@ pub(crate) struct UserDefinedSourceRead {
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
     timeout: Duration,
-    source_client: SourceClient<Channel>,
+    source_client: SharedSourceClient,
     cln_token: CancellationToken,
     reconnect_config: ReconnectConfig,
 }
@@ -43,6 +49,7 @@ pub(crate) struct UserDefinedSourceAck {
     ack_tx: mpsc::Sender<AckRequest>,
     ack_resp_stream: Streaming<AckResponse>,
     client: SourceClient<Channel>,
+    shared_client: SharedSourceClient,
     supports_nack: bool,
     reconnect_config: ReconnectConfig,
     batch_size: usize,
@@ -61,19 +68,26 @@ pub(crate) async fn new_source(
     UserDefinedSourceAck,
     UserDefinedSourceLagReader,
 )> {
+    let shared_client = Arc::new(Mutex::new(client.clone()));
     let src_read = UserDefinedSourceRead::new(
         client.clone(),
         num_records,
         read_timeout,
         cln_token,
         reconnect_config.clone(),
+        Arc::clone(&shared_client),
     )
     .await?;
 
-    let src_ack =
-        UserDefinedSourceAck::new(client.clone(), num_records, supports_nack, reconnect_config)
-            .await?;
-    let lag_reader = UserDefinedSourceLagReader::new(client);
+    let src_ack = UserDefinedSourceAck::new(
+        client,
+        num_records,
+        supports_nack,
+        reconnect_config,
+        Arc::clone(&shared_client),
+    )
+    .await?;
+    let lag_reader = UserDefinedSourceLagReader::new(shared_client);
 
     Ok((src_read, src_ack, lag_reader))
 }
@@ -85,6 +99,7 @@ impl UserDefinedSourceRead {
         timeout: Duration,
         cln_token: CancellationToken,
         reconnect_config: ReconnectConfig,
+        shared_client: SharedSourceClient,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
@@ -93,7 +108,7 @@ impl UserDefinedSourceRead {
             resp_stream,
             num_records: batch_size,
             timeout,
-            source_client: client,
+            source_client: shared_client,
             cln_token,
             reconnect_config,
         })
@@ -140,7 +155,10 @@ impl UserDefinedSourceRead {
     }
 
     pub(crate) fn get_source_client(&self) -> SourceClient<Channel> {
-        self.source_client.clone()
+        self.source_client
+            .lock()
+            .expect("source client lock poisoned")
+            .clone()
     }
 
     async fn reconnect_reader(&mut self) -> Result<()> {
@@ -155,8 +173,20 @@ impl UserDefinedSourceRead {
         let (read_tx, resp_stream) = Self::create_reader(self.num_records, &mut client).await?;
         self.read_tx = read_tx;
         self.resp_stream = resp_stream;
-        self.source_client = client;
+        *self
+            .source_client
+            .lock()
+            .expect("source client lock poisoned") = client;
         Ok(())
+    }
+
+    fn record_udf_error(status: &Status) {
+        warn!(?status, "source UDF error, reconnecting");
+        critical_error!(
+            VERTEX_TYPE_SOURCE,
+            critical_error_reasons::SOURCE_RUNTIME_ERROR
+        );
+        runtime::persist_application_error(status.clone());
     }
 }
 
@@ -254,7 +284,8 @@ impl SourceReader for UserDefinedSourceRead {
         };
 
         if let Err(e) = self.read_tx.send(request).await {
-            warn!(?e, "source read stream is closed, reconnecting");
+            let status = Status::unavailable(format!("source read stream closed: {e}"));
+            Self::record_udf_error(&status);
             return Some(self.reconnect_reader().await.map(|_| Vec::new()));
         }
 
@@ -263,11 +294,8 @@ impl SourceReader for UserDefinedSourceRead {
         while let Some(response) = match self.resp_stream.message().await {
             Ok(response) => response,
             Err(e) => {
-                if is_udf_transport_failure(&e) {
-                    warn!(?e, "source read stream failed, reconnecting");
-                    return Some(self.reconnect_reader().await.map(|_| messages));
-                }
-                return Some(Err(Error::Grpc(Box::new(e))));
+                Self::record_udf_error(&e);
+                return Some(self.reconnect_reader().await.map(|_| messages));
             }
         } {
             if response.status.is_some_and(|status| status.eot) {
@@ -288,8 +316,12 @@ impl SourceReader for UserDefinedSourceRead {
     }
 
     async fn partitions(&mut self) -> Result<SourcePartitions> {
-        let result = self
+        let mut source_client = self
             .source_client
+            .lock()
+            .expect("source client lock poisoned")
+            .clone();
+        let result = source_client
             .partitions_fn(Request::new(()))
             .await
             .map_err(|e| Error::Source(e.to_string()))?
@@ -310,6 +342,7 @@ impl UserDefinedSourceAck {
         batch_size: usize,
         supports_nack: bool,
         reconnect_config: ReconnectConfig,
+        shared_client: SharedSourceClient,
     ) -> Result<Self> {
         let (ack_tx, ack_resp_stream) = Self::create_acker(batch_size, &mut client).await?;
 
@@ -317,6 +350,7 @@ impl UserDefinedSourceAck {
             ack_tx,
             ack_resp_stream,
             client,
+            shared_client,
             supports_nack,
             reconnect_config,
             batch_size,
@@ -375,11 +409,16 @@ impl UserDefinedSourceAck {
         let (ack_tx, ack_resp_stream) = Self::create_acker(self.batch_size, &mut client).await?;
         self.ack_tx = ack_tx;
         self.ack_resp_stream = ack_resp_stream;
+        *self
+            .shared_client
+            .lock()
+            .expect("source client lock poisoned") = client.clone();
         self.client = client;
         Ok(())
     }
 
     async fn reconnect_redrive(&mut self, status: Status) -> Result<()> {
+        UserDefinedSourceRead::record_udf_error(&status);
         self.reconnect_acker().await?;
         Err(Error::UdfRedrive(Box::new(status)))
     }
@@ -415,10 +454,9 @@ impl SourceAcker for UserDefinedSourceAck {
                     .reconnect_redrive(Status::unavailable("source ack stream closed"))
                     .await;
             }
-            Err(e) if is_udf_transport_failure(&e) => {
+            Err(e) => {
                 return self.reconnect_redrive(e).await;
             }
-            Err(e) => return Err(Error::Grpc(Box::new(e))),
         }
 
         Ok(())
@@ -451,10 +489,9 @@ impl SourceAcker for UserDefinedSourceAck {
             .await
         {
             Ok(response) => response,
-            Err(e) if is_udf_transport_failure(&e) => {
+            Err(e) => {
                 return self.reconnect_redrive(e).await;
             }
-            Err(e) => return Err(Error::Grpc(Box::new(e))),
         };
 
         response
@@ -468,19 +505,23 @@ impl SourceAcker for UserDefinedSourceAck {
 
 #[derive(Clone)]
 pub(crate) struct UserDefinedSourceLagReader {
-    source_client: SourceClient<Channel>,
+    source_client: SharedSourceClient,
 }
 
 impl UserDefinedSourceLagReader {
-    fn new(source_client: SourceClient<Channel>) -> Self {
+    fn new(source_client: SharedSourceClient) -> Self {
         Self { source_client }
     }
 }
 
 impl LagReader for UserDefinedSourceLagReader {
     async fn pending(&mut self) -> Result<Option<usize>> {
-        Ok(self
+        let mut source_client = self
             .source_client
+            .lock()
+            .expect("source client lock poisoned")
+            .clone();
+        Ok(source_client
             .pending_fn(Request::new(()))
             .await
             .map_err(|e| Error::Grpc(Box::new(e)))?
