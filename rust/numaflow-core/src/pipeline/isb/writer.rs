@@ -2167,6 +2167,47 @@ mod simple_buffer_tests {
         type ISBWriter = AlwaysFailWriter;
     }
 
+    // ==================== Nack Interception Tests ====================
+
+    /// Test: Messages with NACK tag are intercepted by the writer — the handle receives
+    /// `ReadAck::Nak(Some(opts))` and nothing is written to the buffer.
+    #[tokio::test]
+    async fn test_writer_intercepts_nacked_message() {
+        use crate::message::NackOptions;
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let handle = orchestrator
+            .streaming_write(ReceiverStream::new(rx), cancel.clone())
+            .await
+            .unwrap();
+
+        let opts = NackOptions {
+            delay: Some(1500),
+            max_deliveries: None,
+            reason: Some("udf nack".to_string()),
+        };
+        let (mut msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__NACK__"]));
+        msg.message.nack_options = Some(opts.clone());
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Interception: the handle NAKs with options, and nothing is written.
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+        handle.await.unwrap().unwrap();
+        assert_eq!(
+            adapter.pending_count(),
+            0,
+            "a nacked message must NOT be written to the buffer"
+        );
+    }
+
     /// Reproduces the cancellation-during-retry bug in
     /// `ISBWriterOrchestrator::write_to_stream` (https://github.com/numaproj/numaflow/issues/3403).
     ///
