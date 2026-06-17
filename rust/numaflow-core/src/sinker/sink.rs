@@ -4,20 +4,20 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::{Message, MessageHandle, MessageID, NackOptions};
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
-    pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
 use crate::sinker::builder::HealthCheckClients;
 // Re-export SinkWriterBuilder for external use
 pub(crate) use crate::sinker::builder::SinkWriterBuilder;
+use crate::{Result, mark_failed_batch};
 use crate::{mark_failed, mark_success_batch};
-use crate::{mark_failed_batch, Result};
 use numaflow_kafka::sink::KafkaSink;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serve::{ServingStore, StoreEntry};
@@ -27,8 +27,8 @@ use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::{pin, time};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
@@ -106,8 +106,7 @@ impl ProcessedSinkBatch {
 
 impl From<SinkActorResponse> for ProcessedSinkBatch {
     fn from(value: SinkActorResponse) -> Self {
-        ProcessedSinkBatch::new()
-            .with_nacked(value.nacked)
+        ProcessedSinkBatch::new().with_nacked(value.nacked)
     }
 }
 
@@ -303,9 +302,10 @@ impl SinkWriter {
                 .nacked
                 .into_iter()
                 .fold(vec![], |mut acc, msg| {
-                    let mut handle = read_map.remove(&msg.id)
-                        .expect("nacked message not found in message handle batch read into sink. \
-                        There is a duplicate in msg handle batch.");
+                    let mut handle = read_map.remove(&msg.id).expect(
+                        "nacked message not found in message handle batch read into sink. \
+                        There is a duplicate in msg handle batch.",
+                    );
                     // Update the nack options stored in the handle with options
                     // that came from downstream (udsink, fb_udsink, ons_udsink)
                     handle.message.nack_options = msg.nack_options;
@@ -333,8 +333,7 @@ impl SinkWriter {
         if let Some(conditions) = &self.bypass_conditions
             && let Some(ref _sink) = conditions.sink
         {
-            return Ok(ProcessedSinkBatch::new()
-                .with_nacked(nacked));
+            return Ok(ProcessedSinkBatch::new().with_nacked(nacked));
         }
 
         // Separate dropped messages from messages to process
@@ -347,8 +346,7 @@ impl SinkWriter {
         // If all messages were dropped, we're done
         if to_process.is_empty() {
             send_drop_metrics(is_mono_vertex(), dropped_count);
-            return Ok(ProcessedSinkBatch::new()
-                .with_nacked(nacked));
+            return Ok(ProcessedSinkBatch::new().with_nacked(nacked));
         }
 
         // Perform the write operation
@@ -455,8 +453,7 @@ impl SinkWriter {
         .into_iter()
         .flatten()
         .fold(
-            ProcessedSinkBatch::new()
-                .with_nacked(response.nacked),
+            ProcessedSinkBatch::new().with_nacked(response.nacked),
             ProcessedSinkBatch::merge_with,
         );
 
@@ -895,7 +892,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Once;
     use tokio::sync::mpsc::Receiver;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
 
     struct SimpleSink;
