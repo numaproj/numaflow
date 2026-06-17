@@ -519,8 +519,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
-            // TODO: update once nack option wiring in map is available
-            nack_options: None,
+            nack_options: value.0.nack_options.map(Into::into),
         }
     }
 }

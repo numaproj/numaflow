@@ -1,37 +1,37 @@
+use crate::config::monovertex::BypassConditions;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::mark_success_batch;
-use crate::message::{Message, MessageHandle};
+use crate::message::{Message, MessageHandle, MessageID, NackOptions};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
+    pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL,
 };
 use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
-use crate::{Result, mark_failed_batch};
+use crate::sinker::builder::HealthCheckClients;
+// Re-export SinkWriterBuilder for external use
+pub(crate) use crate::sinker::builder::SinkWriterBuilder;
+use crate::{mark_failed, mark_success_batch};
+use crate::{mark_failed_batch, Result};
 use numaflow_kafka::sink::KafkaSink;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
+use serve::{ServingStore, StoreEntry};
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::{pin, time};
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
-
-use crate::config::monovertex::BypassConditions;
-use crate::sinker::builder::HealthCheckClients;
-// Re-export SinkWriterBuilder for external use
-pub(crate) use crate::sinker::builder::SinkWriterBuilder;
-use serve::{ServingStore, StoreEntry};
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
@@ -75,6 +75,40 @@ pub(crate) enum SinkClientType {
     Sqs(SqsSink),
     Kafka(KafkaSink),
     Pulsar(Box<PulsarSink>),
+}
+
+/// Aims to contain messages that require special handling,
+/// eg: nack with options, for them to be carried back to the callee
+///
+/// This struct is introduced here to allow for extensibility
+/// in case we need to implement ack with options in the future
+#[derive(Default)]
+pub(crate) struct ProcessedSinkBatch {
+    // Messages that are to be nacked back to source
+    pub(crate) nacked: Vec<Message>,
+}
+
+impl ProcessedSinkBatch {
+    pub(crate) fn new() -> Self {
+        ProcessedSinkBatch::default()
+    }
+
+    pub(crate) fn with_nacked(mut self, nacked: Vec<Message>) -> Self {
+        self.nacked.extend(nacked);
+        self
+    }
+
+    pub(crate) fn merge_with(mut self, other: Self) -> Self {
+        self.nacked.extend(other.nacked);
+        self
+    }
+}
+
+impl From<SinkActorResponse> for ProcessedSinkBatch {
+    fn from(value: SinkActorResponse) -> Self {
+        ProcessedSinkBatch::new()
+            .with_nacked(value.nacked)
+    }
 }
 
 /// SinkWriter is a writer that writes messages to the Sink.
@@ -222,16 +256,20 @@ impl SinkWriter {
 
                     let messages = read_batch.iter().map(|msg| msg.message().clone()).collect();
                     match self.process_batch(messages, cln_token.clone()).await {
-                        Ok(()) => {
+                        Ok(processed_messages) => {
                             // Batch processed successfully
 
-                            // TODO(per-message-nack): Split the NACK-tagged messages out here
-                            // and mark_failed(.., msg.nack_options)
-                            // instead of mark_success, so the source redelivers them.
-                            mark_success_batch!(read_batch);
+                            let (acked_handles, nacked_handles) =
+                                Self::split_batch_handles(read_batch, processed_messages);
+
+                            for nacked_handle in nacked_handles {
+                                let opts = nacked_handle.message.nack_options.clone();
+                                mark_failed!(nacked_handle, "message nacked", opts);
+                            }
+                            mark_success_batch!(acked_handles);
                         }
                         Err(e) => {
-                            mark_failed_batch!(read_batch, &e, None);
+                            mark_failed_batch!(read_batch, &e);
                             // Critical error, cancel upstream and initiate shutdown
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
@@ -247,22 +285,60 @@ impl SinkWriter {
         }))
     }
 
-    /// Processes a batch of messages: handles bypass, dropped messages, and writes to sink.
+    pub(crate) fn split_batch_handles(
+        read_batch: Vec<MessageHandle>,
+        processed_sink_batch: ProcessedSinkBatch,
+    ) -> (Vec<MessageHandle>, Vec<MessageHandle>) {
+        let mut read_map: HashMap<MessageID, MessageHandle> =
+            read_batch
+                .into_iter()
+                .fold(Default::default(), |mut mp, msg| {
+                    mp.insert(msg.message.id.clone(), msg);
+                    mp
+                });
+
+        // Gather the final list of messages to be nacked
+        let nacked_handles =
+            processed_sink_batch
+                .nacked
+                .into_iter()
+                .fold(vec![], |mut acc, msg| {
+                    let mut handle = read_map.remove(&msg.id)
+                        .expect("nacked message not found in message handle batch read into sink. \
+                        There is a duplicate in msg handle batch.");
+                    // Update the nack options stored in the handle with options
+                    // that came from downstream (udsink, fb_udsink, ons_udsink)
+                    handle.message.nack_options = msg.nack_options;
+                    acc.push(handle);
+                    acc
+                });
+
+        // Rest of the messages should be acked
+        let acked_handles = read_map.into_values().collect();
+
+        (acked_handles, nacked_handles)
+    }
+
+    /// Processes a batch of message handles: handles bypass, dropped messages, and writes to sink.
     /// On success, all messages are ACK'd. On error, messages are NAK'd (dropped without ack).
     async fn process_batch(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<ProcessedSinkBatch> {
+        let (nacked, to_process): (Vec<_>, Vec<_>) =
+            messages.into_iter().partition(|read_msg| read_msg.nacked());
+
         // If bypass conditions exist for primary sink, ack and skip
         if let Some(conditions) = &self.bypass_conditions
             && let Some(ref _sink) = conditions.sink
         {
-            return Ok(());
+            return Ok(ProcessedSinkBatch::new()
+                .with_nacked(nacked));
         }
 
         // Separate dropped messages from messages to process
-        let (dropped, to_process): (Vec<_>, Vec<_>) = messages
+        let (dropped, to_process): (Vec<_>, Vec<_>) = to_process
             .into_iter()
             .partition(|read_msg| read_msg.dropped());
 
@@ -271,14 +347,20 @@ impl SinkWriter {
         // If all messages were dropped, we're done
         if to_process.is_empty() {
             send_drop_metrics(is_mono_vertex(), dropped_count);
-            return Ok(());
+            return Ok(ProcessedSinkBatch::new()
+                .with_nacked(nacked));
         }
 
         // Perform the write operation
-        self.write_to_sink(to_process, cln_token.clone()).await?;
+        let written_messages = self
+            .write_to_sink(to_process, cln_token.clone())
+            .await?
+            .with_nacked(nacked);
 
         send_drop_metrics(is_mono_vertex(), dropped_count);
-        Ok(())
+        // TODO: add nacked metrics
+
+        Ok(written_messages)
     }
 
     /// Write the messages to the Sink.
@@ -287,11 +369,14 @@ impl SinkWriter {
         &mut self,
         mut messages: Vec<Message>,
         cln_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<ProcessedSinkBatch> {
         if messages.is_empty() {
-            return Ok(());
+            return Ok(ProcessedSinkBatch::new());
         }
 
+        let mut processed_fallback_msgs: Option<ProcessedSinkBatch> = None;
+        let mut processed_on_success_msgs: Option<ProcessedSinkBatch> = None;
+        let mut processed_serving_msgs: Option<ProcessedSinkBatch> = None;
         let write_start_time = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
@@ -343,20 +428,37 @@ impl SinkWriter {
 
         // If there are fallback messages, write them to the fallback sink
         if !response.fallback.is_empty() {
-            self.write_to_fallback(response.fallback, cln_token.clone())
-                .await?;
+            processed_fallback_msgs = Some(
+                self.write_to_fallback(response.fallback, cln_token.clone())
+                    .await?,
+            );
         }
 
         // If there are on_success messages, write them to the on_success sink
         if !response.on_success.is_empty() {
-            self.write_to_on_success(response.on_success, cln_token.clone())
-                .await?;
+            processed_on_success_msgs = Some(
+                self.write_to_on_success(response.on_success, cln_token.clone())
+                    .await?,
+            );
         }
 
         // If there are serving messages, write them to the serving store
         if !response.serving.is_empty() {
-            self.write_to_serving_store(response.serving).await?;
+            processed_serving_msgs = Some(self.write_to_serving_store(response.serving).await?);
         }
+
+        let processed_primary_messages = [
+            processed_fallback_msgs,
+            processed_on_success_msgs,
+            processed_serving_msgs,
+        ]
+        .into_iter()
+        .flatten()
+        .fold(
+            ProcessedSinkBatch::new()
+                .with_nacked(response.nacked),
+            ProcessedSinkBatch::merge_with,
+        );
 
         Self::send_metrics(
             messages_count,
@@ -368,7 +470,7 @@ impl SinkWriter {
             write_start_time,
         );
 
-        Ok(())
+        Ok(processed_primary_messages)
     }
 
     /// Write messages to the OnSuccess Sink.
@@ -376,9 +478,9 @@ impl SinkWriter {
         &mut self,
         mut messages: Vec<Message>,
         cln_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<ProcessedSinkBatch> {
         if messages.is_empty() {
-            return Ok(());
+            return Ok(ProcessedSinkBatch::new());
         }
 
         let on_success_sink_start = time::Instant::now();
@@ -424,7 +526,7 @@ impl SinkWriter {
 
         Self::send_ons_sink_metrics(messages_count, messages_size, on_success_sink_start);
 
-        Ok(())
+        Ok(on_success_response.into())
     }
 
     /// Write the messages to the Fallback Sink.
@@ -432,9 +534,9 @@ impl SinkWriter {
         &mut self,
         mut messages: Vec<Message>,
         cln_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<ProcessedSinkBatch> {
         if messages.is_empty() {
-            return Ok(());
+            return Ok(ProcessedSinkBatch::new());
         }
 
         let fallback_sink_start = time::Instant::now();
@@ -477,11 +579,14 @@ impl SinkWriter {
 
         Self::send_fb_sink_metrics(messages_count, messages_size, fallback_sink_start);
 
-        Ok(())
+        Ok(fb_response.into())
     }
 
     /// Writes the serving messages to the serving store
-    async fn write_to_serving_store(&mut self, messages: Vec<Message>) -> Result<()> {
+    async fn write_to_serving_store(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> Result<ProcessedSinkBatch> {
         let Some(serving_store) = &mut self.serving_store else {
             return Err(Error::Sink(
                 "Response contains serving messages but no serving store is configured. \
@@ -492,7 +597,7 @@ impl SinkWriter {
 
         // convert Message to StoreEntry
         let mut payloads = Vec::with_capacity(messages.len());
-        for msg in messages {
+        for msg in messages.clone() {
             let id = msg
                 .headers
                 .get(DEFAULT_ID_HEADER)
@@ -520,7 +625,7 @@ impl SinkWriter {
             }
         }
 
-        Ok(())
+        Ok(ProcessedSinkBatch::new())
     }
 
     /// Check if the Sink is ready to accept messages.
@@ -739,6 +844,8 @@ pub(crate) enum ResponseStatusFromSink {
     /// Write to serving store.
     Serve(Option<Vec<u8>>),
     OnSuccess(Option<sink_response::result::Message>),
+    // TODO: add options
+    Nack(Option<NackOptions>),
 }
 
 /// Sink will give a response per [Message].
@@ -758,6 +865,9 @@ impl From<sink_response::Result> for ResponseFromSink {
             Fallback => ResponseStatusFromSink::Fallback,
             Serve => ResponseStatusFromSink::Serve(value.serve_response),
             OnSuccess => ResponseStatusFromSink::OnSuccess(value.on_success_msg),
+            numaflow_pb::clients::sink::Status::Nack => {
+                ResponseStatusFromSink::Nack(value.nack_options.map(Into::into))
+            }
         };
         Self {
             id: value.id,
@@ -785,7 +895,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Once;
     use tokio::sync::mpsc::Receiver;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
 
     struct SimpleSink;
@@ -1391,6 +1501,7 @@ mod tests {
                 err_msg: "".to_string(),
                 serve_response: None,
                 on_success_msg: None,
+                nack_options: None,
             }],
             handshake: None,
             status: None,

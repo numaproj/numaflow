@@ -58,6 +58,8 @@ macro_rules! mark_success_batch {
 }
 
 /// Marks a batch of [MessageHandle]s as failed (consumes the batch), recording the failure reason.
+/// Also used for nacking messages using the nack options provided. Nack options provided should be
+/// a vector of same length as the batch of messages.
 ///
 /// # Example
 /// ```ignore
@@ -65,29 +67,28 @@ macro_rules! mark_success_batch {
 /// ```
 #[macro_export]
 macro_rules! mark_failed_batch {
-    ($batch:expr, $err:expr, $opt:expr) => {{
+    ($batch:expr, $err:expr) => {{
         for msg in $batch {
-            msg.mark_failed($err, $opt);
+            msg.mark_failed($err, None);
         }
     }};
 }
 
 use crate::Error;
-use std::cmp::{Ordering, PartialEq};
-use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
-use std::sync::OnceLock;
-use std::sync::atomic::AtomicUsize;
-use tracing::{error, warn};
-
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use std::cmp::{Ordering, PartialEq};
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicUsize;
 use tokio::sync::oneshot;
+use tracing::{error, warn};
 
 const DROP: &str = "U+005C__DROP__";
 const NACK: &str = "U+005C__NACK__";

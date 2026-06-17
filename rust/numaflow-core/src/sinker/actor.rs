@@ -19,6 +19,7 @@ pub(super) struct SinkActorResponse {
     pub(super) serving: Vec<Message>,
     pub(super) dropped: Vec<Message>,
     pub(super) on_success: Vec<Message>,
+    pub(super) nacked: Vec<Message>,
 }
 
 /// SinkActorMessage is a message that is sent to the SinkActor.
@@ -68,6 +69,7 @@ where
         let mut serving_messages = Vec::new();
         let mut dropped_messages = Vec::new();
         let mut on_success_messages = Vec::new();
+        let mut nacked_messages = Vec::new();
 
         // Build backoff iterator from retry config
         let backoff = Exponential::from_millis(
@@ -157,6 +159,14 @@ where
                             on_success_messages.push(msg);
                         }
                     }
+                    Some(ResponseStatusFromSink::Nack(options)) => {
+                        // Any message that was nacked upstream eg: in mono-vertex's udf,
+                        // would've been filtered out already before messages were sent
+                        // to sink for writing. So we can overwrite nack options here.
+                        let mut msg = msg;
+                        msg.nack_options = options;
+                        nacked_messages.push(msg);
+                    }
                     None => {
                         return Err(Error::Sink(format!(
                             "missing response from sink for message id: {msg_id}"
@@ -189,6 +199,7 @@ where
                     serving: serving_messages,
                     dropped: dropped_messages,
                     on_success: on_success_messages,
+                    nacked: nacked_messages,
                 });
             }
 
@@ -243,6 +254,7 @@ where
             serving: serving_messages,
             dropped: dropped_messages,
             on_success: on_success_messages,
+            nacked: nacked_messages,
         })
     }
 
