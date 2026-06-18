@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.1 (2026-06-17)
+
+ * [ff0daa902](https://github.com/numaproj/numaflow/commit/ff0daa90289fbc3a7bf274c534827e3e0265ad06) Update manifests to v1.8.1
+ * [b56679fba](https://github.com/numaproj/numaflow/commit/b56679fbae384abfccf67a81cb74f8e5a4816243) fix: cleanup wal on eof in accumulator (#3461)
+ * [c1326de7a](https://github.com/numaproj/numaflow/commit/c1326de7a5f59b9bae12e440a491758c265a6cac) feat: expose udsink retry count in the system metadata (#3464)
+ * [3a6041473](https://github.com/numaproj/numaflow/commit/3a60414731390d80c0d3944cb2b0121b1cef36f1) fix: pod logs streaming blocked by cleanResponseMiddleware buffering (#3471)
+
+### Contributors
+
+ * Surya Pratap Singh
+ * Vaibhav Tiwari
+ * Yashash Lokesh
+
 ## v1.8.0 (2026-05-28)
 
  * [3d8c11ff9](https://github.com/numaproj/numaflow/commit/3d8c11ff922ada1078db279c0b2272e8af59623c) Update manifests to v1.8.0
