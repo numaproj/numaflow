@@ -513,6 +513,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_map_unary_emits_nack() {
+        use numaflow::map;
+
+        struct NackMap;
+        #[tonic::async_trait]
+        impl map::Mapper for NackMap {
+            async fn map(&self, _input: map::MapRequest) -> Vec<map::Message> {
+                vec![map::Message::message_to_nack(Some(
+                    numaflow::shared::NackOptions {
+                        delay: Some(5000),
+                        max_deliveries: Some(3),
+                        reason: Some("udf nack".to_string()),
+                    },
+                ))]
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            map::Server::new(NackMap)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = UserDefinedUnaryMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+        )
+        .await
+        .unwrap();
+
+        let request = numaflow_pb::clients::map::MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: "hello".into(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "0".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let results = client
+            .unary(request, CancellationToken::new())
+            .await
+            .unwrap();
+        let result = results.first().expect("one result");
+        assert!(result.tags.contains(&"U+005C__NACK__".to_string()));
+        assert_eq!(
+            result.nack_options,
+            Some(numaflow_pb::common::nack_options::NackOptions {
+                reason: Some("udf nack".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            })
+        );
+
+        drop(client);
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+    }
+
+    #[tokio::test]
     async fn unary_method_cleans_up_on_read_tx_send_failure() {
         // Build a UserDefinedUnaryMap whose read_tx receiver has been dropped,
         // so that read_tx.send(..) inside `unary` fails immediately.
