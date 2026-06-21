@@ -645,6 +645,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_map_stream_emits_nack() {
+        use numaflow::mapstream;
+
+        struct NackStream;
+        #[tonic::async_trait]
+        impl mapstream::MapStreamer for NackStream {
+            async fn map_stream(
+                &self,
+                _input: mapstream::MapStreamRequest,
+                tx: tokio::sync::mpsc::Sender<mapstream::Message>,
+            ) {
+                let _ = tx
+                    .send(mapstream::Message::message_to_nack(Some(
+                        numaflow::shared::NackOptions {
+                            delay: Some(5000),
+                            max_deliveries: Some(3),
+                            reason: Some("udf nack".to_string()),
+                        },
+                    )))
+                    .await;
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map_stream.sock");
+        let server_info_file = tmp_dir.path().join("map_stream-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(NackStream)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = UserDefinedStreamMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+        )
+        .await
+        .unwrap();
+
+        let request = numaflow_pb::clients::map::MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: "hello".into(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "0".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let mut rx = client
+            .stream(request, tokio_util::sync::CancellationToken::new())
+            .await;
+        let mut all = vec![];
+        while let Some(resp) = rx.recv().await {
+            all.extend(resp.expect("ok"));
+        }
+        let result = all.first().expect("one result");
+        assert!(result.tags.contains(&"U+005C__NACK__".to_string()));
+        assert_eq!(
+            result.nack_options,
+            Some(numaflow_pb::common::nack_options::NackOptions {
+                reason: Some("udf nack".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            })
+        );
+
+        drop(client);
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        drop(handle);
+    }
+
+    #[tokio::test]
     async fn stream_method_cleans_up_on_read_tx_send_failure() {
         // Build a UserDefinedStreamMap whose read_tx receiver has been dropped,
         // so that read_tx.send(..) inside `stream` fails immediately.
