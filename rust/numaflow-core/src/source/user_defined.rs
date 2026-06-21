@@ -546,7 +546,7 @@ mod tests {
             }
         }
 
-        async fn nack(&self, offsets: Vec<Offset>) {
+        async fn nack(&self, offsets: Vec<Offset>, _nack_options: Option<numaflow::shared::NackOptions>) {
             //
             for offset in offsets {
                 self.yet_to_ack

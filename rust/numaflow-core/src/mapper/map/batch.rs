@@ -444,6 +444,7 @@ mod tests {
                     keys: Option::from(datum.keys),
                     value: datum.value,
                     tags: None,
+                    nack_options: None,
                 });
                 responses.push(response);
             }

@@ -2486,6 +2486,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow"
+version = "0.5.0"
+source = "git+https://github.com/numaproj/numaflow-rs?rev=ce81f940546ea97f77b9afb36020da0c3799aefc#ce81f940546ea97f77b9afb36020da0c3799aefc"
+dependencies = [
+ "chrono",
+ "hyper-util",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-types",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "numaflow-core"
 version = "0.1.0"
 dependencies = [
@@ -2508,7 +2531,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lz4",
- "numaflow 0.5.0",
+ "numaflow 0.5.0 (git+https://github.com/numaproj/numaflow-rs?rev=ce81f940546ea97f77b9afb36020da0c3799aefc)",
  "numaflow-http",
  "numaflow-kafka",
  "numaflow-models",
@@ -2730,7 +2753,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "hyper-util",
- "numaflow 0.5.0",
+ "numaflow 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "numaflow-models",
  "numaflow-pb",
  "numaflow-shared",
@@ -4234,7 +4257,7 @@ dependencies = [
  "chrono",
  "http 1.3.1",
  "hyper-util",
- "numaflow 0.5.0",
+ "numaflow 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "numaflow-models",
  "numaflow-pb",
  "parking_lot",

@@ -229,7 +229,7 @@ mod tests {
             }
         }
 
-        async fn nack(&self, _offsets: Vec<Offset>) {}
+        async fn nack(&self, _offsets: Vec<Offset>, _nack_options: Option<numaflow::shared::NackOptions>) {}
 
         async fn pending(&self) -> Option<usize> {
             Some(
@@ -357,6 +357,7 @@ mod tests {
                     keys: Option::from(datum.keys),
                     value: datum.value,
                     tags: None,
+                    nack_options: None,
                 });
                 responses.push(response);
             }

@@ -325,7 +325,7 @@ mod tests {
         ) {
         }
         async fn ack(&self, _offsets: Vec<numaflow::source::Offset>) {}
-        async fn nack(&self, _offsets: Vec<numaflow::source::Offset>) {}
+        async fn nack(&self, _offsets: Vec<numaflow::source::Offset>, _nack_options: Option<numaflow::shared::NackOptions>) {}
         async fn pending(&self) -> Option<usize> {
             Some(0)
         }
