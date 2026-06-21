@@ -1857,6 +1857,98 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_sink_own_nack_status_end_to_end() {
+        use crate::message::NackOptions;
+        use crate::shared::grpc::create_rpc_channel;
+        use numaflow::sink;
+        use numaflow_pb::clients::sink::sink_client::SinkClient;
+
+        // Mock sink that nacks every message with options (the sink's own Status::NACK).
+        struct NackSink;
+        #[tonic::async_trait]
+        impl sink::Sinker for NackSink {
+            async fn sink(
+                &self,
+                mut input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
+            ) -> Vec<sink::Response> {
+                let mut responses = vec![];
+                while let Some(datum) = input.recv().await {
+                    responses.push(sink::Response::nack(
+                        datum.id,
+                        Some(numaflow::shared::NackOptions {
+                            delay: Some(5000),
+                            max_deliveries: Some(3),
+                            reason: Some("sink rate limited".to_string()),
+                        }),
+                    ));
+                }
+                responses
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let server_handle = tokio::spawn(async move {
+            sink::Server::new(NackSink)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("sink server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let sink_client = SinkClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let cln = CancellationToken::new();
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(sink_client),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message {
+            keys: Arc::from(vec!["k".to_string()]),
+            value: "v".into(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "v".to_string().into(),
+                offset: "0".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+        let (tx, rx) = mpsc::channel(10);
+        tx.send(MessageHandle::new(message, ack_tx)).await.unwrap();
+        drop(tx);
+
+        let jh = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln)
+            .await
+            .unwrap();
+        jh.await.unwrap().unwrap();
+
+        assert_eq!(
+            ack_rx.await.unwrap(),
+            ReadAck::Nak(Some(NackOptions {
+                delay: Some(5000),
+                max_deliveries: Some(3),
+                reason: Some("sink rate limited".to_string()),
+            }))
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        server_handle.await.expect("join server");
+    }
+
+    #[tokio::test]
     async fn test_split_batch_handles_acked_and_nacked() {
         use crate::message::{IntOffset, MessageID, NackOptions, Offset};
 
