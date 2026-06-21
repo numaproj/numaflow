@@ -546,7 +546,11 @@ mod tests {
             }
         }
 
-        async fn nack(&self, offsets: Vec<Offset>, _nack_options: Option<numaflow::shared::NackOptions>) {
+        async fn nack(
+            &self,
+            offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
             //
             for offset in offsets {
                 self.yet_to_ack
@@ -641,6 +645,110 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
         server_handle.await.expect("failed to join server task");
+    }
+
+    #[tokio::test]
+    async fn test_source_nack_forwards_options() {
+        use numaflow::shared::NackOptions as SdkNackOptions;
+        use numaflow::source::{self, Message as SdkMsg, Offset as SdkOffset, SourceReadRequest};
+        use std::sync::{Arc, RwLock};
+        use tokio::sync::mpsc::Sender;
+        use tokio::sync::oneshot;
+
+        // Source that records the NackOptions its nack() receives.
+        struct RecSource {
+            recorded: Arc<RwLock<Vec<Option<SdkNackOptions>>>>,
+        }
+        #[tonic::async_trait]
+        impl source::Sourcer for RecSource {
+            async fn read(&self, request: SourceReadRequest, tx: Sender<SdkMsg>) {
+                for i in 0..request.count {
+                    let off = format!("o-{i}");
+                    tx.send(SdkMsg {
+                        value: b"v".to_vec(),
+                        event_time: Utc::now(),
+                        offset: SdkOffset {
+                            offset: off.into_bytes(),
+                            partition_id: 0,
+                        },
+                        keys: vec![],
+                        headers: Default::default(),
+                        user_metadata: None,
+                    })
+                    .await
+                    .unwrap();
+                }
+            }
+            async fn ack(&self, _offsets: Vec<SdkOffset>) {}
+            async fn nack(&self, _offsets: Vec<SdkOffset>, nack_options: Option<SdkNackOptions>) {
+                self.recorded.write().unwrap().push(nack_options);
+            }
+            async fn pending(&self) -> Option<usize> {
+                Some(0)
+            }
+            async fn partitions(&self) -> Option<Vec<i32>> {
+                Some(vec![0])
+            }
+        }
+
+        let recorded = Arc::new(RwLock::new(Vec::new()));
+        let cln_token = CancellationToken::new();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let rec_for_server = Arc::clone(&recorded);
+        let server_handle = tokio::spawn(async move {
+            source::Server::new(RecSource {
+                recorded: rec_for_server,
+            })
+            .with_socket_file(ss)
+            .with_server_info_file(si)
+            .start_with_shutdown(shutdown_rx)
+            .await
+            .unwrap()
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let (mut src_read, mut src_ack, _lag) =
+            new_source(client, 5, Duration::from_millis(1000), cln_token, true)
+                .await
+                .unwrap();
+
+        let messages = src_read.read().await.unwrap().unwrap();
+        let opts = NackOptions {
+            delay: Some(7000),
+            max_deliveries: Some(2),
+            reason: Some("retry".to_string()),
+        };
+        // nack() awaits the server's response, so `recorded` is populated when it returns.
+        src_ack
+            .nack(
+                messages.iter().map(|m| m.offset.clone()).collect(),
+                Some(opts),
+            )
+            .await
+            .unwrap();
+
+        {
+            let rec = recorded.read().unwrap();
+            assert_eq!(rec.len(), 1, "source nack should be invoked once");
+            assert_eq!(
+                rec.first().unwrap(),
+                &Some(SdkNackOptions {
+                    delay: Some(7000),
+                    max_deliveries: Some(2),
+                    reason: Some("retry".to_string()),
+                })
+            );
+        } // rec (RwLockReadGuard) dropped here, before any await points
+
+        drop(src_read);
+        drop(src_ack);
+        shutdown_tx.send(()).expect("send shutdown");
+        server_handle.await.expect("join server");
     }
 
     #[test]
