@@ -127,6 +127,7 @@ nav:
               - user-guide/reference/configuration/container-resources.md
               - user-guide/reference/configuration/volumes.md
               - user-guide/reference/configuration/environment-variables.md
+              - user-guide/reference/configuration/log-levels.md
               - user-guide/reference/configuration/labels-and-annotations.md
               - user-guide/reference/configuration/init-containers.md
               - user-guide/reference/configuration/sidecar-containers.md

@@ -129,6 +129,7 @@ const (
 	EnvLeaderElectionLeaseRenewPeriod   = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD"
 	EnvUDContainerType                  = "NUMAFLOW_UD_CONTAINER_TYPE"
 	EnvDebug                            = "NUMAFLOW_DEBUG"
+	EnvLogLevel                         = "NUMAFLOW_LOG_LEVEL"
 	EnvPPROF                            = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled              = "NUMAFLOW_HEALTH_CHECK_DISABLED"
 	EnvGRPCMaxMessageSize               = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
