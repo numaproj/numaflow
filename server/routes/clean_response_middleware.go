@@ -25,35 +25,59 @@ import (
 )
 
 var (
-	// "managedFields" is too annoying
+	// Fields stripped from buffered JSON responses.
 	cleanupFields = []string{"managedFields"}
 )
 
-// customResponseWriter wraps gin.ResponseWriter to capture the response body.
+// customResponseWriter buffers non-streaming responses so the middleware can
+// rewrite them. Calling Flush marks the response as streaming: buffered bytes
+// are drained and subsequent writes pass through directly.
 type customResponseWriter struct {
 	gin.ResponseWriter
-	body *bytes.Buffer
+	body      *bytes.Buffer
+	streaming bool
 }
 
-func (w customResponseWriter) Write(b []byte) (int, error) {
+func (w *customResponseWriter) Write(b []byte) (int, error) {
+	if w.streaming {
+		return w.ResponseWriter.Write(b)
+	}
 	return w.body.Write(b)
 }
 
-func (w customResponseWriter) WriteString(s string) (int, error) {
+func (w *customResponseWriter) WriteString(s string) (int, error) {
+	if w.streaming {
+		return w.ResponseWriter.WriteString(s)
+	}
 	return w.body.WriteString(s)
+}
+
+// Flush switches to streaming mode and forwards the flush to the underlying writer.
+func (w *customResponseWriter) Flush() {
+	if !w.streaming {
+		w.streaming = true
+		if w.body.Len() > 0 {
+			_, _ = w.ResponseWriter.Write(w.body.Bytes())
+			w.body.Reset()
+		}
+	}
+	w.ResponseWriter.Flush()
 }
 
 // cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
 func cleanResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Replace the original response writer with our custom one
 		w := &customResponseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = w
 
 		c.Next()
 
-		// At this point, the original handler has written to our customResponseWriter's body buffer.
-		// We can now access and modify the response data.
+		// If the handler streamed (called Flush at any point), bytes have
+		// already been sent to the client and no cleanup is possible.
+		if w.streaming {
+			return
+		}
+
 		originalBody := w.body.Bytes()
 
 		// Only process JSON responses
@@ -77,7 +101,7 @@ func cleanResponseMiddleware() gin.HandlerFunc {
 	}
 }
 
-// removeFieldRecursively removes all occurrences of the given field from a (possibly nested) JSON structure represented as map[string]interface{} or []interface{}.
+// removeFieldsRecursively removes fields from nested JSON objects and arrays.
 func removeFieldsRecursively(data interface{}, fields ...string) {
 	switch val := data.(type) {
 	case map[string]interface{}:

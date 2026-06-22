@@ -2,6 +2,14 @@ use bytes::Bytes;
 use numaflow_pb::common::metadata;
 use std::collections::HashMap;
 
+/// Group name under which sink-specific system metadata is stored in `sys_metadata`.
+pub(crate) const SINK_METADATA_GROUP: &str = "sink";
+
+/// Key under which the current retry attempt count is stored within the
+/// [`SINK_METADATA_GROUP`] group of `sys_metadata`. It is `0` on the first
+/// attempt and incremented by one for every subsequent retry.
+pub(crate) const RETRY_COUNT_KEY: &str = "retry_count";
+
 /// Metadata representation
 #[derive(Debug, Clone)]
 pub(crate) struct Metadata {
@@ -18,6 +26,25 @@ impl Default for Metadata {
             sys_metadata: HashMap::new(),
             user_metadata: HashMap::new(),
         }
+    }
+}
+
+impl Metadata {
+    /// Records the current sink retry attempt count under `sys_metadata["sink"]`
+    /// so that user-defined sinks can observe how many times a message has been retried.
+    /// `retry_count` is stored as the decimal string representation of `count`.
+    pub(crate) fn set_sink_retry_count(&mut self, count: u64) {
+        let sink_metadata = self
+            .sys_metadata
+            .entry(SINK_METADATA_GROUP.to_string())
+            .or_insert_with(|| KeyValueGroup {
+                key_value: HashMap::new(),
+            });
+
+        sink_metadata.key_value.insert(
+            RETRY_COUNT_KEY.to_string(),
+            Bytes::from(count.to_string().into_bytes()),
+        );
     }
 }
 
