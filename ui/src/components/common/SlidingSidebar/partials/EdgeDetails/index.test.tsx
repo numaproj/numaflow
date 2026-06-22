@@ -4,6 +4,8 @@ import { EdgeDetails } from "./index";
 
 import "@testing-library/jest-dom";
 
+const mockISBDebugRefresh = jest.fn();
+
 jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
   usePipelineISBDebugFetch: () => ({
     data: {
@@ -28,7 +30,7 @@ jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
     },
     loading: false,
     error: undefined,
-    refresh: jest.fn(),
+    refresh: mockISBDebugRefresh,
   }),
 }));
 
@@ -38,7 +40,7 @@ describe("EdgeDetails", () => {
   });
 
   it("no watermarks", async () => {
-    render(<EdgeDetails edgeId="test-edge" watermarks={[]} />);
+    render(<EdgeDetails edgeId="test-edge" />);
     await waitFor(() => {
       expect(screen.getByText("test-edge Edge")).toBeInTheDocument();
       expect(screen.getByText("No watermarks found")).toBeInTheDocument();
@@ -87,6 +89,12 @@ describe("EdgeDetails", () => {
         screen.getByText("test-namespace-test-pipeline-in-cat_OT")
       ).toBeInTheDocument();
       expect(screen.getByText(/target vertex buffer/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Refresh"));
+
+    await waitFor(() => {
+      expect(mockISBDebugRefresh).toHaveBeenCalledTimes(1);
     });
   });
 });

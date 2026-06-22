@@ -1,5 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -24,6 +25,7 @@ export interface PipelineISBDebugInfoProps {
   loading: boolean;
   error?: any;
   edgeScoped?: boolean;
+  onRefresh?: () => void;
 }
 
 const formatNumber = (value?: number) => (value ?? 0).toLocaleString("en-US");
@@ -59,14 +61,15 @@ const formatOptional = (value?: string | number) => {
 };
 
 const formatSeconds = (value?: number) => {
-  if (!value) {
+  if (value === undefined) {
     return "-";
   }
   return `${formatDecimal(value)}s`;
 };
 
 const ISB_UNAVAILABLE_MESSAGE = "ISB information is not available yet.";
-const PARTIAL_ISB_UNAVAILABLE_MESSAGE = "Some ISB information is not available yet.";
+const PARTIAL_ISB_UNAVAILABLE_MESSAGE =
+  "Some ISB information is not available yet.";
 
 const HeaderCell = ({ label }: { label: string }) => (
   <TableCell
@@ -109,7 +112,8 @@ const UnavailableRow = ({ colSpan }: { colSpan: number }) => (
   </TableRow>
 );
 
-const monitorErrorKey = (error: ISBMonitorError) => `${error.pod}-${error.message}`;
+const monitorErrorKey = (error: ISBMonitorError) =>
+  `${error.pod}-${error.message}`;
 
 const collectErrors = (
   streams?: PipelineISBStreamsResponse,
@@ -117,9 +121,11 @@ const collectErrors = (
   kvStores?: PipelineISBKVStoresResponse
 ) => {
   const errors = new Map<string, ISBMonitorError>();
-  [...(streams?.errors || []), ...(consumers?.errors || []), ...(kvStores?.errors || [])].forEach(
-    (error) => errors.set(monitorErrorKey(error), error)
-  );
+  [
+    ...(streams?.errors || []),
+    ...(consumers?.errors || []),
+    ...(kvStores?.errors || []),
+  ].forEach((error) => errors.set(monitorErrorKey(error), error));
   return Array.from(errors.values());
 };
 
@@ -189,6 +195,70 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
   </TableBody>
 );
 
+const MonitorErrorsSection = ({ errors }: { errors: ISBMonitorError[] }) => {
+  if (!errors.length) {
+    return null;
+  }
+  return (
+    <DebugSection title="Monitor Errors">
+      <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
+        <Table stickyHeader>
+          <TableHead>
+            <TableRow>
+              <HeaderCell label="Pod" />
+              <HeaderCell label="Error" />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {errors.map((item) => (
+              <TableRow key={monitorErrorKey(item)}>
+                <TableCell>{item.pod}</TableCell>
+                <TableCell>{item.message}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </DebugSection>
+  );
+};
+
+const RefreshButton = ({
+  loading,
+  onRefresh,
+}: {
+  loading: boolean;
+  onRefresh?: () => void;
+}) => {
+  if (!onRefresh) {
+    return null;
+  }
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "flex-end",
+        marginTop: "1.2rem",
+        marginBottom: "1.6rem",
+      }}
+    >
+      <Button
+        variant="outlined"
+        size="medium"
+        onClick={onRefresh}
+        disabled={loading}
+        sx={{
+          fontSize: "1.2rem",
+          fontWeight: 600,
+          minWidth: "10rem",
+        }}
+      >
+        {loading ? "Refreshing..." : "Refresh"}
+      </Button>
+    </Box>
+  );
+};
+
 export function PipelineISBDebugInfo({
   streams,
   consumers,
@@ -196,11 +266,17 @@ export function PipelineISBDebugInfo({
   loading,
   error,
   edgeScoped,
+  onRefresh,
 }: PipelineISBDebugInfoProps) {
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", padding: "2.4rem" }}>
-        <CircularProgress />
+      <Box>
+        <RefreshButton loading={loading} onRefresh={onRefresh} />
+        <Box
+          sx={{ display: "flex", justifyContent: "center", padding: "2.4rem" }}
+        >
+          <CircularProgress />
+        </Box>
       </Box>
     );
   }
@@ -209,20 +285,27 @@ export function PipelineISBDebugInfo({
   const consumerRows = consumers?.consumers || [];
   const kvStoreRows = kvStores?.kvStores || [];
   const monitorErrors = collectErrors(streams, consumers, kvStores);
-  const showSharedNotice = edgeScoped || hasSharedTargetVertexRows(streams, consumers);
-  const hasAnyInformation =
-    !!streamRows.length ||
-    !!consumerRows.length ||
-    !!kvStoreRows.length ||
-    !!monitorErrors.length;
+  const showSharedNotice =
+    edgeScoped || hasSharedTargetVertexRows(streams, consumers);
+  const hasDisplayableRows =
+    !!streamRows.length || !!consumerRows.length || !!kvStoreRows.length;
   const hasAllResponses = !!streams && !!consumers && !!kvStores;
 
-  if (!hasAnyInformation) {
-    return <Box>{ISB_UNAVAILABLE_MESSAGE}</Box>;
+  if (!hasDisplayableRows) {
+    return (
+      <Box>
+        <RefreshButton loading={loading} onRefresh={onRefresh} />
+        <Box sx={{ marginBottom: monitorErrors.length ? "1.6rem" : 0 }}>
+          {ISB_UNAVAILABLE_MESSAGE}
+        </Box>
+        <MonitorErrorsSection errors={monitorErrors} />
+      </Box>
+    );
   }
 
   return (
     <Box>
+      <RefreshButton loading={loading} onRefresh={onRefresh} />
       {(error || !hasAllResponses) && (
         <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
           {PARTIAL_ISB_UNAVAILABLE_MESSAGE}
@@ -230,7 +313,8 @@ export function PipelineISBDebugInfo({
       )}
       {showSharedNotice && (
         <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
-          Stream and consumer rows on an edge are scoped to the target vertex buffer and may be shared by multiple inbound edges.
+          Stream and consumer rows on an edge are scoped to the target vertex
+          buffer and may be shared by multiple inbound edges.
         </Box>
       )}
       <DebugSection title="Stream Information">
@@ -248,7 +332,13 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Leader" />
               </TableRow>
             </TableHead>
-            {streams ? <StreamRows streams={streamRows} /> : <UnavailableRow colSpan={8} />}
+            {streams ? (
+              <StreamRows streams={streamRows} />
+            ) : (
+              <TableBody>
+                <UnavailableRow colSpan={8} />
+              </TableBody>
+            )}
           </Table>
         </TableContainer>
       </DebugSection>
@@ -273,7 +363,9 @@ export function PipelineISBDebugInfo({
             {consumers ? (
               <ConsumerRows consumers={consumerRows} />
             ) : (
-              <UnavailableRow colSpan={10} />
+              <TableBody>
+                <UnavailableRow colSpan={10} />
+              </TableBody>
             )}
           </Table>
         </TableContainer>
@@ -297,33 +389,18 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Replicas" />
               </TableRow>
             </TableHead>
-            {kvStores ? <KVRows kvStores={kvStoreRows} /> : <UnavailableRow colSpan={11} />}
+            {kvStores ? (
+              <KVRows kvStores={kvStoreRows} />
+            ) : (
+              <TableBody>
+                <UnavailableRow colSpan={11} />
+              </TableBody>
+            )}
           </Table>
         </TableContainer>
       </DebugSection>
 
-      {!!monitorErrors.length && (
-        <DebugSection title="Monitor Errors">
-          <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <HeaderCell label="Pod" />
-                  <HeaderCell label="Error" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {monitorErrors.map((item) => (
-                  <TableRow key={monitorErrorKey(item)}>
-                    <TableCell>{item.pod}</TableCell>
-                    <TableCell>{item.message}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DebugSection>
-      )}
+      <MonitorErrorsSection errors={monitorErrors} />
     </Box>
   );
 }

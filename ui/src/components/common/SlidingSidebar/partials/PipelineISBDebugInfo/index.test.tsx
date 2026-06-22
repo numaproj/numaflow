@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PipelineISBDebugInfo } from "./index";
 
 import "@testing-library/jest-dom";
@@ -9,6 +9,49 @@ describe("PipelineISBDebugInfo", () => {
     render(<PipelineISBDebugInfo loading />);
 
     await waitFor(() => {
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    });
+  });
+
+  it("renders and invokes refresh action when provided", async () => {
+    const onRefresh = jest.fn();
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        streams={{ streams: [] }}
+        consumers={{ consumers: [] }}
+        kvStores={{ kvStores: [] }}
+        onRefresh={onRefresh}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Refresh"));
+
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("hides refresh action when not provided", async () => {
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        streams={{ streams: [] }}
+        consumers={{ consumers: [] }}
+        kvStores={{ kvStores: [] }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Refresh")).not.toBeInTheDocument();
+    });
+  });
+
+  it("disables refresh action while loading", async () => {
+    render(<PipelineISBDebugInfo loading onRefresh={jest.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Refreshing...")).toBeDisabled();
       expect(screen.getByRole("progressbar")).toBeInTheDocument();
     });
   });
@@ -38,6 +81,29 @@ describe("PipelineISBDebugInfo", () => {
       expect(
         screen.getByText("ISB information is not available yet.")
       ).toBeInTheDocument();
+    });
+  });
+
+  it("renders unavailable message with monitor errors when there are no rows", async () => {
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        streams={{
+          streams: [],
+          errors: [{ pod: "js-1", message: "connection refused" }],
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("ISB information is not available yet.")
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Some ISB information is not available yet.")
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("Monitor Errors")).toBeInTheDocument();
+      expect(screen.getByText("connection refused")).toBeInTheDocument();
     });
   });
 
@@ -136,7 +202,7 @@ describe("PipelineISBDebugInfo", () => {
               values: 2,
               bytes: 2048,
               history: 1,
-              ttlSeconds: 3600,
+              ttlSeconds: 0,
               replicas: 3,
               storage: "file",
             },
@@ -153,6 +219,7 @@ describe("PipelineISBDebugInfo", () => {
       expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
       expect(screen.getByText("connection refused")).toBeInTheDocument();
       expect(screen.getAllByText("1.00 KiB").length).toBeGreaterThan(0);
+      expect(screen.getByText("0.00s")).toBeInTheDocument();
       expect(screen.queryByText("Subjects")).not.toBeInTheDocument();
       expect(screen.queryByText("Filter Subject")).not.toBeInTheDocument();
       expect(screen.queryByText("Storage")).not.toBeInTheDocument();

@@ -11,6 +11,8 @@ import { BrowserRouter } from "react-router-dom";
 
 import "@testing-library/jest-dom";
 
+const mockISBDebugRefresh = jest.fn();
+
 jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
   usePipelineISBDebugFetch: () => ({
     data: {
@@ -42,7 +44,7 @@ jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
     },
     loading: false,
     error: undefined,
-    refresh: jest.fn(),
+    refresh: mockISBDebugRefresh,
   }),
 }));
 
@@ -259,6 +261,12 @@ describe("VertexDetails", () => {
       expect(
         screen.getAllByText("test-namespace-test-pipeline-test-vertex-0").length
       ).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByText("Refresh"));
+
+    await waitFor(() => {
+      expect(mockISBDebugRefresh).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -22,7 +22,7 @@ export interface EdgeDetailsProps {
   edgeId: string;
   from?: string;
   to?: string;
-  watermarks: (string | number)[];
+  watermarks?: (string | number)[];
 }
 
 export function EdgeDetails({
@@ -38,6 +38,7 @@ export function EdgeDetails({
     data: isbDebugData,
     loading: isbDebugLoading,
     error: isbDebugError,
+    refresh: isbDebugRefresh,
   } = usePipelineISBDebugFetch({
     namespaceId,
     pipelineId,
@@ -116,16 +117,20 @@ export function EdgeDetails({
                 )}
                 {!!watermarks &&
                   !!watermarks.length &&
-                  watermarks.map((watermark: string | number, index: number) => (
-                    <TableRow key={index}>
-                      <TableCell>{index}</TableCell>
-                      <TableCell>
-                        {Number(watermark) < 0
-                          ? watermark
-                          : `${watermark} (${new Date(Number(watermark)).toISOString()})`}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  watermarks.map(
+                    (watermark: string | number, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell>{index}</TableCell>
+                        <TableCell>
+                          {Number(watermark) < 0
+                            ? watermark
+                            : `${watermark} (${new Date(
+                                Number(watermark)
+                              ).toISOString()})`}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -141,6 +146,7 @@ export function EdgeDetails({
               loading={isbDebugLoading}
               error={isbDebugError}
               edgeScoped
+              onRefresh={isbDebugRefresh}
             />
           </Box>
         )}

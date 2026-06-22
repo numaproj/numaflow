@@ -299,6 +299,7 @@ export function VertexDetails({
     data: isbDebugData,
     loading: isbDebugLoading,
     error: isbDebugError,
+    refresh: isbDebugRefresh,
   } = usePipelineISBDebugFetch({
     namespaceId,
     pipelineId,
@@ -523,6 +524,7 @@ export function VertexDetails({
                 kvStores={isbDebugData?.kvStores}
                 loading={isbDebugLoading}
                 error={isbDebugError}
+                onRefresh={isbDebugRefresh}
               />
             )}
           </div>

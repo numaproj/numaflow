@@ -80,6 +80,47 @@ func TestGetPipelineISBConsumersEdgeScoped(t *testing.T) {
 	assert.Equal(t, uint64(14), consumer.AckFloorStreamSeq)
 }
 
+func TestGetPipelineISBConsumersIncludesDirectConsumers(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jsInfo := testPipelineISBJSInfo()
+	cat1 := dfv1.GenerateBufferName("ns", "pl", "cat", 1)
+	jsInfo.AccountDetails[0].Streams[1].DirectConsumer = []*natsserver.ConsumerInfo{
+		{
+			Stream: cat1,
+			Name:   "direct-cat-1",
+			Config: &natsserver.ConsumerConfig{
+				Name:      "direct-cat-1",
+				AckPolicy: natsserver.AckExplicit,
+			},
+			NumPending: 5,
+		},
+	}
+	h := newPipelineISBDebugTestHandler(t, map[string]any{
+		"10.0.0.1": jsInfo,
+	}, []corev1.Pod{testISBPod("js-0", "10.0.0.1")}, true)
+	c, w := newPipelineISBDebugTestContext("/api/v1/namespaces/ns/pipelines/pl/isb/consumers?from=in&to=cat&partition=1")
+
+	h.GetPipelineISBConsumers(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data PipelineISBConsumersDTO `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data.Consumers, 2)
+	var directConsumer *PipelineISBConsumerDTO
+	for i := range got.Data.Consumers {
+		if got.Data.Consumers[i].Consumer == "direct-cat-1" {
+			directConsumer = &got.Data.Consumers[i]
+			break
+		}
+	}
+	require.NotNil(t, directConsumer)
+	assert.Equal(t, cat1, directConsumer.Stream)
+	assert.Equal(t, "explicit", directConsumer.AckPolicy)
+	assert.Equal(t, uint64(5), directConsumer.NumPending)
+}
+
 func TestGetPipelineISBKVStoresVertexScoped(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := newPipelineISBDebugTestHandler(t, map[string]any{

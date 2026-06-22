@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AppContext } from "../../App";
 import { AppContextProps } from "../../types/declarations/app";
 import {
@@ -65,8 +72,17 @@ export const usePipelineISBDebugFetch = ({
   }, [vertexId, from, to, partition]);
 
   const baseUrl = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/isb`;
+  const requestIdentity = useMemo(
+    () => `${baseUrl}${queryString}:${shouldFetch}`,
+    [baseUrl, queryString, shouldFetch]
+  );
+  const requestToken = `${requestIdentity}:${options.requestKey || ""}`;
+  const requestTokenRef = useRef(requestToken);
 
   const refresh = useCallback(() => {
+    setData(undefined);
+    setError(undefined);
+    setLoading(shouldFetch);
     setOptions({
       skip: !shouldFetch,
       requestKey: "id" + Math.random().toString(16).slice(2),
@@ -101,15 +117,20 @@ export const usePipelineISBDebugFetch = ({
         skip: !shouldFetch,
       };
     });
+  }, [shouldFetch]);
+
+  useEffect(() => {
+    if (requestTokenRef.current !== requestToken) {
+      requestTokenRef.current = requestToken;
+      setData(undefined);
+      setError(undefined);
+      setLoading(shouldFetch);
+      return;
+    }
     if (!shouldFetch) {
       setData(undefined);
       setError(undefined);
       setLoading(false);
-    }
-  }, [shouldFetch]);
-
-  useEffect(() => {
-    if (!shouldFetch) {
       return;
     }
     if (streamsLoading || consumersLoading || kvStoresLoading) {
@@ -117,7 +138,8 @@ export const usePipelineISBDebugFetch = ({
       return;
     }
     const fetchError = streamsError || consumersError || kvStoresError;
-    const apiError = streamsData?.errMsg || consumersData?.errMsg || kvStoresData?.errMsg;
+    const apiError =
+      streamsData?.errMsg || consumersData?.errMsg || kvStoresData?.errMsg;
     const availableData = {
       ...(streamsData?.data ? { streams: streamsData.data } : {}),
       ...(consumersData?.data ? { consumers: consumersData.data } : {}),
@@ -147,6 +169,7 @@ export const usePipelineISBDebugFetch = ({
     kvStoresLoading,
     kvStoresError,
     shouldFetch,
+    requestToken,
   ]);
 
   return { data, loading, error, refresh };
