@@ -70,7 +70,7 @@ numaflow-testing = { path = "../numaflow-testing" }
 tempfile = "3.11.0"
 # TODO: revert to the published crate (e.g. numaflow = "0.6.0") once
 # numaproj/numaflow-rs#178 merges and releases a version with nack support.
-numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "ce81f940546ea97f77b9afb36020da0c3799aefc" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "128dedad7ed3ccafc40ef23f9530a27be3ddfd0f" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
