@@ -18,6 +18,7 @@ use crate::reduce::wal::segment::GcEventEntry;
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+use crate::reduce::wal::segment::wal::{SegmentCompactor, SegmentId, WalStore};
 use crate::shared::grpc::utc_from_timestamp;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -25,6 +26,7 @@ use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -57,35 +59,39 @@ pub(crate) struct Compactor {
     kind: WindowKind,
     /// join handle for the compaction writer task
     writer_task_handle: JoinHandle<WalResult<()>>,
+    /// Deletes processed segments. A single handle serves all WAL types.
+    compactor: Box<dyn SegmentCompactor>,
 }
 
 const WAL_KEY_SEPERATOR: &str = ":";
 
 impl Compactor {
-    /// Creates a new Compactor.
-    pub(crate) async fn new(
-        path: PathBuf,
+    /// Creates a Compactor over the injected [`WalStore`].
+    pub(in crate::reduce) async fn new(
+        store: Arc<dyn WalStore>,
         kind: WindowKind,
         max_file_size_mb: u64,
         flush_interval_ms: u64,
         max_segment_age_secs: u64,
     ) -> WalResult<Self> {
-        let segment_wal = ReplayWal::new(WalType::Data, path.clone());
-        let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
-        let compaction_ro_wal = ReplayWal::new(WalType::Compact, path.clone());
+        let segment_wal = ReplayWal::new(store.reader(WalType::Data).await?);
+        let gc_wal = ReplayWal::new(store.reader(WalType::Gc).await?);
+        let compaction_ro_wal = ReplayWal::new(store.reader(WalType::Compact).await?);
+
         let compaction_ao_wal = AppendOnlyWal::new(
             WalType::Compact,
-            path.clone(),
+            store.writer(WalType::Compact).await?,
             max_file_size_mb,
             flush_interval_ms,
             max_segment_age_secs,
-        )
-        .await?;
+        );
 
         let (compaction_ao_tx, compaction_ao_rx) = mpsc::channel(500);
         let handle = compaction_ao_wal
             .streaming_write(ReceiverStream::new(compaction_ao_rx))
             .await?;
+
+        let compactor: Box<dyn SegmentCompactor> = store.compactor(WalType::Data).await?;
 
         Ok(Self {
             gc_wal,
@@ -94,6 +100,7 @@ impl Compactor {
             compaction_ao_tx,
             kind,
             writer_task_handle: handle,
+            compactor,
         })
     }
 
@@ -177,7 +184,9 @@ impl Compactor {
         // Delete the GC files
         for gc_file in gc_files {
             debug!(gc_file = %gc_file.display(), "removing segment file");
-            tokio::fs::remove_file(gc_file).await?;
+            self.compactor
+                .delete(&SegmentId::new(gc_file.display().to_string()))
+                .await?;
         }
 
         Ok(())
@@ -213,7 +222,9 @@ impl Compactor {
         // Delete the GC files
         for gc_file in gc_files {
             info!(gc_file = %gc_file.display(), "removing segment file");
-            tokio::fs::remove_file(gc_file).await?;
+            self.compactor
+                .delete(&SegmentId::new(gc_file.display().to_string()))
+                .await?;
         }
 
         Ok(())
@@ -275,13 +286,16 @@ impl Compactor {
                         .map_err(|e| format!("Failed to send rotate command: {e}"))?;
 
                     // Delete the processed segment file
-                    tokio::fs::remove_file(&filename).await.map_err(|e| {
-                        format!(
-                            "Failed to delete segment file {}: {}",
-                            filename.display(),
-                            e
-                        )
-                    })?;
+                    self.compactor
+                        .delete(&SegmentId::new(filename.display().to_string()))
+                        .await
+                        .map_err(|e| {
+                            format!(
+                                "Failed to delete segment file {}: {}",
+                                filename.display(),
+                                e
+                            )
+                        })?;
 
                     debug!(filename = %filename.display(), "removing segment file");
                 }
@@ -474,6 +488,7 @@ mod tests {
     use super::*;
     use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::WalMessage;
+    use crate::reduce::wal::segment::wal::FsStore;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
@@ -496,7 +511,7 @@ mod tests {
 
         // Create a compactor with default test values
         let compactor = Compactor::new(
-            path.clone(),
+            Arc::new(FsStore::new(path.clone())),
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
@@ -533,12 +548,14 @@ mod tests {
         // Create a WAL writer for GC events
         let gc_writer = AppendOnlyWal::new(
             WalType::Gc,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Set up streaming write for the GC WAL
         let (tx, rx) = mpsc::channel(100);
@@ -587,7 +604,7 @@ mod tests {
 
         // Create a compactor with default test values
         let compactor = Compactor::new(
-            path.clone(),
+            Arc::new(FsStore::new(path.clone())),
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
@@ -635,12 +652,14 @@ mod tests {
         // Create a WAL writer for GC events
         let gc_writer = AppendOnlyWal::new(
             WalType::Gc,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Set up streaming write for the GC WAL
         let (tx, rx) = mpsc::channel(100);
@@ -696,13 +715,14 @@ mod tests {
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
             WalType::Gc,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             1,    // 1MB
             1000, // 1s flush interval
             300,  // max_segment_age_secs
-        )
-        .await
-        .unwrap();
+        );
 
         // Create and write 2 GC events
         let gc_start_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
@@ -746,13 +766,14 @@ mod tests {
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             1,    // 1MB
             1000, // 1s flush interval
             300,  // max_segment_age_secs
-        )
-        .await
-        .unwrap();
+        );
 
         // Write 1000 segment entries across 10 files
         let (tx, rx) = mpsc::channel(100);
@@ -797,7 +818,7 @@ mod tests {
 
         // Create and run compactor
         let compactor = Compactor::new(
-            test_path.clone(),
+            Arc::new(FsStore::new(test_path.clone())),
             WindowKind::Aligned,
             1,    // 1MB
             1000, // 1s flush interval
@@ -812,7 +833,11 @@ mod tests {
         compactor.writer_task_handle.await.unwrap().unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
+        let reader = FsStore::new(test_path)
+            .reader(WalType::Compact)
+            .await
+            .unwrap();
+        let compaction_wal = ReplayWal::new(reader);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
         let mut replayed_event_times = vec![];
 
@@ -875,12 +900,14 @@ mod tests {
         // Create GC WAL with test events
         let gc_wal = AppendOnlyWal::new(
             WalType::Gc,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Create a GC event with a specific end time
         let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
@@ -913,12 +940,14 @@ mod tests {
         // Create segment WAL with test messages
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Create messages with different event times
         let (tx, rx) = mpsc::channel(100);
@@ -975,7 +1004,7 @@ mod tests {
 
         // Create a compactor with aligned window kind
         let compactor = Compactor::new(
-            path.clone(),
+            Arc::new(FsStore::new(path.clone())),
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
@@ -1076,12 +1105,14 @@ mod tests {
         // Create GC WAL with test events
         let gc_wal = AppendOnlyWal::new(
             WalType::Gc,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Create GC events with different keys and end times
         let (tx, rx) = mpsc::channel(100);
@@ -1126,12 +1157,14 @@ mod tests {
         // Create segment WAL with test messages
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
-            path.clone(),
+            FsStore::new(path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             300,  // max_segment_age_secs
-        )
-        .await?;
+        );
 
         // Create messages with different keys and event times
         let (tx, rx) = mpsc::channel(100);
@@ -1226,7 +1259,7 @@ mod tests {
 
         // Create a compactor with unaligned window kind
         let compactor = Compactor::new(
-            path.clone(),
+            Arc::new(FsStore::new(path.clone())),
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
