@@ -601,18 +601,19 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker = Tracker::new(None, CancellationToken::new());
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
         let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
         let transformer = Transformer::new(
             500,
             10,
-            Duration::from_secs(10),
+            Duration::from_millis(10),
             client,
             tracker.clone(),
             ReconnectConfig::new(
                 sock_file.clone(),
                 server_info_file.clone(),
-                CancellationToken::new(),
+                cln_token.clone(),
                 TEST_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
@@ -635,15 +636,14 @@ mod tests {
         };
 
         let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+        cln_token.cancel();
         let result = transformer
-            .transform_batch(
-                vec![MessageHandle::new(message, ack_tx)],
-                CancellationToken::new(),
-                None,
-            )
+            .transform_batch(vec![MessageHandle::new(message, ack_tx)], cln_token, None)
             .await;
-        assert!(result.is_err(), "Expected an error due to panic");
-        assert!(result.unwrap_err().to_string().contains("panic"));
+        assert!(
+            matches!(&result, Err(Error::Transformer(e)) if e == "Operation cancelled"),
+            "Expected cancellation to stop redriving the panicking transformer, got {result:?}"
+        );
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
