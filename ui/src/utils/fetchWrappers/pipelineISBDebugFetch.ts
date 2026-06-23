@@ -138,12 +138,19 @@ export const usePipelineISBDebugFetch = ({
       return;
     }
     const fetchError = streamsError || consumersError || kvStoresError;
+    const currentStreamsData = !streamsError ? streamsData?.data : undefined;
+    const currentConsumersData = !consumersError
+      ? consumersData?.data
+      : undefined;
+    const currentKVStoresData = !kvStoresError ? kvStoresData?.data : undefined;
     const apiError =
-      streamsData?.errMsg || consumersData?.errMsg || kvStoresData?.errMsg;
+      (!streamsError && streamsData?.errMsg) ||
+      (!consumersError && consumersData?.errMsg) ||
+      (!kvStoresError && kvStoresData?.errMsg);
     const availableData = {
-      ...(streamsData?.data ? { streams: streamsData.data } : {}),
-      ...(consumersData?.data ? { consumers: consumersData.data } : {}),
-      ...(kvStoresData?.data ? { kvStores: kvStoresData.data } : {}),
+      ...(currentStreamsData ? { streams: currentStreamsData } : {}),
+      ...(currentConsumersData ? { consumers: currentConsumersData } : {}),
+      ...(currentKVStoresData ? { kvStores: currentKVStoresData } : {}),
     };
     if (Object.keys(availableData).length) {
       setData(availableData);

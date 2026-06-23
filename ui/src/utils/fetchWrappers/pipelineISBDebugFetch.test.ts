@@ -159,4 +159,92 @@ describe("pipelineISBDebugFetch test", () => {
       expect(result.current.loading).toBe(true);
     });
   });
+
+  it("excludes stale retained data for a failed endpoint", async () => {
+    const streamsResponse = {
+      data: { data: { streams: [{ stream: "stale-stream" }] } },
+      error: "streams failed",
+      loading: false,
+    };
+    const consumersResponse = {
+      data: { data: { consumers: [{ consumer: "current-consumer" }] } },
+      error: undefined,
+      loading: false,
+    };
+    const kvStoresResponse = {
+      data: { data: { kvStores: [{ bucket: "current-kv" }] } },
+      error: undefined,
+      loading: false,
+    };
+    mockedUseFetch.mockImplementation((url: string) => {
+      if (url.includes("/streams")) {
+        return streamsResponse;
+      }
+      if (url.includes("/consumers")) {
+        return consumersResponse;
+      }
+      return kvStoresResponse;
+    });
+
+    const { result } = renderHook(() =>
+      usePipelineISBDebugFetch({
+        namespaceId: "ns",
+        pipelineId: "pl",
+        vertexId: "cat",
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.data?.streams).toBeUndefined();
+      expect(result.current.data?.consumers?.consumers[0].consumer).toEqual(
+        "current-consumer"
+      );
+      expect(result.current.data?.kvStores?.kvStores[0].bucket).toEqual(
+        "current-kv"
+      );
+      expect(result.current.error).toEqual("streams failed");
+    });
+  });
+
+  it("clears aggregate data when every endpoint has stale retained data and an error", async () => {
+    const streamsResponse = {
+      data: { data: { streams: [{ stream: "stale-stream" }] } },
+      error: "streams failed",
+      loading: false,
+    };
+    const consumersResponse = {
+      data: { data: { consumers: [{ consumer: "stale-consumer" }] } },
+      error: "consumers failed",
+      loading: false,
+    };
+    const kvStoresResponse = {
+      data: { data: { kvStores: [{ bucket: "stale-kv" }] } },
+      error: "kv failed",
+      loading: false,
+    };
+    mockedUseFetch.mockImplementation((url: string) => {
+      if (url.includes("/streams")) {
+        return streamsResponse;
+      }
+      if (url.includes("/consumers")) {
+        return consumersResponse;
+      }
+      return kvStoresResponse;
+    });
+
+    const { result } = renderHook(() =>
+      usePipelineISBDebugFetch({
+        namespaceId: "ns",
+        pipelineId: "pl",
+        vertexId: "cat",
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.data).toBeUndefined();
+      expect(result.current.error).toEqual("streams failed");
+    });
+  });
 });
