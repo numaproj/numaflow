@@ -116,7 +116,11 @@ impl UserDefinedSink {
             reconnect_config.retry_interval(),
         )
         .await?;
-        let (sink_tx, resp_stream) = Self::create_sink_stream(&mut client).await?;
+        let (sink_tx, resp_stream) = match Self::create_sink_stream(&mut client).await {
+            Ok(stream) => stream,
+            Err(Error::Grpc(status)) => return Err(Self::redrive_error(*status)),
+            Err(e) => return Err(e),
+        };
         self.sink_tx = sink_tx;
         self.resp_stream = resp_stream;
         Ok(())
