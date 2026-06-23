@@ -8,6 +8,7 @@ use crate::reduce::pbq::WAL;
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
+use crate::reduce::wal::segment::wal::{FsStore, WalStore};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
 use std::sync::Arc;
@@ -112,7 +113,7 @@ impl From<Message> for WalMessage {
     }
 }
 
-/// Create WAL components for reduce operations
+/// Create WAL components for reduce operations.
 ///
 /// This function creates both the main WAL and GC WAL if storage is configured.
 /// The only difference between aligned and unaligned reducers is the WindowKind.
@@ -120,44 +121,56 @@ pub(crate) async fn create_wal_components(
     storage_config: Option<&StorageConfig>,
     window_kind: WindowKind,
 ) -> crate::Result<(Option<WAL>, Option<AppendOnlyWal>)> {
-    if let Some(storage_config) = storage_config {
-        let wal_path = storage_config.path.clone();
+    let Some(storage_config) = storage_config else {
+        return Ok((None, None));
+    };
 
-        let append_only_wal = AppendOnlyWal::new(
-            WalType::Data,
-            wal_path.clone(),
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
+    // the single store; all WAL types are built from it, so they share the same storage
+    tokio::fs::create_dir_all(&storage_config.path)
+        .await
+        .map_err(|e| crate::error::Error::WAL(e.to_string()))?;
 
-        let compactor = Compactor::new(
-            wal_path.clone(),
-            window_kind,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
+    let store: Arc<dyn WalStore> = Arc::new(FsStore::new(storage_config.path.clone()));
 
-        let gc_wal = AppendOnlyWal::new(
-            WalType::Gc,
-            wal_path,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
+    create_wal_components_with_store(storage_config, window_kind, store).await
+}
 
-        Ok((
-            Some(WAL {
-                append_only_wal,
-                compactor,
-            }),
-            Some(gc_wal),
-        ))
-    } else {
-        Ok((None, None))
-    }
+/// Builds the WAL components from the given store.
+async fn create_wal_components_with_store(
+    storage_config: &StorageConfig,
+    window_kind: WindowKind,
+    store: Arc<dyn WalStore>,
+) -> crate::Result<(Option<WAL>, Option<AppendOnlyWal>)> {
+    let append_only_wal = AppendOnlyWal::new(
+        WalType::Data,
+        store.writer(WalType::Data).await?,
+        storage_config.max_file_size_mb,
+        storage_config.flush_interval_ms,
+        storage_config.max_segment_age_secs,
+    );
+
+    let compactor = Compactor::new(
+        Arc::clone(&store),
+        window_kind,
+        storage_config.max_file_size_mb,
+        storage_config.flush_interval_ms,
+        storage_config.max_segment_age_secs,
+    )
+    .await?;
+
+    let gc_wal = AppendOnlyWal::new(
+        WalType::Gc,
+        store.writer(WalType::Gc).await?,
+        storage_config.max_file_size_mb,
+        storage_config.flush_interval_ms,
+        storage_config.max_segment_age_secs,
+    );
+
+    Ok((
+        Some(WAL {
+            append_only_wal,
+            compactor,
+        }),
+        Some(gc_wal),
+    ))
 }

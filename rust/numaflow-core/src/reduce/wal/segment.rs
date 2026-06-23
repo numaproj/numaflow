@@ -22,6 +22,9 @@ use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 
+/// Pluggable segment storage traits and their implementations (filesystem, in-memory).
+pub(crate) mod wal;
+
 /// Reading from WAL for Replays.
 pub(crate) mod replay;
 
@@ -119,6 +122,8 @@ mod tests {
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    use crate::reduce::wal::segment::wal::memory::InMemoryStore;
+    use crate::reduce::wal::segment::wal::{FsStore, WalStore};
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
     use std::time::Duration;
@@ -133,13 +138,14 @@ mod tests {
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
             WalType::Gc,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             1,    // 1MB
             1000, // 1s flush interval
             300,  // 5 minutes
-        )
-        .await
-        .unwrap();
+        );
 
         // Create and write GC events
         let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
@@ -169,13 +175,14 @@ mod tests {
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             1,    // 20MB
             1000, // 1s flush interval
             300,  // 5 minutes
-        )
-        .await
-        .unwrap();
+        );
 
         // Write 100 segment entries
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -213,9 +220,15 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Create and run compactor
-        let compactor = Compactor::new(test_path.clone(), WindowKind::Aligned, 1, 1000, 300)
-            .await
-            .unwrap();
+        let compactor = Compactor::new(
+            Arc::new(FsStore::new(test_path.clone())),
+            WindowKind::Aligned,
+            1,
+            1000,
+            300,
+        )
+        .await
+        .unwrap();
 
         let (replay_tx, _replay_rx) = tokio::sync::mpsc::channel(1000);
         let cln_token = CancellationToken::new();
@@ -230,7 +243,11 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Verify compacted data
-        let compaction_replay_wal = ReplayWal::new(WalType::Compact, test_path);
+        let reader = FsStore::new(test_path)
+            .reader(WalType::Compact)
+            .await
+            .unwrap();
+        let compaction_replay_wal = ReplayWal::new(reader);
         let (mut rx, handle) = compaction_replay_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;
@@ -260,6 +277,122 @@ mod tests {
         );
     }
 
+    /// Same as `test_gc_wal_and_aligned_compaction` but over a shared in-memory store, exercising
+    /// the abstraction through the real append/replay/compactor path.
+    #[tokio::test]
+    async fn test_gc_wal_and_aligned_compaction_in_memory() {
+        // One shared in-memory store, injected into every component below.
+        let store: Arc<dyn WalStore> = Arc::new(InMemoryStore::new());
+
+        // GC WAL: write one GC event for window end = 1:00:10.
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            store.writer(WalType::Gc).await.unwrap(),
+            1,
+            1000,
+            300,
+        );
+        let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
+        let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
+        let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
+            end_time: Some(prost_timestamp_from_utc(gc_end)),
+            keys: vec![],
+        };
+
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+        let handle = gc_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+        tx.send(SegmentWriteMessage::WriteGcEvent {
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Data WAL: write 100 messages, event times 1:00:01 .. 1:00:100.
+        let segment_wal = AppendOnlyWal::new(
+            WalType::Data,
+            store.writer(WalType::Data).await.unwrap(),
+            1,
+            1000,
+            300,
+        );
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let handle = segment_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        let time_increment = chrono::Duration::seconds(1);
+        for i in 1..=100 {
+            let message = Message {
+                event_time: start_time + (time_increment * i),
+                keys: Arc::from(vec!["test-key".to_string()]),
+                value: bytes::Bytes::from(vec![1, 2, 3]),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                id: MessageID {
+                    vertex_name: "test-vertex".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
+            };
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
+        }
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Compact (aligned) over the same store.
+        let compactor = Compactor::new(Arc::clone(&store), WindowKind::Aligned, 1, 1000, 300)
+            .await
+            .unwrap();
+        let (replay_tx, _replay_rx) = tokio::sync::mpsc::channel(1000);
+        let cln_token = CancellationToken::new();
+        let handle = compactor
+            .start_compaction_with_replay(replay_tx, Duration::from_secs(60), cln_token.clone())
+            .await
+            .unwrap();
+        cln_token.cancel();
+        handle.await.unwrap().unwrap();
+
+        // Replay compacted data and assert only messages with event_time >= gc_end remain.
+        let reader = store.reader(WalType::Compact).await.unwrap();
+        let compaction_replay_wal = ReplayWal::new(reader);
+        let (mut rx, handle) = compaction_replay_wal.streaming_read().unwrap();
+        let mut remaining_message_count = 0;
+        while let Some(entry) = rx.next().await {
+            if let SegmentEntry::DataEntry { data, .. } = entry {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header
+                    && let Some(message_info) = header.message_info
+                {
+                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
+                    assert!(
+                        event_time >= gc_end,
+                        "Found message with event_time < gc_end"
+                    );
+                }
+                remaining_message_count += 1
+            }
+        }
+        handle.await.unwrap().unwrap();
+
+        assert_eq!(
+            remaining_message_count, 91,
+            "Expected 91 messages to remain after compaction"
+        );
+    }
+
     #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
         let test_path = tempfile::tempdir().unwrap().keep();
@@ -267,13 +400,14 @@ mod tests {
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
             WalType::Gc,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Gc)
+                .await
+                .unwrap(),
             1,    // 1MB
             1000, // 1s flush interval
             300,  // 5 minutes
-        )
-        .await
-        .unwrap();
+        );
 
         // Create and write GC events with different keys
         let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
@@ -317,13 +451,14 @@ mod tests {
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
-            test_path.clone(),
+            FsStore::new(test_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             1,    // 20MB
             1000, // 1s flush interval
             300,  // 5 minutes
-        )
-        .await
-        .unwrap();
+        );
 
         // Write segment entries with different keys
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -365,7 +500,7 @@ mod tests {
 
         // Create and run compactor with unaligned window kind
         let compactor = Compactor::new(
-            test_path.clone(),
+            Arc::new(FsStore::new(test_path.clone())),
             WindowKind::Unaligned,
             1,    // 20MB
             1000, // 1s flush interval
@@ -387,7 +522,11 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
+        let reader = FsStore::new(test_path)
+            .reader(WalType::Compact)
+            .await
+            .unwrap();
+        let compaction_wal = ReplayWal::new(reader);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;

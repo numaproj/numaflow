@@ -250,6 +250,8 @@ mod tests {
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::compactor::WindowKind;
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    #[cfg(feature = "nats-tests")]
+    use crate::reduce::wal::segment::wal::{FsStore, WalStore};
     use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
@@ -458,17 +460,24 @@ mod tests {
         // Create WAL components
         let append_only_wal = AppendOnlyWal::new(
             WalType::Data,
-            wal_path.clone(),
+            FsStore::new(wal_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
             10,  // 10MB max file size
             100, // 100ms flush interval
             300, // max_segment_age_secs
+        );
+
+        let compactor = Compactor::new(
+            Arc::new(FsStore::new(wal_path.clone())),
+            WindowKind::Aligned,
+            10,
+            100,
+            300,
         )
         .await
         .unwrap();
-
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 300)
-            .await
-            .unwrap();
 
         let wal = WAL {
             append_only_wal,
@@ -527,9 +536,16 @@ mod tests {
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
 
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
-            .await
-            .unwrap();
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            FsStore::new(wal_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
+            10,
+            100,
+            300,
+        );
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(10);
         let writer_handle = append_only_wal
@@ -544,7 +560,11 @@ mod tests {
         writer_handle.await.unwrap().unwrap();
 
         // Now use ReplayWal to verify the messages are persisted
-        let replay_wal = ReplayWal::new(WalType::Data, wal_path.clone());
+        let reader = FsStore::new(wal_path.clone())
+            .reader(WalType::Data)
+            .await
+            .unwrap();
+        let replay_wal = ReplayWal::new(reader);
         let (mut replay_stream, replay_handle) = replay_wal.streaming_read().unwrap();
 
         let mut persisted_messages = vec![];
@@ -620,9 +640,16 @@ mod tests {
             .unwrap();
 
         // First, write some messages directly to WAL
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
-            .await
-            .unwrap();
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            FsStore::new(wal_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
+            10,
+            100,
+            300,
+        );
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(100);
         let writer_handle = append_only_wal
@@ -691,13 +718,26 @@ mod tests {
                 .unwrap();
 
         // Create new WAL components for PBQ
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
-            .await
-            .unwrap();
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            FsStore::new(wal_path.clone())
+                .writer(WalType::Data)
+                .await
+                .unwrap(),
+            10,
+            100,
+            300,
+        );
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 300)
-            .await
-            .unwrap();
+        let compactor = Compactor::new(
+            Arc::new(FsStore::new(wal_path.clone())),
+            WindowKind::Aligned,
+            10,
+            100,
+            300,
+        )
+        .await
+        .unwrap();
 
         let wal = WAL {
             append_only_wal,
@@ -806,7 +846,11 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Check WAL again - should now have all 10 messages
-        let data_replay_wal = ReplayWal::new(WalType::Data, wal_path.clone());
+        let reader = FsStore::new(wal_path.clone())
+            .reader(WalType::Data)
+            .await
+            .unwrap();
+        let data_replay_wal = ReplayWal::new(reader);
         let (mut replay_stream, replay_handle) = data_replay_wal.streaming_read().unwrap();
 
         let mut all_wal_messages: Vec<Message> = vec![];
@@ -818,7 +862,11 @@ mod tests {
         }
         replay_handle.await.unwrap().unwrap();
 
-        let compact_wal = ReplayWal::new(WalType::Compact, wal_path.clone());
+        let reader = FsStore::new(wal_path.clone())
+            .reader(WalType::Compact)
+            .await
+            .unwrap();
+        let compact_wal = ReplayWal::new(reader);
         let (mut replay_stream, replay_handle) = compact_wal.streaming_read().unwrap();
         while let Some(entry) = replay_stream.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
