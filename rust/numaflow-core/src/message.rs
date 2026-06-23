@@ -518,8 +518,11 @@ impl fmt::Display for StringOffset {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct NackOptions {
+    // Delay in milliseconds
     pub(crate) delay: Option<u64>,
+    // Number of max redeliveries that are intended to be made
     pub(crate) max_deliveries: Option<u32>,
+    // Human-readable reason for nacking this message
     pub(crate) reason: Option<String>,
 }
 
