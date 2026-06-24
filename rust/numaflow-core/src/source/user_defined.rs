@@ -180,6 +180,13 @@ impl UserDefinedSourceRead {
         Ok(())
     }
 
+    fn preserve_messages_after_reconnect(
+        messages: Vec<Message>,
+        reconnect_result: Result<()>,
+    ) -> Result<Vec<Message>> {
+        reconnect_result.map(|_| messages)
+    }
+
     fn record_udf_error(status: &Status) {
         warn!(?status, "source UDF error, reconnecting");
         critical_error!(
@@ -295,7 +302,11 @@ impl SourceReader for UserDefinedSourceRead {
             Ok(response) => response,
             Err(e) => {
                 Self::record_udf_error(&e);
-                return Some(self.reconnect_reader().await.map(|_| messages));
+                let reconnect_result = self.reconnect_reader().await;
+                return Some(Self::preserve_messages_after_reconnect(
+                    messages,
+                    reconnect_result,
+                ));
             }
         } {
             if response.status.is_some_and(|status| status.eot) {
@@ -539,6 +550,7 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
+    use std::sync::Arc;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
@@ -723,6 +735,50 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
         server_handle.await.expect("failed to join server task");
+    }
+
+    #[test]
+    fn source_read_reconnect_preserves_partial_messages() {
+        let messages = vec![
+            crate::message::Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: b"partial-0".to_vec().into(),
+                offset: crate::message::Offset::String(StringOffset::new("partial-0".into(), 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "partial-0".to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
+            },
+            crate::message::Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: b"partial-1".to_vec().into(),
+                offset: crate::message::Offset::String(StringOffset::new("partial-1".into(), 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "partial-1".to_string().into(),
+                    index: 1,
+                },
+                ..Default::default()
+            },
+        ];
+
+        let reconnected_messages =
+            UserDefinedSourceRead::preserve_messages_after_reconnect(messages.clone(), Ok(()))
+                .unwrap();
+
+        assert_eq!(reconnected_messages.len(), 2);
+        assert_eq!(reconnected_messages[0].offset, messages[0].offset);
+        assert_eq!(reconnected_messages[1].offset, messages[1].offset);
     }
 
     #[test]

@@ -935,6 +935,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .await;
                         if let Err(e) = result {
                             if matches!(e, Error::UdfRedrive(_)) {
+                                // The source ack path failed before numa could confirm the ack.
+                                // Do not synthesize a nack here because the original disposition
+                                // may have been Ack after successful downstream processing.
                                 error!(?e, "Redrivable error while invoking ack");
                                 return;
                             }

@@ -415,6 +415,50 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn transformer_drains_pending_senders_with_udf_redrive() {
+        let sender_map: ResponseSenderMap = Arc::new(Mutex::new(HashMap::new()));
+        let (first_tx, first_rx) = oneshot::channel();
+        let (second_tx, second_rx) = oneshot::channel();
+
+        let first_msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("first".to_string(), 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+        let second_msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("second".to_string(), 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+
+        {
+            let mut senders = sender_map.lock().await;
+            senders.insert("first".to_string(), (first_msg_info, first_tx));
+            senders.insert("second".to_string(), (second_msg_info, second_tx));
+        }
+
+        UserDefinedTransformer::drain_senders(
+            &sender_map,
+            crate::error::Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer stream closed",
+            ))),
+        )
+        .await;
+
+        assert!(sender_map.lock().await.is_empty());
+        assert!(matches!(
+            first_rx.await.unwrap(),
+            Err(crate::error::Error::UdfRedrive(_))
+        ));
+        assert!(matches!(
+            second_rx.await.unwrap(),
+            Err(crate::error::Error::UdfRedrive(_))
+        ));
+    }
+
     #[test]
     fn test_message_to_source_transform_request() {
         let message = Message {

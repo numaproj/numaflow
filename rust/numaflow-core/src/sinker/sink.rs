@@ -231,6 +231,7 @@ impl SinkWriter {
                         }
                         Err(e) => {
                             if matches!(e, Error::UdfRedrive(_)) {
+                                mark_failed_batch!(read_batch, &e);
                                 error!(?e, "redrivable sink error");
                                 continue;
                             }
@@ -993,6 +994,75 @@ mod tests {
         }
         // check if the tracker is empty
         assert!(tracker.is_empty().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_redrivable_error_nacks_batch() {
+        let (sink_tx, mut sink_rx) = mpsc::channel::<SinkActorMessage>(1);
+        tokio::spawn(async move {
+            while let Some(msg) = sink_rx.recv().await {
+                let _ = msg.respond_to.send(Err(Error::UdfRedrive(Box::new(
+                    tonic::Status::unavailable("sink reconnecting"),
+                ))));
+            }
+        });
+
+        let sink_writer = SinkWriter::new(
+            10,
+            Duration::from_millis(100),
+            sink_tx,
+            None,
+            None,
+            None,
+            HealthCheckClients {
+                sink_client: None,
+                fb_sink_client: None,
+                store_client: None,
+                on_success_sink_client: None,
+            },
+            None,
+        );
+
+        let mut ack_rxs = vec![];
+        let messages: Vec<MessageHandle> = (0..3)
+            .map(|i| {
+                let (ack_tx, ack_rx) = oneshot::channel();
+                ack_rxs.push(ack_rx);
+                let message = Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec![format!("key_{}", i)]),
+                    tags: None,
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("offset_{}", i).into(),
+                        index: i as i32,
+                    },
+                    ..Default::default()
+                };
+                MessageHandle::new(message, ack_tx)
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(3);
+        for msg in messages {
+            let _ = tx.send(msg).await;
+        }
+        drop(tx);
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .await
+            .unwrap();
+
+        let result = handle.await.unwrap();
+        assert!(result.is_ok());
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+        }
     }
 
     #[tokio::test]
