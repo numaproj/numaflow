@@ -218,6 +218,7 @@ impl Sink for UserDefinedSink {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use chrono::offset::Utc;
@@ -229,6 +230,7 @@ mod tests {
     use super::*;
     use crate::error::Result;
     use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::user_defined::UserDefinedSink;
 
@@ -319,6 +321,9 @@ mod tests {
         let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
+        let reconnect = sink_client.reconnect().await;
+        assert!(matches!(reconnect, Err(Error::UdfRedrive(_))));
+
         drop(sink_client);
         shutdown_tx
             .send(())
@@ -326,5 +331,55 @@ mod tests {
 
         server_handle.await.expect("failed to join server task");
         Ok(())
+    }
+
+    #[test]
+    fn test_message_to_sink_request_includes_headers_and_metadata() {
+        let metadata = Metadata {
+            previous_vertex: "map".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata: HashMap::from([(
+                "user".to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::from([("key".to_string(), Bytes::from_static(b"value"))]),
+                },
+            )]),
+        };
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key-1".to_string()]),
+            tags: None,
+            value: b"payload".to_vec().into(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            headers: Arc::new(HashMap::from([(
+                "header-key".to_string(),
+                "header-value".to_string(),
+            )])),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 0,
+            },
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        let request: SinkRequest = message.into();
+        let request = request.request.expect("sink request should be present");
+
+        assert_eq!(request.keys, vec!["key-1".to_string()]);
+        assert_eq!(request.value, b"payload".to_vec());
+        assert_eq!(
+            request.headers.get("header-key").map(String::as_str),
+            Some("header-value")
+        );
+        assert_eq!(
+            request
+                .metadata
+                .expect("metadata should be present")
+                .previous_vertex,
+            "map"
+        );
     }
 }

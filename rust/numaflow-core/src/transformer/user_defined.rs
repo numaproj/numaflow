@@ -319,6 +319,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
+    use numaflow_pb::common::metadata;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
 
@@ -457,6 +458,62 @@ mod tests {
             second_rx.await.unwrap(),
             Err(crate::error::Error::UdfRedrive(_))
         ));
+    }
+
+    #[test]
+    fn transformer_message_conversion_preserves_parent_and_response_metadata() {
+        let parent_metadata = Metadata {
+            previous_vertex: "source".to_string(),
+            sys_metadata: HashMap::from([(
+                "system".to_string(),
+                crate::metadata::KeyValueGroup {
+                    key_value: HashMap::from([("trace".to_string(), "parent".into())]),
+                },
+            )]),
+            user_metadata: HashMap::new(),
+        };
+        let msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("parent-offset".to_string(), 0)),
+            is_late: true,
+            headers: Arc::new(HashMap::from([(
+                "header-key".to_string(),
+                "header-value".to_string(),
+            )])),
+            metadata: Some(Arc::new(parent_metadata)),
+        };
+        let response_metadata = metadata::Metadata {
+            previous_vertex: "transformer".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata: HashMap::from([(
+                "user".to_string(),
+                metadata::KeyValueGroup {
+                    key_value: HashMap::from([("k".to_string(), b"v".to_vec())]),
+                },
+            )]),
+        };
+        let response = source_transform_response::Result {
+            keys: vec!["key".to_string()],
+            value: b"value".to_vec(),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
+            tags: vec!["tag".to_string()],
+            metadata: Some(response_metadata),
+        };
+
+        let message: Message = UserDefinedTransformerMessage(response, &msg_info, 3).into();
+
+        assert_eq!(message.offset, msg_info.offset);
+        assert!(message.is_late);
+        assert_eq!(
+            message.headers.get("header-key").map(String::as_str),
+            Some("header-value")
+        );
+        assert_eq!(message.keys.to_vec(), vec!["key".to_string()]);
+        assert_eq!(message.tags.as_deref(), Some(&["tag".to_string()][..]));
+        let metadata = message.metadata.expect("metadata should be present");
+        assert!(metadata.sys_metadata.contains_key("system"));
+        assert!(metadata.user_metadata.contains_key("user"));
     }
 
     #[test]

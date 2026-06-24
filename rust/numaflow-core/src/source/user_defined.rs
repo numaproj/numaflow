@@ -788,6 +788,18 @@ mod tests {
     }
 
     #[test]
+    fn source_read_reconnect_returns_reconnect_error() {
+        let reconnect_error =
+            Error::UdfRedrive(Box::new(Status::unavailable("source reconnect failed")));
+        let result = UserDefinedSourceRead::preserve_messages_after_reconnect(
+            Vec::new(),
+            Err(reconnect_error),
+        );
+
+        assert!(matches!(result, Err(Error::UdfRedrive(_))));
+    }
+
+    #[test]
     fn test_read_response_result_to_message() {
         let result = read_response::Result {
             payload: vec![1, 2, 3],
@@ -813,6 +825,47 @@ mod tests {
             message.event_time,
             Utc.timestamp_opt(1627846261, 0).unwrap()
         );
+    }
+
+    #[test]
+    fn test_read_response_result_requires_offset() {
+        let result = read_response::Result {
+            payload: vec![1, 2, 3],
+            offset: None,
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
+            keys: vec![],
+            headers: HashMap::new(),
+            metadata: None,
+        };
+
+        assert!(matches!(
+            crate::message::Message::try_from(result),
+            Err(Error::Source(message)) if message.contains("Offset not found")
+        ));
+    }
+
+    #[test]
+    fn test_read_response_result_rejects_empty_offset() {
+        let result = read_response::Result {
+            payload: vec![1, 2, 3],
+            offset: Some(numaflow_pb::clients::source::Offset {
+                offset: vec![],
+                partition_id: 0,
+            }),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
+            keys: vec![],
+            headers: HashMap::new(),
+            metadata: None,
+        };
+
+        assert!(matches!(
+            crate::message::Message::try_from(result),
+            Err(Error::Source(message)) if message.contains("Invalid offset")
+        ));
     }
 
     #[test]
