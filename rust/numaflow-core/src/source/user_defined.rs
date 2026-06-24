@@ -776,9 +776,15 @@ mod tests {
             UserDefinedSourceRead::preserve_messages_after_reconnect(messages.clone(), Ok(()))
                 .unwrap();
 
-        assert_eq!(reconnected_messages.len(), 2);
-        assert_eq!(reconnected_messages[0].offset, messages[0].offset);
-        assert_eq!(reconnected_messages[1].offset, messages[1].offset);
+        let reconnected_offsets: Vec<_> = reconnected_messages
+            .iter()
+            .map(|message| message.offset.clone())
+            .collect();
+        let expected_offsets: Vec<_> = messages
+            .iter()
+            .map(|message| message.offset.clone())
+            .collect();
+        assert_eq!(reconnected_offsets, expected_offsets);
     }
 
     #[test]
