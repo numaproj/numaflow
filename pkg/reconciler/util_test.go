@@ -287,6 +287,36 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 		assert.Contains(t, message, "OOMKilled")
 		assert.Contains(t, message, "exit code 137")
 	})
+
+	t.Run("aggregates multiple recently-restarted containers", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "numa",
+						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
+						}},
+					},
+					{
+						Name:  "udf",
+						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+						}},
+					},
+				},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodRecentRestart", reason)
+		assert.True(t, transient)
+		assert.Contains(t, message, `container "numa" restarted recently: OOMKilled (exit code 137)`)
+		assert.Contains(t, message, `container "udf" restarted recently: OOMKilled (exit code 137)`)
+		assert.Contains(t, message, "; ")
+	})
 }
 
 var (
