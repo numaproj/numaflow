@@ -478,7 +478,11 @@ pub mod tests {
             cln_token.clone(),
             true,
             crate::source::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(sock_file, server_info_file, 64 * 1024 * 1024),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    64 * 1024 * 1024,
+                ),
                 cln_token.clone(),
                 crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
