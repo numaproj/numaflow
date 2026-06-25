@@ -429,10 +429,13 @@ mod tests {
             client,
             tracker.clone(),
             ReconnectConfig::new(
-                sock_file.clone(),
-                server_info_file.clone(),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 CancellationToken::new(),
-                TEST_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await?;
@@ -516,10 +519,13 @@ mod tests {
             client,
             tracker.clone(),
             ReconnectConfig::new(
-                sock_file.clone(),
-                server_info_file.clone(),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 CancellationToken::new(),
-                TEST_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await?;
@@ -611,10 +617,13 @@ mod tests {
             client,
             tracker.clone(),
             ReconnectConfig::new(
-                sock_file.clone(),
-                server_info_file.clone(),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                TEST_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await?;

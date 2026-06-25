@@ -129,10 +129,9 @@ async fn append_primary_sink_client(
                 SinkClientType::UserDefined(
                     Box::new(sink_grpc_client.clone()),
                     Some(SinkReconnectConfig::new(
-                        ud_config.socket_path.clone(),
-                        ud_config.server_info_path.clone(),
+                        ud_config.grpc_client_config(),
                         cln_token.clone(),
-                        ud_config.grpc_max_message_size,
+                        grpc::DEFAULT_RECONNECT_INTERVAL,
                     )),
                 ),
             )
@@ -197,10 +196,9 @@ async fn append_fallback_sink_client(
             sink_writer_builder.fb_sink_client(SinkClientType::UserDefined(
                 Box::new(sink_grpc_client.clone()),
                 Some(SinkReconnectConfig::new(
-                    ud_config.socket_path.clone(),
-                    ud_config.server_info_path.clone(),
+                    ud_config.grpc_client_config(),
                     cln_token.clone(),
-                    ud_config.grpc_max_message_size,
+                    grpc::DEFAULT_RECONNECT_INTERVAL,
                 )),
             ))
         }
@@ -257,10 +255,9 @@ async fn append_ons_sink_client(
             sink_writer_builder.on_success_sink_client(SinkClientType::UserDefined(
                 Box::new(sink_grpc_client.clone()),
                 Some(SinkReconnectConfig::new(
-                    ud_config.socket_path.clone(),
-                    ud_config.server_info_path.clone(),
+                    ud_config.grpc_client_config(),
                     cln_token.clone(),
-                    ud_config.grpc_max_message_size,
+                    grpc::DEFAULT_RECONNECT_INTERVAL,
                 )),
             ))
         }
@@ -314,10 +311,9 @@ pub(crate) async fn create_transformer(
             .set(1);
 
         let reconnect_config = TransformerReconnectConfig::new(
-            ud_transformer.socket_path.clone(),
-            ud_transformer.server_info_path.clone(),
+            ud_transformer.grpc_client_config(),
             cln_token.clone(),
-            ud_transformer.grpc_max_message_size,
+            grpc::DEFAULT_RECONNECT_INTERVAL,
         );
         return Ok(Some(
             Transformer::new(
@@ -614,10 +610,9 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             // Check if the SDK version supports nack functionality
             let supports_nack = supports_nack(&server_info.version, server_info.language);
             let reconnect_config = SourceReconnectConfig::new(
-                user_defined_config.socket_path.clone(),
-                user_defined_config.server_info_path.clone(),
+                user_defined_config.grpc_client_config(),
                 cln_token.clone(),
-                user_defined_config.grpc_max_message_size,
+                grpc::DEFAULT_RECONNECT_INTERVAL,
             );
             let (ud_read, ud_ack, ud_lag) = new_source(
                 source_client,

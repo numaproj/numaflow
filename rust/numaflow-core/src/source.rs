@@ -1620,10 +1620,13 @@ mod tests {
             cln_token.clone(),
             true,
             ReconnectConfig::new(
-                sock_file,
-                server_info_file,
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await
@@ -1831,10 +1834,13 @@ mod tests {
             cln_token.clone(),
             true,
             crate::source::user_defined::ReconnectConfig::new(
-                sock_file,
-                server_info_file,
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await
@@ -2085,10 +2091,13 @@ mod tests {
             cln_token.clone(),
             true,
             ReconnectConfig::new(
-                sock_file,
-                server_info_file,
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await
@@ -2298,10 +2307,13 @@ mod tests {
             client,
             tracker.clone(),
             TransformerReconnectConfig::new(
-                sock_file,
-                server_info_file,
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await

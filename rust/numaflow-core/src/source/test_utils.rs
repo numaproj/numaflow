@@ -65,10 +65,13 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     client,
                     tracker.clone(),
                     crate::transformer::user_defined::ReconnectConfig::new(
-                        _server_handle.socket_path(),
-                        _server_handle.server_info_path(),
+                        crate::shared::grpc::GrpcClientConfig::new(
+                            _server_handle.socket_path(),
+                            _server_handle.server_info_path(),
+                            crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                        ),
                         cln_token.clone(),
-                        crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                        crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
                     ),
                 )
                 .await
@@ -102,10 +105,13 @@ impl SourceTestHandle<WithSimpleBuffer> {
             cln_token.clone(),
             true,
             crate::source::user_defined::ReconnectConfig::new(
-                server_handle.socket_path(),
-                server_handle.server_info_path(),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    server_handle.socket_path(),
+                    server_handle.server_info_path(),
+                    crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await

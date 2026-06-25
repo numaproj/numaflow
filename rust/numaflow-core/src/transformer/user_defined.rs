@@ -367,10 +367,13 @@ mod tests {
             500,
             SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?),
             ReconnectConfig::new(
-                sock_file.clone(),
-                server_info_file.clone(),
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 CancellationToken::new(),
-                crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await?;

@@ -383,6 +383,14 @@ impl UserDefinedConfig {
             server_info_path: DEFAULT_ONS_SINK_SERVER_INFO_FILE.to_string(),
         }
     }
+
+    pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
+        crate::shared::grpc::GrpcClientConfig::new(
+            self.socket_path.clone(),
+            self.server_info_path.clone(),
+            self.grpc_max_message_size,
+        )
+    }
 }
 
 #[cfg(test)]

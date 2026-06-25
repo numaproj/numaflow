@@ -1789,10 +1789,13 @@ mod tests {
             cln_token.clone(),
             true,
             ReconnectConfig::new(
-                src_sock_file,
-                src_info_file,
+                crate::shared::grpc::GrpcClientConfig::new(
+                    src_sock_file,
+                    src_info_file,
+                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
                 cln_token.clone(),
-                DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
         )
         .await

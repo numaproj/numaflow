@@ -73,7 +73,7 @@ pub(crate) enum SinkClientType {
     Serve,
     UserDefined(
         Box<SinkClient<Channel>>,
-        Option<crate::sinker::sink::user_defined::ReconnectConfig>,
+        Option<user_defined::ReconnectConfig>,
     ),
     Sqs(SqsSink),
     Kafka(KafkaSink),
