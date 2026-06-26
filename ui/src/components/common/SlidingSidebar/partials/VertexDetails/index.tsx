@@ -21,18 +21,17 @@ import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
 import { AppContext } from "../../../../../App";
 import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
-import { usePipelineISBDebugFetch } from "../../../../../utils/fetchWrappers/pipelineISBDebugFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import {
   ContainerError,
   ReplicaErrors,
 } from "../../../../../types/declarations/pods";
+import { BufferInfo } from "../../../../../types/declarations/pipeline";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
 import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
-import { PipelineISBDebugInfo } from "../PipelineISBDebugInfo";
 
 import "./style.css";
 
@@ -42,7 +41,6 @@ const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
 const ERRORS_TAB_INDEX = 4;
 const BUFFERS_TAB_INDEX = 5;
-const ISB_DEBUG_TAB_INDEX = 6;
 
 export enum VertexType {
   SOURCE,
@@ -58,7 +56,7 @@ export interface VertexDetailsProps {
   vertexId: string;
   vertexSpecs: any;
   vertexMetrics: any;
-  buffers?: any[] | null;
+  buffers?: BufferInfo[] | null;
   type: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
   refresh: () => void;
@@ -294,18 +292,7 @@ export function VertexDetails({
     setErrorsCount(filteredDetailsData.length);
   }, [constructedDetails, filterErrorsWithinLast24Hours]);
 
-  const isPipelineVertex = type !== "monoVertex";
-  const {
-    data: isbDebugData,
-    loading: isbDebugLoading,
-    error: isbDebugError,
-    refresh: isbDebugRefresh,
-  } = usePipelineISBDebugFetch({
-    namespaceId,
-    pipelineId,
-    vertexId,
-    enabled: isPipelineVertex && tabValue === ISB_DEBUG_TAB_INDEX,
-  });
+  const showBuffersTab = !!buffers || type === "source";
 
   return (
     <VertexDetailsContext.Provider
@@ -392,7 +379,7 @@ export function VertexDetails({
               value={ERRORS_TAB_INDEX}
               data-testid="errors-tab"
             />
-            {buffers && (
+            {showBuffersTab && (
               <Tab
                 className={
                   tabValue === BUFFERS_TAB_INDEX
@@ -402,18 +389,6 @@ export function VertexDetails({
                 value={BUFFERS_TAB_INDEX}
                 label="Buffers"
                 data-testid="buffers-tab"
-              />
-            )}
-            {isPipelineVertex && (
-              <Tab
-                className={
-                  tabValue === ISB_DEBUG_TAB_INDEX
-                    ? "vertex-details-tab-selected"
-                    : "vertex-details-tab"
-                }
-                value={ISB_DEBUG_TAB_INDEX}
-                label="ISB"
-                data-testid="isb-tab"
               />
             )}
           </Tabs>
@@ -494,7 +469,7 @@ export function VertexDetails({
             <Errors details={constructedDetails} square />
           )}
         </div>
-        {buffers && (
+        {showBuffersTab && (
           <div
             className="vertex-details-tab-panel"
             role="tabpanel"
@@ -502,29 +477,11 @@ export function VertexDetails({
           >
             {tabValue === BUFFERS_TAB_INDEX && (
               <Buffers
-                buffers={buffers}
+                buffers={buffers || []}
                 namespaceId={namespaceId}
                 pipelineId={pipelineId}
                 vertexId={vertexId}
                 type={type}
-              />
-            )}
-          </div>
-        )}
-        {isPipelineVertex && (
-          <div
-            className="vertex-details-tab-panel"
-            role="tabpanel"
-            hidden={tabValue !== ISB_DEBUG_TAB_INDEX}
-          >
-            {tabValue === ISB_DEBUG_TAB_INDEX && (
-              <PipelineISBDebugInfo
-                streams={isbDebugData?.streams}
-                consumers={isbDebugData?.consumers}
-                kvStores={isbDebugData?.kvStores}
-                loading={isbDebugLoading}
-                error={isbDebugError}
-                onRefresh={isbDebugRefresh}
               />
             )}
           </div>

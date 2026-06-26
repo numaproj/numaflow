@@ -341,9 +341,18 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
                     }}
                   >
                     {data?.isFull && <img src={error} alt={"error"} />}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                      <span>Pending: {data?.pendingLabel || 0}</span>
-                      <span>AckPending: {data?.ackPendingLabel || 0}</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "2px",
+                      }}
+                    >
+                      <span>Queued messages: {data?.pendingLabel || 0}</span>
+                      <span>
+                        In-flight messages: {data?.ackPendingLabel || 0}
+                      </span>
                     </div>
                   </div>
                 </div>

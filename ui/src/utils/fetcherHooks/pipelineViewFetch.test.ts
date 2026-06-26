@@ -231,6 +231,104 @@ describe("Custom Pipeline hook", () => {
     });
     expect(mockedFetch).toBeCalledTimes(6);
   });
+
+  it("uses target buffer aggregates for fan-in edge hover counts", async () => {
+    const okJson = (payload: any) => ({
+      ok: true,
+      json: jest.fn().mockResolvedValue(payload),
+    });
+    const pipelinePayload = {
+      data: {
+        pipeline: {
+          metadata: {
+            name: "fan-in-pipeline",
+            namespace: "default",
+          },
+          spec: {
+            vertices: [
+              { name: "in-a", source: { generator: {} }, scale: {} },
+              { name: "in-b", source: { generator: {} }, scale: {} },
+              { name: "cat", udf: { builtin: { name: "cat" } }, scale: {} },
+            ],
+            edges: [
+              { from: "in-a", to: "cat", conditions: null },
+              { from: "in-b", to: "cat", conditions: null },
+            ],
+            watermark: {},
+          },
+        },
+      },
+    };
+    const mockedFetch = jest.fn((url: string) => {
+      if (url.includes("/isbs")) {
+        return Promise.resolve(
+          okJson({
+            data: [
+              {
+                pipeline: "fan-in-pipeline",
+                bufferName: "default-fan-in-pipeline-cat-0",
+                pendingCount: 7,
+                ackPendingCount: 2,
+                totalMessages: 9,
+                bufferLength: 30000,
+                bufferUsageLimit: 0.8,
+                bufferUsage: 0.5,
+                isFull: false,
+              },
+            ],
+          }) as any
+        );
+      }
+      if (url.includes("/watermarks")) {
+        return Promise.resolve(
+          okJson({
+            data: [
+              {
+                pipeline: "fan-in-pipeline",
+                edge: "in-a-cat",
+                watermarks: [1686318878094],
+                isWatermarkEnabled: true,
+              },
+              {
+                pipeline: "fan-in-pipeline",
+                edge: "in-b-cat",
+                watermarks: [1686318878094],
+                isWatermarkEnabled: true,
+              },
+            ],
+          }) as any
+        );
+      }
+      if (url.includes("/vertices/metrics")) {
+        return Promise.resolve(okJson({ data: {} }) as any);
+      }
+      if (url.includes("/pods")) {
+        return Promise.resolve(okJson({ data: [] }) as any);
+      }
+      return Promise.resolve(okJson(pipelinePayload) as any);
+    });
+    (global as any).fetch = mockedFetch;
+
+    const { result } = renderHook(() =>
+      usePipelineViewFetch("default", "fan-in-pipeline", jest.fn())
+    );
+
+    await waitFor(() => {
+      expect(result.current.edges).toHaveLength(2);
+    });
+
+    expect(
+      result.current.edges.map((edge) => ({
+        id: edge.id,
+        pendingLabel: edge.data?.pendingLabel,
+        ackPendingLabel: edge.data?.ackPendingLabel,
+      }))
+    ).toEqual([
+      { id: "in-a-cat", pendingLabel: 7, ackPendingLabel: 2 },
+      { id: "in-b-cat", pendingLabel: 7, ackPendingLabel: 2 },
+    ]);
+  });
+
   it("refreshes data when refresh function is called", async () => {
     const mockedFetch = jest.fn().mockResolvedValueOnce({
       ok: true,

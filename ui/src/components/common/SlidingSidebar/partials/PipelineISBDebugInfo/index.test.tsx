@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { PipelineISBDebugInfo } from "./index";
 
 import "@testing-library/jest-dom";
@@ -9,49 +9,6 @@ describe("PipelineISBDebugInfo", () => {
     render(<PipelineISBDebugInfo loading />);
 
     await waitFor(() => {
-      expect(screen.getByRole("progressbar")).toBeInTheDocument();
-    });
-  });
-
-  it("renders and invokes refresh action when provided", async () => {
-    const onRefresh = jest.fn();
-    render(
-      <PipelineISBDebugInfo
-        loading={false}
-        streams={{ streams: [] }}
-        consumers={{ consumers: [] }}
-        kvStores={{ kvStores: [] }}
-        onRefresh={onRefresh}
-      />
-    );
-
-    fireEvent.click(screen.getByText("Refresh"));
-
-    await waitFor(() => {
-      expect(onRefresh).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("hides refresh action when not provided", async () => {
-    render(
-      <PipelineISBDebugInfo
-        loading={false}
-        streams={{ streams: [] }}
-        consumers={{ consumers: [] }}
-        kvStores={{ kvStores: [] }}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText("Refresh")).not.toBeInTheDocument();
-    });
-  });
-
-  it("disables refresh action while loading", async () => {
-    render(<PipelineISBDebugInfo loading onRefresh={jest.fn()} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Refreshing...")).toBeDisabled();
       expect(screen.getByRole("progressbar")).toBeInTheDocument();
     });
   });
@@ -213,6 +170,21 @@ describe("PipelineISBDebugInfo", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Stream Information")).toBeInTheDocument();
+      expect(screen.getByText("Messages")).toBeInTheDocument();
+      expect(screen.getAllByText("Bytes").length).toBeGreaterThan(0);
+      expect(screen.getByText("Consumers")).toBeInTheDocument();
+      expect(screen.getAllByText("Replicas").length).toBeGreaterThan(0);
+      expect(screen.getByText("Ack Pending")).toBeInTheDocument();
+      expect(screen.getByText("Pending")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-stream-messages")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-consumer-ack-pending")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-kv-ttl")
+      ).toBeInTheDocument();
       expect(screen.getAllByText("ns-pl-cat-0").length).toBeGreaterThan(1);
       expect(screen.getByText("Yes")).toBeInTheDocument();
       expect(screen.getByText("No")).toBeInTheDocument();

@@ -1,38 +1,8 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { EdgeDetails } from "./index";
 
 import "@testing-library/jest-dom";
-
-const mockISBDebugRefresh = jest.fn();
-
-jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
-  usePipelineISBDebugFetch: () => ({
-    data: {
-      streams: { streams: [] },
-      consumers: { consumers: [] },
-      kvStores: {
-        kvStores: [
-          {
-            namespace: "test-namespace",
-            pipeline: "test-pipeline",
-            scope: "edge",
-            from: "in",
-            to: "cat",
-            bucket: "test-namespace-test-pipeline-in-cat_OT",
-            stream: "KV_test-namespace-test-pipeline-in-cat_OT",
-            values: 2,
-            bytes: 1024,
-            storage: "file",
-          },
-        ],
-      },
-    },
-    loading: false,
-    error: undefined,
-    refresh: mockISBDebugRefresh,
-  }),
-}));
 
 describe("EdgeDetails", () => {
   beforeEach(() => {
@@ -43,6 +13,7 @@ describe("EdgeDetails", () => {
     render(<EdgeDetails edgeId="test-edge" />);
     await waitFor(() => {
       expect(screen.getByText("test-edge Edge")).toBeInTheDocument();
+      expect(screen.getByText("Watermark timestamp")).toBeInTheDocument();
       expect(screen.getByText("No watermarks found")).toBeInTheDocument();
     });
   });
@@ -69,7 +40,7 @@ describe("EdgeDetails", () => {
     });
   });
 
-  it("renders ISB tab", async () => {
+  it("does not render ISB tab", async () => {
     render(
       <EdgeDetails
         namespaceId="test-namespace"
@@ -81,20 +52,10 @@ describe("EdgeDetails", () => {
       />
     );
 
-    fireEvent.click(screen.getByTestId("edge-isb-tab"));
-
     await waitFor(() => {
-      expect(screen.getByText("KV Stores")).toBeInTheDocument();
-      expect(
-        screen.getByText("test-namespace-test-pipeline-in-cat_OT")
-      ).toBeInTheDocument();
-      expect(screen.getByText(/target vertex buffer/)).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Refresh"));
-
-    await waitFor(() => {
-      expect(mockISBDebugRefresh).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId("edge-isb-tab")).not.toBeInTheDocument();
+      expect(screen.queryByText("ISB")).not.toBeInTheDocument();
+      expect(screen.getByText("No watermarks found")).toBeInTheDocument();
     });
   });
 });
