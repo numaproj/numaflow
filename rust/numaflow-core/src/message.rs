@@ -178,7 +178,7 @@ impl Drop for AckHandle {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
             let ack = if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) != 0 {
                 if let Some(reason) = self.failure_reason.get() {
-                    error!(reason = reason.as_str(), "message nacked due to failure");
+                    error!(reason = reason.as_str(), "received nack");
                 }
                 ReadAck::Nak(self.nack_options.get().cloned())
             } else {
