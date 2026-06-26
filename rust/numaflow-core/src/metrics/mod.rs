@@ -93,6 +93,7 @@ pub(crate) mod critical_error_reasons {
     pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
     pub(crate) const SOURCE_TRANSFORMER_RUNTIME_ERROR: &str = "source_transformer_runtime_error";
     pub(crate) const SINK_RUNTIME_ERROR: &str = "sink_runtime_error";
+    pub(crate) const MAP_RUNTIME_ERROR: &str = "map_runtime_error";
 }
 
 const SINK_WRITE_TOTAL: &str = "write";
@@ -193,7 +194,7 @@ pub(crate) struct MonovertexComponents<C: crate::typ::NumaflowTypeConfig> {
 pub(crate) enum PipelineComponents<C: crate::typ::NumaflowTypeConfig> {
     Source(Box<Source<C>>),
     Sink(Box<SinkWriter>),
-    Map(MapHandle),
+    Map(Box<MapHandle>),
     Reduce(UserDefinedReduce),
 }
 
