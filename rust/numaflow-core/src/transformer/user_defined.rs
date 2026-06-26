@@ -252,6 +252,25 @@ impl UserDefinedTransformer {
         Ok(())
     }
 
+    async fn queue_request(
+        &mut self,
+        key: &str,
+        msg_info: ParentMessageInfo,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+        request: SourceTransformRequest,
+    ) -> Option<(ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)> {
+        self.senders
+            .lock()
+            .await
+            .insert(key.to_string(), (msg_info, respond_to));
+
+        if self.read_tx.send(request).await.is_ok() {
+            return None;
+        }
+
+        self.senders.lock().await.remove(key)
+    }
+
     /// Handles the incoming message and sends it to the server for transformation.
     pub(super) async fn transform(
         &mut self,
@@ -276,16 +295,10 @@ impl UserDefinedTransformer {
 
         let request: SourceTransformRequest = message.into();
 
-        self.senders
-            .lock()
+        let Some((msg_info, respond_to)) = self
+            .queue_request(&key, msg_info, respond_to, request.clone())
             .await
-            .insert(key.clone(), (msg_info, respond_to));
-
-        if self.read_tx.send(request.clone()).await.is_ok() {
-            return;
-        }
-
-        let Some((msg_info, respond_to)) = self.senders.lock().await.remove(&key) else {
+        else {
             return;
         };
 
@@ -294,15 +307,10 @@ impl UserDefinedTransformer {
             return;
         }
 
-        self.senders
-            .lock()
+        if let Some((_, respond_to)) = self
+            .queue_request(&key, msg_info, respond_to, request)
             .await
-            .insert(key.clone(), (msg_info, respond_to));
-
-        if self.read_tx.send(request).await.is_err() {
-            let Some((_, respond_to)) = self.senders.lock().await.remove(&key) else {
-                return;
-            };
+        {
             let _ = respond_to.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
                 "source transformer stream closed after reconnect",
             )))));
