@@ -239,7 +239,7 @@ pub async fn start_map_forwarder(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
-                mapper_handle,
+                Box::new(mapper_handle),
             ))),
             watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),

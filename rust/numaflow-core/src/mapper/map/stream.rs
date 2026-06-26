@@ -5,21 +5,24 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
+use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
+use tonic::Status;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, grpc_error_to_redrive, map_redrive_error, reconnect_mapper_client,
+    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric, wait_before_map_redrive,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -76,91 +79,110 @@ impl MapStreamTask {
             otel::TraceStage::Map,
         );
 
-        // Store parent message info before sending to UDF
-        // parent_info contains offset, so we don't need to clone it separately
-        let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
+        // Store parent message info before sending to UDF. This is reset for every redrive so
+        // sibling indexes stay deterministic across retries.
+        let initial_parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
         let request: MapRequest = self.msg_handle.message().clone().into();
-        update_udf_read_metric(self.shared_ctx.is_mono_vertex);
-
-        // Call the UDF and get receiver for raw results
-        let mut receiver = self
-            .mapper
-            .stream(request, self.shared_ctx.hard_shutdown_token.clone())
-            .await;
-
-        // We need to update the tracker with no responses, because unlike unary and batch,
-        // we cannot update the responses here - we will have to append the responses.
-        // Use parent_info.offset instead of cloning offset separately
-        self.shared_ctx
-            .tracker
-            .serving_refresh(parent_info.offset.clone())
-            .await
-            .expect("failed to reset tracker");
 
         loop {
-            let result = receiver.recv().await;
-            match result {
-                Some(Ok(results)) => {
-                    // Convert raw results to Messages using parent info.
-                    // Strip tracing_udf from each result (map stage is done; no-op when no key
-                    // was injected).
-                    for result in results {
-                        let mut mapped_message: Message =
-                            UserDefinedMessage(result, &parent_info, parent_info.current_index)
-                                .into();
-                        parent_info.current_index += 1;
-                        mapped_message.strip_tracing_udf();
+            let mut parent_info = initial_parent_info.clone();
+            update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
-                        update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
+            // Call the UDF and get receiver for raw results
+            let mut receiver = self
+                .mapper
+                .stream(request.clone(), self.shared_ctx.hard_shutdown_token.clone())
+                .await;
 
-                        self.shared_ctx
-                            .tracker
-                            .serving_append(
-                                mapped_message.offset.clone(),
-                                mapped_message.tags.clone(),
-                            )
+            // We need to update the tracker with no responses, because unlike unary and batch,
+            // we cannot update the responses here - we will have to append the responses.
+            self.shared_ctx
+                .tracker
+                .serving_refresh(parent_info.offset.clone())
+                .await
+                .expect("failed to reset tracker");
+
+            let mut should_redrive = false;
+            loop {
+                let result = receiver.recv().await;
+                match result {
+                    Some(Ok(results)) => {
+                        // Convert raw results to Messages using parent info.
+                        // Strip tracing_udf from each result (map stage is done; no-op when no key
+                        // was injected).
+                        for result in results {
+                            let mut mapped_message: Message =
+                                UserDefinedMessage(result, &parent_info, parent_info.current_index)
+                                    .into();
+                            parent_info.current_index += 1;
+                            mapped_message.strip_tracing_udf();
+
+                            update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
+
+                            self.shared_ctx
+                                .tracker
+                                .serving_append(
+                                    mapped_message.offset.clone(),
+                                    mapped_message.tags.clone(),
+                                )
+                                .await
+                                .expect("failed to update tracker");
+
+                            // Each downstream handle shares the original ack tracking — ACK is
+                            // deferred until all mapped messages are written to ISB/sink.
+                            let msg_handle = self.msg_handle.with_message(mapped_message);
+
+                            // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                            // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+                            let msg_handle =
+                                if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
+                                    match bypass_router
+                                        .try_bypass(msg_handle)
+                                        .await
+                                        .expect("failed to send message to bypass channel")
+                                    {
+                                        Some(msg) => msg,
+                                        None => continue, // Message was bypassed, move to next
+                                    }
+                                } else {
+                                    msg_handle
+                                };
+
+                            self.shared_ctx
+                                .output_tx
+                                .send(msg_handle)
+                                .await
+                                .expect("failed to send response");
+                        }
+                    }
+                    Some(Err(Error::UdfRedrive(status))) => {
+                        warn!(?status, offset = ?parent_info.offset, "redriving stream map message after UDF reconnect");
+                        if wait_before_map_redrive(&self.shared_ctx.hard_shutdown_token)
                             .await
-                            .expect("failed to update tracker");
-
-                        // Each downstream handle shares the original ack tracking — ACK is
-                        // deferred until all mapped messages are written to ISB/sink.
-                        let msg_handle = self.msg_handle.with_message(mapped_message);
-
-                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
-                        let msg_handle =
-                            if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
-                                match bypass_router
-                                    .try_bypass(msg_handle)
-                                    .await
-                                    .expect("failed to send message to bypass channel")
-                                {
-                                    Some(msg) => msg,
-                                    None => continue, // Message was bypassed, move to next
-                                }
-                            } else {
-                                msg_handle
-                            };
-
-                        self.shared_ctx
-                            .output_tx
-                            .send(msg_handle)
-                            .await
-                            .expect("failed to send response");
+                            .is_err()
+                        {
+                            return;
+                        }
+                        should_redrive = true;
+                        break;
+                    }
+                    Some(Err(e)) => {
+                        error!(?e, "failed to map message");
+                        mark_failed!(self.msg_handle, &e);
+                        let _ = self.shared_ctx.error_tx.send(e).await;
+                        return;
+                    }
+                    None => {
+                        // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
+                        // finished after sending all results). Fall through to mark_success below.
+                        break;
                     }
                 }
-                Some(Err(e)) => {
-                    error!(?e, "failed to map message");
-                    mark_failed!(self.msg_handle, &e);
-                    let _ = self.shared_ctx.error_tx.send(e).await;
-                    return;
-                }
-                None => {
-                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
-                    // finished after sending all results). Fall through to mark_success below.
-                    break;
-                }
+            }
+
+            if !should_redrive {
+                break;
             }
         }
 
@@ -172,6 +194,13 @@ impl MapStreamTask {
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
+    batch_size: usize,
+    connection: Arc<AsyncMutex<StreamMapConnection>>,
+    reconnect_config: Option<UdfReconnectConfig>,
+}
+
+struct StreamMapConnection {
+    generation: u64,
     read_tx: mpsc::Sender<MapRequest>,
     senders: Arc<Mutex<StreamSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
@@ -182,9 +211,24 @@ impl UserDefinedStreamMap {
     pub(in crate::mapper) async fn new(
         batch_size: usize,
         mut client: MapClient<Channel>,
+        reconnect_config: Option<UdfReconnectConfig>,
     ) -> Result<Self> {
+        let connection = Self::create_connection(batch_size, &mut client, 0).await?;
+
+        Ok(Self {
+            batch_size,
+            connection: Arc::new(AsyncMutex::new(connection)),
+            reconnect_config,
+        })
+    }
+
+    async fn create_connection(
+        batch_size: usize,
+        client: &mut MapClient<Channel>,
+        generation: u64,
+    ) -> Result<StreamMapConnection> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, client).await?;
 
         // map to track the mpsc response sender for each request
         let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
@@ -196,12 +240,12 @@ impl UserDefinedStreamMap {
             Self::receive_stream_responses(sender_map_clone, resp_stream).await;
         });
 
-        let mapper = Self {
+        Ok(StreamMapConnection {
+            generation,
             read_tx,
             senders: sender_map,
             _handle: Arc::new(AbortOnDropHandle::new(handle)),
-        };
-        Ok(mapper)
+        })
     }
 
     /// Broadcasts a gRPC error to all pending senders and records error metrics.
@@ -215,8 +259,9 @@ impl UserDefinedStreamMap {
             std::mem::take(&mut sender_guard.map)
         };
 
+        let error = map_redrive_error(error);
         for (_, sender) in senders {
-            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
+            let _ = sender.send(Err(error.clone())).await;
             update_udf_error_metric(is_mono_vertex());
         }
     }
@@ -331,29 +376,67 @@ impl UserDefinedStreamMap {
         request: MapRequest,
         cln_token: CancellationToken,
     ) -> mpsc::Receiver<Result<StreamMapResponse>> {
+        let (generation, result) = self
+            .stream_once_with_generation(request.clone(), cln_token.clone())
+            .await;
+        match result {
+            Ok(rx) => rx,
+            Err(Error::UdfRedrive(error)) => {
+                warn!(
+                    ?error,
+                    "stream map request failed before responses, reconnecting"
+                );
+                match self.reconnect(generation).await {
+                    Ok(()) => match self.stream_once(request, cln_token).await {
+                        Ok(rx) => rx,
+                        Err(e) => Self::error_receiver(e).await,
+                    },
+                    Err(e) => Self::error_receiver(e).await,
+                }
+            }
+            Err(e) => Self::error_receiver(e).await,
+        }
+    }
+
+    async fn stream_once(
+        &self,
+        request: MapRequest,
+        cln_token: CancellationToken,
+    ) -> Result<mpsc::Receiver<Result<StreamMapResponse>>> {
+        self.stream_once_with_generation(request, cln_token).await.1
+    }
+
+    async fn stream_once_with_generation(
+        &self,
+        request: MapRequest,
+        cln_token: CancellationToken,
+    ) -> (u64, Result<mpsc::Receiver<Result<StreamMapResponse>>>) {
         let (tx, rx) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
 
         // Check if already canceled before sending
         if cln_token.is_cancelled() {
-            let _ = tx
-                .send(Err(Error::Mapper(
-                    "stream map operation cancelled".to_string(),
-                )))
-                .await;
-            return rx;
+            return (
+                0,
+                Err(Error::Mapper("stream map operation cancelled".to_string())),
+            );
         }
 
         let key = request.id.clone();
+        let (generation, senders, read_tx) = {
+            let connection = self.connection.lock().await;
+            (
+                connection.generation,
+                Arc::clone(&connection.senders),
+                connection.read_tx.clone(),
+            )
+        };
 
         // Move the senders_guard out of the scope to drop the guard before sending the response
         // Do this before we send the message to the server to avoid the race condition
         // where the server processes the message faster than the corresponding sender
         // is added to the SenderMap.
         let mapper_closed = {
-            let mut senders_guard = self
-                .senders
-                .lock()
-                .expect("failed to acquire poisoned lock");
+            let mut senders_guard = senders.lock().expect("failed to acquire poisoned lock");
             if !senders_guard.closed {
                 // Write the sender back to the map, because we need to send
                 // more responses for the same request
@@ -363,36 +446,81 @@ impl UserDefinedStreamMap {
         };
 
         if mapper_closed {
-            let _ = tx
-                .send(Err(Error::Mapper("mapper closed".to_string())))
-                .await;
-            return rx;
+            return (
+                generation,
+                Err(map_redrive_error(Status::unavailable(
+                    "stream map stream closed",
+                ))),
+            );
         }
 
         // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
+        if let Err(e) = read_tx.send(request).await {
             error!(?e, "Failed to send message to map stream udf server");
             // We should ideally remove the resp.id from the SenderMap to avoid potential
             // memory leaks as well as to avoid holding the corresponding receiver waiting.
             // We don't care about the return value since we already have access to the 'tx'
             {
-                let _ = self
-                    .senders
+                let _ = senders
                     .lock()
                     .expect("failed to acquire poisoned lock")
                     .map
                     .remove(&key);
             };
 
-            // send error on 'tx'
-            let _ = tx
-                .send(Err(Error::Mapper(format!(
+            return (
+                generation,
+                Err(map_redrive_error(Status::unavailable(format!(
                     "failed to send message to map stream server: {e}"
-                ))))
-                .await
-                .inspect_err(|_| warn!("failed to send error to receiver"));
+                )))),
+            );
         }
 
+        (generation, Ok(rx))
+    }
+
+    async fn reconnect(&self, failed_generation: u64) -> Result<()> {
+        let Some(reconnect_config) = &self.reconnect_config else {
+            return Err(map_redrive_error(Status::unavailable(
+                "stream map reconnect config missing",
+            )));
+        };
+
+        let mut connection = self.connection.lock().await;
+        if connection.generation != failed_generation {
+            return Ok(());
+        }
+        Self::drain_senders(
+            &connection.senders,
+            map_redrive_error(Status::unavailable("stream map reconnecting")),
+        )
+        .await;
+        let next_generation = connection.generation.saturating_add(1);
+
+        let mut client = reconnect_mapper_client(reconnect_config).await?;
+
+        *connection = grpc_error_to_redrive(
+            Self::create_connection(self.batch_size, &mut client, next_generation).await,
+        )?;
+
+        Ok(())
+    }
+
+    async fn drain_senders(sender_map: &Arc<Mutex<StreamSenderMapState>>, error: Error) {
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
+
+        for (_, sender) in senders {
+            let _ = sender.send(Err(error.clone())).await;
+        }
+    }
+
+    async fn error_receiver(error: Error) -> mpsc::Receiver<Result<StreamMapResponse>> {
+        let (tx, rx) = mpsc::channel(1);
+        let _ = tx.send(Err(error)).await;
         rx
     }
 }
@@ -458,9 +586,12 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client =
-            UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
-                .await?;
+        let client = UserDefinedStreamMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await?),
+            None,
+        )
+        .await?;
 
         // Create a MapRequest directly instead of a Message
         let request = numaflow_pb::clients::map::MapRequest {
@@ -639,7 +770,7 @@ mod tests {
         for rx in [&mut rx_a, &mut rx_b] {
             let received = rx.recv().await.expect("expected error broadcast");
             let err = received.expect_err("expected Err variant");
-            assert!(matches!(err, MapError::Grpc(_)));
+            assert!(matches!(err, MapError::UdfRedrive(_)));
         }
     }
 
@@ -655,9 +786,14 @@ mod tests {
 
         let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
         let mapper = UserDefinedStreamMap {
-            read_tx,
-            senders: Arc::clone(&senders),
-            _handle: _abort_handle,
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::StreamMapConnection {
+                generation: 0,
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: _abort_handle,
+            })),
+            reconnect_config: None,
         };
 
         let request = MapRequest {
@@ -674,12 +810,11 @@ mod tests {
             status: None,
         };
 
-        let mut rx = mapper.stream(request, CancellationToken::new()).await;
-
-        // The receiver must observe the read_tx failure as a Mapper error.
-        let first = rx.recv().await.expect("expected error on stream rx");
-        let err = first.expect_err("expected Err variant");
-        assert!(matches!(err, MapError::Mapper(_)));
+        let err = mapper
+            .stream_once(request, CancellationToken::new())
+            .await
+            .expect_err("expected UdfRedrive error from stream_once()");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
         assert!(
             err.to_string()
                 .contains("failed to send message to map stream server"),
