@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
     source_transform_client::SourceTransformClient, source_transform_response,
 };
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
@@ -178,9 +178,12 @@ impl UserDefinedTransformer {
         Ok((read_tx, resp_stream))
     }
 
-    async fn drain_senders(sender_map: &ResponseSenderMap, error: Error) {
-        let mut senders = sender_map.lock().await;
-        for (_, (_, sender)) in senders.drain() {
+    fn drain_senders(sender_map: &ResponseSenderMap, error: Error) {
+        let senders = {
+            let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+            std::mem::take(&mut *senders)
+        };
+        for (_, (_, sender)) in senders {
             let _ = sender.send(Err(error.clone()));
         }
     }
@@ -205,17 +208,23 @@ impl UserDefinedTransformer {
                 Ok(None) => {
                     let status = Status::unavailable("source transformer stream closed");
                     Self::record_udf_error(&status);
-                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(status))).await;
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(status)));
                     break;
                 }
                 Err(e) => {
                     Self::record_udf_error(&e);
-                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(e.clone()))).await;
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(e.clone())));
                     break;
                 }
             };
             let msg_id = resp.id;
-            if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
+            let sender_entry = {
+                sender_map
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .remove(&msg_id)
+            };
+            if let Some((msg_info, sender)) = sender_entry {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = UserDefinedTransformerMessage(result, &msg_info, i as i32).into();
@@ -241,8 +250,7 @@ impl UserDefinedTransformer {
             Error::UdfRedrive(Box::new(Status::unavailable(
                 "source transformer reconnecting",
             ))),
-        )
-        .await;
+        );
         self.task_handle.abort();
         self.read_tx = read_tx;
         self.task_handle = tokio::spawn(Self::receive_responses(
@@ -259,16 +267,21 @@ impl UserDefinedTransformer {
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
         request: SourceTransformRequest,
     ) -> Option<(ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)> {
-        self.senders
-            .lock()
-            .await
-            .insert(key.to_string(), (msg_info, respond_to));
+        {
+            self.senders
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .insert(key.to_string(), (msg_info, respond_to));
+        }
 
         if self.read_tx.send(request).await.is_ok() {
             return None;
         }
 
-        self.senders.lock().await.remove(key)
+        self.senders
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .remove(key)
     }
 
     /// Handles the incoming message and sends it to the server for transformation.
@@ -447,7 +460,7 @@ mod tests {
         };
 
         {
-            let mut senders = sender_map.lock().await;
+            let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
             senders.insert("first".to_string(), (first_msg_info, first_tx));
             senders.insert("second".to_string(), (second_msg_info, second_tx));
         }
@@ -457,10 +470,14 @@ mod tests {
             crate::error::Error::UdfRedrive(Box::new(Status::unavailable(
                 "source transformer stream closed",
             ))),
-        )
-        .await;
+        );
 
-        assert!(sender_map.lock().await.is_empty());
+        assert!(
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .is_empty()
+        );
         assert!(matches!(
             first_rx.await.unwrap(),
             Err(crate::error::Error::UdfRedrive(_))
