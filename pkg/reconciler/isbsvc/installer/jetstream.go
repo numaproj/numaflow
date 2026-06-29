@@ -571,8 +571,11 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed", err.Error())
 		return err
 	}
-	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
-	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet); status {
+	// NATS JetStream maintains quorum at ⌊replicas/2⌋+1. A single missing pod must not mark
+	// the ISBSvc unhealthy when the cluster can still serve writes (e.g. during a rolling node upgrade).
+	// Single-replica ISBSvc (replicas==1) keeps all-or-nothing semantics: quorum evaluates to 1.
+	quorum := int32(r.isbSvc.Spec.JetStream.GetReplicas()/2 + 1)
+	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet, quorum); status {
 		r.isbSvc.Status.MarkChildrenResourceHealthy(reason, msg)
 	} else {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)

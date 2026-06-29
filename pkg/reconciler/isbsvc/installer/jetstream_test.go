@@ -193,6 +193,69 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 	})
 }
 
+func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
+	ctx := context.TODO()
+	stsName := generateJetStreamStatefulSetName(testJetStreamIsbSvc)
+	replicas := int32(3)
+	baseSts := &appv1.StatefulSet{
+		ObjectMeta: testJetStreamIsbSvc.ObjectMeta,
+		Spec: appv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			CurrentRevision:    "rev-1",
+			UpdateRevision:     "rev-1",
+			CurrentReplicas:    3,
+			Replicas:           3,
+		},
+	}
+	baseSts.Name = stsName
+
+	childrenHealthy := func(isbSvc *dfv1.InterStepBufferService) bool {
+		c := isbSvc.Status.GetCondition(dfv1.ISBSvcConditionChildrenResourcesHealthy)
+		return c != nil && c.Status == "True"
+	}
+
+	t.Run("healthy at quorum (2/3 ready)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 2
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.True(t, childrenHealthy(isbSvc), "2/3 ready should be healthy at quorum=2")
+	})
+
+	t.Run("unhealthy below quorum (1/3 ready)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 1
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.False(t, childrenHealthy(isbSvc), "1/3 ready should be unhealthy below quorum=2")
+	})
+}
+
 func getEvents(recorder record.EventRecorder) []string {
 	c := recorder.(*record.FakeRecorder).Events
 	close(c)
