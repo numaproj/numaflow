@@ -130,15 +130,7 @@ func formatContainerFailure(c corev1.ContainerStatus, reason, msg string) string
 // formatRecentRestart renders a container that recently OOM/Error-restarted but is no longer in a
 // failed state. The OOMKilled reason is inferred from exit code 137 when not explicitly set.
 func formatRecentRestart(c corev1.ContainerStatus, x *corev1.ContainerStateTerminated) string {
-	reason := x.Reason
-	if reason == "" {
-		if x.ExitCode == 137 {
-			reason = "OOMKilled"
-		} else {
-			reason = "Error"
-		}
-	}
-	return fmt.Sprintf("container %q restarted recently: %s (exit code %d)", c.Name, reason, x.ExitCode)
+	return fmt.Sprintf("container %q restarted recently: %s %s (exit code %d)", c.Name, x.Reason, x.Message, x.ExitCode)
 }
 
 func NumOfReadyPods(pods corev1.PodList) int {

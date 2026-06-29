@@ -117,7 +117,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			}},
 		}
 		done, reason, message, transient := CheckPodsStatus(&pods)
-		assert.Equal(t, `Pod test-pod: container "numa" restarted recently: OOMKilled (exit code 137)`, message)
+		assert.Equal(t, `Pod test-pod: container "numa" restarted recently:   (exit code 137)`, message)
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
 		assert.True(t, transient)
@@ -313,8 +313,8 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 		assert.False(t, done)
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.True(t, transient)
-		assert.Contains(t, message, `container "numa" restarted recently: OOMKilled (exit code 137)`)
-		assert.Contains(t, message, `container "udf" restarted recently: OOMKilled (exit code 137)`)
+		assert.Contains(t, message, `container "numa" restarted recently: OOMKilled  (exit code 137)`)
+		assert.Contains(t, message, `container "udf" restarted recently: OOMKilled  (exit code 137)`)
 		assert.Contains(t, message, "; ")
 	})
 }
