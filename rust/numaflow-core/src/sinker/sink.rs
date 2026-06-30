@@ -297,32 +297,27 @@ impl SinkWriter {
         read_batch: Vec<MessageHandle>,
         processed_sink_batch: ProcessedSinkBatch,
     ) -> (Vec<MessageHandle>, Vec<MessageHandle>) {
-        let mut read_map: HashMap<MessageID, MessageHandle> =
-            read_batch
-                .into_iter()
-                .fold(Default::default(), |mut mp, msg| {
-                    mp.insert(msg.message.id.clone(), msg);
-                    mp
-                });
+        let mut read_map: HashMap<MessageID, MessageHandle> = read_batch
+            .into_iter()
+            .map(|msg| (msg.message.id.clone(), msg))
+            .collect();
 
-        // Gather the final list of messages to be nacked
-        let nacked_handles =
-            processed_sink_batch
-                .nacked
-                .into_iter()
-                .fold(vec![], |mut acc, msg| {
-                    let mut handle = read_map.remove(&msg.id).expect(
-                        "nacked message not found in message handle batch read into sink. \
-                        There is a duplicate in msg handle batch.",
-                    );
-                    // Update the nack options stored in the handle with options
-                    // that came from downstream (udsink, fb_udsink, ons_udsink)
-                    handle.message.nack_options = msg.nack_options;
-                    acc.push(handle);
-                    acc
-                });
+        // Messages the sink nacked: pull each handle out of the read map and carry over the
+        // nack options that came from downstream (udsink, fb_udsink, ons_udsink).
+        let nacked_handles: Vec<MessageHandle> = processed_sink_batch
+            .nacked
+            .into_iter()
+            .map(|msg| {
+                let mut handle = read_map.remove(&msg.id).expect(
+                    "nacked message not found in message handle batch read into sink. \
+                There is a duplicate in msg handle batch.",
+                );
+                handle.message.nack_options = msg.nack_options;
+                handle
+            })
+            .collect();
 
-        // Rest of the messages should be acked
+        // Everything left in the map is acked.
         let acked_handles = read_map.into_values().collect();
 
         (acked_handles, nacked_handles)
