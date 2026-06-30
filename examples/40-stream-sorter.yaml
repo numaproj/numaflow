@@ -1,41 +1,33 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: stream-sorter-sliding
+  name: stream-sorter
 spec:
+  limits:
+    readBatchSize: 1
   vertices:
-    - name: in
+    - name: input-one
       scale:
         min: 1
       source:
-        udsource:
-          container:
-            # Jitter source: multi-key events with event-time jitter that
-            # periodically pauses some keys for PAUSE_TIMEOUT_SECS.
-            image: docker.intuit.com/personal/vtiwari5/numaflow-rs/sliding-keys-source:stable
-            imagePullPolicy: Always
-            env:
-              - name: NUM_KEYS
-                value: "10"
-              - name: FLUSH_INTERVAL_SECS
-                value: "60"
-              - name: EMIT_INTERVAL_MS
-                value: "100"
-              - name: MAX_TPS
-                value: "0"
+        generator:
+          rpu: 10
+          keyCount: 1
+    - name: input-two
+      scale:
+        min: 1
+      source:
+        generator:
+          rpu: 10
+          keyCount: 1
     - name: accum
       udf:
         container:
-          env:
-            - name: MALLOC_ARENA_MAX
-              value: "2"
-            - name: MALLOC_TRIM_THRESHOLD_
-              value: "131072"
-          image: docker.intuit.com/personal/vtiwari5/numaflow-rs/stream-sorter:stable
+          image: quay.io/numaio/numaflow-rs/stream-sorter:stable
         groupBy:
           window:
             accumulator:
-              timeout: 5s
+              timeout: 30s
           keyed: true
           storage:
             persistentVolumeClaim:
@@ -46,7 +38,9 @@ spec:
       sink:
         log: {}
   edges:
-    - from: in
+    - from: input-one
+      to: accum
+    - from: input-two
       to: accum
     - from: accum
       to: sink
