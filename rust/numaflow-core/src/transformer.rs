@@ -19,7 +19,7 @@ use crate::metrics::{
 };
 use crate::shared::otel;
 use crate::tracker::Tracker;
-use crate::transformer::user_defined::UserDefinedTransformer;
+use crate::transformer::user_defined::{ReconnectConfig, UserDefinedTransformer};
 use crate::{Result, mark_success};
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
@@ -87,11 +87,12 @@ impl Transformer {
         graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
         tracker: Tracker,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client.clone()).await?,
+            UserDefinedTransformer::new(batch_size, client.clone(), reconnect_config).await?,
         );
 
         tokio::spawn(async move {
@@ -217,8 +218,21 @@ impl Transformer {
                     offset.to_string(),
                     otel::TraceTopology::current(),
                 );
-                let transformed_messages =
-                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+                let transformed_messages = loop {
+                    match Transformer::transform(
+                        transform_handle.clone(),
+                        read_msg.clone(),
+                        hard_shutdown_token.clone(),
+                    )
+                    .await
+                    {
+                        Ok(messages) => break messages,
+                        Err(Error::UdfRedrive(e)) => {
+                            error!(?e, ?offset, "transformer stream redrive requested");
+                        }
+                        Err(e) => return Err(e),
+                    }
+                };
                 source_transform_span.record_output_count(transformed_messages.len());
 
                 // update the tracker with the number of responses for each message
@@ -362,6 +376,14 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::oneshot;
 
+    use super::*;
+    use crate::message::StringOffset;
+    use crate::message::{Message, MessageHandle, MessageID, Offset};
+    use crate::shared::grpc::create_rpc_channel;
+
+    const TEST_GRPC_MAX_MESSAGE_SIZE: usize =
+        crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
+
     struct SimpleTransformer;
 
     #[tonic::async_trait]
@@ -409,9 +431,24 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),
@@ -484,9 +521,24 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let tracker = Tracker::new(None, CancellationToken::new());
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await?;
 
         let mut messages = vec![];
         for i in 0..5 {
@@ -565,10 +617,26 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker = Tracker::new(None, CancellationToken::new());
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_millis(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    TEST_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),
@@ -587,15 +655,14 @@ mod tests {
         };
 
         let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+        cln_token.cancel();
         let result = transformer
-            .transform_batch(
-                vec![MessageHandle::new(message, ack_tx)],
-                CancellationToken::new(),
-                None,
-            )
+            .transform_batch(vec![MessageHandle::new(message, ack_tx)], cln_token, None)
             .await;
-        assert!(result.is_err(), "Expected an error due to panic");
-        assert!(result.unwrap_err().to_string().contains("panic"));
+        assert!(
+            matches!(&result, Err(Error::Transformer(e)) if e == "Operation cancelled"),
+            "Expected cancellation to stop redriving the panicking transformer, got {result:?}"
+        );
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

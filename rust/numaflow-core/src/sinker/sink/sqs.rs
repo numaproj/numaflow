@@ -477,7 +477,7 @@ pub mod tests {
         // TODO: flaky
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
             client,
@@ -485,6 +485,15 @@ pub mod tests {
             Duration::from_millis(100),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    64 * 1024 * 1024,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))

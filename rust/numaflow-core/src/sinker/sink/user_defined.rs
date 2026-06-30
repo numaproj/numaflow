@@ -1,19 +1,21 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Code, Request, Status, Streaming};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::Error;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::message::Message;
-use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::metrics::critical_error_reasons;
+use crate::shared::grpc::{UdfReconnectConfig, create_sink_client, prost_timestamp_from_utc};
 use crate::sinker::sink::{ResponseFromSink, Sink};
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
@@ -22,7 +24,10 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
+    reconnect_config: Option<ReconnectConfig>,
 }
+
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// Convert [`Message`] to [`proto::SinkRequest`]
 impl From<Message> for SinkRequest {
@@ -44,7 +49,21 @@ impl From<Message> for SinkRequest {
 }
 
 impl UserDefinedSink {
-    pub(crate) async fn new(mut client: SinkClient<Channel>) -> Result<Self> {
+    pub(crate) async fn new(
+        mut client: SinkClient<Channel>,
+        reconnect_config: Option<ReconnectConfig>,
+    ) -> Result<Self> {
+        let (sink_tx, resp_stream) = Self::create_sink_stream(&mut client).await?;
+        Ok(Self {
+            sink_tx,
+            resp_stream,
+            reconnect_config,
+        })
+    }
+
+    async fn create_sink_stream(
+        client: &mut SinkClient<Channel>,
+    ) -> Result<(mpsc::Sender<SinkRequest>, Streaming<SinkResponse>)> {
         let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
 
@@ -80,26 +99,50 @@ impl UserDefinedSink {
             return Err(Error::Sink("invalid handshake response".to_string()));
         }
 
-        Ok(Self {
-            sink_tx,
-            resp_stream,
-        })
+        Ok((sink_tx, resp_stream))
     }
-}
 
-impl Sink for UserDefinedSink {
-    /// writes a set of messages to the sink.
-    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        let requests: Vec<SinkRequest> =
-            messages.into_iter().map(|message| message.into()).collect();
+    async fn reconnect(&mut self) -> Result<()> {
+        let Some(reconnect_config) = &self.reconnect_config else {
+            return Err(Error::UdfRedrive(Box::new(Status::unavailable(
+                "sink stream closed",
+            ))));
+        };
+        let (mut client, _) = create_sink_client(
+            reconnect_config.socket_path(),
+            reconnect_config.server_info_path(),
+            reconnect_config.cln_token(),
+            reconnect_config.grpc_max_message_size(),
+            reconnect_config.retry_interval(),
+        )
+        .await?;
+        let (sink_tx, resp_stream) = match Self::create_sink_stream(&mut client).await {
+            Ok(stream) => stream,
+            Err(Error::Grpc(status)) => return Err(Self::redrive_error(*status)),
+            Err(e) => return Err(e),
+        };
+        self.sink_tx = sink_tx;
+        self.resp_stream = resp_stream;
+        Ok(())
+    }
+
+    fn redrive_error(status: Status) -> Error {
+        warn!(?status, "sink UDF error, redriving after reconnect");
+        critical_error!(VERTEX_TYPE_SINK, critical_error_reasons::SINK_RUNTIME_ERROR);
+        runtime::persist_application_error(status.clone());
+        Error::UdfRedrive(Box::new(status))
+    }
+
+    async fn sink_once(&mut self, requests: &[SinkRequest]) -> Result<Vec<ResponseFromSink>> {
         let num_requests = requests.len();
 
-        // write requests to the server
-        for request in requests {
-            let _ = self.sink_tx.send(request).await;
+        for request in requests.iter().cloned() {
+            self.sink_tx
+                .send(request)
+                .await
+                .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
         }
 
-        // send eot request to indicate the end of the stream
         let eot_request = SinkRequest {
             request: None,
             status: Some(TransmissionStatus { eot: true }),
@@ -108,20 +151,21 @@ impl Sink for UserDefinedSink {
         self.sink_tx
             .send(eot_request)
             .await
-            .map_err(|e| Error::Sink(format!("failed to send eot request: {e}")))?;
+            .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
 
-        // Now that we have sent, we wait for responses!
-        // NOTE: This works now because the results are not streamed. As of today, it will give the
-        // response only once it has read all the requests.
-        // We wait for num_requests + 1 responses because the last response will be the EOT response.
         let mut responses = Vec::new();
         loop {
-            let response = self
-                .resp_stream
-                .message()
-                .await
-                .map_err(|e| Error::Grpc(Box::new(e)))?
-                .ok_or(Error::Sink("failed to receive response".to_string()))?;
+            let response = match self.resp_stream.message().await {
+                Ok(Some(response)) => response,
+                Ok(None) => {
+                    return Err(Self::redrive_error(Status::unavailable(
+                        "sink response stream closed",
+                    )));
+                }
+                Err(e) => {
+                    return Err(Self::redrive_error(e));
+                }
+            };
 
             if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
@@ -154,8 +198,27 @@ impl Sink for UserDefinedSink {
     }
 }
 
+impl Sink for UserDefinedSink {
+    /// writes a set of messages to the sink.
+    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+        let requests: Vec<SinkRequest> =
+            messages.into_iter().map(|message| message.into()).collect();
+        loop {
+            match self.sink_once(&requests).await {
+                Ok(responses) => return Ok(responses),
+                Err(Error::UdfRedrive(e)) => {
+                    error!(?e, "redriving sink batch after reconnect");
+                    self.reconnect().await?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use chrono::offset::Utc;
@@ -167,6 +230,7 @@ mod tests {
     use super::*;
     use crate::error::Result;
     use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::user_defined::UserDefinedSink;
 
@@ -214,7 +278,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let mut sink_client =
-            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?), None)
                 .await
                 .expect("failed to connect to sink server");
 
@@ -257,6 +321,9 @@ mod tests {
         let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
+        let reconnect = sink_client.reconnect().await;
+        assert!(matches!(reconnect, Err(Error::UdfRedrive(_))));
+
         drop(sink_client);
         shutdown_tx
             .send(())
@@ -264,5 +331,55 @@ mod tests {
 
         server_handle.await.expect("failed to join server task");
         Ok(())
+    }
+
+    #[test]
+    fn test_message_to_sink_request_includes_headers_and_metadata() {
+        let metadata = Metadata {
+            previous_vertex: "map".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata: HashMap::from([(
+                "user".to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::from([("key".to_string(), Bytes::from_static(b"value"))]),
+                },
+            )]),
+        };
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key-1".to_string()]),
+            tags: None,
+            value: b"payload".to_vec().into(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            headers: Arc::new(HashMap::from([(
+                "header-key".to_string(),
+                "header-value".to_string(),
+            )])),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 0,
+            },
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        let request: SinkRequest = message.into();
+        let request = request.request.expect("sink request should be present");
+
+        assert_eq!(request.keys, vec!["key-1".to_string()]);
+        assert_eq!(request.value, b"payload".to_vec());
+        assert_eq!(
+            request.headers.get("header-key").map(String::as_str),
+            Some("header-value")
+        );
+        assert_eq!(
+            request
+                .metadata
+                .expect("metadata should be present")
+                .previous_vertex,
+            "map"
+        );
     }
 }

@@ -89,6 +89,12 @@ const ACK_TOTAL: &str = "ack";
 const UDF_ERROR_TOTAL: &str = "udf_error";
 const CRITICAL_ERROR_TOTAL: &str = "critical_error";
 
+pub(crate) mod critical_error_reasons {
+    pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
+    pub(crate) const SOURCE_TRANSFORMER_RUNTIME_ERROR: &str = "source_transformer_runtime_error";
+    pub(crate) const SINK_RUNTIME_ERROR: &str = "sink_runtime_error";
+}
+
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
 const FALLBACK_SINK_WRITE_ERRORS_TOTAL: &str = "fbsink_write_errors";
@@ -1638,11 +1644,12 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
-    use crate::source::user_defined::new_source;
+    use crate::source::user_defined::{ReconnectConfig, new_source};
     use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -1778,13 +1785,23 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let src_client = SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap());
+        let src_client =
+            SourceClient::new(create_rpc_channel(src_sock_file.clone()).await.unwrap());
         let (src_read, src_ack, lag_reader) = new_source(
             src_client,
             5,
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    src_sock_file,
+                    src_info_file,
+                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await
         .expect("Failed to create source reader");
@@ -1807,13 +1824,19 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sink_sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sink_sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
-        .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
-            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
-        )))
+        .fb_sink_client(SinkClientType::UserDefined(
+            Box::new(SinkClient::new(
+                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+            )),
+            None,
+        ))
         .build()
         .await
         .expect("failed to create sink writer");

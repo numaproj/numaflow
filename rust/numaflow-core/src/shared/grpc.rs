@@ -2,8 +2,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use axum::http::Uri;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use chrono::{DateTime, TimeZone, Timelike, Utc};
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -23,6 +21,13 @@ use numaflow_shared::server_info::{ServerInfo, sdk_server_info};
 use crate::error;
 use crate::error::Error;
 
+async fn sleep_or_cancel(duration: Duration, cln_token: &CancellationToken) -> error::Result<()> {
+    tokio::select! {
+        _ = cln_token.cancelled() => Err(Error::Cancelled()),
+        _ = sleep(duration) => Ok(()),
+    }
+}
+
 /// Waits until the source server is ready, by doing health checks
 pub(crate) async fn wait_until_source_ready(
     cln_token: &CancellationToken,
@@ -31,15 +36,13 @@ pub(crate) async fn wait_until_source_ready(
     loop {
         info!("Waiting for source client to be ready...");
         if cln_token.is_cancelled() {
-            return Err(Error::Forwarder(
-                "Cancellation token is cancelled".to_string(),
-            ));
+            return Err(Error::Cancelled());
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
             Err(e) => {
                 warn!(error = ?e, "Failed to check source client readiness");
-                sleep(Duration::from_secs(1)).await
+                sleep_or_cancel(Duration::from_secs(1), cln_token).await?;
             }
         }
     }
@@ -54,15 +57,13 @@ pub(crate) async fn wait_until_sink_ready(
     loop {
         info!("Waiting for sink client to be ready...");
         if cln_token.is_cancelled() {
-            return Err(Error::Forwarder(
-                "Cancellation token is cancelled".to_string(),
-            ));
+            return Err(Error::Cancelled());
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
             Err(e) => {
                 warn!(error = ?e, "Failed to check sink client readiness");
-                sleep(Duration::from_secs(1)).await
+                sleep_or_cancel(Duration::from_secs(1), cln_token).await?;
             }
         }
     }
@@ -77,15 +78,13 @@ pub(crate) async fn wait_until_transformer_ready(
     loop {
         info!("Waiting for transformer client to be ready...");
         if cln_token.is_cancelled() {
-            return Err(Error::Forwarder(
-                "Cancellation token is cancelled".to_string(),
-            ));
+            return Err(Error::Cancelled());
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
             Err(e) => {
                 warn!(error = ?e, "Failed to check transformer client readiness");
-                sleep(Duration::from_secs(1)).await
+                sleep_or_cancel(Duration::from_secs(1), cln_token).await?;
             }
         }
     }
@@ -100,15 +99,13 @@ pub(crate) async fn wait_until_mapper_ready(
     loop {
         info!("Waiting for mapper client to be ready...");
         if cln_token.is_cancelled() {
-            return Err(Error::Forwarder(
-                "Cancellation token is cancelled".to_string(),
-            ));
+            return Err(Error::Cancelled());
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
             Err(e) => {
                 warn!(error = ?e, "Failed to check mapper client readiness");
-                sleep(Duration::from_secs(1)).await
+                sleep_or_cancel(Duration::from_secs(1), cln_token).await?;
             }
         }
     }
@@ -126,8 +123,78 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Timestamp {
 /// `Duration` via [`create_rpc_channel_with_interval`] to keep reconnect-scenario tests sub-100ms.
 pub(crate) const DEFAULT_RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Connection parameters shared by every user-defined gRPC client (sink, source, transformer).
+/// These mirror the fields each component's `UserDefinedConfig` already carries, so a reconnect
+/// config can be built directly from one instead of re-passing the same values.
+#[derive(Clone, Debug)]
+pub(crate) struct GrpcClientConfig {
+    pub socket_path: PathBuf,
+    pub server_info_path: PathBuf,
+    pub grpc_max_message_size: usize,
+}
+
+impl GrpcClientConfig {
+    pub(crate) fn new(
+        socket_path: impl Into<PathBuf>,
+        server_info_path: impl Into<PathBuf>,
+        grpc_max_message_size: usize,
+    ) -> Self {
+        Self {
+            socket_path: socket_path.into(),
+            server_info_path: server_info_path.into(),
+            grpc_max_message_size,
+        }
+    }
+}
+
+/// Reconnect configuration: the shared gRPC connection parameters plus the bits that are specific
+/// to reconnecting — a cancellation token to abort in-flight retries and the per-attempt interval.
+#[derive(Clone, Debug)]
+pub(crate) struct UdfReconnectConfig {
+    grpc_config: GrpcClientConfig,
+    cln_token: CancellationToken,
+    retry_interval: Duration,
+}
+
+impl UdfReconnectConfig {
+    /// Builds a reconnect config from an existing gRPC client config, layering the
+    /// reconnect-specific `cln_token` and per-attempt `retry_interval` on top.
+    pub(crate) fn new(
+        grpc_config: GrpcClientConfig,
+        cln_token: CancellationToken,
+        retry_interval: Duration,
+    ) -> Self {
+        Self {
+            grpc_config,
+            cln_token,
+            retry_interval,
+        }
+    }
+
+    pub(crate) fn socket_path(&self) -> PathBuf {
+        self.grpc_config.socket_path.clone()
+    }
+
+    pub(crate) fn server_info_path(&self) -> PathBuf {
+        self.grpc_config.server_info_path.clone()
+    }
+
+    pub(crate) fn cln_token(&self) -> CancellationToken {
+        self.cln_token.clone()
+    }
+
+    pub(crate) fn grpc_max_message_size(&self) -> usize {
+        self.grpc_config.grpc_max_message_size
+    }
+
+    pub(crate) fn retry_interval(&self) -> Duration {
+        self.retry_interval
+    }
+}
+
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
-    create_rpc_channel_with_interval(socket_path, DEFAULT_RECONNECT_INTERVAL).await
+    let cln_token = CancellationToken::new();
+    create_rpc_channel_with_interval(socket_path, DEFAULT_RECONNECT_INTERVAL, &cln_token).await
 }
 
 /// Same as [`create_rpc_channel`] but takes an explicit retry interval. Use this in tests to keep
@@ -135,26 +202,25 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
 pub(crate) async fn create_rpc_channel_with_interval(
     socket_path: PathBuf,
     retry_interval: Duration,
+    cln_token: &CancellationToken,
 ) -> error::Result<Channel> {
-    const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
+    loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::Cancelled());
+        }
 
-    let interval = fixed::Interval::from_millis(retry_interval.as_millis() as u64)
-        .take(MAX_RECONNECT_ATTEMPTS);
-    let channel = Retry::new(
-        interval,
-        async || match connect_with_uds(socket_path.clone()).await {
-            Ok(channel) => Ok(channel),
+        let connect = connect_with_uds(socket_path.clone());
+        match tokio::select! {
+            _ = cln_token.cancelled() => return Err(Error::Cancelled()),
+            result = connect => result,
+        } {
+            Ok(channel) => return Ok(channel),
             Err(e) => {
                 warn!(error = ?e, ?socket_path, "Failed to connect to UDS socket");
-                Err(Error::Connection(format!(
-                    "Failed to connect {socket_path:?}: {e:?}"
-                )))
+                sleep_or_cancel(retry_interval, cln_token).await?;
             }
-        },
-        |_: &Error| true,
-    )
-    .await?;
-    Ok(channel)
+        }
+    }
 }
 
 /// Connects to the UDS socket and returns a channel
@@ -206,7 +272,7 @@ pub(crate) async fn create_source_client(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
-    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval, &cln_token).await?;
     let mut client = SourceClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
@@ -224,7 +290,7 @@ pub(crate) async fn create_sink_client(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<(SinkClient<Channel>, ServerInfo)> {
-    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval, &cln_token).await?;
     let mut client = SinkClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
@@ -242,7 +308,7 @@ pub(crate) async fn create_transformer_client(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<(SourceTransformClient<Channel>, ServerInfo)> {
-    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval, &cln_token).await?;
     let mut client = SourceTransformClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
@@ -260,7 +326,7 @@ pub(crate) async fn create_mapper_client(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<(MapClient<Channel>, ServerInfo)> {
-    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval, &cln_token).await?;
     let mut client = MapClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);

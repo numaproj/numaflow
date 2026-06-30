@@ -1,23 +1,30 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
     source_transform_client::SourceTransformClient, source_transform_response,
 };
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use tonic::{Request, Status, Streaming};
 
 use crate::config::get_vertex_name;
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::metrics::critical_error_reasons;
+use crate::shared::grpc::{
+    UdfReconnectConfig, create_transformer_client, prost_timestamp_from_utc, utc_from_timestamp,
+};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 // fields which will not be changed
 struct ParentMessageInfo {
@@ -79,6 +86,8 @@ pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
+    batch_size: usize,
+    reconnect_config: ReconnectConfig,
 }
 
 /// Aborts the background task when the UserDefinedTransformer is dropped.
@@ -111,7 +120,31 @@ impl UserDefinedTransformer {
     pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
+        let (read_tx, resp_stream) = Self::create_stream(batch_size, &mut client).await?;
+        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
+
+        Ok(Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+            batch_size,
+            reconnect_config,
+        })
+    }
+
+    async fn create_stream(
+        batch_size: usize,
+        client: &mut SourceTransformClient<Channel>,
+    ) -> Result<(
+        mpsc::Sender<SourceTransformRequest>,
+        Streaming<SourceTransformResponse>,
+    )> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -143,23 +176,25 @@ impl UserDefinedTransformer {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
-        // map to track the oneshot sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        Ok((read_tx, resp_stream))
+    }
 
-        // background task to receive responses from the server and send them to the appropriate
-        // oneshot sender based on the message id
-        let task_handle = tokio::spawn(Self::receive_responses(
-            Arc::clone(&sender_map),
-            resp_stream,
-        ));
-
-        let transformer = Self {
-            read_tx,
-            senders: sender_map,
-            task_handle,
+    fn drain_senders(sender_map: &ResponseSenderMap, error: Error) {
+        let senders = {
+            let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+            std::mem::take(&mut *senders)
         };
+        for (_, (_, sender)) in senders {
+            let _ = sender.send(Err(error.clone()));
+        }
+    }
 
-        Ok(transformer)
+    fn record_udf_error(status: &Status) {
+        critical_error!(
+            VERTEX_TYPE_SOURCE,
+            critical_error_reasons::SOURCE_TRANSFORMER_RUNTIME_ERROR
+        );
+        runtime::persist_application_error(status.clone());
     }
 
     // receive responses from the server and gets the corresponding oneshot sender from the map
@@ -168,28 +203,86 @@ impl UserDefinedTransformer {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let mut senders = sender_map.lock().await;
-                for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
+        loop {
+            let resp = match resp_stream.message().await {
+                Ok(Some(resp)) => resp,
+                Ok(None) => {
+                    let status = Status::unavailable("source transformer stream closed");
+                    Self::record_udf_error(&status);
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(status)));
+                    break;
                 }
-                None
-            }
-        } {
+                Err(e) => {
+                    Self::record_udf_error(&e);
+                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(e.clone())));
+                    break;
+                }
+            };
             let msg_id = resp.id;
-            if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
+            let sender_entry = {
+                sender_map
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .remove(&msg_id)
+            };
+            if let Some((msg_info, sender)) = sender_entry {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = UserDefinedTransformerMessage(result, &msg_info, i as i32).into();
                     response_messages.push(message);
                 }
-                sender
-                    .send(Ok(response_messages))
-                    .expect("failed to send response");
+                let _ = sender.send(Ok(response_messages));
             }
         }
+    }
+
+    async fn reconnect(&mut self) -> Result<()> {
+        let (mut client, _) = create_transformer_client(
+            self.reconnect_config.socket_path(),
+            self.reconnect_config.server_info_path(),
+            self.reconnect_config.cln_token(),
+            self.reconnect_config.grpc_max_message_size(),
+            self.reconnect_config.retry_interval(),
+        )
+        .await?;
+        let (read_tx, resp_stream) = Self::create_stream(self.batch_size, &mut client).await?;
+        Self::drain_senders(
+            &self.senders,
+            Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer reconnecting",
+            ))),
+        );
+        self.task_handle.abort();
+        self.read_tx = read_tx;
+        self.task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&self.senders),
+            resp_stream,
+        ));
+        Ok(())
+    }
+
+    async fn queue_request(
+        &mut self,
+        key: &str,
+        msg_info: ParentMessageInfo,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+        request: SourceTransformRequest,
+    ) -> Option<(ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)> {
+        {
+            self.senders
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .insert(key.to_string(), (msg_info, respond_to));
+        }
+
+        if self.read_tx.send(request).await.is_ok() {
+            return None;
+        }
+
+        self.senders
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .remove(key)
     }
 
     /// Handles the incoming message and sends it to the server for transformation.
@@ -198,6 +291,13 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
+        if self.task_handle.is_finished()
+            && let Err(e) = self.reconnect().await
+        {
+            let _ = respond_to.send(Err(e));
+            return;
+        }
+
         let key = message.offset.clone().to_string();
 
         let msg_info = ParentMessageInfo {
@@ -207,12 +307,28 @@ impl UserDefinedTransformer {
             metadata: message.metadata.clone(),
         };
 
-        self.senders
-            .lock()
-            .await
-            .insert(key, (msg_info, respond_to));
+        let request: SourceTransformRequest = message.into();
 
-        let _ = self.read_tx.send(message.into()).await;
+        let Some((msg_info, respond_to)) = self
+            .queue_request(&key, msg_info, respond_to, request.clone())
+            .await
+        else {
+            return;
+        };
+
+        if let Err(e) = self.reconnect().await {
+            let _ = respond_to.send(Err(e));
+            return;
+        }
+
+        if let Some((_, respond_to)) = self
+            .queue_request(&key, msg_info, respond_to, request)
+            .await
+        {
+            let _ = respond_to.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer stream closed after reconnect",
+            )))));
+        }
     }
 }
 
@@ -225,7 +341,9 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
+    use numaflow_pb::common::metadata;
     use tempfile::TempDir;
+    use tokio_util::sync::CancellationToken;
 
     use super::*;
     use crate::message::StringOffset;
@@ -269,7 +387,16 @@ mod tests {
 
         let mut client = UserDefinedTransformer::new(
             500,
-            SourceTransformClient::new(create_rpc_channel(sock_file).await?),
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await?;
 
@@ -312,6 +439,110 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn transformer_drains_pending_senders_with_udf_redrive() {
+        let sender_map: ResponseSenderMap = Arc::new(Mutex::new(HashMap::new()));
+        let (first_tx, first_rx) = oneshot::channel();
+        let (second_tx, second_rx) = oneshot::channel();
+
+        let first_msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("first".to_string(), 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+        let second_msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("second".to_string(), 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+
+        {
+            let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+            senders.insert("first".to_string(), (first_msg_info, first_tx));
+            senders.insert("second".to_string(), (second_msg_info, second_tx));
+        }
+
+        UserDefinedTransformer::drain_senders(
+            &sender_map,
+            crate::error::Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer stream closed",
+            ))),
+        );
+
+        assert!(
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .is_empty()
+        );
+        assert!(matches!(
+            first_rx.await.unwrap(),
+            Err(crate::error::Error::UdfRedrive(_))
+        ));
+        assert!(matches!(
+            second_rx.await.unwrap(),
+            Err(crate::error::Error::UdfRedrive(_))
+        ));
+    }
+
+    #[test]
+    fn transformer_message_conversion_preserves_parent_and_response_metadata() {
+        let parent_metadata = Metadata {
+            previous_vertex: "source".to_string(),
+            sys_metadata: HashMap::from([(
+                "system".to_string(),
+                crate::metadata::KeyValueGroup {
+                    key_value: HashMap::from([("trace".to_string(), "parent".into())]),
+                },
+            )]),
+            user_metadata: HashMap::new(),
+        };
+        let msg_info = ParentMessageInfo {
+            offset: Offset::String(StringOffset::new("parent-offset".to_string(), 0)),
+            is_late: true,
+            headers: Arc::new(HashMap::from([(
+                "header-key".to_string(),
+                "header-value".to_string(),
+            )])),
+            metadata: Some(Arc::new(parent_metadata)),
+        };
+        let response_metadata = metadata::Metadata {
+            previous_vertex: "transformer".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata: HashMap::from([(
+                "user".to_string(),
+                metadata::KeyValueGroup {
+                    key_value: HashMap::from([("k".to_string(), b"v".to_vec())]),
+                },
+            )]),
+        };
+        let response = source_transform_response::Result {
+            keys: vec!["key".to_string()],
+            value: b"value".to_vec(),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
+            tags: vec!["tag".to_string()],
+            metadata: Some(response_metadata),
+        };
+
+        let message: Message = UserDefinedTransformerMessage(response, &msg_info, 3).into();
+
+        assert_eq!(message.offset, msg_info.offset);
+        assert!(message.is_late);
+        assert_eq!(
+            message.headers.get("header-key").map(String::as_str),
+            Some("header-value")
+        );
+        assert_eq!(message.keys.to_vec(), vec!["key".to_string()]);
+        assert_eq!(message.tags.as_deref(), Some(&["tag".to_string()][..]));
+        let metadata = message.metadata.expect("metadata should be present");
+        assert!(metadata.sys_metadata.contains_key("system"));
+        assert!(metadata.user_metadata.contains_key("user"));
     }
 
     #[test]
