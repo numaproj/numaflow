@@ -442,7 +442,7 @@ pub(in crate::mapper) fn map_redrive_error(status: tonic::Status) -> Error {
         critical_error_reasons::MAP_RUNTIME_ERROR
     );
     #[cfg(not(test))]
-    numaflow_monitor::runtime::persist_application_error_with_container(status.clone(), "mapper");
+    numaflow_monitor::runtime::persist_application_error_with_container(status.clone(), "udf");
     Error::UdfRedrive(Box::new(status))
 }
 

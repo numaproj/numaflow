@@ -284,7 +284,7 @@ impl UserDefinedBatchMap {
                             .is_empty()
                         {
                             error!(
-                                "received EOT but not all responses have been received, gracefully exiting"
+                                "received EOT before all batch map responses, redriving after reconnect"
                             );
                             Self::broadcast_error(
                                 &sender_map,
@@ -443,7 +443,7 @@ impl UserDefinedBatchMap {
         {
             error!(
                 ?e,
-                "Failed to send eot request to server, batch map operation should have failed"
+                "failed to send EOT request to batch map server, redriving after reconnect"
             );
             let error = map_redrive_error(Status::unavailable(format!(
                 "failed to send eot request to batch map server: {e}"
@@ -724,7 +724,13 @@ mod tests {
             .next()
             .expect("expected one error result")
             .expect_err("partial EOT should be recoverable");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
+        match err {
+            MapError::UdfRedrive(status) => {
+                assert_eq!(status.code(), tonic::Code::Internal);
+                assert_eq!(status.message(), "UDF_PARTIAL_RESPONSE(batch_map)");
+            }
+            err => panic!("expected UdfRedrive error from partial EOT, got {err:?}"),
+        }
 
         drop(client);
         shutdown_tx
