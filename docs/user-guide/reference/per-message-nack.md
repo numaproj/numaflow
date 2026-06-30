@@ -241,17 +241,18 @@ event-time assignment, and the message still counts toward watermark progression
 ### Source (user-defined)
 
 A user-defined source *receives* nacks: when a message it produced is nacked downstream, Numaflow
-calls the source's **nack handler** with the offsets to redeliver and the `NackOptions`. Implement it
-to re-queue those offsets so a subsequent `Read` returns them again (honoring `delay` if you wish).
+calls the source's **nack handler** with each offset to redeliver and its (optional) `NackOptions`,
+bundled together. Implement it to re-queue those offsets so a subsequent `Read` returns them again
+(honoring `delay` if you wish).
 Built-in sources (Kafka, JetStream, Pulsar, etc.) redeliver natively and need no user code.
 
 === "Go"
 
     ```go
     func (s *mySource) Nack(ctx context.Context, req sourcer.NackRequest) {
-        opts := req.NackOptions() // may be nil; carries Delay / MaxDeliveries / Reason
-        for _, offset := range req.Offsets() {
-            s.requeue(offset, opts) // make the next Read() return this offset again
+        for _, n := range req.Offsets() { // []sourcer.NackOffset
+            // n.NackOptions may be nil; carries Delay / MaxDeliveries / Reason
+            s.requeue(n.Offset, n.NackOptions) // make the next Read() return this offset again
         }
     }
     ```
@@ -261,9 +262,9 @@ Built-in sources (Kafka, JetStream, Pulsar, etc.) redeliver natively and need no
     ```java
     @Override
     public void nack(NackRequest request) {
-        NackOptions opts = request.getNackOptions(); // may be null
-        for (Offset offset : request.getOffsets()) {
-            requeue(offset, opts);
+        for (NackOffset n : request.getOffsets()) { // List<NackOffset>
+            // n.getNackOptions() may be null
+            requeue(n.getOffset(), n.getNackOptions());
         }
     }
     ```
@@ -271,9 +272,10 @@ Built-in sources (Kafka, JetStream, Pulsar, etc.) redeliver natively and need no
 === "Rust"
 
     ```rust
-    async fn nack(&self, offsets: Vec<Offset>, nack_options: Option<NackOptions>) {
-        for offset in offsets {
-            self.requeue(offset, &nack_options); // re-deliver on a later read()
+    async fn nack(&self, offsets: Vec<NackOffset>) {
+        for n in offsets {
+            // n.option: Option<NackOptions>
+            self.requeue(n.offset, &n.option); // re-deliver on a later read()
         }
     }
     ```
@@ -312,7 +314,7 @@ wire. The mechanism varies by component but converges on one internal dispositio
   carrying the `NackOptions`. The runtime recognizes the tag and treats the message as a nack of the
   corresponding input rather than as data to forward.
 - **Source** nacks are delivered to the user-defined source via a dedicated `Nack` gRPC call carrying
-  the offsets and `NackOptions`.
+  each offset together with its own `NackOptions`.
 
 **Translation to the input message.** Whatever the surface, the runtime converts the signal into a
 negative-ack of the **input** message that produced it (internally `ReadAck::Nak(options)`). This is
@@ -324,10 +326,10 @@ not the individual outputs of a UDF.
 - **Inter-step buffer (JetStream).** The buffer reader issues a negative acknowledgement with the
   delay (`AckKind::Nak(delay)`). JetStream then redelivers the message to the vertex after the delay
   elapses. This is the path used between vertices in a pipeline.
-- **Source.** The source acker negatively-acknowledges the offsets. Offsets are grouped by their
-  distinct `NackOptions` so each group is nacked in a single call. For a user-defined source this
-  invokes your `Nack` handler; for built-in sources it triggers the source's native redelivery. This
-  is the path used at the source vertex and in a MonoVertex (which has no inter-step buffer).
+- **Source.** The source acker negatively-acknowledges the offsets — each paired with its own
+  `NackOptions` — in a single `Nack` call. For a user-defined source this invokes your `Nack` handler;
+  for built-in sources it triggers the source's native redelivery. This is the path used at the source
+  vertex and in a MonoVertex (which has no inter-step buffer).
 
 **Relationship to the platform's existing nack.** None of this is a new delivery guarantee — it is the
 same redelivery machinery that already underpinned Numaflow's at-least-once semantics (an unacked read

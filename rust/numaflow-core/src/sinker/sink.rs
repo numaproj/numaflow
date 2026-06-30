@@ -292,6 +292,7 @@ impl SinkWriter {
         }))
     }
 
+    /// processed_sink_batch already contains nacked messages,
     pub(crate) fn split_batch_handles(
         read_batch: Vec<MessageHandle>,
         processed_sink_batch: ProcessedSinkBatch,
