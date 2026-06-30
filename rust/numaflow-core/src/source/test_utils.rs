@@ -64,6 +64,15 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     Duration::from_secs(10),
                     client,
                     tracker.clone(),
+                    crate::transformer::user_defined::ReconnectConfig::new(
+                        crate::shared::grpc::GrpcClientConfig::new(
+                            _server_handle.socket_path(),
+                            _server_handle.server_info_path(),
+                            crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                        ),
+                        cln_token.clone(),
+                        crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+                    ),
                 )
                 .await
                 .expect("failed to create source transformer");
@@ -95,6 +104,15 @@ impl SourceTestHandle<WithSimpleBuffer> {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    server_handle.socket_path(),
+                    server_handle.server_info_path(),
+                    crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))

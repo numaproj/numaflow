@@ -216,9 +216,9 @@ impl SinkWriterBuilder {
                     actor.run().await;
                 });
             }
-            SinkClientType::UserDefined(sink_client) => {
-                health_check_builder = health_check_builder.sink_client(sink_client.clone());
-                let sink = UserDefinedSink::new(sink_client).await?;
+            SinkClientType::UserDefined(sink_client, reconnect_config) => {
+                health_check_builder = health_check_builder.sink_client((*sink_client).clone());
+                let sink = UserDefinedSink::new(*sink_client, reconnect_config).await?;
                 tokio::spawn(async move {
                     let actor = SinkActor::new(receiver, sink, retry_config);
                     actor.run().await;
@@ -270,9 +270,10 @@ impl SinkWriterBuilder {
                         actor.run().await;
                     });
                 }
-                SinkClientType::UserDefined(sink_client) => {
-                    health_check_builder = health_check_builder.fb_sink_client(sink_client.clone());
-                    let sink = UserDefinedSink::new(sink_client).await?;
+                SinkClientType::UserDefined(sink_client, reconnect_config) => {
+                    health_check_builder =
+                        health_check_builder.fb_sink_client((*sink_client).clone());
+                    let sink = UserDefinedSink::new(*sink_client, reconnect_config).await?;
                     tokio::spawn(async move {
                         let actor = SinkActor::new(fb_receiver, sink, fb_retry_config);
                         actor.run().await;
@@ -328,10 +329,10 @@ impl SinkWriterBuilder {
                         actor.run().await;
                     });
                 }
-                SinkClientType::UserDefined(sink_client) => {
+                SinkClientType::UserDefined(sink_client, reconnect_config) => {
                     health_check_builder =
-                        health_check_builder.on_success_sink_client(sink_client.clone());
-                    let sink = UserDefinedSink::new(sink_client).await?;
+                        health_check_builder.on_success_sink_client((*sink_client).clone());
+                    let sink = UserDefinedSink::new(*sink_client, reconnect_config).await?;
                     tokio::spawn(async move {
                         let actor = SinkActor::new(fb_receiver, sink, fb_retry_config);
                         actor.run().await;

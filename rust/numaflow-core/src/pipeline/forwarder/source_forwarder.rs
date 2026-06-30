@@ -873,11 +873,26 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer =
-            Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
-                .await
-                .unwrap();
+        let client =
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
+        let transformer = Transformer::new(
+            10,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            crate::transformer::user_defined::ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await
+        .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -900,7 +915,7 @@ mod tests {
         // TODO: flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
             client,
@@ -908,6 +923,15 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file,
+                    server_info_file,
+                    crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                cln_token.clone(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
