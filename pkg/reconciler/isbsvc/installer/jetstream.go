@@ -575,11 +575,29 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 	// the ISBSvc unhealthy when the cluster can still serve writes (e.g. during a rolling node upgrade).
 	// Single-replica ISBSvc (replicas==1) keeps all-or-nothing semantics: quorum evaluates to 1.
 	quorum := int32(r.isbSvc.Spec.JetStream.GetReplicas()/2 + 1)
-	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet, quorum); status {
-		r.isbSvc.Status.MarkChildrenResourceHealthy(reason, msg)
-	} else {
+	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet, quorum); !status {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
+		return nil
 	}
+	// Quorum is met, but individual pods may be in a persistent failure state
+	// (CrashLoopBackOff, ImagePullBackOff, OOMKill) that will never self-resolve.
+	// Terminating pods from a node eviction are skipped by CheckPodsStatus, so this
+	// check distinguishes transient unavailability from permanent pod failures.
+	// Limitation: a pod stuck in Pending (e.g. unschedulable) is not detected here;
+	// a follow-up time-based escalation would be needed to catch that case.
+	podList := &corev1.PodList{}
+	if err := r.client.List(ctx, podList, &client.ListOptions{
+		Namespace:     r.isbSvc.Namespace,
+		LabelSelector: labels.SelectorFromSet(r.labels),
+	}); err != nil {
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy("ListPodsFailed", err.Error())
+		return err
+	}
+	if healthy, reason, msg, _ := reconciler.CheckPodsStatus(podList); !healthy {
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
+		return nil
+	}
+	r.isbSvc.Status.MarkChildrenResourceHealthy("Healthy", "JetStream cluster is healthy")
 	return nil
 }
 

@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -212,16 +213,44 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 	}
 	baseSts.Name = stsName
 
+	healthyPod := func(name string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+
+	crashingPod := func(name string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+					}},
+				},
+			},
+		}
+	}
+
 	childrenHealthy := func(isbSvc *dfv1.InterStepBufferService) bool {
 		c := isbSvc.Status.GetCondition(dfv1.ISBSvcConditionChildrenResourcesHealthy)
 		return c != nil && c.Status == "True"
 	}
 
-	t.Run("healthy at quorum (2/3 ready)", func(t *testing.T) {
+	t.Run("healthy at quorum (2/3 ready, no pod errors)", func(t *testing.T) {
 		sts := baseSts.DeepCopy()
 		sts.Status.ReadyReplicas = 2
 		isbSvc := testJetStreamIsbSvc.DeepCopy()
-		cl := fake.NewClientBuilder().WithObjects(sts).Build()
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1")).Build()
 		i := &jetStreamInstaller{
 			client:     cl,
 			kubeClient: k8sfake.NewSimpleClientset(),
@@ -233,7 +262,7 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 		}
 		err := i.CheckChildrenResourceStatus(ctx)
 		assert.NoError(t, err)
-		assert.True(t, childrenHealthy(isbSvc), "2/3 ready should be healthy at quorum=2")
+		assert.True(t, childrenHealthy(isbSvc), "2/3 ready with no pod errors should be healthy at quorum=2")
 	})
 
 	t.Run("unhealthy below quorum (1/3 ready)", func(t *testing.T) {
@@ -253,6 +282,25 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 		err := i.CheckChildrenResourceStatus(ctx)
 		assert.NoError(t, err)
 		assert.False(t, childrenHealthy(isbSvc), "1/3 ready should be unhealthy below quorum=2")
+	})
+
+	t.Run("unhealthy at quorum with CrashLoopBackOff pod (persistent failure)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 2
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1"), crashingPod("pod-2")).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.False(t, childrenHealthy(isbSvc), "quorum met but CrashLoopBackOff pod should be unhealthy")
 	})
 }
 

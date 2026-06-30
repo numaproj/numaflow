@@ -183,7 +183,7 @@ func CheckStatefulSetStatus(sts *appv1.StatefulSet, minReadyReplicas int32) (don
 		return false, "Progressing", fmt.Sprintf("waiting for statefulset rolling update to complete %d pods at revision %s...",
 			sts.Status.UpdatedReplicas, sts.Status.UpdateRevision)
 	}
-	if sts.Spec.Replicas != nil && sts.Status.ReadyReplicas < minReadyReplicas {
+	if sts.Status.ReadyReplicas < minReadyReplicas {
 		return false, "Unavailable", fmt.Sprintf("Waiting for %d pods to be ready...\n", minReadyReplicas-sts.Status.ReadyReplicas)
 	}
 	if sts.Spec.UpdateStrategy.Type == appv1.RollingUpdateStatefulSetStrategyType && sts.Spec.UpdateStrategy.RollingUpdate != nil {
