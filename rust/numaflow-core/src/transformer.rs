@@ -376,11 +376,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::oneshot;
 
-    use super::*;
-    use crate::message::StringOffset;
-    use crate::message::{Message, MessageHandle, MessageID, Offset};
-    use crate::shared::grpc::create_rpc_channel;
-
     const TEST_GRPC_MAX_MESSAGE_SIZE: usize =
         crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
 

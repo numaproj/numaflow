@@ -1172,7 +1172,7 @@ mod tests {
         let result = handle.await.unwrap();
         assert!(result.is_ok());
         for ack_rx in ack_rxs {
-            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
         }
     }
 
@@ -1990,12 +1990,16 @@ mod tests {
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let sink_client = SinkClient::new(create_rpc_channel(sock_file).await.unwrap());
         let cln = CancellationToken::new();
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(sink_client),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file.clone()).await.unwrap(),
+                )),
+                None,
+            ),
         )
         .build()
         .await

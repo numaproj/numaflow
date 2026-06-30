@@ -528,6 +528,7 @@ mod tests {
             )),
             tags: vec!["tag".to_string()],
             metadata: Some(response_metadata),
+            nack_options: None,
         };
 
         let message: Message = UserDefinedTransformerMessage(response, &msg_info, 3).into();
@@ -611,7 +612,16 @@ mod tests {
 
         let mut client = UserDefinedTransformer::new(
             500,
-            SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await.unwrap()),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
         )
         .await
         .unwrap();

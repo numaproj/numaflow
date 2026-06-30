@@ -822,11 +822,25 @@ mod tests {
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let (mut src_read, mut src_ack, _lag) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token, true)
-                .await
-                .unwrap();
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
+        let (mut src_read, mut src_ack, _lag) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token,
+            true,
+            crate::transformer::user_defined::ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await
+        .unwrap();
 
         let messages = src_read.read().await.unwrap().unwrap();
         let opts = NackOptions {
