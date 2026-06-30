@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
@@ -351,7 +351,7 @@ impl SourceAcker for UserDefinedSourceAck {
     /// This method checks if the SDK supports nack functionality using a pre-computed flag.
     /// For older SDK versions (< 0.11), it logs a warning and returns Ok() for backward compatibility.
     /// For newer SDK versions (>= 0.11), it calls the actual nack gRPC method.
-    async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
         if !self.supports_nack {
             warn!(
                 offset_count = offsets.len(),
@@ -361,16 +361,20 @@ impl SourceAcker for UserDefinedSourceAck {
         }
 
         // SDK supports nack, call the actual gRPC method
-        let nack_offsets: Result<Vec<source::Offset>> =
-            offsets.into_iter().map(TryInto::try_into).collect();
+        let nack_offsets: Result<Vec<source::nack_request::Request>> = offsets
+            .into_iter()
+            .map(|no| {
+                Ok(source::nack_request::Request {
+                    offsets: vec![no.offset.try_into()?],
+                    nack_options: no.option.map(Into::into),
+                })
+            })
+            .collect::<Result<Vec<_>>>();
 
         let response = self
             .client
             .nack_fn(NackRequest {
-                request: Some(source::nack_request::Request {
-                    offsets: nack_offsets?,
-                    nack_options: options.map(Into::into),
-                }),
+                request: nack_offsets?,
             })
             .await
             .map_err(|e| {
@@ -454,7 +458,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::message::IntOffset;
+    use crate::message::{IntOffset, NackOptions};
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
 
     #[test]
@@ -624,7 +628,15 @@ mod tests {
 
         // nack the messages
         let response = src_ack
-            .nack(messages.iter().map(|m| m.offset.clone()).collect(), None)
+            .nack(
+                messages
+                    .iter()
+                    .map(|m| NackOffset {
+                        offset: m.offset.clone(),
+                        option: None,
+                    })
+                    .collect(),
+            )
             .await;
         assert!(response.is_ok());
 
@@ -726,8 +738,13 @@ mod tests {
         // nack() awaits the server's response, so `recorded` is populated when it returns.
         src_ack
             .nack(
-                messages.iter().map(|m| m.offset.clone()).collect(),
-                Some(opts),
+                messages
+                    .iter()
+                    .map(|m| NackOffset {
+                        offset: m.offset.clone(),
+                        option: Some(opts.clone()),
+                    })
+                    .collect(),
             )
             .await
             .unwrap();

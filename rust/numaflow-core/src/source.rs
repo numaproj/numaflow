@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{MessageHandle, NackOptions, ReadAck};
+use crate::message::{MessageHandle, NackOffset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
@@ -125,7 +125,7 @@ pub(crate) trait LocalSourceAcker {
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()>;
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -161,8 +161,7 @@ enum ActorMessage {
     },
     Nack {
         respond_to: oneshot::Sender<Result<()>>,
-        offsets: Vec<Offset>,
-        options: Option<NackOptions>,
+        offsets: Vec<NackOffset>,
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -214,9 +213,8 @@ where
             ActorMessage::Nack {
                 respond_to,
                 offsets,
-                options,
             } => {
-                let nack = self.acker.nack(offsets, options).await;
+                let nack = self.acker.nack(offsets).await;
                 let _ = respond_to.send(nack);
             }
             ActorMessage::Pending { respond_to } => {
@@ -445,14 +443,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// nack the offsets by communicating with the nack actor.
     async fn nack(
         source_handle: mpsc::Sender<ActorMessage>,
-        offsets: Vec<Offset>,
-        options: Option<NackOptions>,
+        offsets: Vec<NackOffset>,
     ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Nack {
             respond_to: sender,
             offsets,
-            options,
         };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
         // to check for the same failure twice.
@@ -1114,7 +1110,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let ack_result = if disposition {
             Self::ack_with_retry(source_handle, vec![offset], &cancel_token).await
         } else {
-            Self::nack_with_retry(source_handle, vec![offset], nack_option, &cancel_token).await
+            Self::nack_with_retry(
+                source_handle,
+                vec![NackOffset {
+                    offset,
+                    option: nack_option,
+                }],
+                &cancel_token,
+            )
+            .await
         };
 
         // streaming=true: ack_time and e2e_time are skipped on the mvtx path;
@@ -1147,9 +1151,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 Ok(ReadAck::Ack) => {
                     offsets_to_ack.push(offset.clone());
                 }
-                Ok(ReadAck::Nak(options)) => {
+                Ok(ReadAck::Nak(option)) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push((offset.clone(), options));
+                    offsets_to_nack.push(NackOffset {
+                        offset: offset.clone(),
+                        option,
+                    });
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -1168,9 +1175,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         if !offsets_to_nack.is_empty() {
             // Group offsets by their nack options so each distinct option set results in a
             // single backend nack call; offsets sharing the same (or no) options are batched.
-            for (option, offsets) in group_offsets_by_nack_options(offsets_to_nack) {
-                Self::nack_with_retry(source_handle.clone(), offsets, option, &cancel_token).await?
-            }
+            Self::nack_with_retry(source_handle.clone(), offsets_to_nack, &cancel_token).await?
         }
         // Non-streaming path: record all batch-granular metrics (streaming=false).
         Self::send_ack_metrics(e2e_start_time, n, start, false);
@@ -1212,15 +1217,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Invokes nack with infinite retries until the cancellation token is cancelled.
     async fn nack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
-        offsets: Vec<Offset>,
-        options: Option<NackOptions>,
+        offsets: Vec<NackOffset>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
         // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || Self::nack(source_handle.clone(), offsets.clone(), options.clone()).await,
+            async || Self::nack(source_handle.clone(), offsets.clone()).await,
             |error: &Error| {
                 error!(?error, "Failed to send nack to source, retrying...");
                 // Don't retry non-retryable errors
@@ -1428,19 +1432,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 }
 
-/// Groups nacked offsets by their [`NackOptions`] so that offsets sharing the same options
-/// (including `None`) are nacked in a single backend call. This preserves per-message options
-/// without degrading to one backend round-trip per offset.
-fn group_offsets_by_nack_options(
-    offsets_to_nack: Vec<(Offset, Option<NackOptions>)>,
-) -> HashMap<Option<NackOptions>, Vec<Offset>> {
-    let mut nack_map: HashMap<Option<NackOptions>, Vec<Offset>> = HashMap::new();
-    for (offset, option) in offsets_to_nack {
-        nack_map.entry(option).or_default().push(offset);
-    }
-    nack_map
-}
-
 #[cfg(test)]
 mod tests {
     use crate::mark_success;
@@ -1462,40 +1453,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
-
-    #[test]
-    fn test_group_offsets_by_nack_options() {
-        use crate::message::NackOptions;
-
-        let opts_a = NackOptions {
-            delay: Some(1000),
-            max_deliveries: None,
-            reason: Some("a".to_string()),
-        };
-        let opts_b = NackOptions {
-            delay: Some(2000),
-            max_deliveries: None,
-            reason: Some("b".to_string()),
-        };
-        let offset = |n: i64| CoreOffset::Int(CoreIntOffset::new(n, 0));
-
-        let grouped = super::group_offsets_by_nack_options(vec![
-            (offset(1), Some(opts_a.clone())),
-            (offset(2), None),
-            (offset(3), Some(opts_b.clone())),
-            (offset(4), Some(opts_a.clone())),
-            (offset(5), None),
-        ]);
-
-        // Three distinct buckets: opts_a, opts_b, and None — order preserved within each.
-        assert_eq!(grouped.len(), 3);
-        assert_eq!(
-            grouped.get(&Some(opts_a)).unwrap(),
-            &vec![offset(1), offset(4)]
-        );
-        assert_eq!(grouped.get(&Some(opts_b)).unwrap(), &vec![offset(3)]);
-        assert_eq!(grouped.get(&None).unwrap(), &vec![offset(2), offset(5)]);
-    }
 
     struct SimpleSource {
         num: usize,
@@ -2387,107 +2344,6 @@ mod tests {
 
         let _ = shutdown_tx.send(());
         let _ = server_handle.await;
-    }
-
-    #[tokio::test]
-    async fn test_invoke_ack_groups_nacks_by_options() {
-        use crate::message::{NackOptions, ReadAck};
-        use crate::tracker::Tracker;
-        use std::sync::{Arc, Mutex};
-        use tokio::sync::{Semaphore, oneshot};
-        use tokio_util::sync::CancellationToken;
-
-        // Recording consumer of ActorMessages on the source side.
-        let (source_tx, mut source_rx) = tokio::sync::mpsc::channel::<super::ActorMessage>(16);
-        let acked: Arc<Mutex<Vec<CoreOffset>>> = Arc::new(Mutex::new(vec![]));
-        #[allow(clippy::type_complexity)]
-        let nacked: Arc<Mutex<Vec<(Vec<CoreOffset>, Option<NackOptions>)>>> =
-            Arc::new(Mutex::new(vec![]));
-        let acked_c = Arc::clone(&acked);
-        let nacked_c = Arc::clone(&nacked);
-        let consumer = tokio::spawn(async move {
-            while let Some(msg) = source_rx.recv().await {
-                match msg {
-                    super::ActorMessage::Ack {
-                        respond_to,
-                        offsets,
-                    } => {
-                        acked_c.lock().unwrap().extend(offsets);
-                        let _ = respond_to.send(Ok(()));
-                    }
-                    super::ActorMessage::Nack {
-                        respond_to,
-                        offsets,
-                        options,
-                    } => {
-                        nacked_c.lock().unwrap().push((offsets, options));
-                        let _ = respond_to.send(Ok(()));
-                    }
-                    _ => {}
-                }
-            }
-        });
-
-        let opts_a = NackOptions {
-            delay: Some(100),
-            max_deliveries: None,
-            reason: Some("a".to_string()),
-        };
-        let opts_b = NackOptions {
-            delay: Some(200),
-            max_deliveries: None,
-            reason: Some("b".to_string()),
-        };
-
-        // Build (offset, ReadAck) -> oneshot batch.
-        let mk = |seq: i64, ack: ReadAck| {
-            let off = CoreOffset::Int(CoreIntOffset::new(seq, 0));
-            let (tx, rx) = oneshot::channel();
-            tx.send(ack).unwrap();
-            (off, rx)
-        };
-        let batch = vec![
-            mk(1, ReadAck::Ack),
-            mk(2, ReadAck::Nak(Some(opts_a.clone()))),
-            mk(3, ReadAck::Nak(Some(opts_b.clone()))),
-            mk(4, ReadAck::Nak(Some(opts_a.clone()))),
-            mk(5, ReadAck::Nak(None)),
-        ];
-
-        let cln = CancellationToken::new();
-        let tracker = Tracker::new(None, cln.clone());
-        let sem = Arc::new(Semaphore::new(1));
-        let permit = sem.acquire_owned().await.unwrap();
-
-        Source::<crate::typ::WithoutRateLimiter>::invoke_ack(
-            tokio::time::Instant::now(),
-            source_tx.clone(),
-            batch,
-            permit,
-            tracker,
-            cln.clone(),
-        )
-        .await
-        .unwrap();
-
-        drop(source_tx);
-        consumer.await.unwrap();
-
-        // Ack: only offset 1.
-        assert_eq!(acked.lock().unwrap().len(), 1);
-
-        // Nack: grouped into 3 buckets (opts_a -> [2,4], opts_b -> [3], None -> [5]).
-        let nacks = nacked.lock().unwrap();
-        assert_eq!(nacks.len(), 3, "one backend nack call per distinct options");
-        let find = |o: &Option<NackOptions>| {
-            nacks
-                .iter()
-                .find(|(_, opt)| opt == o)
-                .map(|(offs, _)| offs.len())
-        };
-        assert_eq!(find(&Some(opts_a)), Some(2));
-        assert_eq!(find(&Some(opts_b)), Some(1));
-        assert_eq!(find(&None), Some(1));
     }
 
     /// Streaming with a bypass router present: exercises the

@@ -79,7 +79,7 @@ message MapResponse {
     repeated string tags = 3;
     // Metadata is the metadata of the message
     metadata.Metadata metadata = 4;
-    // TODO: add nack options
+    // Nack options specified while nacking a message
     optional nack_options.NackOptions nack_options = 5;
   }
   repeated Result results = 1;

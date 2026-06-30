@@ -174,7 +174,7 @@ message NackRequest {
     optional nack_options.NackOptions nack_options = 2;
   }
   // Required field holding the request. The list will be ordered and will have the same order as the original Read response.
-  Request request = 1;
+  repeated Request request = 1;
 }
 
 message NackResponse {

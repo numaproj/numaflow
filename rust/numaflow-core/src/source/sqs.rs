@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
@@ -125,11 +125,7 @@ impl source::SourceAcker for SqsSource {
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
 
-    async fn nack(
-        &mut self,
-        _offsets: Vec<Offset>,
-        _options: Option<NackOptions>,
-    ) -> crate::error::Result<()> {
+    async fn nack(&mut self, _offsets: Vec<NackOffset>) -> crate::error::Result<()> {
         // SQS doesn't support nack - no-op
         Ok(())
     }

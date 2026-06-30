@@ -211,8 +211,8 @@ pub mod ack_response {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NackRequest {
     /// Required field holding the request. The list will be ordered and will have the same order as the original Read response.
-    #[prost(message, optional, tag = "1")]
-    pub request: ::core::option::Option<nack_request::Request>,
+    #[prost(message, repeated, tag = "1")]
+    pub request: ::prost::alloc::vec::Vec<nack_request::Request>,
 }
 /// Nested message and enum types in `NackRequest`.
 pub mod nack_request {

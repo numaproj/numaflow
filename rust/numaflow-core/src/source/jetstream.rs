@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, MessageID, NackOptions, Offset};
+use crate::message::{IntOffset, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
 use crate::{Error, Result, message::Message};
@@ -92,12 +92,13 @@ impl SourceAcker for JetstreamSource {
         Ok(())
     }
 
-    async fn nack(&mut self, offsets: Vec<Offset>, _options: Option<NackOptions>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
         let mut jetstream_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Int(seq_num) = offset else {
+            let Offset::Int(seq_num) = offset.offset else {
                 return Err(Error::Source(format!(
-                    "Expected integer offset for Jetstream source. Got: {offset:?}"
+                    "Expected integer offset for Jetstream source. Got: {:?}",
+                    offset.offset
                 )));
             };
             jetstream_offsets.push(seq_num.offset as u64);

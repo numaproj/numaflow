@@ -2,7 +2,7 @@
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Result;
-use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
 use crate::source::{SourceAcker, SourceReader};
@@ -107,11 +107,11 @@ impl SourceAcker for CoreHttpSource {
             .map_err(|e| e.into())
     }
 
-    async fn nack(&mut self, offsets: Vec<Offset>, _options: Option<NackOptions>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
         // extract the ids from the offsets, id was used to create the offset
         let ids = offsets
             .into_iter()
-            .filter_map(|o| match o {
+            .filter_map(|o| match o.offset {
                 Offset::String(s) => Some(s.offset),
                 Offset::Int(_) => {
                     // this should not happen since we create the offsets

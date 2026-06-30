@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{Message, NackOptions};
+use crate::message::{Message, NackOffset};
 use crate::message::{MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
@@ -71,11 +71,7 @@ impl SourceAcker for NatsSource {
         Ok(())
     }
 
-    async fn nack(
-        &mut self,
-        _offsets: Vec<Offset>,
-        _options: Option<NackOptions>,
-    ) -> crate::Result<()> {
+    async fn nack(&mut self, _offsets: Vec<NackOffset>) -> crate::Result<()> {
         // NATS nack is a no-op (plain NATS doesn't support nack)
         Ok(())
     }

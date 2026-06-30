@@ -399,6 +399,12 @@ impl Default for Offset {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct NackOffset {
+    pub(crate) offset: Offset,
+    pub(crate) option: Option<NackOptions>,
+}
+
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {

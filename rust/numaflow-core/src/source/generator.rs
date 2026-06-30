@@ -1,7 +1,7 @@
 use crate::config::components::source::GeneratorConfig;
 use crate::config::get_vertex_replica;
 
-use crate::message::{Message, NackOptions, Offset};
+use crate::message::{Message, NackOffset, Offset};
 use crate::reader;
 use crate::source;
 use tokio_stream::StreamExt;
@@ -399,11 +399,7 @@ impl source::SourceAcker for GeneratorAck {
         Ok(())
     }
 
-    async fn nack(
-        &mut self,
-        _: Vec<Offset>,
-        _options: Option<NackOptions>,
-    ) -> crate::error::Result<()> {
+    async fn nack(&mut self, _: Vec<NackOffset>) -> crate::error::Result<()> {
         // Generator source doesn't support nack - no-op
         Ok(())
     }
