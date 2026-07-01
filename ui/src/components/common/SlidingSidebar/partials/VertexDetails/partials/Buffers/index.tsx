@@ -380,8 +380,13 @@ export function Buffers({
               alignItems: "center",
               margin: "1.2rem 0",
             },
+            left: 0,
             minHeight: "5.6rem",
             padding: "0 1.6rem",
+            position: "sticky",
+            right: 0,
+            top: 0,
+            zIndex: 10,
           }}
         >
           <Box sx={{ fontSize: "1.6rem", fontWeight: 600 }}>
