@@ -10,9 +10,10 @@ describe("EdgeDetails", () => {
   });
 
   it("no watermarks", async () => {
-    render(<EdgeDetails edgeId="test-edge" watermarks={[]} />);
+    render(<EdgeDetails edgeId="test-edge" />);
     await waitFor(() => {
       expect(screen.getByText("test-edge Edge")).toBeInTheDocument();
+      expect(screen.getByText("Watermark timestamp")).toBeInTheDocument();
       expect(screen.getByText("No watermarks found")).toBeInTheDocument();
     });
   });
@@ -36,6 +37,25 @@ describe("EdgeDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("test-edge Edge")).toBeInTheDocument();
       expect(screen.getByText(`${rawWatermark}`)).toBeInTheDocument();
+    });
+  });
+
+  it("does not render ISB tab", async () => {
+    render(
+      <EdgeDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        edgeId="test-edge"
+        from="in"
+        to="cat"
+        watermarks={[]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("edge-isb-tab")).not.toBeInTheDocument();
+      expect(screen.queryByText("ISB")).not.toBeInTheDocument();
+      expect(screen.getByText("No watermarks found")).toBeInTheDocument();
     });
   });
 });

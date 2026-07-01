@@ -10,11 +10,18 @@ import TableRow from "@mui/material/TableRow";
 import "./style.css";
 
 export interface EdgeDetailsProps {
+  namespaceId?: string;
+  pipelineId?: string;
   edgeId: string;
-  watermarks: (string|number)[];
+  from?: string;
+  to?: string;
+  watermarks?: (string | number)[];
 }
 
-export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
+export function EdgeDetails({
+  edgeId,
+  watermarks,
+}: EdgeDetailsProps) {
   return (
     <Box
       sx={{
@@ -42,26 +49,28 @@ export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
           <TableHead>
             <TableRow>
               <TableCell>Partition</TableCell>
-              <TableCell>Watermark</TableCell>
+              <TableCell>Watermark timestamp</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {(!watermarks || !watermarks.length) && (
               <TableRow>
-                <TableCell colSpan={4} align="center">
+                <TableCell colSpan={2} align="center">
                   No watermarks found
                 </TableCell>
               </TableRow>
             )}
             {!!watermarks &&
               !!watermarks.length &&
-              watermarks.map((watermark: (string|number), index: number) => (
+              watermarks.map((watermark: string | number, index: number) => (
                 <TableRow key={index}>
                   <TableCell>{index}</TableCell>
                   <TableCell>
                     {Number(watermark) < 0
                       ? watermark
-                      : `${watermark} (${new Date(Number(watermark)).toISOString()})`}
+                      : `${watermark} (${new Date(
+                          Number(watermark)
+                        ).toISOString()})`}
                   </TableCell>
                 </TableRow>
               ))}
