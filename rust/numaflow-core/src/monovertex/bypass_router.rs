@@ -261,7 +261,7 @@ impl BypassRouterReceiver {
                                 | MessageToSink::Fallback(h)
                                 | MessageToSink::OnSuccess(h) => h,
                             };
-                            handle.mark_failed(self.final_result.as_ref().unwrap_err());
+                            handle.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                         }
                         continue;
                     }
@@ -325,7 +325,7 @@ impl BypassRouterReceiver {
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
                             for msg in msg_handles {
-                                msg.mark_failed(&e);
+                                msg.mark_failed(&e, None);
                             }
                             self.final_result = Err(e);
                             self.shutting_down_on_err = true;
@@ -400,6 +400,7 @@ mod tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         }
     }
 

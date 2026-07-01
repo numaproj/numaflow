@@ -516,6 +516,7 @@ mod tests {
                 ..Default::default()
             })),
             is_late: false,
+            nack_options: None,
         };
 
         // Insert a new message

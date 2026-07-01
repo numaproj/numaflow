@@ -76,6 +76,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 Some(Arc::new(metadata))
             },
             is_late: value.1.is_late,
+            nack_options: value.0.nack_options.map(Into::into),
         }
     }
 }
@@ -527,6 +528,7 @@ mod tests {
             )),
             tags: vec!["tag".to_string()],
             metadata: Some(response_metadata),
+            nack_options: None,
         };
 
         let message: Message = UserDefinedTransformerMessage(response, &msg_info, 3).into();
@@ -570,4 +572,148 @@ mod tests {
     }
 
     // TODO(ajain60): add unit test for metadata once rust sdk supports it
+
+    #[tokio::test]
+    async fn test_transform_emits_nack() {
+        use numaflow::sourcetransform;
+
+        struct NackTransform;
+        #[tonic::async_trait]
+        impl sourcetransform::SourceTransformer for NackTransform {
+            async fn transform(
+                &self,
+                _input: sourcetransform::SourceTransformRequest,
+            ) -> Vec<sourcetransform::Message> {
+                vec![sourcetransform::Message::message_to_nack(
+                    Utc::now(),
+                    Some(numaflow::shared::NackOptions {
+                        delay: Some(5000),
+                        max_deliveries: Some(3),
+                        reason: Some("udf nack".to_string()),
+                    }),
+                )]
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            sourcetransform::Server::new(NackTransform)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedTransformer::new(
+            500,
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await.unwrap()),
+            ReconnectConfig::new(
+                crate::shared::grpc::GrpcClientConfig::new(
+                    sock_file.clone(),
+                    server_info_file.clone(),
+                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                ),
+                CancellationToken::new(),
+                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
+            ),
+        )
+        .await
+        .unwrap();
+
+        let message = Message {
+            keys: Arc::from(vec!["k".into()]),
+            value: "hello".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "v".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let (tx, rx) = oneshot::channel();
+        tokio::time::timeout(Duration::from_secs(2), client.transform(message, tx))
+            .await
+            .unwrap();
+        let messages = rx.await.unwrap().unwrap();
+        let out = messages.first().expect("one message");
+        assert!(out.nacked());
+        assert_eq!(
+            out.nack_options,
+            Some(crate::message::NackOptions {
+                delay: Some(5000),
+                max_deliveries: Some(3),
+                reason: Some("udf nack".to_string()),
+            })
+        );
+
+        drop(client);
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+    }
+
+    #[test]
+    fn test_transform_response_result_carries_nack_tag_and_options() {
+        use crate::message::{IntOffset, NackOptions, Offset};
+        use crate::shared::grpc::prost_timestamp_from_utc;
+        use numaflow_pb::common::nack_options::NackOptions as PbNackOptions;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let parent_info = ParentMessageInfo {
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+        };
+
+        // event_time must be Some — the From impl .expect()s it.
+        let result = source_transform_response::Result {
+            keys: vec!["k".to_string()],
+            value: b"v".to_vec(),
+            event_time: Some(prost_timestamp_from_utc(chrono::Utc::now())),
+            tags: vec!["U+005C__NACK__".to_string()], // must match message.rs NACK const
+            metadata: None,
+            nack_options: Some(PbNackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(2),
+                delay: Some(1000),
+            }),
+        };
+        let msg: Message = UserDefinedTransformerMessage(result, &parent_info, 0).into();
+        assert!(msg.nacked());
+        assert_eq!(
+            msg.nack_options,
+            Some(NackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(2),
+                delay: Some(1000),
+            })
+        );
+
+        let result_plain = source_transform_response::Result {
+            keys: vec![],
+            value: vec![],
+            event_time: Some(prost_timestamp_from_utc(chrono::Utc::now())),
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+        let msg_plain: Message =
+            UserDefinedTransformerMessage(result_plain, &parent_info, 1).into();
+        assert!(!msg_plain.nacked());
+        assert_eq!(msg_plain.nack_options, None);
+    }
 }

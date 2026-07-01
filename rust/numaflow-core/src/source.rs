@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{MessageHandle, ReadAck};
+use crate::message::{MessageHandle, NackOffset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
@@ -125,7 +125,7 @@ pub(crate) trait LocalSourceAcker {
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()>;
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -161,7 +161,7 @@ enum ActorMessage {
     },
     Nack {
         respond_to: oneshot::Sender<Result<()>>,
-        offsets: Vec<Offset>,
+        offsets: Vec<NackOffset>,
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -441,7 +441,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// nack the offsets by communicating with the nack actor.
-    async fn nack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<NackOffset>,
+    ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Nack {
             respond_to: sender,
@@ -1067,7 +1070,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         result
     }
-
     /// Per-message ack for the streaming path. Awaits a single message's oneshot, issues
     /// ack or nack for that one offset, then releases the in-flight permit. This runs as an
     /// independent background task per message, enabling out-of-order acknowledgement.
@@ -1082,10 +1084,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         tracker: Tracker,
         cancel_token: CancellationToken,
     ) -> Result<()> {
+        let mut nack_option = None;
         let disposition = match ack_rx.await {
             Ok(ReadAck::Ack) => true,
-            Ok(ReadAck::Nak) => {
+            Ok(ReadAck::Nak(option)) => {
                 warn!(?offset, "Nak received for offset (streaming)");
+                nack_option = option;
                 false
             }
             Err(e) => {
@@ -1113,7 +1117,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let ack_result = if disposition {
             Self::ack_with_retry(source_handle, vec![offset], &cancel_token).await
         } else {
-            Self::nack_with_retry(source_handle, vec![offset], &cancel_token).await
+            Self::nack_with_retry(
+                source_handle,
+                vec![NackOffset {
+                    offset,
+                    option: nack_option,
+                }],
+                &cancel_token,
+            )
+            .await
         };
 
         // streaming=true: ack_time and e2e_time are skipped on the mvtx path;
@@ -1146,9 +1158,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 Ok(ReadAck::Ack) => {
                     offsets_to_ack.push(offset.clone());
                 }
-                Ok(ReadAck::Nak) => {
+                Ok(ReadAck::Nak(option)) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push(offset.clone());
+                    offsets_to_nack.push(NackOffset {
+                        offset: offset.clone(),
+                        option,
+                    });
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -1165,7 +1180,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
+            // Group offsets by their nack options so each distinct option set results in a
+            // single backend nack call; offsets sharing the same (or no) options are batched.
+            Self::nack_with_retry(source_handle.clone(), offsets_to_nack, &cancel_token).await?
         }
         // Non-streaming path: record all batch-granular metrics (streaming=false).
         Self::send_ack_metrics(e2e_start_time, n, start, false);
@@ -1207,7 +1224,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Invokes nack with infinite retries until the cancellation token is cancelled.
     async fn nack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
-        offsets: Vec<Offset>,
+        offsets: Vec<NackOffset>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
         // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
@@ -1523,7 +1540,11 @@ mod tests {
             }
         }
 
-        async fn nack(&self, offsets: Vec<Offset>) {
+        async fn nack(
+            &self,
+            offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
             for offset in offsets {
                 self.yet_to_ack
                     .write()
@@ -1782,7 +1803,11 @@ mod tests {
             }
         }
 
-        async fn nack(&self, offsets: Vec<Offset>) {
+        async fn nack(
+            &self,
+            offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
             for off in offsets {
                 self.nacked
                     .write()
