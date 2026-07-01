@@ -174,13 +174,13 @@ export function Buffers({
     {
       key: "partition",
       label: "Partition",
-      width: "24%",
+      width: "26rem",
       render: (buffer) => buffer?.bufferName,
     },
     {
       key: "isFull",
       label: "Is Full",
-      width: "9%",
+      width: "8rem",
       align: "center",
       testId: "isFull",
       tooltip:
@@ -190,7 +190,7 @@ export function Buffers({
     {
       key: "pending",
       label: "Pending",
-      width: "9%",
+      width: "9rem",
       align: "center",
       testId: "pending",
       tooltip: "Messages queued in the buffer waiting to be consumed.",
@@ -199,7 +199,7 @@ export function Buffers({
     {
       key: "ackPending",
       label: "Ack Pending",
-      width: "11%",
+      width: "11rem",
       align: "center",
       testId: "ackPending",
       tooltip: "Messages delivered to a consumer but not yet acknowledged.",
@@ -208,7 +208,7 @@ export function Buffers({
     {
       key: "totalMessages",
       label: "Total Messages",
-      width: "13%",
+      width: "14rem",
       align: "center",
       testId: "totalMessages",
       tooltip:
@@ -228,7 +228,7 @@ export function Buffers({
     {
       key: "bufferUsage",
       label: "Buffer Usage",
-      width: "11%",
+      width: "12rem",
       align: "center",
       testId: "usage",
       tooltip: "Current buffer fill percentage.",
@@ -237,7 +237,7 @@ export function Buffers({
     {
       key: "bufferLength",
       label: "Buffer Length",
-      width: "11%",
+      width: "12rem",
       align: "center",
       testId: "bufferLength",
       tooltip: "Maximum configured buffer capacity in messages.",
@@ -246,7 +246,7 @@ export function Buffers({
     {
       key: "bufferUsageLimit",
       label: "Buffer Usage Limit",
-      width: "12%",
+      width: "15rem",
       align: "center",
       testId: "bufferUsageLimit",
       tooltip:
@@ -300,19 +300,17 @@ export function Buffers({
       }}
     >
       <TableContainer
-        sx={{ backgroundColor: "#FFF", flex: "0 0 auto", maxHeight: "20rem" }}
+        sx={{
+          backgroundColor: "#FFF",
+          flex: "0 0 auto",
+          maxHeight: "20rem",
+          overflowX: "auto",
+        }}
       >
-        <Box
-          sx={{
-            color: "#6B6C72",
-            fontSize: "1.2rem",
-            padding: "1.2rem 1.6rem",
-          }}
+        <Table
+          stickyHeader
+          sx={{ minWidth: "107rem", tableLayout: "fixed", width: "100%" }}
         >
-          Live buffer counters from JetStream consumer state. Refreshed with
-          pipeline data.
-        </Box>
-        <Table stickyHeader sx={{ tableLayout: "fixed", width: "100%" }}>
           <TableHead>
             <TableRow>
               {bufferColumns.map(({ key, label, width, align, tooltip }) => (

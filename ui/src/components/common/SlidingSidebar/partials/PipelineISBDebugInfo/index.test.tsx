@@ -219,10 +219,6 @@ describe("PipelineISBDebugInfo", () => {
       expect(
         screen.getByTestId("isb-debug-header-help-kv-ttl")
       ).toBeInTheDocument();
-      expect(
-        screen.getByText(/Diagnostic snapshot from JetStream monitor/)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/Source pods: js-0/)).toBeInTheDocument();
       expect(screen.getAllByText("ns-pl-cat-0").length).toBeGreaterThan(1);
       expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
       expect(screen.getByText("Scope")).toBeInTheDocument();

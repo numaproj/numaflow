@@ -94,42 +94,42 @@ interface ISBColumnLayout {
 }
 
 const consumerColumns = {
-  consumer: { width: "16%" },
-  stream: { width: "16%" },
-  partition: { width: "6%" },
-  redelivered: { width: "7%" },
-  waiting: { width: "8%" },
-  deliveredStreamSequence: { width: "9%" },
-  ackFloorStreamSequence: { width: "9%" },
-  ackWait: { width: "7%" },
-  maxAckPending: { width: "10%" },
-  leader: { width: "12%" },
+  consumer: { width: "18rem" },
+  stream: { width: "18rem" },
+  partition: { width: "8rem" },
+  redelivered: { width: "12rem" },
+  waiting: { width: "12rem" },
+  deliveredStreamSequence: { width: "13rem" },
+  ackFloorStreamSequence: { width: "13rem" },
+  ackWait: { width: "9rem" },
+  maxAckPending: { width: "14rem" },
+  leader: { width: "16rem" },
 };
 
 const streamColumns = {
-  stream: { width: "18%" },
-  partition: { width: "6%" },
-  messages: { width: "9%" },
-  bytes: { width: "8%" },
-  firstSequence: { width: "9%" },
-  lastSequence: { width: "9%" },
-  lastTimestamp: { width: "13%" },
-  consumerCount: { width: "8%" },
-  replicas: { width: "6%" },
-  leader: { width: "14%" },
+  stream: { width: "22rem" },
+  partition: { width: "8rem" },
+  messages: { width: "15rem" },
+  bytes: { width: "9rem" },
+  firstSequence: { width: "11rem" },
+  lastSequence: { width: "11rem" },
+  lastTimestamp: { width: "18rem" },
+  consumerCount: { width: "14rem" },
+  replicas: { width: "9rem" },
+  leader: { width: "18rem" },
 };
 
 const kvStoreColumns = {
-  bucket: { width: "22%" },
-  scope: { width: "7%" },
-  direction: { width: "8%" },
-  from: { width: "7%" },
-  to: { width: "7%" },
-  values: { width: "7%" },
-  bytes: { width: "8%" },
-  ttl: { width: "9%" },
-  replicas: { width: "6%" },
-  leader: { width: "19%" },
+  bucket: { width: "24rem" },
+  scope: { width: "9rem" },
+  direction: { width: "11rem" },
+  from: { width: "8rem" },
+  to: { width: "8rem" },
+  values: { width: "9rem" },
+  bytes: { width: "9rem" },
+  ttl: { width: "10rem" },
+  replicas: { width: "9rem" },
+  leader: { width: "18rem" },
 };
 
 const CONSUMER_COLUMN_COUNT = Object.keys(consumerColumns).length;
@@ -154,16 +154,19 @@ const bodyRowSx = {
 const ISBTable = ({
   children,
   columns,
+  minWidth,
   testId,
 }: {
   children: React.ReactNode;
   columns: ISBColumnLayout[];
+  minWidth?: string;
   testId?: string;
 }) => (
   <Table
     data-testid={testId}
     stickyHeader
     sx={{
+      minWidth,
       tableLayout: "fixed",
       width: "100%",
     }}
@@ -240,25 +243,32 @@ const HeaderCell = ({
 );
 
 const BodyCell = ({
-  align = "center",
+  align = "left",
   children,
   column,
+  title,
+  wrap = false,
 }: {
   align?: ISBCellAlign;
   children: React.ReactNode;
   column?: ISBColumnLayout;
+  title?: string;
+  wrap?: boolean;
 }) => (
   <TableCell
     align={align}
+    title={title}
     sx={{
       borderBottom: "0.1rem solid #E0E0E0",
       fontSize: "1.2rem",
       overflow: "hidden",
       padding: "1rem 1.2rem",
-      textOverflow: "ellipsis",
+      overflowWrap: wrap ? "anywhere" : "normal",
+      textOverflow: wrap ? "clip" : "ellipsis",
       verticalAlign: "middle",
-      whiteSpace: "nowrap",
+      whiteSpace: wrap ? "normal" : "nowrap",
       width: column?.width,
+      wordBreak: wrap ? "break-word" : "normal",
     }}
   >
     <Box
@@ -266,10 +276,12 @@ const BodyCell = ({
         display: "flex",
         justifyContent: justifyContentByAlign[align],
         minWidth: 0,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
+        overflow: wrap ? "visible" : "hidden",
+        overflowWrap: wrap ? "anywhere" : "normal",
+        textOverflow: wrap ? "clip" : "ellipsis",
+        whiteSpace: wrap ? "normal" : "nowrap",
         width: "100%",
+        wordBreak: wrap ? "break-word" : "normal",
       }}
     >
       {children}
@@ -328,38 +340,14 @@ const hasSharedTargetVertexRows = (
   !!streams?.streams?.some((stream) => stream.sharedByInboundEdges) ||
   !!consumers?.consumers?.some((consumer) => consumer.sharedByInboundEdges);
 
-const collectSnapshotMetadata = (
-  streams?: PipelineISBStreamsResponse,
-  consumers?: PipelineISBConsumersResponse,
-  kvStores?: PipelineISBKVStoresResponse
-) => {
-  const sourcePods = new Set<string>();
-  const collectedAtValues: string[] = [];
-  [
-    ...(streams?.streams || []),
-    ...(consumers?.consumers || []),
-    ...(kvStores?.kvStores || []),
-  ].forEach((item) => {
-    if (item.sourcePod) {
-      sourcePods.add(item.sourcePod);
-    }
-    if (item.collectedAt) {
-      collectedAtValues.push(item.collectedAt);
-    }
-  });
-  collectedAtValues.sort();
-  return {
-    sourcePods: Array.from(sourcePods).sort(),
-    collectedAt: collectedAtValues[collectedAtValues.length - 1],
-  };
-};
-
 const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
   <TableBody>
     {!streams.length && <EmptyRow colSpan={STREAM_COLUMN_COUNT} />}
     {streams.map((stream) => (
       <TableRow key={stream.stream} sx={bodyRowSx}>
-        <BodyCell column={streamColumns.stream}>{stream.stream}</BodyCell>
+        <BodyCell column={streamColumns.stream} title={stream.stream} wrap>
+          {stream.stream}
+        </BodyCell>
         <BodyCell align="center" column={streamColumns.partition}>
           {formatNumber(stream.partition)}
         </BodyCell>
@@ -375,7 +363,10 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
         <BodyCell align="center" column={streamColumns.lastSequence}>
           {formatNumber(stream.lastSeq)}
         </BodyCell>
-        <BodyCell column={streamColumns.lastTimestamp}>
+        <BodyCell
+          column={streamColumns.lastTimestamp}
+          title={formatTimestamp(stream.lastTimestamp)}
+        >
           {formatTimestamp(stream.lastTimestamp)}
         </BodyCell>
         <BodyCell align="center" column={streamColumns.consumerCount}>
@@ -384,7 +375,11 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
         <BodyCell align="center" column={streamColumns.replicas}>
           {formatOptional(stream.replicas)}
         </BodyCell>
-        <BodyCell column={streamColumns.leader}>
+        <BodyCell
+          column={streamColumns.leader}
+          title={String(formatOptional(stream.leader))}
+          wrap
+        >
           {formatOptional(stream.leader)}
         </BodyCell>
       </TableRow>
@@ -397,10 +392,16 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
     {!consumers.length && <EmptyRow colSpan={CONSUMER_COLUMN_COUNT} />}
     {consumers.map((consumer) => (
       <TableRow key={`${consumer.stream}-${consumer.consumer}`} sx={bodyRowSx}>
-        <BodyCell column={consumerColumns.consumer}>
+        <BodyCell
+          column={consumerColumns.consumer}
+          title={consumer.consumer}
+          wrap
+        >
           {consumer.consumer}
         </BodyCell>
-        <BodyCell column={consumerColumns.stream}>{consumer.stream}</BodyCell>
+        <BodyCell column={consumerColumns.stream} title={consumer.stream} wrap>
+          {consumer.stream}
+        </BodyCell>
         <BodyCell align="center" column={consumerColumns.partition}>
           {formatNumber(consumer.partition)}
         </BodyCell>
@@ -428,7 +429,11 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
         <BodyCell align="center" column={consumerColumns.maxAckPending}>
           {formatOptional(consumer.maxAckPending)}
         </BodyCell>
-        <BodyCell column={consumerColumns.leader}>
+        <BodyCell
+          column={consumerColumns.leader}
+          title={String(formatOptional(consumer.leader))}
+          wrap
+        >
           {formatOptional(consumer.leader)}
         </BodyCell>
       </TableRow>
@@ -441,17 +446,27 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
     {!kvStores.length && <EmptyRow colSpan={KV_STORE_COLUMN_COUNT} />}
     {kvStores.map((kvStore) => (
       <TableRow key={kvStore.stream} sx={bodyRowSx}>
-        <BodyCell column={kvStoreColumns.bucket}>{kvStore.bucket}</BodyCell>
+        <BodyCell column={kvStoreColumns.bucket} title={kvStore.bucket} wrap>
+          {kvStore.bucket}
+        </BodyCell>
         <BodyCell align="center" column={kvStoreColumns.scope}>
           {kvStore.scope}
         </BodyCell>
         <BodyCell align="center" column={kvStoreColumns.direction}>
           {formatOptional(kvStore.direction)}
         </BodyCell>
-        <BodyCell align="center" column={kvStoreColumns.from}>
+        <BodyCell
+          column={kvStoreColumns.from}
+          title={String(formatOptional(kvStore.from))}
+          wrap
+        >
           {formatOptional(kvStore.from)}
         </BodyCell>
-        <BodyCell align="center" column={kvStoreColumns.to}>
+        <BodyCell
+          column={kvStoreColumns.to}
+          title={String(formatOptional(kvStore.to))}
+          wrap
+        >
           {formatOptional(kvStore.to)}
         </BodyCell>
         <BodyCell align="center" column={kvStoreColumns.values}>
@@ -466,7 +481,11 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
         <BodyCell align="center" column={kvStoreColumns.replicas}>
           {formatOptional(kvStore.replicas)}
         </BodyCell>
-        <BodyCell column={kvStoreColumns.leader}>
+        <BodyCell
+          column={kvStoreColumns.leader}
+          title={String(formatOptional(kvStore.leader))}
+          wrap
+        >
           {formatOptional(kvStore.leader)}
         </BodyCell>
       </TableRow>
@@ -526,11 +545,6 @@ export function PipelineISBDebugInfo({
   const consumerRows = consumers?.consumers || [];
   const kvStoreRows = kvStores?.kvStores || [];
   const monitorErrors = collectErrors(streams, consumers, kvStores);
-  const snapshotMetadata = collectSnapshotMetadata(
-    streams,
-    consumers,
-    kvStores
-  );
   const showSharedNotice =
     edgeScoped || hasSharedTargetVertexRows(streams, consumers);
   const hasDisplayableRows =
@@ -550,14 +564,6 @@ export function PipelineISBDebugInfo({
 
   return (
     <Box>
-      <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
-        Diagnostic snapshot from JetStream monitor /jsz. Live Pending and Ack
-        Pending counters are shown in the Buffers table above.
-        {snapshotMetadata.collectedAt &&
-          ` Collected at ${formatTimestamp(snapshotMetadata.collectedAt)}.`}
-        {!!snapshotMetadata.sourcePods.length &&
-          ` Source pods: ${snapshotMetadata.sourcePods.join(", ")}.`}
-      </Box>
       {(error || !hasAllResponses) && (
         <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
           {PARTIAL_ISB_UNAVAILABLE_MESSAGE}
@@ -573,6 +579,7 @@ export function PipelineISBDebugInfo({
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={consumerColumnLayouts}
+            minWidth="133rem"
             testId="isb-debug-consumers-table"
           >
             <TableHead>
@@ -652,6 +659,7 @@ export function PipelineISBDebugInfo({
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={streamColumnLayouts}
+            minWidth="135rem"
             testId="isb-debug-streams-table"
           >
             <TableHead>
@@ -733,6 +741,7 @@ export function PipelineISBDebugInfo({
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={kvStoreColumnLayouts}
+            minWidth="115rem"
             testId="isb-debug-kv-stores-table"
           >
             <TableHead>

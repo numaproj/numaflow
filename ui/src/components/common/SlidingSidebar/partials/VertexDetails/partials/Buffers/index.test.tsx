@@ -125,9 +125,6 @@ describe("Buffers", () => {
         screen.getByTestId("buffer-header-help-totalMessages")
       ).toBeInTheDocument();
       expect(
-        screen.getByText(/Live buffer counters from JetStream consumer state/)
-      ).toBeInTheDocument();
-      expect(
         screen.getByText("No buffer information found")
       ).toBeInTheDocument();
       expect(screen.getByText("Advanced ISB Diagnostics")).toBeInTheDocument();
