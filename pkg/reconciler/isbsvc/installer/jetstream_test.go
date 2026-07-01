@@ -260,8 +260,9 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
-		err := i.CheckChildrenResourceStatus(ctx)
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
 		assert.NoError(t, err)
+		assert.False(t, needsRequeue)
 		assert.True(t, childrenHealthy(isbSvc), "2/3 ready with no pod errors should be healthy at quorum=2")
 	})
 
@@ -279,8 +280,9 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
-		err := i.CheckChildrenResourceStatus(ctx)
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
 		assert.NoError(t, err)
+		assert.False(t, needsRequeue)
 		assert.False(t, childrenHealthy(isbSvc), "1/3 ready should be unhealthy below quorum=2")
 	})
 
@@ -298,9 +300,49 @@ func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
-		err := i.CheckChildrenResourceStatus(ctx)
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
 		assert.NoError(t, err)
+		assert.False(t, needsRequeue, "CrashLoopBackOff is not transient — no requeue needed")
 		assert.False(t, childrenHealthy(isbSvc), "quorum met but CrashLoopBackOff pod should be unhealthy")
+	})
+
+	t.Run("unhealthy with recent-restart pod (transient — needs requeue)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 3
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		recentRestart := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-2-restarting",
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								ExitCode:   137,
+								FinishedAt: metav1.Now(),
+							},
+						},
+					},
+				},
+			},
+		}
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1"), recentRestart).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.True(t, needsRequeue, "recent OOM restart is transient — controller must requeue")
+		assert.False(t, childrenHealthy(isbSvc), "recent OOM restart should still be unhealthy")
 	})
 }
 

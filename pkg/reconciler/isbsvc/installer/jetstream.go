@@ -557,7 +557,7 @@ func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVo
 	return pvcl.Items, nil
 }
 
-func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) error {
+func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) (bool, error) {
 	var isbStatefulSet appv1.StatefulSet
 	if err := r.client.Get(ctx, client.ObjectKey{
 		Namespace: r.isbSvc.Namespace,
@@ -566,10 +566,10 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		if apierrors.IsNotFound(err) {
 			r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed",
 				"StatefulSet not found, might be still under creation")
-			return nil
+			return false, nil
 		}
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed", err.Error())
-		return err
+		return false, err
 	}
 	// NATS JetStream maintains quorum at ⌊replicas/2⌋+1. A single missing pod must not mark
 	// the ISBSvc unhealthy when the cluster can still serve writes (e.g. during a rolling node upgrade).
@@ -577,7 +577,7 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 	quorum := int32(r.isbSvc.Spec.JetStream.GetReplicas()/2 + 1)
 	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet, quorum); !status {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
-		return nil
+		return false, nil
 	}
 	// Quorum is met, but individual pods may be in a persistent failure state
 	// (CrashLoopBackOff, ImagePullBackOff, OOMKill) that will never self-resolve.
@@ -591,14 +591,16 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		LabelSelector: labels.SelectorFromSet(r.labels),
 	}); err != nil {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy("ListPodsFailed", err.Error())
-		return err
+		return false, err
 	}
-	if healthy, reason, msg, _ := reconciler.CheckPodsStatus(podList); !healthy {
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(podList); !healthy {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
-		return nil
+		// transientUnhealthy means the pod had a recent restart (OOM/error exit within 2 minutes)
+		// and may stabilise without a Kubernetes event to trigger re-reconciliation.
+		return transientUnhealthy, nil
 	}
 	r.isbSvc.Status.MarkChildrenResourceHealthy("Healthy", "JetStream cluster is healthy")
-	return nil
+	return false, nil
 }
 
 func generateJetStreamServerSecretName(isbSvc *dfv1.InterStepBufferService) string {
