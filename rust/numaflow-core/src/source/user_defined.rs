@@ -179,6 +179,7 @@ impl TryFrom<read_response::Result> for Message {
                 None => Metadata::default(),
             })),
             is_late: false,
+            nack_options: None,
         })
     }
 }
@@ -350,7 +351,7 @@ impl SourceAcker for UserDefinedSourceAck {
     /// This method checks if the SDK supports nack functionality using a pre-computed flag.
     /// For older SDK versions (< 0.11), it logs a warning and returns Ok() for backward compatibility.
     /// For newer SDK versions (>= 0.11), it calls the actual nack gRPC method.
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
         if !self.supports_nack {
             warn!(
                 offset_count = offsets.len(),
@@ -360,8 +361,15 @@ impl SourceAcker for UserDefinedSourceAck {
         }
 
         // SDK supports nack, call the actual gRPC method
-        let nack_offsets: Result<Vec<source::Offset>> =
-            offsets.into_iter().map(TryInto::try_into).collect();
+        let nack_offsets: Result<Vec<source::nack_request::Request>> = offsets
+            .into_iter()
+            .map(|no| {
+                Ok(source::nack_request::Request {
+                    offsets: vec![no.offset.try_into()?],
+                    nack_options: no.option.map(Into::into),
+                })
+            })
+            .collect::<Result<Vec<_>>>();
 
         let response = self
             .client
@@ -452,7 +460,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::message::IntOffset;
+    use crate::message::{IntOffset, NackOptions};
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
 
     #[test]
@@ -544,7 +552,11 @@ mod tests {
             }
         }
 
-        async fn nack(&self, offsets: Vec<Offset>) {
+        async fn nack(
+            &self,
+            offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
             //
             for offset in offsets {
                 self.yet_to_ack
@@ -618,7 +630,15 @@ mod tests {
 
         // nack the messages
         let response = src_ack
-            .nack(messages.iter().map(|m| m.offset.clone()).collect())
+            .nack(
+                messages
+                    .iter()
+                    .map(|m| NackOffset {
+                        offset: m.offset.clone(),
+                        option: None,
+                    })
+                    .collect(),
+            )
             .await;
         assert!(response.is_ok());
 

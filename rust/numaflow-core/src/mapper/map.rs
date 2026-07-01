@@ -257,7 +257,7 @@ impl MapHandle {
                     // if there are errors then we need to drain the stream and nack
                     if self.shutting_down_on_err {
                         warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                        read_msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                        read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                     } else {
                         let permit = Arc::clone(&ctx.semaphore).acquire_owned()
                             .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
@@ -310,7 +310,7 @@ impl MapHandle {
             if self.shutting_down_on_err {
                 for read_msg in read_batch {
                     warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                    read_msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                    read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                 }
                 continue;
             }
@@ -519,6 +519,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
+            nack_options: value.0.nack_options.map(Into::into),
         }
     }
 }
@@ -709,6 +710,7 @@ mod tests {
                     keys: Option::from(datum.keys),
                     value: datum.value,
                     tags: None,
+                    nack_options: None,
                 });
                 responses.push(response);
             }
@@ -1014,7 +1016,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1128,8 +1130,8 @@ mod tests {
 
         let ack1 = ack_rx1.await.unwrap();
         let ack2 = ack_rx2.await.unwrap();
-        assert_eq!(ack1, ReadAck::Nak);
-        assert_eq!(ack2, ReadAck::Nak);
+        assert_eq!(ack1, ReadAck::Nak(None));
+        assert_eq!(ack2, ReadAck::Nak(None));
 
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -1237,7 +1239,7 @@ mod tests {
         );
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1311,7 +1313,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         Ok(())
@@ -1393,8 +1395,8 @@ mod tests {
 
         let ack1 = ack_rx1.await.unwrap();
         let ack2 = ack_rx2.await.unwrap();
-        assert_eq!(ack1, ReadAck::Nak);
-        assert_eq!(ack2, ReadAck::Nak);
+        assert_eq!(ack1, ReadAck::Nak(None));
+        assert_eq!(ack2, ReadAck::Nak(None));
 
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -1450,7 +1452,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.expect("Failed to await ack rx");
-            assert_eq!(ack, ReadAck::Nak, "Expected Nak due to panic");
+            assert_eq!(ack, ReadAck::Nak(None), "Expected Nak due to panic");
         }
 
         Ok(())
@@ -1677,5 +1679,50 @@ mod tests {
     fn test_update_udf_process_time_metric_pipeline() {
         // Currently only ensuring that this should not panic
         update_udf_process_time_metric(false);
+    }
+
+    #[test]
+    fn test_map_response_result_carries_nack_tag_and_options() {
+        use crate::message::NackOptions;
+        use numaflow_pb::clients::map::map_response;
+        use numaflow_pb::common::nack_options::NackOptions as PbNackOptions;
+
+        let parent_msg = Message::default();
+        let parent_info = ParentMessageInfo::from(&parent_msg);
+
+        // With NACK tag + options -> nacked() true and options carried.
+        let result = map_response::Result {
+            keys: vec!["k".to_string()],
+            value: b"v".to_vec(),
+            tags: vec!["U+005C__NACK__".to_string()], // must match message.rs NACK const
+            metadata: None,
+            nack_options: Some(PbNackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            }),
+        };
+        let msg: Message = UserDefinedMessage(result, &parent_info, 0).into();
+        assert!(msg.nacked(), "NACK tag must make the message nacked()");
+        assert_eq!(
+            msg.nack_options,
+            Some(NackOptions {
+                reason: Some("retry".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+            })
+        );
+
+        // No options -> None and not nacked.
+        let result_plain = map_response::Result {
+            keys: vec![],
+            value: vec![],
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+        let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
+        assert!(!msg_plain.nacked());
+        assert_eq!(msg_plain.nack_options, None);
     }
 }

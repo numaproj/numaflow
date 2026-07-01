@@ -6,7 +6,7 @@ use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{CompressionType, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, Offset};
+use crate::message::{IntOffset, Message, MessageID, MessageType, NackOptions, Offset};
 use crate::metadata::Metadata;
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
@@ -89,6 +89,7 @@ impl JSWrappedMessage {
             watermark: None,
             metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
+            nack_options: None,
         })
     }
 }
@@ -233,10 +234,17 @@ impl JetStreamReader {
     }
 
     /// Negatively acknowledge the offset, optionally deferring redelivery by `delay`.
-    pub(crate) async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
+    pub(crate) async fn nack(
+        &self,
+        offset: &Offset,
+        nack_options: Option<NackOptions>,
+    ) -> Result<()> {
         let msg = self
             .get_js_message(offset, true)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        let delay = nack_options
+            .and_then(|option| option.delay)
+            .map(Duration::from_millis);
         msg.ack_with(AckKind::Nak(delay))
             .await
             .map_err(|e| Error::ISB(ISBError::Nack(format!("offset {}: {}", offset, e))))?;
@@ -281,8 +289,8 @@ impl crate::pipeline::isb::ISBReader for JetStreamReader {
         JetStreamReader::ack(self, offset).await
     }
 
-    async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
-        JetStreamReader::nack(self, offset, delay).await
+    async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()> {
+        JetStreamReader::nack(self, offset, nack_options).await
     }
 
     async fn pending(&self) -> Result<Option<usize>> {

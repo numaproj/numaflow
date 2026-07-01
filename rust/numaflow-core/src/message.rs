@@ -37,8 +37,8 @@ macro_rules! mark_success {
 /// ```
 #[macro_export]
 macro_rules! mark_failed {
-    ($msg:expr, $err:expr) => {{
-        $msg.mark_failed($err);
+    ($msg:expr, $err:expr, $opt:expr) => {{
+        $msg.mark_failed($err, $opt);
     }};
 }
 
@@ -58,6 +58,8 @@ macro_rules! mark_success_batch {
 }
 
 /// Marks a batch of [MessageHandle]s as failed (consumes the batch), recording the failure reason.
+/// Also used for nacking messages using the nack options provided. Nack options provided should be
+/// a vector of same length as the batch of messages.
 ///
 /// # Example
 /// ```ignore
@@ -67,28 +69,29 @@ macro_rules! mark_success_batch {
 macro_rules! mark_failed_batch {
     ($batch:expr, $err:expr) => {{
         for msg in $batch {
-            msg.mark_failed($err);
+            msg.mark_failed($err, None);
         }
     }};
 }
 
 use crate::Error;
-use std::cmp::{Ordering, PartialEq};
-use std::collections::HashMap;
-use std::fmt;
-use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, OnceLock};
-use tracing::{error, warn};
-
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use std::cmp::{Ordering, PartialEq};
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicUsize;
 use tokio::sync::oneshot;
+use tracing::{error, warn};
 
 const DROP: &str = "U+005C__DROP__";
+const NACK: &str = "U+005C__NACK__";
 
 /// The message that is passed from the source to the sink.
 /// NOTE: It is cheap to clone.
@@ -119,6 +122,8 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
+    // TODO: Move to using Option<Box<NackOptions>> in a separate PR
+    pub(crate) nack_options: Option<NackOptions>,
 }
 
 /// AckHandle is used to send the ack/nak to the source. It uses a reference count to track
@@ -140,6 +145,8 @@ struct AckHandle {
     /// Uses OnceLock since the span is set exactly once after construction; subsequent calls
     /// to `set_pipeline_span` are no-ops.
     pipeline_span: OnceLock<tracing::Span>,
+    // options for nacking
+    nack_options: OnceLock<NackOptions>,
 }
 
 impl AckHandle {
@@ -149,6 +156,7 @@ impl AckHandle {
             ref_count: AtomicUsize::new(1),
             failure_reason: OnceLock::new(),
             pipeline_span: OnceLock::new(),
+            nack_options: OnceLock::new(),
         }
     }
 
@@ -170,9 +178,9 @@ impl Drop for AckHandle {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
             let ack = if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) != 0 {
                 if let Some(reason) = self.failure_reason.get() {
-                    error!(reason = reason.as_str(), "message nacked due to failure");
+                    error!(reason = reason.as_str(), "received nack");
                 }
-                ReadAck::Nak
+                ReadAck::Nak(self.nack_options.get().cloned())
             } else {
                 ReadAck::Ack
             };
@@ -231,8 +239,11 @@ impl MessageHandle {
     /// Mark the message as failed (consumes the handle), recording the reason it will be nacked.
     /// ref_count is not decremented, so the message will be NAK'd when the AckHandle is dropped.
     /// The error is logged at NAK time.
-    pub(crate) fn mark_failed(self, reason: impl fmt::Display) {
+    pub(crate) fn mark_failed(self, reason: impl fmt::Display, nack_option: Option<NackOptions>) {
         let _ = self.ack_handle.failure_reason.set(reason.to_string());
+        if let Some(opt) = nack_option {
+            let _ = self.ack_handle.nack_options.set(opt);
+        }
     }
 
     /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.
@@ -277,6 +288,7 @@ impl From<Message> for MessageHandle {
                 ref_count: AtomicUsize::new(0), // Already "success" state
                 failure_reason: OnceLock::new(),
                 pipeline_span: OnceLock::new(),
+                nack_options: OnceLock::new(),
             }),
         }
     }
@@ -335,6 +347,7 @@ impl Default for Message {
             metadata: None,
             typ: Default::default(),
             is_late: false,
+            nack_options: None,
         }
     }
 }
@@ -386,12 +399,25 @@ impl Default for Offset {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct NackOffset {
+    pub(crate) offset: Offset,
+    pub(crate) option: Option<NackOptions>,
+}
+
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {
         self.tags
             .as_ref()
             .is_some_and(|tags| tags.contains(&DROP.to_string()))
+    }
+
+    // Check if the message should be nacked.
+    pub(crate) fn nacked(&self) -> bool {
+        self.tags
+            .as_ref()
+            .is_some_and(|tags| tags.contains(&NACK.to_string()))
     }
 
     pub(crate) fn strip_tracing_udf(&mut self) {
@@ -496,12 +522,42 @@ impl fmt::Display for StringOffset {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub(crate) struct NackOptions {
+    // Delay in milliseconds
+    pub(crate) delay: Option<u64>,
+    // Number of max redeliveries that are intended to be made
+    pub(crate) max_deliveries: Option<u32>,
+    // Human-readable reason for nacking this message
+    pub(crate) reason: Option<String>,
+}
+
+impl From<NackOptions> for numaflow_pb::common::nack_options::NackOptions {
+    fn from(value: NackOptions) -> Self {
+        Self {
+            reason: value.reason,
+            max_deliveries: value.max_deliveries,
+            delay: value.delay,
+        }
+    }
+}
+
+impl From<numaflow_pb::common::nack_options::NackOptions> for NackOptions {
+    fn from(value: numaflow_pb::common::nack_options::NackOptions) -> Self {
+        Self {
+            reason: value.reason,
+            max_deliveries: value.max_deliveries,
+            delay: value.delay,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum ReadAck {
     /// Message was successfully processed.
     Ack,
     /// Message will not be processed now and processing can move onto the next message, NAK’d message will be retried.
-    Nak,
+    Nak(Option<NackOptions>),
 }
 
 /// Message ID which is used to uniquely identify a message. It cheap to clone this.
@@ -600,13 +656,12 @@ impl TryFrom<Message> for BytesMut {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::error::Result;
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
-
-    use super::*;
-    use crate::error::Result;
 
     #[test]
     fn test_offset_display() {
@@ -730,7 +785,7 @@ mod tests {
 
         // Should receive NAK
         let result = ack_rx.await.unwrap();
-        assert_eq!(result, ReadAck::Nak);
+        assert_eq!(result, ReadAck::Nak(None));
     }
 
     #[tokio::test]
@@ -785,7 +840,111 @@ mod tests {
 
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();
-        assert_eq!(result, ReadAck::Nak);
+        assert_eq!(result, ReadAck::Nak(None));
+    }
+
+    #[tokio::test]
+    async fn test_mark_failed_with_nack_options() {
+        // mark_failed with Some(options) must surface those options in the NAK.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+
+        let opts = NackOptions {
+            delay: Some(5000),
+            max_deliveries: Some(3),
+            reason: Some("downstream unavailable".to_string()),
+        };
+        read_message.mark_failed("nacked by udf", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[tokio::test]
+    async fn test_mark_failed_without_options_naks_with_none() {
+        // mark_failed with None behaves like the implicit nack (no options).
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+
+        read_message.mark_failed("infra error", None);
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
+    }
+
+    #[tokio::test]
+    async fn test_nack_options_some_wins_over_prior_none_on_shared_handle() {
+        // On a shared AckHandle (fan-out), a no-option failure must not squat the slot and
+        // block a later options-bearing failure from being recorded.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+        let cloned = read_message.clone();
+
+        let opts = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("retry later".to_string()),
+        };
+        read_message.mark_failed("no opts", None);
+        cloned.mark_failed("with opts", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[tokio::test]
+    async fn test_fanout_nack_one_ref_failed_with_options() {
+        // A fanned-out handle (map/transform) shares one AckHandle. If one downstream
+        // ref is marked failed-with-options while the rest succeed, the shared handle
+        // must NAK with those options.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let parent = MessageHandle::new(Message::default(), ack_tx);
+
+        let child_a = parent.with_message(Message::default());
+        let child_b = parent.with_message(Message::default());
+
+        let opts = NackOptions {
+            delay: Some(2000),
+            max_deliveries: Some(3),
+            reason: Some("downstream nack".to_string()),
+        };
+
+        parent.mark_success();
+        child_a.mark_success();
+        child_b.mark_failed("message nacked", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[test]
+    fn test_message_nacked_tag_detection() {
+        let mut message = Message::default();
+        assert!(!message.nacked(), "default message must not be nacked");
+
+        message.tags = Some(Arc::from(vec![NACK.to_string()]));
+        assert!(message.nacked(), "message tagged NACK must be nacked");
+
+        message.tags = Some(Arc::from(vec!["some-other-tag".to_string()]));
+        assert!(!message.nacked(), "unrelated tags must not nack");
+    }
+
+    #[test]
+    fn test_nack_options_pb_round_trip() {
+        // Fully populated round-trips losslessly.
+        let opts = NackOptions {
+            delay: Some(7500),
+            max_deliveries: Some(4),
+            reason: Some("rate limited".to_string()),
+        };
+        let pb: numaflow_pb::common::nack_options::NackOptions = opts.clone().into();
+        assert_eq!(NackOptions::from(pb), opts);
+
+        // Partially populated: unset fields stay None (proto3 `optional`), they must NOT
+        // collapse to 0 / "" on the wire.
+        let partial = NackOptions {
+            delay: Some(2000),
+            max_deliveries: None,
+            reason: None,
+        };
+        let pb: numaflow_pb::common::nack_options::NackOptions = partial.clone().into();
+        assert_eq!(NackOptions::from(pb), partial);
     }
 
     fn message_with_metadata() -> Message {

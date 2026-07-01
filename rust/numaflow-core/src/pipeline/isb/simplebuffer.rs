@@ -16,7 +16,7 @@ use numaflow_testing::simplebuffer::{
 use numaflow_throttling::NoOpRateLimiter;
 
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset};
+use crate::message::{IntOffset, Message, MessageID, NackOptions, Offset};
 use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::{ISBReader, ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::typ::NumaflowTypeConfig;
@@ -138,6 +138,7 @@ fn convert_message(read_msg: ReadMessage) -> Message {
         headers: Arc::new(read_msg.headers),
         metadata: None,
         is_late: false,
+        nack_options: None,
     }
 }
 
@@ -155,7 +156,7 @@ impl ISBReader for SimpleReaderAdapter {
         self.inner.ack(&simple_offset).await.map_err(|e| e.into())
     }
 
-    async fn nack(&self, offset: &Offset, _delay: Option<Duration>) -> crate::Result<()> {
+    async fn nack(&self, offset: &Offset, _nack_options: Option<NackOptions>) -> crate::Result<()> {
         // SimpleBuffer has no broker-side delay; the optional `delay` is ignored.
         let simple_offset = offset.into();
         self.inner.nack(&simple_offset).await.map_err(|e| e.into())
@@ -311,6 +312,7 @@ mod tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         }
     }
 

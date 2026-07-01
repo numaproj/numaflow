@@ -15,7 +15,10 @@ fn main() {
 fn build_common() {
     prost_build::Config::new()
         .out_dir("src/common")
-        .compile_protos(&["proto/metadata.proto"], &["proto"])
+        .compile_protos(
+            &["proto/metadata.proto", "proto/common/nack_options.proto"],
+            &["proto"],
+        )
         .expect("failed to compile common protos");
 }
 
@@ -25,6 +28,7 @@ fn build_client() {
         .build_server(false)
         .out_dir("src/clients")
         .extern_path(".metadata", "crate::common::metadata")
+        .extern_path(".nack_options", "crate::common::nack_options")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
