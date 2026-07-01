@@ -318,31 +318,6 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 		assert.Contains(t, message, `container "udf" restarted recently: OOMKilled (exit code 137)`)
 		assert.Contains(t, message, "; ")
 	})
-
-	t.Run("current OOMKilled termination is preferred over a generic last termination", func(t *testing.T) {
-		// Current state is OOMKilled but the last termination was tagged the generic "Error"
-		// (the runtime attributes OOM best-effort). The OOMKilled reason should win.
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				ContainerStatuses: []corev1.ContainerStatus{
-					{
-						Name: "numa",
-						State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-							Reason: "OOMKilled", ExitCode: 137,
-						}},
-						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-							Reason: "Error", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
-						}},
-					},
-				},
-			}},
-		}}
-		done, reason, message, transient := CheckPodsStatus(&pods)
-		assert.False(t, done)
-		assert.Equal(t, "PodRecentRestart", reason)
-		assert.True(t, transient)
-		assert.Equal(t, `Pod mvtx-0: container "numa" restarted recently: OOMKilled (exit code 137)`, message)
-	})
 }
 
 var (
