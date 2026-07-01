@@ -215,8 +215,10 @@ impl AccumulatorWindowManager {
         messages
     }
 
-    /// Deletes all the timestamps before the given end time for the window. The window can either be
-    /// still active or already closed (closed but not yet GC'd). For a closed window, once all of its
+    /// Deletes all the timestamps before the given end time for the window. A key can be present in
+    /// BOTH maps at once: an old instance still in `closed_windows` awaiting GC, and a re-opened
+    /// instance in `active_windows` (the key went idle, was closed, then received new data before
+    /// this close's GC event arrived). For a closed window, once all of its
     /// timestamps are drained, its entry is removed from the closed windows map.
     pub(crate) fn delete_window(&self, window: Window) {
         let combined_key = combine_keys(&window.keys);
@@ -227,12 +229,11 @@ impl AccumulatorWindowManager {
             let active_windows = self.active_windows.read().expect("Poisoned lock");
             if let Some(window_state) = active_windows.get(&combined_key) {
                 window_state.delete_timestamps_before(window.end_time);
-                return;
             }
         }
 
-        // Otherwise the window must be in the closed set. Truncate its timestamps and drop the entry
-        // once it is fully drained so that it no longer participates in watermark propagation.
+        // Drain the closed instance for this key, if any, and evict it once fully drained so it no
+        // longer participates in watermark propagation (and no longer leaks).
         let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
         if let Some(window_state) = closed_windows.get(&combined_key) {
             let drained = window_state.delete_timestamps_before(window.end_time);
@@ -452,5 +453,95 @@ mod tests {
         // Verify the oldest window end time is msg1's event time
         let oldest_time = windower.oldest_window_end_time().unwrap();
         assert_eq!(oldest_time, msg1.event_time);
+    }
+
+    #[test]
+    fn test_delete_window_drains_closed_after_reopen() {
+        // 60s timeout. A window closes when watermark > max_event_time + 60s.
+        let timeout = Duration::from_secs(60);
+        let windower = AccumulatorWindowManager::new(timeout);
+
+        // Use a fixed base far enough in the past that close_windows fires deterministically.
+        let base = Utc::now() - chrono::Duration::seconds(300);
+
+        // 1) Open a window for key "k" with the first message.
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["k".to_string()]),
+            tags: None,
+            value: "v1".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: base,
+            ..Default::default()
+        };
+        windower.assign_windows(msg1.clone());
+        assert_eq!(windower.active_window_count(), 1);
+        assert_eq!(windower.closed_window_count(), 0);
+
+        // 2) Close it: watermark (base + 120s) > max_event_time (base) + 60s. Capture the close window
+        //    that the SDK would echo back (end_time = max_event_time + timeout = base + 60s).
+        let closed = windower.close_windows(base + chrono::Duration::seconds(120));
+        let close_window = match &closed.first().expect("expected a closed window").operation {
+            UnalignedWindowOperation::Close { window } => window.clone(),
+            other => panic!("expected Close operation, got {other:?}"),
+        };
+        assert_eq!(
+            windower.active_window_count(),
+            0,
+            "window should have moved out of active"
+        );
+        assert_eq!(
+            windower.closed_window_count(),
+            1,
+            "window should now be closed-pending-GC"
+        );
+
+        // 3) Re-open the SAME key with newer data BEFORE the close's GC (delete_window) is applied.
+        let msg2 = Message {
+            event_time: base + chrono::Duration::seconds(200),
+            ..msg1.clone()
+        };
+        windower.assign_windows(msg2);
+        assert_eq!(
+            windower.active_window_count(),
+            1,
+            "key re-opened into active"
+        );
+        assert_eq!(
+            windower.closed_window_count(),
+            1,
+            "old closed instance still pending GC"
+        );
+
+        // 4) Apply the OLD close's GC event.
+        windower.delete_window(close_window);
+
+        // 5) The old closed instance must be drained AND evicted; the re-opened active instance must be
+        //    left intact (its newer timestamp preserved).
+        assert_eq!(
+            windower.closed_window_count(),
+            0,
+            "closed window leaked after re-open (delete_window returned early on active match)"
+        );
+        assert_eq!(
+            windower.active_window_count(),
+            1,
+            "re-opened active window must survive GC"
+        );
+        let active = windower.active_windows.read().unwrap();
+        let ws = active
+            .get(&combine_keys(&["k".to_string()]))
+            .expect("re-opened window present");
+        let ts = ws.message_timestamps.read().unwrap();
+        assert_eq!(
+            ts.len(),
+            1,
+            "re-opened window keeps exactly its new timestamp"
+        );
+        assert_eq!(
+            *ts.iter().next().unwrap(),
+            base + chrono::Duration::seconds(200),
+            "the no-op truncation must not drop the re-opened timestamp"
+        );
     }
 }
