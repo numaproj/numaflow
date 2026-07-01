@@ -93,6 +93,12 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             return;
         }
 
+        if message.nacked() {
+            // TODO: send nacked message metric
+            mark_failed!(self.msg_handle, "message nacked", message.nack_options);
+            return;
+        }
+
         // Route and write to appropriate streams
         let write_results = self
             .orchestrator
@@ -119,7 +125,8 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 self.msg_handle,
                 format!(
                     "Token cancelled during ISB write: {cancelled_count} write(s) did not complete"
-                )
+                ),
+                None
             );
             return;
         }
@@ -145,7 +152,8 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                     "PAF resolution failed: {}/{} writes succeeded",
                     resolved_offsets.len(),
                     expected_writes
-                )
+                ),
+                None
             );
             return;
         }
@@ -1104,7 +1112,7 @@ mod tests {
 mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{IntOffset, MessageHandle, MessageID, ReadAck};
+    use crate::message::{IntOffset, MessageHandle, MessageID, NackOptions, ReadAck};
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
@@ -1135,6 +1143,7 @@ mod simple_buffer_tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         };
         (MessageHandle::new(message, ack_tx), ack_rx)
     }
@@ -1408,7 +1417,7 @@ mod simple_buffer_tests {
             .await
             .expect("Should receive nack")
             .unwrap();
-        assert_eq!(ack, ReadAck::Nak);
+        assert_eq!(ack, ReadAck::Nak(None));
 
         handle.await.unwrap().unwrap();
         assert_eq!(adapter.pending_count(), 0);
@@ -1791,7 +1800,7 @@ mod simple_buffer_tests {
             .await
             .expect("Should receive ack response")
             .unwrap();
-        assert_eq!(ack, ReadAck::Nak);
+        assert_eq!(ack, ReadAck::Nak(None));
 
         drop(tx);
 
@@ -1959,6 +1968,7 @@ mod simple_buffer_tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         }
     }
 
@@ -2134,7 +2144,7 @@ mod simple_buffer_tests {
         async fn ack(&self, _offset: &Offset) -> Result<()> {
             Ok(())
         }
-        async fn nack(&self, _offset: &Offset, _delay: Option<Duration>) -> Result<()> {
+        async fn nack(&self, _offset: &Offset, _nack_options: Option<NackOptions>) -> Result<()> {
             Ok(())
         }
         async fn pending(&self) -> Result<Option<usize>> {
@@ -2155,6 +2165,47 @@ mod simple_buffer_tests {
         type RateLimiter = numaflow_throttling::NoOpRateLimiter;
         type ISBReader = UnusedReader;
         type ISBWriter = AlwaysFailWriter;
+    }
+
+    // ==================== Nack Interception Tests ====================
+
+    /// Test: Messages with NACK tag are intercepted by the writer — the handle receives
+    /// `ReadAck::Nak(Some(opts))` and nothing is written to the buffer.
+    #[tokio::test]
+    async fn test_writer_intercepts_nacked_message() {
+        use crate::message::NackOptions;
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let handle = orchestrator
+            .streaming_write(ReceiverStream::new(rx), cancel.clone())
+            .await
+            .unwrap();
+
+        let opts = NackOptions {
+            delay: Some(1500),
+            max_deliveries: None,
+            reason: Some("udf nack".to_string()),
+        };
+        let (mut msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__NACK__"]));
+        msg.message.nack_options = Some(opts.clone());
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Interception: the handle NAKs with options, and nothing is written.
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+        handle.await.unwrap().unwrap();
+        assert_eq!(
+            adapter.pending_count(),
+            0,
+            "a nacked message must NOT be written to the buffer"
+        );
     }
 
     /// Reproduces the cancellation-during-retry bug in
@@ -2223,7 +2274,7 @@ mod simple_buffer_tests {
         // EXPECTED: cancelled-during-retry NAKs so the source can redeliver.
         assert_eq!(
             ack,
-            ReadAck::Nak,
+            ReadAck::Nak(None),
             "Cancellation during retry must NAK to preserve at-least-once. Got ACK"
         );
 

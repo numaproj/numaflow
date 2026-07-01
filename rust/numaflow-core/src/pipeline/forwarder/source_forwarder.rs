@@ -355,7 +355,12 @@ mod simple_buffer_tests {
             }
         }
 
-        async fn nack(&self, _offsets: Vec<Offset>) {}
+        async fn nack(
+            &self,
+            _offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
+        }
 
         async fn pending(&self) -> Option<usize> {
             Some(
@@ -819,7 +824,12 @@ mod tests {
             }
         }
 
-        async fn nack(&self, _offsets: Vec<Offset>) {}
+        async fn nack(
+            &self,
+            _offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
+        }
 
         async fn pending(&self) -> Option<usize> {
             Some(
