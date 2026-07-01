@@ -127,22 +127,15 @@ func formatContainerFailure(c corev1.ContainerStatus, reason, msg string) string
 	return detail
 }
 
-// formatRecentRestart renders a container that recently OOM/Error-restarted. The detail is normally
-// read from the last termination, but the current terminated state is preferred when it carries a
-// reason, and OOMKilled is given top preference wherever it appears: the runtime tags OOM
-// best-effort, so the current and last terminations can disagree (one "OOMKilled", one "Error").
+// formatRecentRestart renders a container that recently OOM/Error-restarted.
 // Reason, message and exit code are reported verbatim (no OOM is inferred); the message is included
 // only when present, since it is empty for a typical OOM kill.
 func formatRecentRestart(c corev1.ContainerStatus, x *corev1.ContainerStateTerminated) string {
-	t := x
-	if cur := c.State.Terminated; cur != nil && cur.Reason != "" && x.Reason != "OOMKilled" {
-		t = cur
+	detail := fmt.Sprintf("container %q restarted recently: %s", c.Name, x.Reason)
+	if x.Message != "" {
+		detail += " " + x.Message
 	}
-	detail := fmt.Sprintf("container %q restarted recently: %s", c.Name, t.Reason)
-	if t.Message != "" {
-		detail += " " + t.Message
-	}
-	return detail + fmt.Sprintf(" (exit code %d)", t.ExitCode)
+	return detail + fmt.Sprintf(" (exit code %d)", x.ExitCode)
 }
 
 func NumOfReadyPods(pods corev1.PodList) int {
