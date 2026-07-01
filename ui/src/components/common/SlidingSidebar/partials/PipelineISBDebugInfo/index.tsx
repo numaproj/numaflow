@@ -364,6 +364,7 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
           {formatNumber(stream.lastSeq)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={streamColumns.lastTimestamp}
           title={formatTimestamp(stream.lastTimestamp)}
         >
@@ -376,9 +377,9 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
           {formatOptional(stream.replicas)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={streamColumns.leader}
           title={String(formatOptional(stream.leader))}
-          wrap
         >
           {formatOptional(stream.leader)}
         </BodyCell>
@@ -430,9 +431,9 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
           {formatOptional(consumer.maxAckPending)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={consumerColumns.leader}
           title={String(formatOptional(consumer.leader))}
-          wrap
         >
           {formatOptional(consumer.leader)}
         </BodyCell>
@@ -456,6 +457,7 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
           {formatOptional(kvStore.direction)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={kvStoreColumns.from}
           title={String(formatOptional(kvStore.from))}
           wrap
@@ -463,6 +465,7 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
           {formatOptional(kvStore.from)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={kvStoreColumns.to}
           title={String(formatOptional(kvStore.to))}
           wrap
@@ -482,9 +485,9 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
           {formatOptional(kvStore.replicas)}
         </BodyCell>
         <BodyCell
+          align="center"
           column={kvStoreColumns.leader}
           title={String(formatOptional(kvStore.leader))}
-          wrap
         >
           {formatOptional(kvStore.leader)}
         </BodyCell>
