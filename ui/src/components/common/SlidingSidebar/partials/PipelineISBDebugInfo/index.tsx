@@ -66,6 +66,17 @@ const formatSeconds = (value?: number) => {
   return `${formatDecimal(value)}s`;
 };
 
+const formatTimestamp = (value?: string) => {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("en-US");
+};
+
 const ISB_UNAVAILABLE_MESSAGE = "ISB information is not available yet.";
 const PARTIAL_ISB_UNAVAILABLE_MESSAGE =
   "Some ISB information is not available yet.";
@@ -78,51 +89,91 @@ const justifyContentByAlign: Record<ISBCellAlign, string> = {
   right: "flex-end",
 };
 
-const ISB_TABLE_COLUMN_COUNT = 16;
+interface ISBColumnLayout {
+  width: string;
+}
 
-const streamColumnSpans = {
-  stream: 6,
-  vertex: 1,
-  partition: 1,
-  messages: 2,
-  bytes: 2,
-  consumers: 1,
-  replicas: 1,
-  leader: 2,
+const consumerColumns = {
+  consumer: { width: "16%" },
+  stream: { width: "16%" },
+  partition: { width: "6%" },
+  redelivered: { width: "7%" },
+  waiting: { width: "8%" },
+  deliveredStreamSequence: { width: "9%" },
+  ackFloorStreamSequence: { width: "9%" },
+  ackWait: { width: "7%" },
+  maxAckPending: { width: "10%" },
+  leader: { width: "12%" },
 };
 
-const consumerColumnSpans = {
-  consumer: 3,
-  stream: 3,
-  vertex: 1,
-  partition: 1,
-  durable: 1,
-  ackPending: 2,
-  redelivered: 1,
-  pending: 1,
-  ackPolicy: 1,
-  leader: 2,
+const streamColumns = {
+  stream: { width: "18%" },
+  partition: { width: "6%" },
+  messages: { width: "9%" },
+  bytes: { width: "8%" },
+  firstSequence: { width: "9%" },
+  lastSequence: { width: "9%" },
+  lastTimestamp: { width: "13%" },
+  consumerCount: { width: "8%" },
+  replicas: { width: "6%" },
+  leader: { width: "14%" },
 };
 
-const kvStoreColumnSpans = {
-  bucket: 6,
-  scope: 1,
-  direction: 1,
-  from: 1,
-  to: 1,
-  vertex: 1,
-  values: 1,
-  bytes: 1,
-  history: 1,
-  ttl: 1,
-  replicas: 1,
+const kvStoreColumns = {
+  bucket: { width: "22%" },
+  scope: { width: "7%" },
+  direction: { width: "8%" },
+  from: { width: "7%" },
+  to: { width: "7%" },
+  values: { width: "7%" },
+  bytes: { width: "8%" },
+  ttl: { width: "9%" },
+  replicas: { width: "6%" },
+  leader: { width: "19%" },
 };
 
-const ISBTable = ({ children }: { children: React.ReactNode }) => (
-  <Table stickyHeader sx={{ tableLayout: "fixed", width: "100%" }}>
+const CONSUMER_COLUMN_COUNT = Object.keys(consumerColumns).length;
+const STREAM_COLUMN_COUNT = Object.keys(streamColumns).length;
+const KV_STORE_COLUMN_COUNT = Object.keys(kvStoreColumns).length;
+const consumerColumnLayouts = Object.values(consumerColumns);
+const streamColumnLayouts = Object.values(streamColumns);
+const kvStoreColumnLayouts = Object.values(kvStoreColumns);
+
+const tableContainerSx = {
+  backgroundColor: "#FFF",
+  maxHeight: "60rem",
+  overflowX: "auto",
+  width: "100%",
+};
+
+const bodyRowSx = {
+  "&:nth-of-type(odd)": { backgroundColor: "#FAFBFC" },
+  "&:hover": { backgroundColor: "#F0F2F5" },
+};
+
+const ISBTable = ({
+  children,
+  columns,
+  testId,
+}: {
+  children: React.ReactNode;
+  columns: ISBColumnLayout[];
+  testId?: string;
+}) => (
+  <Table
+    data-testid={testId}
+    stickyHeader
+    sx={{
+      tableLayout: "fixed",
+      width: "100%",
+    }}
+  >
     <colgroup>
-      {Array.from({ length: ISB_TABLE_COLUMN_COUNT }).map((_, index) => (
-        <col key={`isb-table-column-${index}`} />
+      {columns.map((column, index) => (
+        <col
+          key={`${testId || "isb-table"}-column-${index}`}
+          style={{ width: column.width }}
+        />
       ))}
     </colgroup>
     {children}
@@ -130,28 +181,32 @@ const ISBTable = ({ children }: { children: React.ReactNode }) => (
 );
 
 const HeaderCell = ({
-  align = "left",
-  colSpan = 1,
+  align = "center",
+  column,
   label,
   testId,
   tooltip,
 }: {
   align?: ISBCellAlign;
-  colSpan?: number;
+  column?: ISBColumnLayout;
   label: string;
   testId?: string;
   tooltip?: string;
 }) => (
   <TableCell
     align={align}
-    colSpan={colSpan}
     sx={{
       backgroundColor: "#F4F4F4",
       borderBottom: "0.1rem solid #C6C6C6",
       color: "#393939",
       fontSize: "1.1rem",
       fontWeight: 700,
+      overflow: "hidden",
+      padding: "1rem 1.2rem",
+      textOverflow: "ellipsis",
+      verticalAlign: "middle",
       whiteSpace: "nowrap",
+      width: column?.width,
     }}
   >
     <Box
@@ -160,6 +215,10 @@ const HeaderCell = ({
         display: "flex",
         gap: "0.4rem",
         justifyContent: justifyContentByAlign[align],
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
         width: "100%",
       }}
     >
@@ -181,27 +240,35 @@ const HeaderCell = ({
 );
 
 const BodyCell = ({
-  align = "left",
+  align = "center",
   children,
-  colSpan = 1,
+  column,
 }: {
   align?: ISBCellAlign;
   children: React.ReactNode;
-  colSpan?: number;
+  column?: ISBColumnLayout;
 }) => (
   <TableCell
     align={align}
-    colSpan={colSpan}
     sx={{
+      borderBottom: "0.1rem solid #E0E0E0",
+      fontSize: "1.2rem",
       overflow: "hidden",
+      padding: "1rem 1.2rem",
       textOverflow: "ellipsis",
+      verticalAlign: "middle",
       whiteSpace: "nowrap",
+      width: column?.width,
     }}
   >
     <Box
       sx={{
         display: "flex",
         justifyContent: justifyContentByAlign[align],
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
         width: "100%",
       }}
     >
@@ -261,31 +328,63 @@ const hasSharedTargetVertexRows = (
   !!streams?.streams?.some((stream) => stream.sharedByInboundEdges) ||
   !!consumers?.consumers?.some((consumer) => consumer.sharedByInboundEdges);
 
+const collectSnapshotMetadata = (
+  streams?: PipelineISBStreamsResponse,
+  consumers?: PipelineISBConsumersResponse,
+  kvStores?: PipelineISBKVStoresResponse
+) => {
+  const sourcePods = new Set<string>();
+  const collectedAtValues: string[] = [];
+  [
+    ...(streams?.streams || []),
+    ...(consumers?.consumers || []),
+    ...(kvStores?.kvStores || []),
+  ].forEach((item) => {
+    if (item.sourcePod) {
+      sourcePods.add(item.sourcePod);
+    }
+    if (item.collectedAt) {
+      collectedAtValues.push(item.collectedAt);
+    }
+  });
+  collectedAtValues.sort();
+  return {
+    sourcePods: Array.from(sourcePods).sort(),
+    collectedAt: collectedAtValues[collectedAtValues.length - 1],
+  };
+};
+
 const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
   <TableBody>
-    {!streams.length && <EmptyRow colSpan={ISB_TABLE_COLUMN_COUNT} />}
+    {!streams.length && <EmptyRow colSpan={STREAM_COLUMN_COUNT} />}
     {streams.map((stream) => (
-      <TableRow key={stream.stream}>
-        <BodyCell colSpan={streamColumnSpans.stream}>{stream.stream}</BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.vertex}>
-          {stream.vertex}
-        </BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.partition}>
+      <TableRow key={stream.stream} sx={bodyRowSx}>
+        <BodyCell column={streamColumns.stream}>{stream.stream}</BodyCell>
+        <BodyCell align="center" column={streamColumns.partition}>
           {formatNumber(stream.partition)}
         </BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.messages}>
+        <BodyCell align="center" column={streamColumns.messages}>
           {formatNumber(stream.messages)}
         </BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.bytes}>
+        <BodyCell align="center" column={streamColumns.bytes}>
           {formatBytes(stream.bytes)}
         </BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.consumers}>
+        <BodyCell align="center" column={streamColumns.firstSequence}>
+          {formatNumber(stream.firstSeq)}
+        </BodyCell>
+        <BodyCell align="center" column={streamColumns.lastSequence}>
+          {formatNumber(stream.lastSeq)}
+        </BodyCell>
+        <BodyCell column={streamColumns.lastTimestamp}>
+          {formatTimestamp(stream.lastTimestamp)}
+        </BodyCell>
+        <BodyCell align="center" column={streamColumns.consumerCount}>
           {formatNumber(stream.consumerCount)}
         </BodyCell>
-        <BodyCell align="center" colSpan={streamColumnSpans.replicas}>
+        <BodyCell align="center" column={streamColumns.replicas}>
           {formatOptional(stream.replicas)}
         </BodyCell>
-        <BodyCell colSpan={streamColumnSpans.leader}>
+        <BodyCell column={streamColumns.leader}>
           {formatOptional(stream.leader)}
         </BodyCell>
       </TableRow>
@@ -295,37 +394,41 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
 
 const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
   <TableBody>
-    {!consumers.length && <EmptyRow colSpan={ISB_TABLE_COLUMN_COUNT} />}
+    {!consumers.length && <EmptyRow colSpan={CONSUMER_COLUMN_COUNT} />}
     {consumers.map((consumer) => (
-      <TableRow key={`${consumer.stream}-${consumer.consumer}`}>
-        <BodyCell colSpan={consumerColumnSpans.consumer}>
+      <TableRow key={`${consumer.stream}-${consumer.consumer}`} sx={bodyRowSx}>
+        <BodyCell column={consumerColumns.consumer}>
           {consumer.consumer}
         </BodyCell>
-        <BodyCell colSpan={consumerColumnSpans.stream}>
-          {consumer.stream}
-        </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.vertex}>
-          {consumer.vertex}
-        </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.partition}>
+        <BodyCell column={consumerColumns.stream}>{consumer.stream}</BodyCell>
+        <BodyCell align="center" column={consumerColumns.partition}>
           {formatNumber(consumer.partition)}
         </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.durable}>
-          {consumer.durable ? "Yes" : "No"}
-        </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.ackPending}>
-          {formatNumber(consumer.numAckPending)}
-        </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.redelivered}>
+        <BodyCell align="center" column={consumerColumns.redelivered}>
           {formatNumber(consumer.numRedelivered)}
         </BodyCell>
-        <BodyCell align="center" colSpan={consumerColumnSpans.pending}>
-          {formatNumber(consumer.numPending)}
+        <BodyCell align="center" column={consumerColumns.waiting}>
+          {formatNumber(consumer.numWaiting)}
         </BodyCell>
-        <BodyCell colSpan={consumerColumnSpans.ackPolicy}>
-          {formatOptional(consumer.ackPolicy)}
+        <BodyCell
+          align="center"
+          column={consumerColumns.deliveredStreamSequence}
+        >
+          {formatNumber(consumer.deliveredStreamSeq)}
         </BodyCell>
-        <BodyCell colSpan={consumerColumnSpans.leader}>
+        <BodyCell
+          align="center"
+          column={consumerColumns.ackFloorStreamSequence}
+        >
+          {formatNumber(consumer.ackFloorStreamSeq)}
+        </BodyCell>
+        <BodyCell align="center" column={consumerColumns.ackWait}>
+          {formatSeconds(consumer.ackWaitSeconds)}
+        </BodyCell>
+        <BodyCell align="center" column={consumerColumns.maxAckPending}>
+          {formatOptional(consumer.maxAckPending)}
+        </BodyCell>
+        <BodyCell column={consumerColumns.leader}>
           {formatOptional(consumer.leader)}
         </BodyCell>
       </TableRow>
@@ -335,41 +438,36 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
 
 const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
   <TableBody>
-    {!kvStores.length && <EmptyRow colSpan={ISB_TABLE_COLUMN_COUNT} />}
+    {!kvStores.length && <EmptyRow colSpan={KV_STORE_COLUMN_COUNT} />}
     {kvStores.map((kvStore) => (
-      <TableRow key={kvStore.stream}>
-        <BodyCell colSpan={kvStoreColumnSpans.bucket}>
-          {kvStore.bucket}
-        </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.scope}>
+      <TableRow key={kvStore.stream} sx={bodyRowSx}>
+        <BodyCell column={kvStoreColumns.bucket}>{kvStore.bucket}</BodyCell>
+        <BodyCell align="center" column={kvStoreColumns.scope}>
           {kvStore.scope}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.direction}>
+        <BodyCell align="center" column={kvStoreColumns.direction}>
           {formatOptional(kvStore.direction)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.from}>
+        <BodyCell align="center" column={kvStoreColumns.from}>
           {formatOptional(kvStore.from)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.to}>
+        <BodyCell align="center" column={kvStoreColumns.to}>
           {formatOptional(kvStore.to)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.vertex}>
-          {formatOptional(kvStore.vertex)}
-        </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.values}>
+        <BodyCell align="center" column={kvStoreColumns.values}>
           {formatNumber(kvStore.values)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.bytes}>
+        <BodyCell align="center" column={kvStoreColumns.bytes}>
           {formatBytes(kvStore.bytes)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.history}>
-          {formatOptional(kvStore.history)}
-        </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.ttl}>
+        <BodyCell align="center" column={kvStoreColumns.ttl}>
           {formatSeconds(kvStore.ttlSeconds)}
         </BodyCell>
-        <BodyCell align="center" colSpan={kvStoreColumnSpans.replicas}>
+        <BodyCell align="center" column={kvStoreColumns.replicas}>
           {formatOptional(kvStore.replicas)}
+        </BodyCell>
+        <BodyCell column={kvStoreColumns.leader}>
+          {formatOptional(kvStore.leader)}
         </BodyCell>
       </TableRow>
     ))}
@@ -382,7 +480,7 @@ const MonitorErrorsSection = ({ errors }: { errors: ISBMonitorError[] }) => {
   }
   return (
     <DebugSection title="Monitor Errors">
-      <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
+      <TableContainer sx={tableContainerSx}>
         <Table stickyHeader>
           <TableHead>
             <TableRow>
@@ -428,6 +526,11 @@ export function PipelineISBDebugInfo({
   const consumerRows = consumers?.consumers || [];
   const kvStoreRows = kvStores?.kvStores || [];
   const monitorErrors = collectErrors(streams, consumers, kvStores);
+  const snapshotMetadata = collectSnapshotMetadata(
+    streams,
+    consumers,
+    kvStores
+  );
   const showSharedNotice =
     edgeScoped || hasSharedTargetVertexRows(streams, consumers);
   const hasDisplayableRows =
@@ -447,6 +550,14 @@ export function PipelineISBDebugInfo({
 
   return (
     <Box>
+      <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
+        Diagnostic snapshot from JetStream monitor /jsz. Live Pending and Ack
+        Pending counters are shown in the Buffers table above.
+        {snapshotMetadata.collectedAt &&
+          ` Collected at ${formatTimestamp(snapshotMetadata.collectedAt)}.`}
+        {!!snapshotMetadata.sourcePods.length &&
+          ` Source pods: ${snapshotMetadata.sourcePods.join(", ")}.`}
+      </Box>
       {(error || !hasAllResponses) && (
         <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
           {PARTIAL_ISB_UNAVAILABLE_MESSAGE}
@@ -459,62 +570,68 @@ export function PipelineISBDebugInfo({
         </Box>
       )}
       <DebugSection title="Consumer Information">
-        <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
-          <ISBTable>
+        <TableContainer sx={tableContainerSx}>
+          <ISBTable
+            columns={consumerColumnLayouts}
+            testId="isb-debug-consumers-table"
+          >
             <TableHead>
               <TableRow>
                 <HeaderCell
                   label="Consumer"
-                  colSpan={consumerColumnSpans.consumer}
+                  column={consumerColumns.consumer}
                 />
-                <HeaderCell label="Stream" colSpan={consumerColumnSpans.stream} />
-                <HeaderCell
-                  label="Vertex"
-                  align="center"
-                  colSpan={consumerColumnSpans.vertex}
-                />
+                <HeaderCell label="Stream" column={consumerColumns.stream} />
                 <HeaderCell
                   label="Partition"
                   align="center"
-                  colSpan={consumerColumnSpans.partition}
-                />
-                <HeaderCell
-                  label="Durable"
-                  align="center"
-                  colSpan={consumerColumnSpans.durable}
-                  tooltip="Whether the consumer has durable state in JetStream."
-                  testId="isb-debug-header-help-consumer-durable"
-                />
-                <HeaderCell
-                  label="Ack Pending"
-                  align="center"
-                  colSpan={consumerColumnSpans.ackPending}
-                  tooltip="Messages delivered to this consumer but not yet acknowledged."
-                  testId="isb-debug-header-help-consumer-ack-pending"
+                  column={consumerColumns.partition}
                 />
                 <HeaderCell
                   label="Redelivered"
                   align="center"
-                  colSpan={consumerColumnSpans.redelivered}
+                  column={consumerColumns.redelivered}
                   tooltip="Messages redelivered because they were not acknowledged in time."
                   testId="isb-debug-header-help-consumer-redelivered"
                 />
                 <HeaderCell
-                  label="Pending"
+                  label="Waiting Pulls"
                   align="center"
-                  colSpan={consumerColumnSpans.pending}
-                  tooltip="Messages available for this consumer that have not been delivered yet."
-                  testId="isb-debug-header-help-consumer-pending"
+                  column={consumerColumns.waiting}
+                  tooltip="Pull requests currently waiting for messages from this consumer."
+                  testId="isb-debug-header-help-consumer-waiting"
                 />
                 <HeaderCell
-                  label="Ack Policy"
-                  colSpan={consumerColumnSpans.ackPolicy}
-                  tooltip="Acknowledgement policy configured for this consumer."
-                  testId="isb-debug-header-help-consumer-ack-policy"
+                  label="Delivered Seq"
+                  align="center"
+                  column={consumerColumns.deliveredStreamSequence}
+                  tooltip="Latest stream sequence delivered to this consumer."
+                  testId="isb-debug-header-help-consumer-delivered-seq"
+                />
+                <HeaderCell
+                  label="Ack Floor Seq"
+                  align="center"
+                  column={consumerColumns.ackFloorStreamSequence}
+                  tooltip="Latest stream sequence fully acknowledged by this consumer."
+                  testId="isb-debug-header-help-consumer-ack-floor-seq"
+                />
+                <HeaderCell
+                  label="Ack Wait"
+                  align="center"
+                  column={consumerColumns.ackWait}
+                  tooltip="How long JetStream waits for an acknowledgement before redelivery."
+                  testId="isb-debug-header-help-consumer-ack-wait"
+                />
+                <HeaderCell
+                  label="Max Ack Pending"
+                  align="center"
+                  column={consumerColumns.maxAckPending}
+                  tooltip="Maximum number of unacknowledged messages allowed for this consumer."
+                  testId="isb-debug-header-help-consumer-max-ack-pending"
                 />
                 <HeaderCell
                   label="Leader"
-                  colSpan={consumerColumnSpans.leader}
+                  column={consumerColumns.leader}
                   tooltip="JetStream server currently leading this consumer state."
                   testId="isb-debug-header-help-consumer-leader"
                 />
@@ -524,7 +641,7 @@ export function PipelineISBDebugInfo({
               <ConsumerRows consumers={consumerRows} />
             ) : (
               <TableBody>
-                <UnavailableRow colSpan={ISB_TABLE_COLUMN_COUNT} />
+                <UnavailableRow colSpan={CONSUMER_COLUMN_COUNT} />
               </TableBody>
             )}
           </ISBTable>
@@ -532,52 +649,70 @@ export function PipelineISBDebugInfo({
       </DebugSection>
 
       <DebugSection title="Stream Information">
-        <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
-          <ISBTable>
+        <TableContainer sx={tableContainerSx}>
+          <ISBTable
+            columns={streamColumnLayouts}
+            testId="isb-debug-streams-table"
+          >
             <TableHead>
               <TableRow>
-                <HeaderCell label="Stream" colSpan={streamColumnSpans.stream} />
-                <HeaderCell
-                  label="Vertex"
-                  align="center"
-                  colSpan={streamColumnSpans.vertex}
-                />
+                <HeaderCell label="Stream" column={streamColumns.stream} />
                 <HeaderCell
                   label="Partition"
                   align="center"
-                  colSpan={streamColumnSpans.partition}
+                  column={streamColumns.partition}
                 />
                 <HeaderCell
-                  label="Messages"
+                  label="Stored Messages"
                   align="center"
-                  colSpan={streamColumnSpans.messages}
-                  tooltip="Number of messages currently stored in the stream."
+                  column={streamColumns.messages}
+                  tooltip="Number of messages currently retained in the stream. This is not the same as pending backlog."
                   testId="isb-debug-header-help-stream-messages"
                 />
                 <HeaderCell
                   label="Bytes"
                   align="center"
-                  colSpan={streamColumnSpans.bytes}
+                  column={streamColumns.bytes}
                   tooltip="Total storage used by messages in the stream."
                   testId="isb-debug-header-help-stream-bytes"
                 />
                 <HeaderCell
-                  label="Consumers"
+                  label="First Seq"
                   align="center"
-                  colSpan={streamColumnSpans.consumers}
+                  column={streamColumns.firstSequence}
+                  tooltip="First retained stream sequence."
+                  testId="isb-debug-header-help-stream-first-seq"
+                />
+                <HeaderCell
+                  label="Last Seq"
+                  align="center"
+                  column={streamColumns.lastSequence}
+                  tooltip="Latest stream sequence written to this stream."
+                  testId="isb-debug-header-help-stream-last-seq"
+                />
+                <HeaderCell
+                  label="Last Timestamp"
+                  column={streamColumns.lastTimestamp}
+                  tooltip="Timestamp of the latest retained message in this stream."
+                  testId="isb-debug-header-help-stream-last-timestamp"
+                />
+                <HeaderCell
+                  label="Consumer Count"
+                  align="center"
+                  column={streamColumns.consumerCount}
                   tooltip="Number of consumers attached to this stream."
                   testId="isb-debug-header-help-stream-consumers"
                 />
                 <HeaderCell
                   label="Replicas"
                   align="center"
-                  colSpan={streamColumnSpans.replicas}
+                  column={streamColumns.replicas}
                   tooltip="Configured JetStream replica count for this stream."
                   testId="isb-debug-header-help-stream-replicas"
                 />
                 <HeaderCell
                   label="Leader"
-                  colSpan={streamColumnSpans.leader}
+                  column={streamColumns.leader}
                   tooltip="JetStream server currently leading this stream replica group."
                   testId="isb-debug-header-help-stream-leader"
                 />
@@ -587,7 +722,7 @@ export function PipelineISBDebugInfo({
               <StreamRows streams={streamRows} />
             ) : (
               <TableBody>
-                <UnavailableRow colSpan={ISB_TABLE_COLUMN_COUNT} />
+                <UnavailableRow colSpan={STREAM_COLUMN_COUNT} />
               </TableBody>
             )}
           </ISBTable>
@@ -595,74 +730,71 @@ export function PipelineISBDebugInfo({
       </DebugSection>
 
       <DebugSection title="KV Stores">
-        <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
-          <ISBTable>
+        <TableContainer sx={tableContainerSx}>
+          <ISBTable
+            columns={kvStoreColumnLayouts}
+            testId="isb-debug-kv-stores-table"
+          >
             <TableHead>
               <TableRow>
-                <HeaderCell label="Bucket" colSpan={kvStoreColumnSpans.bucket} />
+                <HeaderCell label="Bucket" column={kvStoreColumns.bucket} />
                 <HeaderCell
                   label="Scope"
                   align="center"
-                  colSpan={kvStoreColumnSpans.scope}
-                  tooltip="Whether the KV bucket is scoped to a vertex or an edge."
+                  column={kvStoreColumns.scope}
+                  tooltip="Whether the KV bucket is scoped to an edge, source, or sink."
                   testId="isb-debug-header-help-kv-scope"
                 />
                 <HeaderCell
                   label="Direction"
                   align="center"
-                  colSpan={kvStoreColumnSpans.direction}
+                  column={kvStoreColumns.direction}
                   tooltip="Read or write direction for edge-scoped KV state."
                   testId="isb-debug-header-help-kv-direction"
                 />
                 <HeaderCell
                   label="From"
                   align="center"
-                  colSpan={kvStoreColumnSpans.from}
+                  column={kvStoreColumns.from}
                 />
                 <HeaderCell
                   label="To"
                   align="center"
-                  colSpan={kvStoreColumnSpans.to}
-                />
-                <HeaderCell
-                  label="Vertex"
-                  align="center"
-                  colSpan={kvStoreColumnSpans.vertex}
+                  column={kvStoreColumns.to}
                 />
                 <HeaderCell
                   label="Values"
                   align="center"
-                  colSpan={kvStoreColumnSpans.values}
+                  column={kvStoreColumns.values}
                   tooltip="Number of values currently stored in the KV bucket."
                   testId="isb-debug-header-help-kv-values"
                 />
                 <HeaderCell
                   label="Bytes"
                   align="center"
-                  colSpan={kvStoreColumnSpans.bytes}
+                  column={kvStoreColumns.bytes}
                   tooltip="Total storage used by values in the KV bucket."
                   testId="isb-debug-header-help-kv-bytes"
                 />
                 <HeaderCell
-                  label="History"
-                  align="center"
-                  colSpan={kvStoreColumnSpans.history}
-                  tooltip="Number of historical revisions retained per key."
-                  testId="isb-debug-header-help-kv-history"
-                />
-                <HeaderCell
                   label="TTL"
                   align="center"
-                  colSpan={kvStoreColumnSpans.ttl}
+                  column={kvStoreColumns.ttl}
                   tooltip="Time-to-live for values stored in this KV bucket."
                   testId="isb-debug-header-help-kv-ttl"
                 />
                 <HeaderCell
                   label="Replicas"
                   align="center"
-                  colSpan={kvStoreColumnSpans.replicas}
+                  column={kvStoreColumns.replicas}
                   tooltip="Configured JetStream replica count for this KV bucket."
                   testId="isb-debug-header-help-kv-replicas"
+                />
+                <HeaderCell
+                  label="Leader"
+                  column={kvStoreColumns.leader}
+                  tooltip="JetStream server currently leading this KV bucket backing stream."
+                  testId="isb-debug-header-help-kv-leader"
                 />
               </TableRow>
             </TableHead>
@@ -670,7 +802,7 @@ export function PipelineISBDebugInfo({
               <KVRows kvStores={kvStoreRows} />
             ) : (
               <TableBody>
-                <UnavailableRow colSpan={ISB_TABLE_COLUMN_COUNT} />
+                <UnavailableRow colSpan={KV_STORE_COLUMN_COUNT} />
               </TableBody>
             )}
           </ISBTable>

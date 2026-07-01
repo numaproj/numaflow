@@ -19,10 +19,15 @@ type PipelineISBStreamDTO struct {
 	ConsumerCount        int      `json:"consumerCount"`
 	FirstSeq             uint64   `json:"firstSeq"`
 	LastSeq              uint64   `json:"lastSeq"`
+	FirstTimestamp       string   `json:"firstTimestamp,omitempty"`
+	LastTimestamp        string   `json:"lastTimestamp,omitempty"`
 	Storage              string   `json:"storage,omitempty"`
 	Replicas             int      `json:"replicas,omitempty"`
 	Retention            string   `json:"retention,omitempty"`
+	MaxMessages          int64    `json:"maxMessages,omitempty"`
 	Leader               string   `json:"leader,omitempty"`
+	SourcePod            string   `json:"sourcePod,omitempty"`
+	CollectedAt          string   `json:"collectedAt,omitempty"`
 	Scope                string   `json:"scope"`
 	SharedByInboundEdges bool     `json:"sharedByInboundEdges"`
 }
@@ -57,6 +62,8 @@ type PipelineISBConsumerDTO struct {
 	AckFloorConsumerSeq  uint64   `json:"ackFloorConsumerSeq"`
 	AckFloorStreamSeq    uint64   `json:"ackFloorStreamSeq"`
 	Leader               string   `json:"leader,omitempty"`
+	SourcePod            string   `json:"sourcePod,omitempty"`
+	CollectedAt          string   `json:"collectedAt,omitempty"`
 	Scope                string   `json:"scope"`
 	SharedByInboundEdges bool     `json:"sharedByInboundEdges"`
 }
@@ -67,19 +74,22 @@ type PipelineISBKVStoresDTO struct {
 }
 
 type PipelineISBKVStoreDTO struct {
-	Namespace  string  `json:"namespace"`
-	Pipeline   string  `json:"pipeline"`
-	Scope      string  `json:"scope"`
-	Direction  string  `json:"direction,omitempty"`
-	Vertex     string  `json:"vertex,omitempty"`
-	From       string  `json:"from,omitempty"`
-	To         string  `json:"to,omitempty"`
-	Bucket     string  `json:"bucket"`
-	Stream     string  `json:"stream"`
-	Values     int     `json:"values"`
-	Bytes      uint64  `json:"bytes"`
-	History    int64   `json:"history,omitempty"`
-	TTLSeconds float64 `json:"ttlSeconds,omitempty"`
-	Replicas   int     `json:"replicas,omitempty"`
-	Storage    string  `json:"storage,omitempty"`
+	Namespace   string  `json:"namespace"`
+	Pipeline    string  `json:"pipeline"`
+	Scope       string  `json:"scope"`
+	Direction   string  `json:"direction,omitempty"`
+	Vertex      string  `json:"vertex,omitempty"`
+	From        string  `json:"from,omitempty"`
+	To          string  `json:"to,omitempty"`
+	Bucket      string  `json:"bucket"`
+	Stream      string  `json:"stream"`
+	Values      int     `json:"values"`
+	Bytes       uint64  `json:"bytes"`
+	History     int64   `json:"history,omitempty"`
+	TTLSeconds  float64 `json:"ttlSeconds,omitempty"`
+	Replicas    int     `json:"replicas,omitempty"`
+	Storage     string  `json:"storage,omitempty"`
+	Leader      string  `json:"leader,omitempty"`
+	SourcePod   string  `json:"sourcePod,omitempty"`
+	CollectedAt string  `json:"collectedAt,omitempty"`
 }

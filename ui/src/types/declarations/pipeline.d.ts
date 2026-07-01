@@ -148,10 +148,15 @@ export interface PipelineISBStream {
   consumerCount: number;
   firstSeq: number;
   lastSeq: number;
+  firstTimestamp?: string;
+  lastTimestamp?: string;
   storage?: string;
   replicas?: number;
   retention?: string;
+  maxMessages?: number;
   leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
   scope: string;
   sharedByInboundEdges: boolean;
 }
@@ -181,6 +186,8 @@ export interface PipelineISBConsumer {
   ackFloorConsumerSeq: number;
   ackFloorStreamSeq: number;
   leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
   scope: string;
   sharedByInboundEdges: boolean;
 }
@@ -201,6 +208,9 @@ export interface PipelineISBKVStore {
   ttlSeconds?: number;
   replicas?: number;
   storage?: string;
+  leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
 }
 
 export interface PipelineISBStreamsResponse {
@@ -383,4 +393,3 @@ export interface PipelineHealthData {
   resourceHealthMessage: string;
   resourceHealthStatus: string;
 }
-

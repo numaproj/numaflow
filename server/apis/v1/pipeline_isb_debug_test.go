@@ -44,9 +44,14 @@ func TestGetPipelineISBStreamsVertexScoped(t *testing.T) {
 	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "cat", 0), got.Data.Streams[0].Stream)
 	assert.Equal(t, []string{dfv1.GenerateBufferName("ns", "pl", "cat", 0)}, got.Data.Streams[0].Subjects)
 	assert.Equal(t, uint64(10), got.Data.Streams[0].Messages)
+	assert.Equal(t, int64(100000), got.Data.Streams[0].MaxMessages)
 	assert.Equal(t, "file", got.Data.Streams[0].Storage)
 	assert.Equal(t, "workqueue", got.Data.Streams[0].Retention)
 	assert.Equal(t, "js-0", got.Data.Streams[0].Leader)
+	assert.Equal(t, "js-0", got.Data.Streams[0].SourcePod)
+	assert.Equal(t, "2026-06-30T01:02:03Z", got.Data.Streams[0].CollectedAt)
+	assert.Equal(t, "2026-06-30T00:00:00Z", got.Data.Streams[0].FirstTimestamp)
+	assert.Equal(t, "2026-06-30T00:01:00Z", got.Data.Streams[0].LastTimestamp)
 	require.Empty(t, got.Data.Errors)
 }
 
@@ -78,6 +83,8 @@ func TestGetPipelineISBConsumersEdgeScoped(t *testing.T) {
 	assert.Equal(t, 7, consumer.NumAckPending)
 	assert.Equal(t, uint64(21), consumer.DeliveredStreamSeq)
 	assert.Equal(t, uint64(14), consumer.AckFloorStreamSeq)
+	assert.Equal(t, "js-0", consumer.SourcePod)
+	assert.Equal(t, "2026-06-30T01:02:03Z", consumer.CollectedAt)
 }
 
 func TestGetPipelineISBConsumersIncludesDirectConsumers(t *testing.T) {
@@ -147,6 +154,70 @@ func TestGetPipelineISBKVStoresVertexScoped(t *testing.T) {
 	assert.Equal(t, uint64(30), got.Data.KVStores[0].Bytes)
 	assert.Equal(t, int64(1), got.Data.KVStores[0].History)
 	assert.Equal(t, float64(3600), got.Data.KVStores[0].TTLSeconds)
+	assert.Equal(t, "js-0", got.Data.KVStores[0].Leader)
+	assert.Equal(t, "js-0", got.Data.KVStores[0].SourcePod)
+}
+
+func TestGetPipelineISBStreamsPrefersLeaderSnapshot(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	leaderSnapshot := testPipelineISBJSInfo()
+	followerSnapshot := testPipelineISBJSInfo()
+	cat0 := dfv1.GenerateBufferName("ns", "pl", "cat", 0)
+	leaderSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 10, 100, 0)
+	leaderSnapshot.AccountDetails[0].Streams[0].Cluster.Leader = "js-1"
+	followerSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 99, 990, 0)
+	followerSnapshot.AccountDetails[0].Streams[0].Cluster.Leader = "js-1"
+	h := newPipelineISBDebugTestHandler(t, map[string]any{
+		"10.0.0.1": followerSnapshot,
+		"10.0.0.2": leaderSnapshot,
+	}, []corev1.Pod{
+		testISBPod("js-0", "10.0.0.1"),
+		testISBPod("js-1", "10.0.0.2"),
+	}, true)
+	c, w := newPipelineISBDebugTestContext("/api/v1/namespaces/ns/pipelines/pl/isb/streams?vertex=cat&partition=0")
+
+	h.GetPipelineISBStreams(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data PipelineISBStreamsDTO `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data.Streams, 1)
+	assert.Equal(t, uint64(10), got.Data.Streams[0].Messages)
+	assert.Equal(t, "js-1", got.Data.Streams[0].SourcePod)
+}
+
+func TestGetPipelineISBConsumersPrefersLeaderSnapshot(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	leaderSnapshot := testPipelineISBJSInfo()
+	followerSnapshot := testPipelineISBJSInfo()
+	cat0 := dfv1.GenerateBufferName("ns", "pl", "cat", 0)
+	leaderSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 10, 100, 0)
+	leaderSnapshot.AccountDetails[0].Streams[0].Consumer[0].Cluster.Leader = "js-1"
+	leaderSnapshot.AccountDetails[0].Streams[0].Consumer[0].NumRedelivered = 1
+	followerSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 10, 100, 0)
+	followerSnapshot.AccountDetails[0].Streams[0].Consumer[0].Cluster.Leader = "js-1"
+	followerSnapshot.AccountDetails[0].Streams[0].Consumer[0].NumRedelivered = 9
+	h := newPipelineISBDebugTestHandler(t, map[string]any{
+		"10.0.0.1": followerSnapshot,
+		"10.0.0.2": leaderSnapshot,
+	}, []corev1.Pod{
+		testISBPod("js-0", "10.0.0.1"),
+		testISBPod("js-1", "10.0.0.2"),
+	}, true)
+	c, w := newPipelineISBDebugTestContext("/api/v1/namespaces/ns/pipelines/pl/isb/consumers?vertex=cat&partition=0")
+
+	h.GetPipelineISBConsumers(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data PipelineISBConsumersDTO `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data.Consumers, 1)
+	assert.Equal(t, 1, got.Data.Consumers[0].NumRedelivered)
+	assert.Equal(t, "js-1", got.Data.Consumers[0].SourcePod)
 }
 
 func TestGetPipelineISBStreamsPartialFailure(t *testing.T) {
@@ -299,7 +370,8 @@ func testPipelineISBJSInfo() natsserver.JSInfo {
 	inCatBucket := isbsvc.JetStreamOTKVName(dfv1.GenerateEdgeBucketName("ns", "pl", "in", "cat"))
 	catOutBucket := isbsvc.JetStreamOTKVName(dfv1.GenerateEdgeBucketName("ns", "pl", "cat", "out"))
 	return natsserver.JSInfo{
-		ID: "server-a",
+		ID:  "server-a",
+		Now: time.Date(2026, 6, 30, 1, 2, 3, 0, time.UTC),
 		AccountDetails: []*natsserver.AccountDetail{
 			{
 				Name: "$G",
@@ -325,6 +397,7 @@ func testPipelineISBStreamDetail(name string, messages uint64, bytes uint64, par
 			Name:      name,
 			Subjects:  []string{name},
 			Retention: natsserver.WorkQueuePolicy,
+			MaxMsgs:   100000,
 			Storage:   natsserver.FileStorage,
 			Replicas:  3,
 		},
@@ -332,7 +405,9 @@ func testPipelineISBStreamDetail(name string, messages uint64, bytes uint64, par
 			Msgs:      messages,
 			Bytes:     bytes,
 			FirstSeq:  1,
+			FirstTime: time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC),
 			LastSeq:   messages,
+			LastTime:  time.Date(2026, 6, 30, 0, 1, 0, 0, time.UTC),
 			Consumers: 1,
 		},
 		Consumer: []*natsserver.ConsumerInfo{
@@ -372,6 +447,9 @@ func testPipelineISBKVStreamDetail(bucket string) natsserver.StreamDetail {
 	stream := "KV_" + bucket
 	return natsserver.StreamDetail{
 		Name: stream,
+		Cluster: &natsserver.ClusterInfo{
+			Leader: "js-0",
+		},
 		Config: &natsserver.StreamConfig{
 			Name:       stream,
 			MaxMsgsPer: 1,

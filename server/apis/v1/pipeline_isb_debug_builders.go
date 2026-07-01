@@ -138,7 +138,7 @@ func buildPipelineISBStreamDTOs(snapshots []jetStreamMonitorSnapshot, expected m
 			if !ok {
 				return
 			}
-			dto := newPipelineISBStreamDTO(metadata, stream)
+			dto := newPipelineISBStreamDTO(metadata, stream, snapshot.pod.Name, collectedAt(snapshot.jsInfo))
 			if existing, ok := streams[stream.Name]; !ok || richerPipelineISBStreamDTO(dto, existing) {
 				streams[stream.Name] = dto
 			}
@@ -160,7 +160,7 @@ func buildPipelineISBStreamDTOs(snapshots []jetStreamMonitorSnapshot, expected m
 	return result
 }
 
-func newPipelineISBStreamDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail) PipelineISBStreamDTO {
+func newPipelineISBStreamDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail, sourcePod, collectedAt string) PipelineISBStreamDTO {
 	dto := PipelineISBStreamDTO{
 		Namespace:            metadata.Namespace,
 		Pipeline:             metadata.Pipeline,
@@ -174,6 +174,10 @@ func newPipelineISBStreamDTO(metadata pipelineISBResourceMetadata, stream natsse
 		ConsumerCount:        stream.State.Consumers,
 		FirstSeq:             stream.State.FirstSeq,
 		LastSeq:              stream.State.LastSeq,
+		FirstTimestamp:       timestampString(stream.State.FirstTime),
+		LastTimestamp:        timestampString(stream.State.LastTime),
+		SourcePod:            sourcePod,
+		CollectedAt:          collectedAt,
 		Scope:                metadata.Scope,
 		SharedByInboundEdges: metadata.SharedByInboundEdges,
 	}
@@ -182,6 +186,7 @@ func newPipelineISBStreamDTO(metadata pipelineISBResourceMetadata, stream natsse
 		dto.Storage = strings.ToLower(stream.Config.Storage.String())
 		dto.Replicas = stream.Config.Replicas
 		dto.Retention = strings.ToLower(stream.Config.Retention.String())
+		dto.MaxMessages = stream.Config.MaxMsgs
 	}
 	if len(dto.Subjects) == 0 {
 		dto.Subjects = []string{stream.Name}
@@ -193,6 +198,9 @@ func newPipelineISBStreamDTO(metadata pipelineISBResourceMetadata, stream natsse
 }
 
 func richerPipelineISBStreamDTO(candidate, existing PipelineISBStreamDTO) bool {
+	if isLeaderReported(candidate.SourcePod, candidate.Leader) != isLeaderReported(existing.SourcePod, existing.Leader) {
+		return isLeaderReported(candidate.SourcePod, candidate.Leader)
+	}
 	if existing.Leader == "" && candidate.Leader != "" {
 		return true
 	}
@@ -211,7 +219,7 @@ func buildPipelineISBConsumerDTOs(snapshots []jetStreamMonitorSnapshot, expected
 				return
 			}
 			forEachStreamConsumer(stream, func(consumer *natsserver.ConsumerInfo) {
-				dto := newPipelineISBConsumerDTO(metadata, stream, consumer)
+				dto := newPipelineISBConsumerDTO(metadata, stream, consumer, snapshot.pod.Name, collectedAt(snapshot.jsInfo))
 				key := dto.Stream + ":" + dto.Consumer
 				if existing, ok := consumers[key]; !ok || richerPipelineISBConsumerDTO(dto, existing) {
 					consumers[key] = dto
@@ -251,7 +259,7 @@ func forEachStreamConsumer(stream natsserver.StreamDetail, visit func(*natsserve
 	}
 }
 
-func newPipelineISBConsumerDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail, consumer *natsserver.ConsumerInfo) PipelineISBConsumerDTO {
+func newPipelineISBConsumerDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail, consumer *natsserver.ConsumerInfo, sourcePod, collectedAt string) PipelineISBConsumerDTO {
 	consumerName := consumer.Name
 	streamName := consumer.Stream
 	if streamName == "" {
@@ -274,6 +282,8 @@ func newPipelineISBConsumerDTO(metadata pipelineISBResourceMetadata, stream nats
 		DeliveredStreamSeq:   consumer.Delivered.Stream,
 		AckFloorConsumerSeq:  consumer.AckFloor.Consumer,
 		AckFloorStreamSeq:    consumer.AckFloor.Stream,
+		SourcePod:            sourcePod,
+		CollectedAt:          collectedAt,
 		Scope:                metadata.Scope,
 		SharedByInboundEdges: metadata.SharedByInboundEdges,
 	}
@@ -302,6 +312,9 @@ func newPipelineISBConsumerDTO(metadata pipelineISBResourceMetadata, stream nats
 }
 
 func richerPipelineISBConsumerDTO(candidate, existing PipelineISBConsumerDTO) bool {
+	if isLeaderReported(candidate.SourcePod, candidate.Leader) != isLeaderReported(existing.SourcePod, existing.Leader) {
+		return isLeaderReported(candidate.SourcePod, candidate.Leader)
+	}
 	if existing.Leader == "" && candidate.Leader != "" {
 		return true
 	}
@@ -319,7 +332,7 @@ func buildPipelineISBKVStoreDTOs(snapshots []jetStreamMonitorSnapshot, expected 
 			if !ok {
 				return
 			}
-			dto := newPipelineISBKVStoreDTO(metadata, stream)
+			dto := newPipelineISBKVStoreDTO(metadata, stream, snapshot.pod.Name, collectedAt(snapshot.jsInfo))
 			if existing, ok := kvStores[stream.Name]; !ok || richerPipelineISBKVStoreDTO(dto, existing) {
 				kvStores[stream.Name] = dto
 			}
@@ -363,7 +376,7 @@ func pipelineISBKVDirectionRank(direction string) int {
 	}
 }
 
-func newPipelineISBKVStoreDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail) PipelineISBKVStoreDTO {
+func newPipelineISBKVStoreDTO(metadata pipelineISBResourceMetadata, stream natsserver.StreamDetail, sourcePod, collectedAt string) PipelineISBKVStoreDTO {
 	values := stream.State.NumSubjects
 	if values == 0 && len(stream.State.Subjects) > 0 {
 		values = len(stream.State.Subjects)
@@ -372,17 +385,19 @@ func newPipelineISBKVStoreDTO(metadata pipelineISBResourceMetadata, stream natss
 		values = int(stream.State.Msgs)
 	}
 	dto := PipelineISBKVStoreDTO{
-		Namespace: metadata.Namespace,
-		Pipeline:  metadata.Pipeline,
-		Scope:     metadata.Scope,
-		Direction: metadata.Direction,
-		Vertex:    metadata.Vertex,
-		From:      metadata.From,
-		To:        metadata.To,
-		Bucket:    metadata.KVBucket,
-		Stream:    stream.Name,
-		Values:    values,
-		Bytes:     stream.State.Bytes,
+		Namespace:   metadata.Namespace,
+		Pipeline:    metadata.Pipeline,
+		Scope:       metadata.Scope,
+		Direction:   metadata.Direction,
+		Vertex:      metadata.Vertex,
+		From:        metadata.From,
+		To:          metadata.To,
+		Bucket:      metadata.KVBucket,
+		Stream:      stream.Name,
+		Values:      values,
+		Bytes:       stream.State.Bytes,
+		SourcePod:   sourcePod,
+		CollectedAt: collectedAt,
 	}
 	if stream.Config != nil {
 		dto.History = stream.Config.MaxMsgsPer
@@ -390,10 +405,16 @@ func newPipelineISBKVStoreDTO(metadata pipelineISBResourceMetadata, stream natss
 		dto.Replicas = stream.Config.Replicas
 		dto.Storage = strings.ToLower(stream.Config.Storage.String())
 	}
+	if stream.Cluster != nil {
+		dto.Leader = stream.Cluster.Leader
+	}
 	return dto
 }
 
 func richerPipelineISBKVStoreDTO(candidate, existing PipelineISBKVStoreDTO) bool {
+	if isLeaderReported(candidate.SourcePod, candidate.Leader) != isLeaderReported(existing.SourcePod, existing.Leader) {
+		return isLeaderReported(candidate.SourcePod, candidate.Leader)
+	}
 	if existing.Storage == "" && candidate.Storage != "" {
 		return true
 	}
@@ -419,4 +440,22 @@ func durationSeconds(duration time.Duration) float64 {
 		return 0
 	}
 	return duration.Seconds()
+}
+
+func collectedAt(jsInfo *natsserver.JSInfo) string {
+	if jsInfo == nil {
+		return ""
+	}
+	return timestampString(jsInfo.Now)
+}
+
+func timestampString(timestamp time.Time) string {
+	if timestamp.IsZero() {
+		return ""
+	}
+	return timestamp.Format(time.RFC3339Nano)
+}
+
+func isLeaderReported(sourcePod, leader string) bool {
+	return sourcePod != "" && sourcePod == leader
 }

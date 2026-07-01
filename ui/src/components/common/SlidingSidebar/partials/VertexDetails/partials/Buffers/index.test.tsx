@@ -12,9 +12,12 @@ jest.mock("../../../../../MetricsModalWrapper", () => ({
   MetricsModalWrapper: ({ value }) => <div>{value}</div>,
 }));
 
-jest.mock("../../../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
-  usePipelineISBDebugFetch: (props) => mockUsePipelineISBDebugFetch(props),
-}));
+jest.mock(
+  "../../../../../../../utils/fetchWrappers/pipelineISBDebugFetch",
+  () => ({
+    usePipelineISBDebugFetch: (props) => mockUsePipelineISBDebugFetch(props),
+  })
+);
 
 const mockBuffers = [
   {
@@ -107,18 +110,27 @@ describe("Buffers", () => {
     renderBuffers([]);
     await waitFor(() => {
       expect(screen.getByText("Partition")).toBeInTheDocument();
-      expect(screen.getByText("IsFull")).toBeInTheDocument();
-      expect(screen.getByText("AckPending")).toBeInTheDocument();
+      expect(screen.getByText("Is Full")).toBeInTheDocument();
+      expect(screen.getByText("Ack Pending")).toBeInTheDocument();
       expect(screen.getByText("Pending")).toBeInTheDocument();
-      expect(screen.getByTestId("buffer-header-help-ackPending")).toBeInTheDocument();
-      expect(screen.getByTestId("buffer-header-help-bufferUsage")).toBeInTheDocument();
+      expect(screen.getByText("Total Messages")).toBeInTheDocument();
+      expect(screen.getByText("Buffer Usage Limit")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("buffer-header-help-ackPending")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("buffer-header-help-bufferUsage")
+      ).toBeInTheDocument();
       expect(
         screen.getByTestId("buffer-header-help-totalMessages")
       ).toBeInTheDocument();
       expect(
+        screen.getByText(/Live buffer counters from JetStream consumer state/)
+      ).toBeInTheDocument();
+      expect(
         screen.getByText("No buffer information found")
       ).toBeInTheDocument();
-      expect(screen.getByText("Advanced Details (ISB)")).toBeInTheDocument();
+      expect(screen.getByText("Advanced ISB Diagnostics")).toBeInTheDocument();
     });
   });
 
@@ -134,9 +146,7 @@ describe("Buffers", () => {
       expect(screen.getAllByText("30000").length).toBeGreaterThan(0);
       expect(screen.getByText("9")).toBeInTheDocument();
       expect(screen.queryByText("Details")).not.toBeInTheDocument();
-      expect(
-        screen.queryByText("Stream Information")
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Stream Information")).not.toBeInTheDocument();
       expect(screen.queryByText("Refresh")).not.toBeInTheDocument();
     });
   });
@@ -144,7 +154,7 @@ describe("Buffers", () => {
   it("expands advanced details and lazy loads vertex ISB details", async () => {
     renderBuffers();
 
-    fireEvent.click(screen.getByText("Advanced Details (ISB)"));
+    fireEvent.click(screen.getByText("Advanced ISB Diagnostics"));
 
     await waitFor(() => {
       expect(

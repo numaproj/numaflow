@@ -82,10 +82,14 @@ describe("PipelineISBDebugInfo", () => {
               consumerCount: 1,
               firstSeq: 1,
               lastSeq: 10,
+              lastTimestamp: "2026-06-30T00:01:00Z",
               storage: "file",
               replicas: 3,
               retention: "workqueue",
+              maxMessages: 100000,
               leader: "js-0",
+              sourcePod: "js-0",
+              collectedAt: "2026-06-30T01:02:03Z",
               scope: "vertex",
               sharedByInboundEdges: false,
             },
@@ -116,6 +120,8 @@ describe("PipelineISBDebugInfo", () => {
               ackFloorConsumerSeq: 8,
               ackFloorStreamSeq: 8,
               leader: "js-0",
+              sourcePod: "js-0",
+              collectedAt: "2026-06-30T01:02:03Z",
               scope: "vertex",
               sharedByInboundEdges: false,
             },
@@ -139,6 +145,8 @@ describe("PipelineISBDebugInfo", () => {
               ackFloorConsumerSeq: 0,
               ackFloorStreamSeq: 0,
               leader: "js-0",
+              sourcePod: "js-0",
+              collectedAt: "2026-06-30T01:02:03Z",
               scope: "vertex",
               sharedByInboundEdges: false,
             },
@@ -162,6 +170,9 @@ describe("PipelineISBDebugInfo", () => {
               ttlSeconds: 0,
               replicas: 3,
               storage: "file",
+              leader: "js-0",
+              sourcePod: "js-0",
+              collectedAt: "2026-06-30T01:02:03Z",
             },
           ],
         }}
@@ -170,31 +181,59 @@ describe("PipelineISBDebugInfo", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Stream Information")).toBeInTheDocument();
-      expect(screen.getByText("Messages")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-consumers-table")
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("isb-debug-streams-table")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-kv-stores-table")
+      ).toBeInTheDocument();
+      expect(screen.getByText("Stored Messages")).toBeInTheDocument();
       expect(screen.getAllByText("Bytes").length).toBeGreaterThan(0);
-      expect(screen.getByText("Consumers")).toBeInTheDocument();
+      expect(screen.getByText("First Seq")).toBeInTheDocument();
+      expect(screen.getByText("Last Seq")).toBeInTheDocument();
+      expect(screen.getByText("Last Timestamp")).toBeInTheDocument();
+      expect(screen.getByText("Consumer Count")).toBeInTheDocument();
+      expect(screen.queryByText("Retention")).not.toBeInTheDocument();
+      expect(screen.queryByText("Max Messages")).not.toBeInTheDocument();
+      expect(screen.queryByText("Storage")).not.toBeInTheDocument();
       expect(screen.getAllByText("Replicas").length).toBeGreaterThan(0);
-      expect(screen.getByText("Ack Pending")).toBeInTheDocument();
-      expect(screen.getByText("Pending")).toBeInTheDocument();
+      expect(screen.getByText("Redelivered")).toBeInTheDocument();
+      expect(screen.getByText("Waiting Pulls")).toBeInTheDocument();
+      expect(screen.getByText("Delivered Seq")).toBeInTheDocument();
+      expect(screen.getByText("Ack Floor Seq")).toBeInTheDocument();
+      expect(screen.getByText("Ack Wait")).toBeInTheDocument();
+      expect(screen.getByText("Max Ack Pending")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("isb-debug-header-help-consumer-ack-pending")
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("isb-debug-header-help-consumer-pending")
+      ).not.toBeInTheDocument();
       expect(
         screen.getByTestId("isb-debug-header-help-stream-messages")
       ).toBeInTheDocument();
       expect(
-        screen.getByTestId("isb-debug-header-help-consumer-ack-pending")
+        screen.getByTestId("isb-debug-header-help-consumer-redelivered")
       ).toBeInTheDocument();
       expect(
         screen.getByTestId("isb-debug-header-help-kv-ttl")
       ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Diagnostic snapshot from JetStream monitor/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Source pods: js-0/)).toBeInTheDocument();
       expect(screen.getAllByText("ns-pl-cat-0").length).toBeGreaterThan(1);
-      expect(screen.getByText("Yes")).toBeInTheDocument();
-      expect(screen.getByText("No")).toBeInTheDocument();
       expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
+      expect(screen.getByText("Scope")).toBeInTheDocument();
+      expect(screen.getByText("edge")).toBeInTheDocument();
       expect(screen.getByText("connection refused")).toBeInTheDocument();
       expect(screen.getAllByText("1.00 KiB").length).toBeGreaterThan(0);
       expect(screen.getByText("0.00s")).toBeInTheDocument();
       expect(screen.queryByText("Subjects")).not.toBeInTheDocument();
       expect(screen.queryByText("Filter Subject")).not.toBeInTheDocument();
-      expect(screen.queryByText("Storage")).not.toBeInTheDocument();
+      expect(screen.queryByText("Durable")).not.toBeInTheDocument();
+      expect(screen.queryByText("Ack Policy")).not.toBeInTheDocument();
     });
   });
 

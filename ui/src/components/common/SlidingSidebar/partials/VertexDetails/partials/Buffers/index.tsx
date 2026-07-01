@@ -174,62 +174,45 @@ export function Buffers({
     {
       key: "partition",
       label: "Partition",
-      width: "26%",
+      width: "24%",
       render: (buffer) => buffer?.bufferName,
     },
     {
       key: "isFull",
-      label: "IsFull",
-      width: "10%",
+      label: "Is Full",
+      width: "9%",
       align: "center",
       testId: "isFull",
-      tooltip: "Whether the buffer has reached its configured capacity or usage limit.",
+      tooltip:
+        "Whether the buffer has reached its configured capacity or usage limit.",
       render: (buffer) => (buffer?.isFull ? "yes" : "no"),
-    },
-    {
-      key: "ackPending",
-      label: "AckPending",
-      width: "12%",
-      align: "center",
-      testId: "ackPending",
-      tooltip: "Messages delivered to a consumer but not yet acknowledged.",
-      render: (buffer) => buffer?.ackPendingCount,
     },
     {
       key: "pending",
       label: "Pending",
-      width: "10%",
+      width: "9%",
       align: "center",
       testId: "pending",
       tooltip: "Messages queued in the buffer waiting to be consumed.",
       render: (buffer) => buffer?.pendingCount,
     },
     {
-      key: "bufferLength",
-      label: "Buffer Length",
-      width: "13%",
+      key: "ackPending",
+      label: "Ack Pending",
+      width: "11%",
       align: "center",
-      testId: "bufferLength",
-      tooltip: "Maximum configured buffer capacity in messages.",
-      render: (buffer) => buffer?.bufferLength,
-    },
-    {
-      key: "bufferUsage",
-      label: "Buffer Usage",
-      width: "13%",
-      align: "center",
-      testId: "usage",
-      tooltip: "Current buffer fill percentage.",
-      render: (buffer) => formatPercent(buffer?.bufferUsage),
+      testId: "ackPending",
+      tooltip: "Messages delivered to a consumer but not yet acknowledged.",
+      render: (buffer) => buffer?.ackPendingCount,
     },
     {
       key: "totalMessages",
-      label: "Total Pending Messages",
-      width: "16%",
+      label: "Total Messages",
+      width: "13%",
       align: "center",
       testId: "totalMessages",
       tooltip:
-        "Stored pending messages metric, with metrics drilldown when available.",
+        "Total messages currently counted for this buffer, with metrics drilldown when available.",
       render: (buffer) => (
         <MetricsModalWrapper
           disableMetricsCharts={disableMetricsCharts}
@@ -241,6 +224,34 @@ export function Buffers({
           value={buffer?.totalMessages}
         />
       ),
+    },
+    {
+      key: "bufferUsage",
+      label: "Buffer Usage",
+      width: "11%",
+      align: "center",
+      testId: "usage",
+      tooltip: "Current buffer fill percentage.",
+      render: (buffer) => formatPercent(buffer?.bufferUsage),
+    },
+    {
+      key: "bufferLength",
+      label: "Buffer Length",
+      width: "11%",
+      align: "center",
+      testId: "bufferLength",
+      tooltip: "Maximum configured buffer capacity in messages.",
+      render: (buffer) => buffer?.bufferLength,
+    },
+    {
+      key: "bufferUsageLimit",
+      label: "Buffer Usage Limit",
+      width: "12%",
+      align: "center",
+      testId: "bufferUsageLimit",
+      tooltip:
+        "Configured usage threshold at which the buffer is treated as full.",
+      render: (buffer) => formatPercent(buffer?.bufferUsageLimit),
     },
   ];
 
@@ -291,6 +302,16 @@ export function Buffers({
       <TableContainer
         sx={{ backgroundColor: "#FFF", flex: "0 0 auto", maxHeight: "20rem" }}
       >
+        <Box
+          sx={{
+            color: "#6B6C72",
+            fontSize: "1.2rem",
+            padding: "1.2rem 1.6rem",
+          }}
+        >
+          Live buffer counters from JetStream consumer state. Refreshed with
+          pipeline data.
+        </Box>
         <Table stickyHeader sx={{ tableLayout: "fixed", width: "100%" }}>
           <TableHead>
             <TableRow>
@@ -309,7 +330,7 @@ export function Buffers({
           <TableBody>
             {!buffers.length && (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   No buffer information found
                 </TableCell>
               </TableRow>
@@ -317,16 +338,18 @@ export function Buffers({
             {!!buffers.length &&
               buffers.map((buffer, idx) => (
                 <TableRow key={`node-buffer-info-${idx}`}>
-                  {bufferColumns.map(({ key, width, align, testId, render }) => (
-                    <BufferBodyCell
-                      key={key}
-                      width={width}
-                      align={align}
-                      testId={testId}
-                    >
-                      {render(buffer)}
-                    </BufferBodyCell>
-                  ))}
+                  {bufferColumns.map(
+                    ({ key, width, align, testId, render }) => (
+                      <BufferBodyCell
+                        key={key}
+                        width={width}
+                        align={align}
+                        testId={testId}
+                      >
+                        {render(buffer)}
+                      </BufferBodyCell>
+                    )
+                  )}
                 </TableRow>
               ))}
           </TableBody>
@@ -364,7 +387,7 @@ export function Buffers({
           }}
         >
           <Box sx={{ fontSize: "1.6rem", fontWeight: 600 }}>
-            Advanced Details (ISB)
+            Advanced ISB Diagnostics
           </Box>
         </AccordionSummary>
         <AccordionDetails sx={{ padding: "1.6rem" }}>
