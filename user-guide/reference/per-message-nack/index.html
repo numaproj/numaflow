@@ -13,7 +13,7 @@
     
     
       
-        <title>Ordered Processing - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Per-message Nack - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ordered-processing" class="md-skip">
+        <a href="#per-message-nack" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Ordered Processing
+              Per-message Nack
             
           </span>
         </div>
@@ -1625,127 +1625,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Ordered Processing
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../ordered-processing/" class="md-nav__link">
         Ordered Processing
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-order-preservation-means" class="md-nav__link">
-    What Order Preservation Means
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    How It Works
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pipeline-specification" class="md-nav__link">
-    Pipeline Specification
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#per-vertex-override" class="md-nav__link">
-    Per-Vertex Override
-  </a>
-  
-    <nav class="md-nav" aria-label="Per-Vertex Override">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#partitions-with-ordered-disabled" class="md-nav__link">
-    partitions with Ordered Disabled
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caveats-and-limitations" class="md-nav__link">
-    Caveats and Limitations
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#behavior-at-join-vertices" class="md-nav__link">
-    Behavior at Join Vertices
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#behavior-in-cycles" class="md-nav__link">
-    Behavior in Cycles
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
-  </a>
-  
-    <nav class="md-nav" aria-label="Example">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#complete-example" class="md-nav__link">
-    Complete Example
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1839,11 +1723,121 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../per-message-nack/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Per-message Nack
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Per-message Nack
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-per-message-nack" class="md-nav__link">
+    What is per-message nack
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-we-need-it" class="md-nav__link">
+    Why we need it
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nackoptions" class="md-nav__link">
+    NackOptions
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use-it" class="md-nav__link">
+    How to use it
+  </a>
+  
+    <nav class="md-nav" aria-label="How to use it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sink" class="md-nav__link">
+    Sink
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map" class="md-nav__link">
+    Map
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-transformer" class="md-nav__link">
+    Source transformer
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-user-defined" class="md-nav__link">
+    Source (user-defined)
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats" class="md-nav__link">
+    Caveats
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-how-nack-works-internally" class="md-nav__link">
+    Appendix: how nack works internally
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2833,37 +2827,58 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-order-preservation-means" class="md-nav__link">
-    What Order Preservation Means
+  <a href="#what-is-per-message-nack" class="md-nav__link">
+    What is per-message nack
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    How It Works
+  <a href="#why-we-need-it" class="md-nav__link">
+    Why we need it
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-specification" class="md-nav__link">
-    Pipeline Specification
+  <a href="#nackoptions" class="md-nav__link">
+    NackOptions
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#per-vertex-override" class="md-nav__link">
-    Per-Vertex Override
+  <a href="#how-to-use-it" class="md-nav__link">
+    How to use it
   </a>
   
-    <nav class="md-nav" aria-label="Per-Vertex Override">
+    <nav class="md-nav" aria-label="How to use it">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#partitions-with-ordered-disabled" class="md-nav__link">
-    partitions with Ordered Disabled
+  <a href="#sink" class="md-nav__link">
+    Sink
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map" class="md-nav__link">
+    Map
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-transformer" class="md-nav__link">
+    Source transformer
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-user-defined" class="md-nav__link">
+    Source (user-defined)
   </a>
   
 </li>
@@ -2874,43 +2889,16 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#caveats-and-limitations" class="md-nav__link">
-    Caveats and Limitations
+  <a href="#caveats" class="md-nav__link">
+    Caveats
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#behavior-at-join-vertices" class="md-nav__link">
-    Behavior at Join Vertices
+  <a href="#appendix-how-nack-works-internally" class="md-nav__link">
+    Appendix: how nack works internally
   </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#behavior-in-cycles" class="md-nav__link">
-    Behavior in Cycles
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
-  </a>
-  
-    <nav class="md-nav" aria-label="Example">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#complete-example" class="md-nav__link">
-    Complete Example
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2926,231 +2914,344 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/ordered-processing.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/per-message-nack.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="ordered-processing">Ordered Processing<a class="headerlink" href="#ordered-processing" title="Permanent link">&para;</a></h1>
+<h1 id="per-message-nack">Per-Message Nack<a class="headerlink" href="#per-message-nack" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Available from v1.8</strong></p>
+<p><strong>What it is.</strong> Per-message nack lets your user-defined function (UDF) explicitly tell Numaflow
+"I could not process this message — redeliver it later," optionally with a redelivery <strong>delay</strong>, a
+<strong>max-deliveries</strong> hint, and a human-readable <strong>reason</strong>. It is available in the source, source
+transformer, map, and sink. It is opt-in: a message is nacked only when your code asks for it.</p>
 </blockquote>
-<p>By default, Numaflow improves throughput by distributing work across any available processing unit, which means
-messages may be processed out of the order in which they arrived. However, some workflows require messages to be
-processed in their arrival order - for example, a create-update-delete sequence where you cannot update a record
-before it has been created.</p>
-<p>The <strong>ordered processing</strong> feature provides <strong>input-order preservation</strong> with partitioned FIFO semantics: within a
-partition, the N-th message is processed only after the (N-1)-th message completes. The ordering is based on the
-position of each message in the Inter-Step Buffer (ISB), not on event timestamps.</p>
-<h2 id="what-order-preservation-means">What Order Preservation Means<a class="headerlink" href="#what-order-preservation-means" title="Permanent link">&para;</a></h2>
-<p>It is important to distinguish <strong>order preservation</strong> from <strong>timestamp ordering</strong>:</p>
+<h2 id="what-is-per-message-nack">What is per-message nack<a class="headerlink" href="#what-is-per-message-nack" title="Permanent link">&para;</a></h2>
+<p>A <strong>nack</strong> ("negative acknowledgement") is the opposite of an ack. When Numaflow acks a message, the
+message is considered processed and is removed from the source / inter-step buffer. When a message is
+<strong>nacked</strong>, it is <em>not</em> removed — it is <strong>redelivered</strong> so it can be processed again.</p>
+<p>Per-message nack exposes this at the UDF level. Instead of only succeeding (ack) or hard-failing
+(crash), your code can return a <em>third</em> outcome for an individual message: "nack this one, and here is
+how I'd like it redelivered." The redelivery is governed by an optional <code>NackOptions</code>:</p>
 <table>
 <thead>
 <tr>
-<th>Concept</th>
+<th>Field</th>
+<th>Type</th>
 <th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Order preservation (this feature)</strong></td>
-<td>Messages are processed in the same order they were written to the ISB - i.e., FIFO. Message N is processed only after message N-1 completes, within a partition.</td>
+<td><code>delay</code></td>
+<td>duration (ms)</td>
+<td>Wait this long before redelivering the message.</td>
 </tr>
 <tr>
-<td><strong>Timestamp ordering</strong></td>
-<td>Messages are sorted by event time so that earlier events are processed before later ones. This feature does <strong>not</strong> provide timestamp ordering.</td>
+<td><code>maxDeliveries</code></td>
+<td>uint32</td>
+<td>Hint for the maximum number of redelivery attempts (see <a href="#caveats">Caveats</a>).</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>string</td>
+<td>Human-readable reason for the nack; logged for observability.</td>
 </tr>
 </tbody>
 </table>
-<p>Sources may emit events whose event-time timestamps are not monotonically increasing (e.g., late-arriving data,
-multiple producers). Order preservation guarantees that messages are processed in their <strong>arrival order</strong> (the order
-the source emitted them into the pipeline), regardless of their event timestamps.</p>
-<p>In short: if your source emits messages A, B, C in that sequence, order preservation guarantees they are processed in
-the sequence A, B, C - even if B has an earlier event timestamp than A.</p>
-<h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<p>Ordered processing works differently depending on the vertex type:</p>
-<table>
-<thead>
-<tr>
-<th>Vertex Type</th>
-<th>Behavior</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Source</strong></td>
-<td>Always preserves input order - messages are emitted into the pipeline in the order received from the external source. No configuration needed.</td>
-</tr>
-<tr>
-<td><strong>Map</strong></td>
-<td>Requires <code>partitions</code> to be configured. Replicas are fixed to the <code>partitions</code> count. Messages are routed to partitions by key hash, so all messages with the same key are processed by the same pod in order.</td>
-</tr>
-<tr>
-<td><strong>Reduce</strong></td>
-<td>Already partitioned and order-preserving - no additional configuration needed.</td>
-</tr>
-<tr>
-<td><strong>Sink</strong></td>
-<td>Same as Map - requires <code>partitions</code>. Replicas are fixed to the partition count.</td>
-</tr>
-</tbody>
-</table>
-<p>When ordered processing is enabled for a Map or Sink vertex:</p>
+<p>All three fields are <strong>optional</strong>. A nack with no options simply asks for the message to be
+redelivered with the backend's default behavior.</p>
+<h2 id="why-we-need-it">Why we need it<a class="headerlink" href="#why-we-need-it" title="Permanent link">&para;</a></h2>
+<p>Numaflow has <strong>always</strong> had negative acknowledgement at the platform level: if a vertex fails to
+process a message (an error, a crash, an unacked read that times out), the message is not acked and is
+redelivered. This is fundamental to Numaflow's at-least-once delivery guarantee.</p>
+<p>What was missing is <strong>user control</strong>. That redelivery machinery was entirely internal — there was no
+way for your UDF to <em>intentionally</em> trigger it for a specific message. Common situations had no clean
+answer:</p>
 <ul>
-<li>The number of replicas is automatically fixed to the partition count (one pod per partition).</li>
-<li>Autoscaling is disabled for that vertex - you must not set <code>scale.min</code> or <code>scale.max</code>.</li>
-<li>Messages are routed to partitions by hashing their keys, ensuring all messages with the same key go to the same pod,
-  preserving their arrival order.</li>
+<li>A sink's downstream (a database, an API) is <strong>temporarily unavailable</strong> and you want Numaflow to
+  retry the message in a few seconds rather than drop it or crash the pod.</li>
+<li>A message <strong>isn't ready</strong> to be processed yet (a dependency hasn't arrived) and you want to defer it.</li>
+<li>You want a transient error to result in <strong>redelivery with backoff</strong> instead of a hard failure.</li>
 </ul>
-<h2 id="pipeline-specification">Pipeline Specification<a class="headerlink" href="#pipeline-specification" title="Permanent link">&para;</a></h2>
-<p>Enable order-preserving processing by setting <code>ordered.enabled: true</code> at the pipeline level. For Map and Sink
-vertices, set <code>partitions</code> to the number of ordered lanes you need - the controller will fix replicas to that count
-automatically.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
-<span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
-<span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">ordered</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">           </span><span class="c1"># enable order-preserving processing pipeline-wide</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-source</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">            </span><span class="c1"># always preserves input order; no extra config needed</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-map</span>
-<span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">         </span><span class="c1"># N replicas will be created, one per partition</span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-map:stable</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink</span>
-<span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">         </span><span class="c1"># N replicas will be created, one per partition</span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-source</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-map</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-map</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink</span>
+<p>Per-message nack surfaces the platform's existing redelivery capability to user code, and adds
+per-message control over <em>when</em> (delay) and <em>how often</em> (max-deliveries) a message comes back.</p>
+<!-- TODO: add python SDK examples -->
+
+<h2 id="nackoptions">NackOptions<a class="headerlink" href="#nackoptions" title="Permanent link">&para;</a></h2>
+<p><code>NackOptions</code> is the same shape across all SDKs (field names follow each language's conventions):</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Go</label><label for="__tabbed_1_2">Java</label><label for="__tabbed_1_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="c1">// pkg/sinker, pkg/mapper, pkg/sourcetransformer, pkg/sourcer all expose NackOptions</span>
+<span class="nx">opts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">sinker</span><span class="p">.</span><span class="nx">NackOptions</span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Delay</span><span class="p">:</span><span class="w">         </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="mi">5000</span><span class="p">)),</span><span class="w"> </span><span class="c1">// 5s, *uint64</span>
+<span class="w">    </span><span class="nx">MaxDeliveries</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint32</span><span class="p">(</span><span class="mi">3</span><span class="p">)),</span><span class="w">    </span><span class="c1">// *uint32</span>
+<span class="w">    </span><span class="nx">Reason</span><span class="p">:</span><span class="w">        </span><span class="nx">ptr</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">),</span><span class="w"> </span><span class="c1">// *string</span>
+<span class="p">}</span>
 </code></pre></div>
-<h2 id="per-vertex-override">Per-Vertex Override<a class="headerlink" href="#per-vertex-override" title="Permanent link">&para;</a></h2>
-<p>Ordered processing can also be enabled or disabled at the individual vertex level, which overrides the pipeline-level
-setting. This is useful when you want most vertices to run unordered for throughput, but need ordering for specific steps.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">ordered</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># pipeline-level default</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high-throughput-map</span>
-<span class="w">      </span><span class="nt">ordered</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">  </span><span class="c1"># override: disable ordered processing for this vertex</span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-fast-map:stable</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ordered-sink</span>
-<span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">io.numaproj.numaflow.shared.NackOptions</span><span class="p">;</span>
+
+<span class="n">NackOptions</span><span class="w"> </span><span class="n">opts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NackOptions</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
+<span class="w">        </span><span class="p">.</span><span class="na">delay</span><span class="p">(</span><span class="mi">5000L</span><span class="p">)</span><span class="w">                                  </span><span class="c1">// ms</span>
+<span class="w">        </span><span class="p">.</span><span class="na">maxDeliveries</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="na">reason</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
 </code></pre></div>
-<h3 id="partitions-with-ordered-disabled"><code>partitions</code> with Ordered Disabled<a class="headerlink" href="#partitions-with-ordered-disabled" title="Permanent link">&para;</a></h3>
-<p>Setting <code>partitions</code> on a vertex that has ordered processing disabled (or overridden to <code>false</code>) is valid. The vertex
-will still have N ISB buffer partitions created, giving you a <a href="../multi-partition/">multi-partitioned edge</a> for higher
-throughput. However, replicas are determined by normal autoscaling - they are not fixed to N - so multiple replicas may
-read from the same partition, or one replica may handle multiple partitions. There is no ordering guarantee in this
-case.</p>
-<h2 id="caveats-and-limitations">Caveats and Limitations<a class="headerlink" href="#caveats-and-limitations" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Autoscaling is not supported</strong> for Map and Sink vertices with ordered processing enabled. The replica count is fixed
-  to the partition count. Setting <code>scale.min</code> or <code>scale.max</code> on such vertices will cause a validation error.</li>
-<li><strong>Reduce vertices</strong> are already partitioned and order-preserving by design; the <code>ordered</code> setting is ignored for them.</li>
-<li><strong>Source vertices</strong> always preserve input order regardless of the <code>ordered</code> setting.</li>
-<li><strong>Key-based routing</strong>: ordering is guaranteed per key. Messages with different keys may still be interleaved across
-  partitions. Ensure your UDF or SDK sets meaningful message keys to leverage per-key ordering.</li>
-<li><strong>In-flight cap is forced to 1</strong>: when ordered processing is enabled on a Map or Sink vertex, the controller
-  automatically sets <code>limits.concurrency = 1</code> so each pod processes one message at a time. You don't need to set
-  <code>concurrency</code> or <code>readBatchSize</code> yourself — any explicit <code>concurrency</code> you set is overridden for ordered vertices.</li>
-<li><strong>Throughput trade-off</strong>: ordered processing limits parallelism within a partition. Consider the number of partitions
-  carefully to balance ordering guarantees with throughput requirements.</li>
-<li><strong>Join vertices (multiple input edges)</strong>: When a vertex receives messages from multiple upstream vertices
-  (a <a href="../join-vertex/">join</a>), order preservation holds independently for each input edge, <em>but not across edges</em>.
-  Messages from different upstream vertices are interleaved in whatever order they arrive at the ISB. If you need a
-  global ordering across multiple inputs, you must merge them at a single source or use application-level sequencing.</li>
-<li><strong>Cycles</strong>: When a <a href="../join-vertex/#cycles">cycle</a> re-injects a message back into an earlier vertex, that message is
-  appended to the ISB after messages that have already been written. From the user's perspective, the re-injected
-  message appears later in the processing order than it did in the original stream. This means order preservation
-  relative to the original input sequence is disrupted for cycled messages.</li>
-</ul>
-<h2 id="behavior-at-join-vertices">Behavior at Join Vertices<a class="headerlink" href="#behavior-at-join-vertices" title="Permanent link">&para;</a></h2>
-<p>A <a href="../join-vertex/">join vertex</a> receives messages from two or more upstream vertices. Each input edge has its own set
-of ISB partitions, and order preservation applies <strong>per edge</strong>:</p>
-<ul>
-<li>Messages arriving from upstream vertex A are processed in FIFO order relative to each other.</li>
-<li>Messages arriving from upstream vertex B are processed in FIFO order relative to each other.</li>
-<li>However, messages from A and B are <strong>interleaved</strong> in whatever order they arrive at the join vertex. There is no
-  cross-edge ordering guarantee.</li>
-</ul>
-<p>The <a href="#example">example below</a> demonstrates this: sources <code>in-1</code> and <code>in-2</code> both feed into the <code>cat</code> vertex. Within each source's
-stream, order is preserved, but <code>cat</code> will interleave messages from <code>in-1</code> and <code>in-2</code> based on arrival time.</p>
-<h2 id="behavior-in-cycles">Behavior in Cycles<a class="headerlink" href="#behavior-in-cycles" title="Permanent link">&para;</a></h2>
-<p>A <a href="../join-vertex/#cycles">cycle</a> sends a message from a vertex back to itself or to a previous vertex. When a message
-is re-injected via a cycle:</p>
-<ol>
-<li>The cycled message is appended to the ISB <strong>after</strong> messages that have already been written by the original upstream
-   source.</li>
-<li>From the perspective of the receiving vertex, the cycled message appears as a new, later message - not in its
-   original position.</li>
-<li>Therefore, order preservation relative to the original input stream is <strong>not maintained</strong> for cycled messages.</li>
-</ol>
-<p>If your use case requires strict ordering and also uses cycles (e.g., retry logic), be aware that retried messages will
-be processed after messages that arrived in the interim. Design your application logic accordingly.</p>
-<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<p>To enable order-preserving processing, set <code>ordered.enabled: true</code> in the pipeline spec. For Map and Sink vertices,
-also set <code>partitions</code> to the desired number of partitions (which will also be the fixed replica count).</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
-<span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ordered-pipeline</span>
-<span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">ordered</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in-1</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in-2</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-rs/map-cat:stable</span>
-<span class="w">          </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">IfNotPresent</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
-<span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in-1</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in-2</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">numaflow</span><span class="p">::</span><span class="n">shared</span><span class="p">::</span><span class="n">NackOptions</span><span class="p">;</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="n">opts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NackOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">delay</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span><span class="w">          </span><span class="c1">// ms</span>
+<span class="w">    </span><span class="n">max_deliveries</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+<span class="w">    </span><span class="n">reason</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span>
+<span class="p">};</span>
 </code></pre></div>
-<p>In the example above:</p>
+</div>
+</div>
+</div>
+<blockquote>
+<p><strong>SDK availability.</strong> Per-message nack is available in the <strong>Rust</strong>, <strong>Go</strong>, and <strong>Java</strong> SDKs.
+All fields are optional — pass "no options" (<code>nil</code> / <code>null</code> / <code>None</code>) for a plain redelivery.</p>
+</blockquote>
+<h2 id="how-to-use-it">How to use it<a class="headerlink" href="#how-to-use-it" title="Permanent link">&para;</a></h2>
+<p>The mechanism differs slightly by component: the <strong>sink</strong>, <strong>map</strong>, and <strong>source transformer</strong>
+<em>produce</em> a nack (they tell Numaflow a message should be redelivered), while a <strong>user-defined source</strong>
+<em>receives</em> a nack (Numaflow calls your source so it can redeliver).</p>
+<h3 id="sink">Sink<a class="headerlink" href="#sink" title="Permanent link">&para;</a></h3>
+<p>Return a <strong>nack response</strong> for the message instead of a success/failure response.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Go</label><label for="__tabbed_2_2">Java</label><label for="__tabbed_2_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">mySink</span><span class="p">)</span><span class="w"> </span><span class="nx">Sink</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">datumCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">sinker</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sinker</span><span class="p">.</span><span class="nx">Responses</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">responses</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sinker</span><span class="p">.</span><span class="nx">ResponsesBuilder</span><span class="p">()</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">datumCh</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="nx">d</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">isRetryable</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// ask Numaflow to redeliver this message after 5s</span>
+<span class="w">            </span><span class="nx">responses</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">responses</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinker</span><span class="p">.</span><span class="nx">ResponseNack</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">(),</span>
+<span class="w">                </span><span class="o">&amp;</span><span class="nx">sinker</span><span class="p">.</span><span class="nx">NackOptions</span><span class="p">{</span><span class="nx">Delay</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="mi">5000</span><span class="p">)),</span><span class="w"> </span><span class="nx">Reason</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">())}))</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">responses</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">responses</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinker</span><span class="p">.</span><span class="nx">ResponseOK</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()))</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">responses</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nd">@Override</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">ResponseList</span><span class="w"> </span><span class="nf">processMessages</span><span class="p">(</span><span class="n">DatumIterator</span><span class="w"> </span><span class="n">datums</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ResponseList</span><span class="p">.</span><span class="na">ResponseListBuilder</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ResponseList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Datum</span><span class="w"> </span><span class="n">d</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">((</span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datums</span><span class="p">.</span><span class="na">next</span><span class="p">())</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">writeFailedRetryably</span><span class="p">(</span><span class="n">d</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">builder</span><span class="p">.</span><span class="na">addResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">.</span><span class="na">responseNack</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="na">getId</span><span class="p">(),</span>
+<span class="w">                    </span><span class="n">NackOptions</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">().</span><span class="na">delay</span><span class="p">(</span><span class="mi">5000L</span><span class="p">).</span><span class="na">reason</span><span class="p">(</span><span class="s">&quot;downstream unavailable&quot;</span><span class="p">).</span><span class="na">build</span><span class="p">()));</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">builder</span><span class="p">.</span><span class="na">addResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">.</span><span class="na">responseOK</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="na">getId</span><span class="p">()));</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">sink</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">input</span><span class="p">:</span><span class="w"> </span><span class="nc">Receiver</span><span class="o">&lt;</span><span class="n">SinkRequest</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">responses</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span><span class="p">::</span><span class="n">new</span><span class="p">();</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">req</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">recv</span><span class="p">().</span><span class="k">await</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="o">&amp;</span><span class="n">req</span><span class="p">).</span><span class="k">await</span><span class="p">.</span><span class="n">is_err</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">responses</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">Response</span><span class="p">::</span><span class="n">nack</span><span class="p">(</span><span class="n">req</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">NackOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">delay</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span>
+<span class="w">                </span><span class="n">reason</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">&quot;downstream unavailable&quot;</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span>
+<span class="w">                </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">            </span><span class="p">})));</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">responses</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">Response</span><span class="p">::</span><span class="n">ok</span><span class="p">(</span><span class="n">req</span><span class="p">.</span><span class="n">id</span><span class="p">));</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">responses</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="map">Map<a class="headerlink" href="#map" title="Permanent link">&para;</a></h3>
+<p>Return a special <strong>nack message</strong> in place of the normal output. This signals that the <em>input</em>
+message should be redelivered (see the <a href="#caveats">whole-message caveat</a>).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:3"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Go</label><label for="__tabbed_3_2">Java</label><label for="__tabbed_3_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">myMapper</span><span class="p">)</span><span class="w"> </span><span class="nx">Map</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">!</span><span class="nx">ready</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span>
+<span class="w">            </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">MessageToNack</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">mapper</span><span class="p">.</span><span class="nx">NackOptions</span><span class="p">{</span><span class="nx">Delay</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="mi">2000</span><span class="p">))}))</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">mapper</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">(</span><span class="nx">transform</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">())))</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nd">@Override</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">MessageList</span><span class="w"> </span><span class="nf">processMessage</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">keys</span><span class="p">,</span><span class="w"> </span><span class="n">Datum</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ready</span><span class="p">(</span><span class="n">d</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
+<span class="w">                </span><span class="p">.</span><span class="na">addMessage</span><span class="p">(</span><span class="n">Message</span><span class="p">.</span><span class="na">toNack</span><span class="p">(</span><span class="n">NackOptions</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">().</span><span class="na">delay</span><span class="p">(</span><span class="mi">2000L</span><span class="p">).</span><span class="na">build</span><span class="p">()))</span>
+<span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">().</span><span class="na">addMessage</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Message</span><span class="p">(</span><span class="n">transform</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="na">getValue</span><span class="p">()))).</span><span class="na">build</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">map</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">:</span><span class="w"> </span><span class="nc">MapRequest</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Message</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="n">ready</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">message_to_nack</span><span class="p">(</span><span class="nb">Some</span><span class="p">(</span><span class="n">NackOptions</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">delay</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">2000</span><span class="p">),</span><span class="w"> </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span><span class="w"> </span><span class="p">}))];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="fm">vec!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">transform</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">value</span><span class="p">))]</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="source-transformer">Source transformer<a class="headerlink" href="#source-transformer" title="Permanent link">&para;</a></h3>
+<p>Same as map, but the nack message also carries an <strong>event time</strong> (the transformer is responsible for
+event-time assignment, and the message still counts toward watermark progression).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:3"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Go</label><label for="__tabbed_4_2">Java</label><label for="__tabbed_4_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">myTransformer</span><span class="p">)</span><span class="w"> </span><span class="nx">Transform</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">!</span><span class="nx">ready</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span>
+<span class="w">            </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">MessageToNack</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">(),</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">NackOptions</span><span class="p">{</span><span class="nx">Delay</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="mi">2000</span><span class="p">))}))</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// ... normal transform ...</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nd">@Override</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">MessageList</span><span class="w"> </span><span class="nf">processMessage</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">keys</span><span class="p">,</span><span class="w"> </span><span class="n">Datum</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ready</span><span class="p">(</span><span class="n">d</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
+<span class="w">                </span><span class="p">.</span><span class="na">addMessage</span><span class="p">(</span><span class="n">Message</span><span class="p">.</span><span class="na">toNack</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="na">getEventTime</span><span class="p">(),</span>
+<span class="w">                        </span><span class="n">NackOptions</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">().</span><span class="na">delay</span><span class="p">(</span><span class="mi">2000L</span><span class="p">).</span><span class="na">build</span><span class="p">()))</span>
+<span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// ... normal transform ...</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">transform</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">:</span><span class="w"> </span><span class="nc">SourceTransformRequest</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Message</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="n">ready</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">message_to_nack</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">eventtime</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">NackOptions</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">delay</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">2000</span><span class="p">),</span><span class="w"> </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span><span class="w"> </span><span class="p">}))];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// ... normal transform ...</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="source-user-defined">Source (user-defined)<a class="headerlink" href="#source-user-defined" title="Permanent link">&para;</a></h3>
+<p>A user-defined source <em>receives</em> nacks: when a message it produced is nacked downstream, Numaflow
+calls the source's <strong>nack handler</strong> with each offset to redeliver and its (optional) <code>NackOptions</code>,
+bundled together. Implement it to re-queue those offsets so a subsequent <code>Read</code> returns them again
+(honoring <code>delay</code> if you wish).
+Built-in sources (Kafka, JetStream, Pulsar, etc.) redeliver natively and need no user code.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:3"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Go</label><label for="__tabbed_5_2">Java</label><label for="__tabbed_5_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">mySource</span><span class="p">)</span><span class="w"> </span><span class="nx">Nack</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">sourcer</span><span class="p">.</span><span class="nx">NackRequest</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">n</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Offsets</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">// []sourcer.NackOffset</span>
+<span class="w">        </span><span class="c1">// n.NackOptions may be nil; carries Delay / MaxDeliveries / Reason</span>
+<span class="w">        </span><span class="nx">s</span><span class="p">.</span><span class="nx">requeue</span><span class="p">(</span><span class="nx">n</span><span class="p">.</span><span class="nx">Offset</span><span class="p">,</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">NackOptions</span><span class="p">)</span><span class="w"> </span><span class="c1">// make the next Read() return this offset again</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nd">@Override</span>
+<span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">nack</span><span class="p">(</span><span class="n">NackRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">NackOffset</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="na">getOffsets</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">// List&lt;NackOffset&gt;</span>
+<span class="w">        </span><span class="c1">// n.getNackOptions() may be null</span>
+<span class="w">        </span><span class="n">requeue</span><span class="p">(</span><span class="n">n</span><span class="p">.</span><span class="na">getOffset</span><span class="p">(),</span><span class="w"> </span><span class="n">n</span><span class="p">.</span><span class="na">getNackOptions</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">nack</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">offsets</span><span class="p">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">NackOffset</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">offsets</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// n.option: Option&lt;NackOptions&gt;</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">requeue</span><span class="p">(</span><span class="n">n</span><span class="p">.</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">n</span><span class="p">.</span><span class="n">option</span><span class="p">);</span><span class="w"> </span><span class="c1">// re-deliver on a later read()</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>ordered.enabled: true</code> enables order-preserving processing pipeline-wide.</li>
-<li>For each ordered Map/Sink vertex the controller automatically forces <code>limits.concurrency = 1</code> so each pod processes
-  one message at a time, which is essential for strict in-order guarantees.</li>
-<li>The <code>cat</code> (Map) and <code>out</code> (Sink) vertices each have <code>partitions: 3</code>, so they will run with exactly 3 replicas.</li>
-<li>Source vertices (<code>in-1</code>, <code>in-2</code>) always preserve input order and require no extra configuration.</li>
-<li>Because <code>in-1</code> and <code>in-2</code> both feed into <code>cat</code> (a join), messages from the two sources are interleaved at <code>cat</code>.
-  Order preservation holds within each source's stream, not across the two sources.</li>
+<li>
+<p><strong>Nacking is per <em>input</em> message, not per <em>output</em> message.</strong> A map or source transformer can
+  return many output messages for a single input. Nack is a property of the <strong>input</strong> message, so
+  nacking <em>any</em> output (or returning a single <code>MessageToNack</code>) causes the <strong>entire input message to
+  be redelivered</strong> — the UDF will be invoked again on that whole input and will re-emit <em>all</em> of its
+  outputs. Design your UDF so that re-processing a redelivered input is safe (idempotent), and so it
+  deterministically decides whether to nack again. You cannot nack just one element of a fan-out and
+  keep the others.</p>
+</li>
+<li>
+<p><strong>Redelivery is at-least-once, not transactional.</strong> A nack does not roll anything back. Outputs that
+  were already forwarded, or sink writes that already succeeded for <em>other</em> messages in the batch, are
+  not undone. Redelivered messages may produce duplicates downstream; consumers should tolerate them.</p>
+</li>
+<li>
+<p><strong><code>delay</code>/<code>maxDeliveries</code> honoring is backend-dependent.</strong> Between vertices, redelivery goes through 
+  the inter-step buffer; the JetStream ISB honors the <code>delay</code> before redelivering. For a user-defined 
+  source, <code>delay</code>/<code>maxDeliveries</code> is passed to your nack handler and it is up to you to act on it. 
+  Built-in sources redeliver using their native mechanism and may not apply a per-message delay.</p>
+</li>
+<li>
+<p><strong><code>reason</code> is informational.</strong> It is logged for observability and does not affect routing or
+  redelivery behavior.</p>
+</li>
 </ul>
-<h3 id="complete-example">Complete Example<a class="headerlink" href="#complete-example" title="Permanent link">&para;</a></h3>
-<p>For a more complete example that combines ordered processing with event-time sorting, see
-<a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/ordered-stream-processing">ordered-stream-processing</a>
-in the Rust SDK. That example uses an accumulator to sort out-of-order events by event time, then feeds them through
-partitioned map and sink vertices with ordered processing enabled, demonstrating both temporal and spatial ordering
-working together.</p>
+<h2 id="appendix-how-nack-works-internally">Appendix: how nack works internally<a class="headerlink" href="#appendix-how-nack-works-internally" title="Permanent link">&para;</a></h2>
+<p><strong>Signaling.</strong> Numaflow needs a uniform way for a UDF to mark a single message as "nack" over the
+wire. The mechanism varies by component but converges on one internal disposition:</p>
+<ul>
+<li><strong>Sink</strong> responses carry an explicit status. A nack response uses the sink status <code>NACK</code>, with the
+  <code>NackOptions</code> attached to that response.</li>
+<li><strong>Map / source transformer</strong> outputs reuse the same tag-based mechanism as the built-in <em>drop</em>
+  signal: a nack message is an output tagged with an internal magic tag (<code>U+005C__NACK__</code>) and
+  carrying the <code>NackOptions</code>. The runtime recognizes the tag and treats the message as a nack of the
+  corresponding input rather than as data to forward.</li>
+<li><strong>Source</strong> nacks are delivered to the user-defined source via a dedicated <code>Nack</code> gRPC call carrying
+  each offset together with its own <code>NackOptions</code>.</li>
+</ul>
+<p><strong>Translation to the input message.</strong> Whatever the surface, the runtime converts the signal into a
+negative-ack of the <strong>input</strong> message that produced it (internally <code>ReadAck::Nak(options)</code>). This is
+why nack is per-input-message: the unit being acked or nacked is always the message that was <em>read</em>,
+not the individual outputs of a UDF.</p>
+<p><strong>Redelivery paths.</strong> The negative-ack is honored by whichever layer the message was read from:</p>
+<ul>
+<li><strong>Inter-step buffer (JetStream).</strong> The buffer reader issues a negative acknowledgement with the
+  delay (<code>AckKind::Nak(delay)</code>). JetStream then redelivers the message to the vertex after the delay
+  elapses. This is the path used between vertices in a pipeline.</li>
+<li><strong>Source.</strong> The source acker negatively-acknowledges the offsets — each paired with its own
+  <code>NackOptions</code> — in a single <code>Nack</code> call. For a user-defined source this invokes your <code>Nack</code> handler;
+  for built-in sources it triggers the source's native redelivery. This is the path used at the source
+  vertex and in a MonoVertex (which has no inter-step buffer).</li>
+</ul>
+<p><strong>Relationship to the platform's existing nack.</strong> None of this is a new delivery guarantee — it is the
+same redelivery machinery that already underpinned Numaflow's at-least-once semantics (an unacked read
+is redelivered). Per-message nack simply gives user code a first-class, parameterized way to trigger
+it for a chosen message.</p>
 
               
             </article>
@@ -3173,7 +3274,7 @@ working together.</p>
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../multi-partition/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Multi-partitioned Edges" rel="prev">
+        <a href="../monovertex-bypass/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MonoVertex Bypass Routing" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -3182,20 +3283,20 @@ working together.</p>
               <span class="md-footer__direction">
                 Previous
               </span>
-              Multi-partitioned Edges
+              MonoVertex Bypass Routing
             </div>
           </div>
         </a>
       
       
         
-        <a href="../side-inputs/" class="md-footer__link md-footer__link--next" aria-label="Next: Side Inputs" rel="next">
+        <a href="../configuration/pod-specifications/" class="md-footer__link md-footer__link--next" aria-label="Next: Pod Specifications" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Side Inputs
+              Pod Specifications
             </div>
           </div>
           <div class="md-footer__button md-icon">
