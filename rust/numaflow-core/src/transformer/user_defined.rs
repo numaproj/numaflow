@@ -193,7 +193,7 @@ impl UserDefinedTransformer {
             VERTEX_TYPE_SOURCE,
             critical_error_reasons::SOURCE_TRANSFORMER_RUNTIME_ERROR
         );
-        runtime::persist_application_error(status.clone());
+        runtime::persist_application_error_with_container(status.clone(), "transformer");
     }
 
     // receive responses from the server and gets the corresponding oneshot sender from the map

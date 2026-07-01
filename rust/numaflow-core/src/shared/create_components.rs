@@ -408,7 +408,12 @@ pub(crate) async fn create_mapper(
                         grpc::DEFAULT_RECONNECT_INTERVAL,
                     )
                     .await?;
-                    Ok(MapHandle::new(
+                    let reconnect_config = grpc::UdfReconnectConfig::new(
+                        config.grpc_client_config(),
+                        cln_token.clone(),
+                        grpc::DEFAULT_RECONNECT_INTERVAL,
+                    );
+                    Ok(MapHandle::new_with_reconnect_config(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
@@ -416,6 +421,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        Some(reconnect_config),
                     )
                     .await?)
                 }
