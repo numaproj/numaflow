@@ -601,48 +601,48 @@ export function PipelineISBDebugInfo({
                   label="Redelivered"
                   align="center"
                   column={consumerColumns.redelivered}
-                  tooltip="Messages redelivered because they were not acknowledged in time."
+                  tooltip="Messages redelivered because they were not acknowledged in time"
                   testId="isb-debug-header-help-consumer-redelivered"
                 />
                 <HeaderCell
                   label="Waiting Pulls"
                   align="center"
                   column={consumerColumns.waiting}
-                  tooltip="Pull requests currently waiting for messages from this consumer."
+                  tooltip="Pull requests currently waiting for messages from this consumer"
                   testId="isb-debug-header-help-consumer-waiting"
                 />
                 <HeaderCell
                   label="Delivered Seq"
                   align="center"
                   column={consumerColumns.deliveredStreamSequence}
-                  tooltip="Latest stream sequence delivered to this consumer."
+                  tooltip="Latest stream sequence delivered to this consumer"
                   testId="isb-debug-header-help-consumer-delivered-seq"
                 />
                 <HeaderCell
                   label="Ack Floor Seq"
                   align="center"
                   column={consumerColumns.ackFloorStreamSequence}
-                  tooltip="Latest stream sequence fully acknowledged by this consumer."
+                  tooltip="Latest stream sequence fully acknowledged by this consumer"
                   testId="isb-debug-header-help-consumer-ack-floor-seq"
                 />
                 <HeaderCell
                   label="Ack Wait"
                   align="center"
                   column={consumerColumns.ackWait}
-                  tooltip="How long JetStream waits for an acknowledgement before redelivery."
+                  tooltip="How long JetStream waits for an acknowledgement before redelivery"
                   testId="isb-debug-header-help-consumer-ack-wait"
                 />
                 <HeaderCell
                   label="Max Ack Pending"
                   align="center"
                   column={consumerColumns.maxAckPending}
-                  tooltip="Maximum number of unacknowledged messages allowed for this consumer."
+                  tooltip="Maximum number of unacknowledged messages allowed for this consumer"
                   testId="isb-debug-header-help-consumer-max-ack-pending"
                 />
                 <HeaderCell
                   label="Leader"
                   column={consumerColumns.leader}
-                  tooltip="JetStream server currently leading this consumer state."
+                  tooltip="JetStream server currently leading this consumer state"
                   testId="isb-debug-header-help-consumer-leader"
                 />
               </TableRow>
@@ -677,54 +677,54 @@ export function PipelineISBDebugInfo({
                   label="Stored Messages"
                   align="center"
                   column={streamColumns.messages}
-                  tooltip="Number of messages currently retained in the stream. This is not the same as pending backlog."
+                  tooltip="Number of messages currently retained in the stream. This is not the same as pending backlog"
                   testId="isb-debug-header-help-stream-messages"
                 />
                 <HeaderCell
                   label="Bytes"
                   align="center"
                   column={streamColumns.bytes}
-                  tooltip="Total storage used by messages in the stream."
+                  tooltip="Total storage used by messages in the stream"
                   testId="isb-debug-header-help-stream-bytes"
                 />
                 <HeaderCell
                   label="First Seq"
                   align="center"
                   column={streamColumns.firstSequence}
-                  tooltip="First retained stream sequence."
+                  tooltip="First retained stream sequence"
                   testId="isb-debug-header-help-stream-first-seq"
                 />
                 <HeaderCell
                   label="Last Seq"
                   align="center"
                   column={streamColumns.lastSequence}
-                  tooltip="Latest stream sequence written to this stream."
+                  tooltip="Latest stream sequence written to this stream"
                   testId="isb-debug-header-help-stream-last-seq"
                 />
                 <HeaderCell
                   label="Last Timestamp"
                   column={streamColumns.lastTimestamp}
-                  tooltip="Timestamp of the latest retained message in this stream."
+                  tooltip="Timestamp of the latest retained message in this stream"
                   testId="isb-debug-header-help-stream-last-timestamp"
                 />
                 <HeaderCell
                   label="Consumer Count"
                   align="center"
                   column={streamColumns.consumerCount}
-                  tooltip="Number of consumers attached to this stream."
+                  tooltip="Number of consumers attached to this stream"
                   testId="isb-debug-header-help-stream-consumers"
                 />
                 <HeaderCell
                   label="Replicas"
                   align="center"
                   column={streamColumns.replicas}
-                  tooltip="Configured JetStream replica count for this stream."
+                  tooltip="Configured JetStream replica count for this stream"
                   testId="isb-debug-header-help-stream-replicas"
                 />
                 <HeaderCell
                   label="Leader"
                   column={streamColumns.leader}
-                  tooltip="JetStream server currently leading this stream replica group."
+                  tooltip="JetStream server currently leading this stream replica group"
                   testId="isb-debug-header-help-stream-leader"
                 />
               </TableRow>
@@ -754,14 +754,14 @@ export function PipelineISBDebugInfo({
                   label="Scope"
                   align="center"
                   column={kvStoreColumns.scope}
-                  tooltip="Whether the KV bucket is scoped to an edge, source, or sink."
+                  tooltip="Whether the KV bucket is scoped to an edge, source, or sink"
                   testId="isb-debug-header-help-kv-scope"
                 />
                 <HeaderCell
                   label="Direction"
                   align="center"
                   column={kvStoreColumns.direction}
-                  tooltip="Read or write direction for edge-scoped KV state."
+                  tooltip="Read or write direction of KV state for this vertex"
                   testId="isb-debug-header-help-kv-direction"
                 />
                 <HeaderCell
@@ -778,34 +778,34 @@ export function PipelineISBDebugInfo({
                   label="Values"
                   align="center"
                   column={kvStoreColumns.values}
-                  tooltip="Number of values currently stored in the KV bucket."
+                  tooltip="Approximate number of keys in the KV bucket from JetStream stream state"
                   testId="isb-debug-header-help-kv-values"
                 />
                 <HeaderCell
                   label="Bytes"
                   align="center"
                   column={kvStoreColumns.bytes}
-                  tooltip="Total storage used by values in the KV bucket."
+                  tooltip="Total storage used by values in the KV bucket"
                   testId="isb-debug-header-help-kv-bytes"
                 />
                 <HeaderCell
                   label="TTL"
                   align="center"
                   column={kvStoreColumns.ttl}
-                  tooltip="Time-to-live for values stored in this KV bucket."
+                  tooltip="Time-to-live for values stored in this KV bucket"
                   testId="isb-debug-header-help-kv-ttl"
                 />
                 <HeaderCell
                   label="Replicas"
                   align="center"
                   column={kvStoreColumns.replicas}
-                  tooltip="Configured JetStream replica count for this KV bucket."
+                  tooltip="Configured JetStream replica count for this KV bucket"
                   testId="isb-debug-header-help-kv-replicas"
                 />
                 <HeaderCell
                   label="Leader"
                   column={kvStoreColumns.leader}
-                  tooltip="JetStream server currently leading this KV bucket backing stream."
+                  tooltip="JetStream server currently leading this KV bucket backing stream"
                   testId="isb-debug-header-help-kv-leader"
                 />
               </TableRow>

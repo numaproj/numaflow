@@ -113,17 +113,7 @@ describe("Buffers", () => {
       expect(screen.getByText("Is Full")).toBeInTheDocument();
       expect(screen.getByText("Ack Pending")).toBeInTheDocument();
       expect(screen.getByText("Pending")).toBeInTheDocument();
-      expect(screen.getByText("Total Messages")).toBeInTheDocument();
-      expect(screen.getByText("Buffer Usage Limit")).toBeInTheDocument();
-      expect(
-        screen.getByTestId("buffer-header-help-ackPending")
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("buffer-header-help-bufferUsage")
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("buffer-header-help-totalMessages")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Total Pending Messages")).toBeInTheDocument();
       expect(
         screen.getByText("No buffer information found")
       ).toBeInTheDocument();

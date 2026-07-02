@@ -18,7 +18,6 @@ import { AppContext } from "../../../../../../../App";
 import { usePipelineISBDebugFetch } from "../../../../../../../utils/fetchWrappers/pipelineISBDebugFetch";
 import { BufferInfo } from "../../../../../../../types/declarations/pipeline";
 import { VertexDetailsContext } from "../../index";
-import { Help } from "../../../../../Help";
 
 const ADVANCED_ISB_DETAILS_KEY = "advanced-isb-details";
 
@@ -39,20 +38,15 @@ interface BufferColumn {
   width: string;
   align?: BufferCellAlign;
   testId?: string;
-  tooltip?: string;
   render: (buffer: BufferInfo) => React.ReactNode;
 }
 
 const BufferHeaderCell = ({
   label,
-  testId,
-  tooltip,
   width,
   align = "left",
 }: {
   label: string;
-  testId?: string;
-  tooltip?: string;
   width: string;
   align?: BufferCellAlign;
 }) => (
@@ -79,18 +73,6 @@ const BufferHeaderCell = ({
       }}
     >
       {label}
-      {tooltip && (
-        <Box
-          data-testid={testId}
-          sx={{
-            alignItems: "center",
-            display: "inline-flex",
-            lineHeight: 0,
-          }}
-        >
-          <Help tooltip={tooltip} />
-        </Box>
-      )}
     </Box>
   </TableCell>
 );
@@ -183,8 +165,6 @@ export function Buffers({
       width: "8rem",
       align: "center",
       testId: "isFull",
-      tooltip:
-        "Whether the buffer has reached its configured capacity or usage limit.",
       render: (buffer) => (buffer?.isFull ? "yes" : "no"),
     },
     {
@@ -193,7 +173,6 @@ export function Buffers({
       width: "9rem",
       align: "center",
       testId: "pending",
-      tooltip: "Messages queued in the buffer waiting to be consumed.",
       render: (buffer) => buffer?.pendingCount,
     },
     {
@@ -202,17 +181,14 @@ export function Buffers({
       width: "11rem",
       align: "center",
       testId: "ackPending",
-      tooltip: "Messages delivered to a consumer but not yet acknowledged.",
       render: (buffer) => buffer?.ackPendingCount,
     },
     {
       key: "totalMessages",
-      label: "Total Messages",
+      label: "Total Pending Messages",
       width: "14rem",
       align: "center",
       testId: "totalMessages",
-      tooltip:
-        "Total messages currently counted for this buffer, with metrics drilldown when available.",
       render: (buffer) => (
         <MetricsModalWrapper
           disableMetricsCharts={disableMetricsCharts}
@@ -231,7 +207,6 @@ export function Buffers({
       width: "12rem",
       align: "center",
       testId: "usage",
-      tooltip: "Current buffer fill percentage.",
       render: (buffer) => formatPercent(buffer?.bufferUsage),
     },
     {
@@ -240,18 +215,7 @@ export function Buffers({
       width: "12rem",
       align: "center",
       testId: "bufferLength",
-      tooltip: "Maximum configured buffer capacity in messages.",
       render: (buffer) => buffer?.bufferLength,
-    },
-    {
-      key: "bufferUsageLimit",
-      label: "Buffer Usage Limit",
-      width: "15rem",
-      align: "center",
-      testId: "bufferUsageLimit",
-      tooltip:
-        "Configured usage threshold at which the buffer is treated as full.",
-      render: (buffer) => formatPercent(buffer?.bufferUsageLimit),
     },
   ];
 
@@ -309,16 +273,14 @@ export function Buffers({
       >
         <Table
           stickyHeader
-          sx={{ minWidth: "107rem", tableLayout: "fixed", width: "100%" }}
+          sx={{ minWidth: "92rem", tableLayout: "fixed", width: "100%" }}
         >
           <TableHead>
             <TableRow>
-              {bufferColumns.map(({ key, label, width, align, tooltip }) => (
+              {bufferColumns.map(({ key, label, width, align }) => (
                 <BufferHeaderCell
                   key={key}
                   label={label}
-                  testId={`buffer-header-help-${key}`}
-                  tooltip={tooltip}
                   width={width}
                   align={align}
                 />
@@ -328,7 +290,7 @@ export function Buffers({
           <TableBody>
             {!buffers.length && (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={7} align="center">
                   No buffer information found
                 </TableCell>
               </TableRow>

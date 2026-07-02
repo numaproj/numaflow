@@ -192,7 +192,7 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
                 <HeaderCell label="API Requests" />
                 <HeaderCell
                   label="API Errors"
-                  tooltip="API error count / API error rate."
+                  tooltip="API error count / API error rate"
                   testId="isb-debug-header-help-api-errors"
                 />
               </TableRow>
@@ -255,14 +255,14 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
                 <HeaderCell label="Leader" />
                 <HeaderCell
                   label="Current"
-                  tooltip="Whether this peer is caught up with the RAFT meta group leader."
+                  tooltip="Whether this peer is caught up with the RAFT meta group leader"
                   testId="isb-debug-header-help-current"
                 />
                 <HeaderCell label="Online" />
                 <HeaderCell label="Last Active" />
                 <HeaderCell
                   label="Lag"
-                  tooltip="Number of RAFT log entries this peer is behind the leader."
+                  tooltip="Number of RAFT log entries this peer is behind the leader"
                   testId="isb-debug-header-help-lag"
                 />
               </TableRow>
