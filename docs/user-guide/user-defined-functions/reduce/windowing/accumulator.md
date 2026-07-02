@@ -201,7 +201,7 @@ Accumulator, the `Datum` is kept intact.
 
 ### How windows are closed (internal EOF)
 
-Accumulator windows are closed by numaflow-core, **not** by the user-defined function. A window is closed once the
+Accumulator windows are closed by numaflow-core, **not** by the user-defined function (similar to other reduce operations). A window is closed once the
 watermark advances past the latest event time seen for that key plus the configured [`timeout`](#timeout) — in other
 words, once the key has been inactive for `timeout`, as measured against the watermark. (As described under
 [`timeout`](#timeout), this is why the watermark must keep progressing: a stalled watermark can keep a window open
