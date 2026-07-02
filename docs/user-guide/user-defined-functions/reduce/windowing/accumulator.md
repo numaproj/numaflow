@@ -185,15 +185,55 @@ more data, hoping to progress watermark with the next datum. This might lead to 
 
 ## How It Works
 
-The Accumulator window works by:
+The Accumulator maintains a single, per-key global window. The window opens when the first `Datum` for a key arrives
+and, unlike fixed, sliding, or session windows, it has no fixed end time — it stays open, accumulating (and optionally
+re-emitting) `Datum`s, until we don't receive any more similar keyed events for `timeout` duration.
 
-1. Maintaining an ordered list of elements for each key
-2. When the watermark progresses, it pops all sorted elements and writes them to the output stream
-3. New elements are inserted into the ordered list based on their event time
-4. If no new data arrives for a key within the specified timeout period, the window is closed
+For each key, the user-defined function typically:
+
+1. Maintains an ordered list of elements for each key (for example, sorted by event time)
+2. When the watermark progresses, pops all elements that are now behind the watermark and writes them to the output stream
+3. Inserts newly arrived elements into the ordered list based on their event time
+4. Flushes any remaining buffered elements when the window is closed (see [How windows are closed](#how-windows-are-closed-internal-eof))
 
 Unlike both `map` or `reduce` operations, where `Datum` is consumed and `Message` is returned, for reordering with the
 Accumulator, the `Datum` is kept intact.
+
+### How windows are closed (internal EOF)
+
+Accumulator windows are closed by numaflow-core, **not** by the user-defined function. A window is closed once the
+watermark advances past the latest event time seen for that key plus the configured [`timeout`](#timeout) — in other
+words, once the key has been inactive for `timeout`, as measured against the watermark. (As described under
+[`timeout`](#timeout), this is why the watermark must keep progressing: a stalled watermark can keep a window open
+indefinitely and lead to OOM.)
+
+When core closes a window, it sends an internal **close / end-of-stream (EOF)** signal to the UDF for that key. This
+signal surfaces differently in each SDK, but it always means the same thing: *no more input will arrive for this
+window, so flush whatever you have buffered.*
+
+After the UDF has handled this signal and returned, the SDK sends an **EOF response** back to core for that window.
+This EOF response is what tells core the window is fully processed, so that it can garbage-collect the window's
+persisted state (WAL), release the tracked messages, and let the watermark advance downstream. Data is retained until
+`Outbound(Watermark) - 1` (see [Data Retention](#data-retention)).
+
+### Dropping or skipping messages
+
+Because the Accumulator is a reduce-family operation — a stream of `Datum` in, a stream of `Datum` out — there is **no
+requirement for a one-to-one mapping between input and output**. If you do not want to forward a particular `Datum`,
+simply do not emit it; you do **not** need to emit an explicit "drop" message to account for it.
+
+!!! note "Behavior change in v1.8.1"
+
+    Before **v1.8.1**, an accumulator window's persisted state was cleaned up only once the UDF emitted at least one
+    output message for that window. A UDF that filtered out (dropped) every message for a window would leave that
+    window's state uncollected, causing unbounded memory and WAL growth. This is why an explicit drop helper (for
+    example, `MessageToDrop` / `to_drop()`) was previously considered necessary — to "account for" every input.
+
+    As of **v1.8.1** ([numaflow#3461](https://github.com/numaproj/numaflow/pull/3461)), window cleanup is driven by the
+    internal EOF described [above](#how-windows-are-closed-internal-eof) and no longer depends on the UDF emitting
+    output. You can safely skip messages by simply not emitting them; the window and its state are cleaned up
+    automatically once the window closes after the `timeout`. Explicitly emitting drops is no longer required. (Some
+    SDKs, such as Python, still expose a `to_drop()` helper, but it is optional and unnecessary for cleanup.)
 
 
 ## Example
