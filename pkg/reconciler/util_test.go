@@ -52,13 +52,13 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			Items: []corev1.Pod{
 				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
 					ContainerStatuses: []corev1.ContainerStatus{
-						{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+						{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 					}},
 				},
 			},
 		}
 		done, reason, message, transient := CheckPodsStatus(&pods)
-		assert.Equal(t, "Pod test-pod is unhealthy", message)
+		assert.Equal(t, `Pod test-pod: container "numa" CrashLoopBackOff`, message)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
 		assert.False(t, done)
 		assert.False(t, transient)
@@ -102,12 +102,14 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
+						Name:  "numa",
 						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
 						LastTerminationState: corev1.ContainerState{
 							Terminated: &corev1.ContainerStateTerminated{
 								FinishedAt: metav1.Time{
 									Time: time.Now().Add(-1 * time.Minute),
 								},
+								Reason:   "OOMKilled",
 								ExitCode: 137,
 							},
 						},
@@ -116,7 +118,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			}},
 		}
 		done, reason, message, transient := CheckPodsStatus(&pods)
-		assert.Equal(t, "Pod test-pod is unhealthy", message)
+		assert.Equal(t, `Pod test-pod: container "numa" restarted recently: OOMKilled (exit code 137)`, message)
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
 		assert.True(t, transient)
@@ -157,14 +159,14 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Name: "failed-pod"}, Status: corev1.PodStatus{
 				Phase: corev1.PodFailed,
 				ContainerStatuses: []corev1.ContainerStatus{
-					{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
+					{Name: "numa", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
 				}},
 			},
 		}}
 		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.False(t, done)
 		assert.Equal(t, "PodError", reason)
-		assert.Equal(t, "Pod failed-pod is unhealthy", message)
+		assert.Equal(t, `Pod failed-pod: container "numa" Error`, message)
 	})
 
 	t.Run("Test unhealthy pod is still detected among terminating pods", func(t *testing.T) {
@@ -177,14 +179,14 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			},
 			{ObjectMeta: metav1.ObjectMeta{Name: "unhealthy-pod"}, Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{
-					{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+					{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 				}},
 			},
 		}}
 		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.False(t, done)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
-		assert.Equal(t, "Pod unhealthy-pod is unhealthy", message)
+		assert.Equal(t, `Pod unhealthy-pod: container "numa" CrashLoopBackOff`, message)
 	})
 
 	t.Run("Test vertex status as false with failed initContainer", func(t *testing.T) {
@@ -192,20 +194,129 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			Items: []corev1.Pod{
 				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
 					ContainerStatuses: []corev1.ContainerStatus{
-						{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
+						{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
 					},
 					InitContainerStatuses: []corev1.ContainerStatus{
-						{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
+						{Name: "init", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
 					},
 				},
 				},
 			},
 		}
 		done, reason, message, transient := CheckPodsStatus(&pods)
-		assert.Equal(t, "Pod test-pod is unhealthy", message)
+		assert.Equal(t, `Pod test-pod: container "init" Error`, message)
 		assert.Equal(t, "PodError", reason)
 		assert.False(t, done)
 		assert.False(t, transient)
+	})
+}
+
+func TestCheckPodsStatusFailureDetail(t *testing.T) {
+	t.Run("OOMKilled surfaced for crash-looping container", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "numa",
+						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "back-off restarting failed container"}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
+						}},
+					},
+				},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodCrashLoopBackOff", reason)
+		assert.Contains(t, message, `container "numa" CrashLoopBackOff`)
+		assert.Contains(t, message, "OOMKilled")
+		assert.Contains(t, message, "exit code 137")
+		assert.False(t, transient)
+	})
+
+	t.Run("ImagePullBackOff includes waiting message", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: "udf", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff", Message: `Back-off pulling image "bad:img"`}}},
+				},
+			}},
+		}}
+		done, reason, message, _ := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodImagePullBackOff", reason)
+		assert.Contains(t, message, "ImagePullBackOff")
+		assert.Contains(t, message, `Back-off pulling image "bad:img"`)
+	})
+
+	t.Run("aggregates all failed containers in a pod", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: "udf", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}},
+					{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+				},
+			}},
+		}}
+		done, reason, message, _ := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodImagePullBackOff", reason)
+		assert.Contains(t, message, `container "udf" ImagePullBackOff`)
+		assert.Contains(t, message, `container "numa" CrashLoopBackOff`)
+		assert.Contains(t, message, "; ")
+	})
+
+	t.Run("recent OOM restart surfaces OOM detail", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "numa",
+						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+						}},
+					},
+				},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodRecentRestart", reason)
+		assert.True(t, transient)
+		assert.Contains(t, message, "OOMKilled")
+		assert.Contains(t, message, "exit code 137")
+	})
+
+	t.Run("aggregates multiple recently-restarted containers", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  "numa",
+						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
+						}},
+					},
+					{
+						Name:  "udf",
+						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+						}},
+					},
+				},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodRecentRestart", reason)
+		assert.True(t, transient)
+		assert.Contains(t, message, `container "numa" restarted recently: OOMKilled (exit code 137)`)
+		assert.Contains(t, message, `container "udf" restarted recently: OOMKilled (exit code 137)`)
+		assert.Contains(t, message, "; ")
 	})
 }
 
