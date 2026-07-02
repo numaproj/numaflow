@@ -26,6 +26,7 @@ import {
   ContainerError,
   ReplicaErrors,
 } from "../../../../../types/declarations/pods";
+import { BufferInfo } from "../../../../../types/declarations/pipeline";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
@@ -55,7 +56,7 @@ export interface VertexDetailsProps {
   vertexId: string;
   vertexSpecs: any;
   vertexMetrics: any;
-  buffers: any[];
+  buffers?: BufferInfo[] | null;
   type: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
   refresh: () => void;
@@ -291,6 +292,8 @@ export function VertexDetails({
     setErrorsCount(filteredDetailsData.length);
   }, [constructedDetails, filterErrorsWithinLast24Hours]);
 
+  const showBuffersTab = !!buffers || type === "source";
+
   return (
     <VertexDetailsContext.Provider
       value={{
@@ -325,6 +328,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={PODS_VIEW_TAB_INDEX}
               label="Pods View"
               data-testid="pods-tab"
             />
@@ -334,6 +338,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={SPEC_TAB_INDEX}
               label="Spec"
               data-testid="spec-tab"
             />
@@ -343,6 +348,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={PROCESSING_RATES_TAB_INDEX}
               label="Processing Rates"
               data-testid="pr-tab"
             />
@@ -352,6 +358,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={K8S_EVENTS_TAB_INDEX}
               label="K8s Events"
               data-testid="events-tab"
             />
@@ -369,15 +376,17 @@ export function VertexDetails({
                   </Box>
                 </Box>
               }
+              value={ERRORS_TAB_INDEX}
               data-testid="errors-tab"
             />
-            {buffers && (
+            {showBuffersTab && (
               <Tab
                 className={
                   tabValue === BUFFERS_TAB_INDEX
                     ? "vertex-details-tab-selected"
                     : "vertex-details-tab"
                 }
+                value={BUFFERS_TAB_INDEX}
                 label="Buffers"
                 data-testid="buffers-tab"
               />
@@ -460,7 +469,7 @@ export function VertexDetails({
             <Errors details={constructedDetails} square />
           )}
         </div>
-        {buffers && (
+        {showBuffersTab && (
           <div
             className="vertex-details-tab-panel"
             role="tabpanel"
@@ -468,7 +477,7 @@ export function VertexDetails({
           >
             {tabValue === BUFFERS_TAB_INDEX && (
               <Buffers
-                buffers={buffers}
+                buffers={buffers || []}
                 namespaceId={namespaceId}
                 pipelineId={pipelineId}
                 vertexId={vertexId}
