@@ -659,6 +659,7 @@ mod tests {
         let client = UserDefinedUnaryMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
         )
         .await
         .unwrap();

@@ -169,7 +169,7 @@ impl MapStreamTask {
                     }
                     Some(Err(e)) => {
                         error!(?e, "failed to map message");
-                        mark_failed!(self.msg_handle, &e);
+                        mark_failed!(self.msg_handle, &e, None);
                         let _ = self.shared_ctx.error_tx.send(e).await;
                         return;
                     }
@@ -816,6 +816,7 @@ mod tests {
         let client = UserDefinedStreamMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
         )
         .await
         .unwrap();

@@ -565,6 +565,7 @@ mod tests {
                 keys: Some(datum.keys),
                 value: datum.value,
                 tags: None,
+                nack_options: None,
             });
             // Intentionally skip the rest of the batch to force partial EOT.
             vec![response]
@@ -856,6 +857,7 @@ mod tests {
         let client = UserDefinedBatchMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
         )
         .await
         .unwrap();
