@@ -83,6 +83,7 @@ tokio-stream = "0.1.17"
 tokio-util = { version = "0.7", features = ["rt"] }
 bytes = "1.11.1"
 tracing = "0.1.41"
+# Keep OpenTelemetry crates on a compatible minor version line.
 tracing-opentelemetry = "0.33"
 opentelemetry = "0.32"
 opentelemetry_sdk = "0.32"
