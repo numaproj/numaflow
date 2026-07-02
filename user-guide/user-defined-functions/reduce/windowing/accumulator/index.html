@@ -1467,6 +1467,26 @@
     How It Works
   </a>
   
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-windows-are-closed-internal-eof" class="md-nav__link">
+    How windows are closed (internal EOF)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropping-or-skipping-messages" class="md-nav__link">
+    Dropping or skipping messages
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2921,6 +2941,26 @@
     How It Works
   </a>
   
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-windows-are-closed-internal-eof" class="md-nav__link">
+    How windows are closed (internal EOF)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropping-or-skipping-messages" class="md-nav__link">
+    Dropping or skipping messages
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3111,15 +3151,47 @@ the timeout may not be triggered without configuring <a href="https://numaflow.n
 Currently, in such cases, the accumulator window may not close as it continues to hold on to the state for the key while ingesting
 more data, hoping to progress watermark with the next datum. This might lead to OOM situations.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<p>The Accumulator window works by:</p>
+<p>The Accumulator maintains a single, per-key global window. The window opens when the first <code>Datum</code> for a key arrives
+and, unlike fixed, sliding, or session windows, it has no fixed end time — it stays open, accumulating (and optionally
+re-emitting) <code>Datum</code>s, until we don't receive any more similar keyed events for <code>timeout</code> duration.</p>
+<p>For each key, the user-defined function typically:</p>
 <ol>
-<li>Maintaining an ordered list of elements for each key</li>
-<li>When the watermark progresses, it pops all sorted elements and writes them to the output stream</li>
-<li>New elements are inserted into the ordered list based on their event time</li>
-<li>If no new data arrives for a key within the specified timeout period, the window is closed</li>
+<li>Maintains an ordered list of elements for each key (for example, sorted by event time)</li>
+<li>When the watermark progresses, pops all elements that are now behind the watermark and writes them to the output stream</li>
+<li>Inserts newly arrived elements into the ordered list based on their event time</li>
+<li>Flushes any remaining buffered elements when the window is closed (see <a href="#how-windows-are-closed-internal-eof">How windows are closed</a>)</li>
 </ol>
 <p>Unlike both <code>map</code> or <code>reduce</code> operations, where <code>Datum</code> is consumed and <code>Message</code> is returned, for reordering with the
 Accumulator, the <code>Datum</code> is kept intact.</p>
+<h3 id="how-windows-are-closed-internal-eof">How windows are closed (internal EOF)<a class="headerlink" href="#how-windows-are-closed-internal-eof" title="Permanent link">&para;</a></h3>
+<p>Accumulator windows are closed by numaflow-core, <strong>not</strong> by the user-defined function (similar to other reduce operations). A window is closed once the
+watermark advances past the latest event time seen for that key plus the configured <a href="#timeout"><code>timeout</code></a> — in other
+words, once the key has been inactive for <code>timeout</code>, as measured against the watermark. (As described under
+<a href="#timeout"><code>timeout</code></a>, this is why the watermark must keep progressing: a stalled watermark can keep a window open
+indefinitely and lead to OOM.)</p>
+<p>When core closes a window, it sends an internal <strong>close / end-of-stream (EOF)</strong> signal to the UDF for that key. This
+signal surfaces differently in each SDK, but it always means the same thing: <em>no more input will arrive for this
+window, so flush whatever you have buffered.</em></p>
+<p>After the UDF has handled this signal and returned, the SDK sends an <strong>EOF response</strong> back to core for that window.
+This EOF response is what tells core the window is fully processed, so that it can garbage-collect the window's
+persisted state (WAL), release the tracked messages, and let the watermark advance downstream. Data is retained until
+<code>Outbound(Watermark) - 1</code> (see <a href="#data-retention">Data Retention</a>).</p>
+<h3 id="dropping-or-skipping-messages">Dropping or skipping messages<a class="headerlink" href="#dropping-or-skipping-messages" title="Permanent link">&para;</a></h3>
+<p>Because the Accumulator is a reduce-family operation — a stream of <code>Datum</code> in, a stream of <code>Datum</code> out — there is <strong>no
+requirement for a one-to-one mapping between input and output</strong>. If you do not want to forward a particular <code>Datum</code>,
+simply do not emit it; you do <strong>not</strong> need to emit an explicit "drop" message to account for it.</p>
+<div class="admonition note">
+<p class="admonition-title">Behavior change in v1.8.1</p>
+<p>Before <strong>v1.8.1</strong>, an accumulator window's persisted state was cleaned up only once the UDF emitted at least one
+output message for that window. A UDF that filtered out (dropped) every message for a window would leave that
+window's state uncollected, causing unbounded memory and WAL growth. This is why an explicit drop helper (for
+example, <code>MessageToDrop</code> / <code>to_drop()</code>) was previously considered necessary — to "account for" every input.</p>
+<p>As of <strong>v1.8.1</strong> (<a href="https://github.com/numaproj/numaflow/pull/3461">numaflow#3461</a>), window cleanup is driven by the
+internal EOF described <a href="#how-windows-are-closed-internal-eof">above</a> and no longer depends on the UDF emitting
+output. You can safely skip messages by simply not emitting them; the window and its state are cleaned up
+automatically once the window closes after the <code>timeout</code>. Explicitly emitting drops is no longer required. (Some
+SDKs, such as Python, still expose a <code>to_drop()</code> helper, but it is optional and unnecessary for cleanup.)</p>
+</div>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <p>Here's an <a href="https://github.com/numaproj/numaflow/blob/main/examples/13-accumulator-window.yaml">example</a> of using an
 Accumulator window to join and sort two HTTP sources:</p>
