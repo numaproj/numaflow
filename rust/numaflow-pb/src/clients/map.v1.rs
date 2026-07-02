@@ -77,6 +77,11 @@ pub mod map_response {
         /// Metadata is the metadata of the message
         #[prost(message, optional, tag = "4")]
         pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
+        /// Nack options specified while nacking a message
+        #[prost(message, optional, tag = "5")]
+        pub nack_options: ::core::option::Option<
+            crate::common::nack_options::NackOptions,
+        >,
     }
 }
 /// *

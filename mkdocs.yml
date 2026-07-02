@@ -122,6 +122,7 @@ nav:
           - "MonoVertex Streaming Mode": user-guide/reference/mvtx-streaming.md
           - user-guide/reference/distributed-throttling.md
           - user-guide/reference/monovertex-bypass.md
+          - "Per-message Nack": user-guide/reference/per-message-nack.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md

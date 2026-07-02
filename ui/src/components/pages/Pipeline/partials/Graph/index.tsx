@@ -769,7 +769,11 @@ export default function Graph(props: GraphProps) {
       const updated = {
         type: SidebarType.EDGE_DETAILS,
         edgeDetailsProps: {
+          namespaceId,
+          pipelineId,
           edgeId: edge.id,
+          from: edge?.data?.source || edge.source,
+          to: edge?.data?.target || edge.target,
           watermarks: edge?.data?.edgeWatermark?.watermarks,
         },
       };
@@ -779,7 +783,7 @@ export default function Graph(props: GraphProps) {
       }
       setSidebarProps(updated);
     },
-    [setSidebarProps, sidebarProps]
+    [setSidebarProps, sidebarProps, namespaceId, pipelineId]
   );
 
   const handleEdgeClick = useCallback(

@@ -289,8 +289,14 @@ impl Transformer {
             .iter()
             .filter(|h| h.message().dropped())
             .count();
+        let nacked_message_count = transformed_handles
+            .iter()
+            .filter(|h| h.message().nacked())
+            .count();
         let elapsed_time = batch_start_time.elapsed().as_micros() as f64;
-        let write_messages_count = transformed_handles.len() - dropped_messages_count;
+        let write_messages_count =
+            transformed_handles.len() - dropped_messages_count - nacked_message_count;
+        // TODO: emit nacked message metrics
         Self::send_transformer_metrics(
             dropped_messages_count,
             elapsed_time,
@@ -357,6 +363,10 @@ impl Transformer {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::message::StringOffset;
+    use crate::message::{Message, MessageHandle, MessageID, Offset};
+    use crate::shared::grpc::create_rpc_channel;
     use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
@@ -365,11 +375,6 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
-
-    use super::*;
-    use crate::message::StringOffset;
-    use crate::message::{Message, MessageHandle, MessageID, Offset};
-    use crate::shared::grpc::create_rpc_channel;
 
     const TEST_GRPC_MAX_MESSAGE_SIZE: usize =
         crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE;

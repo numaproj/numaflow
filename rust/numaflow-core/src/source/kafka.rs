@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::config::get_vertex_name;
 use crate::error::Error;
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
 
@@ -53,6 +53,7 @@ impl TryFrom<KafkaMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
+            nack_options: None,
         })
     }
 }
@@ -151,7 +152,7 @@ impl source::SourceAcker for KafkaSource {
         self.ack_messages(kafka_offsets).await.map_err(Into::into)
     }
 
-    async fn nack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> crate::error::Result<()> {
         info!(?offsets, "Nack invoked for offsets (no-op for Kafka)");
         // Kafka doesn't support nack - no-op
         Ok(())

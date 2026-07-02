@@ -8,7 +8,7 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use crate::error::Result;
-use crate::message::{Message, Offset};
+use crate::message::{Message, NackOptions, Offset};
 
 /// A boxed future representing a pending write operation.
 /// This is returned by `ISBWriter::async_write()` and can be awaited
@@ -57,9 +57,7 @@ pub(crate) trait LocalISBReader: Sync {
     /// Negative acknowledgment - indicates the message should be redelivered.
     ///
     /// The implementation uses the offset to identify which message to nack.
-    /// Pass `delay = Some(...)` to defer redelivery by that duration when the
-    /// underlying ISB supports it; `None` redelivers as soon as the ISB allows.
-    async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()>;
+    async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()>;
 
     /// Returns the number of pending (unprocessed) messages, if available.
     ///
