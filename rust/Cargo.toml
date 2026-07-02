@@ -83,10 +83,11 @@ tokio-stream = "0.1.17"
 tokio-util = { version = "0.7", features = ["rt"] }
 bytes = "1.11.1"
 tracing = "0.1.41"
-tracing-opentelemetry = "0.32"
-opentelemetry = "0.31"
-opentelemetry_sdk = "0.31"
-opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+# Keep OpenTelemetry crates on a compatible minor version line.
+tracing-opentelemetry = "0.33"
+opentelemetry = "0.32"
+opentelemetry_sdk = "0.32"
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic"] }
 async-nats = "0.44.2"
 thiserror = "2.0.12"
 axum = { version = "0.8.4", default-features = false, features = [
