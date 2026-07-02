@@ -36,25 +36,26 @@ import (
 
 const jetStreamMonitorPort = 8222
 
+type jetStreamMonitorSnapshot struct {
+	pod    corev1.Pod
+	jsInfo *natsserver.JSInfo
+}
+
 // GetISBServiceJetStream returns JetStream monitor summary and RAFT meta group information for an ISB service.
 func (h *handler) GetISBServiceJetStream(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
-	_, pods, ok := h.getJetStreamISBMonitorPods(c, ns, isbsvcName)
+	snapshots, errors, ok := h.collectJetStreamMonitorSnapshots(c, ns, isbsvcName)
 	if !ok {
 		return
 	}
 	response := ISBJetStreamDTO{
 		Summary:       []JetStreamSummaryDTO{},
 		RaftMetaGroup: []JetStreamRaftMetaDTO{},
+		Errors:        errors,
 	}
-	for _, pod := range pods {
-		jsInfo, err := h.fetchJetStreamInfo(c.Request.Context(), pod)
-		if err != nil {
-			response.Errors = append(response.Errors, ISBMonitorErrorDTO{Pod: pod.Name, Message: err.Error()})
-			continue
-		}
-		response.Summary = append(response.Summary, newJetStreamSummaryDTO(pod.Name, jsInfo))
-		response.RaftMetaGroup = append(response.RaftMetaGroup, newJetStreamRaftMetaDTOs(pod.Name, jsInfo)...)
+	for _, snapshot := range snapshots {
+		response.Summary = append(response.Summary, newJetStreamSummaryDTO(snapshot.pod.Name, snapshot.jsInfo))
+		response.RaftMetaGroup = append(response.RaftMetaGroup, newJetStreamRaftMetaDTOs(snapshot.pod.Name, snapshot.jsInfo)...)
 	}
 	if len(response.Summary) == 0 && len(response.Errors) > 0 {
 		message := fmt.Sprintf("Failed to fetch JetStream monitor data for interstepbuffer service %q namespace %q", isbsvcName, ns)
@@ -72,6 +73,24 @@ func (h *handler) GetISBServiceJetStream(c *gin.Context) {
 		return response.RaftMetaGroup[i].ID < response.RaftMetaGroup[j].ID
 	})
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) collectJetStreamMonitorSnapshots(c *gin.Context, ns, isbsvcName string) ([]jetStreamMonitorSnapshot, []ISBMonitorErrorDTO, bool) {
+	_, pods, ok := h.getJetStreamISBMonitorPods(c, ns, isbsvcName)
+	if !ok {
+		return nil, nil, false
+	}
+	snapshots := []jetStreamMonitorSnapshot{}
+	errors := []ISBMonitorErrorDTO{}
+	for _, pod := range pods {
+		jsInfo, err := h.fetchJetStreamInfo(c.Request.Context(), pod)
+		if err != nil {
+			errors = append(errors, ISBMonitorErrorDTO{Pod: pod.Name, Message: err.Error()})
+			continue
+		}
+		snapshots = append(snapshots, jetStreamMonitorSnapshot{pod: pod, jsInfo: jsInfo})
+	}
+	return snapshots, errors, true
 }
 
 // getJetStreamISBMonitorPods validates that the ISB service is JetStream backed and returns running pods with Pod IPs.

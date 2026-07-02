@@ -134,6 +134,111 @@ export interface ISBServiceDebugFetchResult {
   refresh: () => void;
 }
 
+export interface PipelineISBStream {
+  namespace: string;
+  pipeline: string;
+  vertex: string;
+  from?: string;
+  to?: string;
+  partition: number;
+  stream: string;
+  subjects?: string[];
+  messages: number;
+  bytes: number;
+  consumerCount: number;
+  firstSeq: number;
+  lastSeq: number;
+  firstTimestamp?: string;
+  lastTimestamp?: string;
+  storage?: string;
+  replicas?: number;
+  retention?: string;
+  maxMessages?: number;
+  leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
+  scope: string;
+  sharedByInboundEdges: boolean;
+}
+
+export interface PipelineISBConsumer {
+  namespace: string;
+  pipeline: string;
+  vertex: string;
+  from?: string;
+  to?: string;
+  partition: number;
+  stream: string;
+  consumer: string;
+  durable?: string;
+  filterSubject?: string;
+  filterSubjects?: string[];
+  ackPolicy?: string;
+  deliverPolicy?: string;
+  ackWaitSeconds?: number;
+  maxAckPending?: number;
+  numAckPending: number;
+  numRedelivered: number;
+  numWaiting: number;
+  numPending: number;
+  deliveredConsumerSeq: number;
+  deliveredStreamSeq: number;
+  ackFloorConsumerSeq: number;
+  ackFloorStreamSeq: number;
+  leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
+  scope: string;
+  sharedByInboundEdges: boolean;
+}
+
+export interface PipelineISBKVStore {
+  namespace: string;
+  pipeline: string;
+  scope: string;
+  direction?: string;
+  vertex?: string;
+  from?: string;
+  to?: string;
+  bucket: string;
+  stream: string;
+  values: number;
+  bytes: number;
+  history?: number;
+  ttlSeconds?: number;
+  replicas?: number;
+  storage?: string;
+  leader?: string;
+  sourcePod?: string;
+  collectedAt?: string;
+}
+
+export interface PipelineISBStreamsResponse {
+  streams: PipelineISBStream[];
+  errors?: ISBMonitorError[];
+}
+
+export interface PipelineISBConsumersResponse {
+  consumers: PipelineISBConsumer[];
+  errors?: ISBMonitorError[];
+}
+
+export interface PipelineISBKVStoresResponse {
+  kvStores: PipelineISBKVStore[];
+  errors?: ISBMonitorError[];
+}
+
+export interface PipelineISBDebugFetchResult {
+  data?: {
+    streams?: PipelineISBStreamsResponse;
+    consumers?: PipelineISBConsumersResponse;
+    kvStores?: PipelineISBKVStoresResponse;
+  };
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
 export interface PipelineSummary {
   name: string;
   status: string;
@@ -288,4 +393,3 @@ export interface PipelineHealthData {
   resourceHealthMessage: string;
   resourceHealthStatus: string;
 }
-

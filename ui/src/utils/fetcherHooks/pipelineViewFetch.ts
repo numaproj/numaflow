@@ -528,8 +528,8 @@ export const usePipelineViewFetch = (
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (spec?.edges && buffers && edgeWatermark) {
-      // backpressure for a buffer is the count of pending messages
-      // map from edge-id( from-Vertex - to-Vertex ) to sum of pending and ackPending counts
+      // Edge hover shows a compact target-buffer summary. These counts are
+      // aggregated by the destination vertex buffer, not by the individual edge.
       const edgePendingLabel = new Map();
       const edgeAckPendingLabel = new Map();
       const edgeIsFull = new Map();
