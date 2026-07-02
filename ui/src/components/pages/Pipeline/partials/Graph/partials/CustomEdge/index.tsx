@@ -349,10 +349,8 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
                         gap: "2px",
                       }}
                     >
-                      <span>Queued messages: {data?.pendingLabel || 0}</span>
-                      <span>
-                        In-flight messages: {data?.ackPendingLabel || 0}
-                      </span>
+                      <span>Pending: {data?.pendingLabel || 0}</span>
+                      <span>AckPending: {data?.ackPendingLabel || 0}</span>
                     </div>
                   </div>
                 </div>

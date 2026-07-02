@@ -160,6 +160,58 @@ describe("pipelineISBDebugFetch test", () => {
     });
   });
 
+  it("keeps cached data when fetch is disabled", async () => {
+    const streamsResponse = {
+      data: { data: { streams: [{ stream: "cat-stream" }] } },
+      error: undefined,
+      loading: false,
+    };
+    const consumersResponse = {
+      data: { data: { consumers: [] } },
+      error: undefined,
+      loading: false,
+    };
+    const kvStoresResponse = {
+      data: { data: { kvStores: [] } },
+      error: undefined,
+      loading: false,
+    };
+    mockedUseFetch.mockImplementation((url: string) => {
+      if (url.includes("/streams")) {
+        return streamsResponse;
+      }
+      if (url.includes("/consumers")) {
+        return consumersResponse;
+      }
+      return kvStoresResponse;
+    });
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        usePipelineISBDebugFetch({
+          namespaceId: "ns",
+          pipelineId: "pl",
+          vertexId: "cat",
+          enabled,
+        }),
+      { initialProps: { enabled: true } }
+    );
+
+    await waitFor(() => {
+      expect(result.current.data?.streams?.streams[0].stream).toEqual(
+        "cat-stream"
+      );
+    });
+
+    rerender({ enabled: false });
+
+    await waitFor(() => {
+      expect(result.current.data?.streams?.streams[0].stream).toEqual(
+        "cat-stream"
+      );
+      expect(result.current.loading).toBe(false);
+    });
+  });
+
   it("excludes stale retained data for a failed endpoint", async () => {
     const streamsResponse = {
       data: { data: { streams: [{ stream: "stale-stream" }] } },

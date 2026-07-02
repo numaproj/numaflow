@@ -1,4 +1,7 @@
 import React from "react";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Table from "@mui/material/Table";
@@ -7,6 +10,7 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Help } from "../../../Help";
 import {
   ISBMonitorError,
@@ -141,6 +145,8 @@ const kvStoreColumnLayouts = Object.values(kvStoreColumns);
 
 const tableContainerSx = {
   backgroundColor: "#FFF",
+  border: "0.1rem solid #DADCE0",
+  borderRadius: "0.8rem",
   maxHeight: "60rem",
   overflowX: "auto",
   width: "100%",
@@ -202,8 +208,6 @@ const HeaderCell = ({
       backgroundColor: "#F4F4F4",
       borderBottom: "0.1rem solid #C6C6C6",
       color: "#393939",
-      fontSize: "1.1rem",
-      fontWeight: 700,
       overflow: "hidden",
       padding: "1rem 1.2rem",
       textOverflow: "ellipsis",
@@ -246,12 +250,14 @@ const BodyCell = ({
   align = "left",
   children,
   column,
+  monospace = false,
   title,
   wrap = false,
 }: {
   align?: ISBCellAlign;
   children: React.ReactNode;
   column?: ISBColumnLayout;
+  monospace?: boolean;
   title?: string;
   wrap?: boolean;
 }) => (
@@ -260,7 +266,6 @@ const BodyCell = ({
     title={title}
     sx={{
       borderBottom: "0.1rem solid #E0E0E0",
-      fontSize: "1.2rem",
       overflow: "hidden",
       padding: "1rem 1.2rem",
       overflowWrap: wrap ? "anywhere" : "normal",
@@ -274,6 +279,7 @@ const BodyCell = ({
     <Box
       sx={{
         display: "flex",
+        fontFamily: monospace ? "monospace" : undefined,
         justifyContent: justifyContentByAlign[align],
         minWidth: 0,
         overflow: wrap ? "visible" : "hidden",
@@ -289,19 +295,46 @@ const BodyCell = ({
   </TableCell>
 );
 
-const DebugSection = ({
+const DebugAccordionSection = ({
   title,
+  defaultExpanded = false,
   children,
 }: {
   title: string;
+  defaultExpanded?: boolean;
   children: React.ReactNode;
 }) => (
-  <Box sx={{ marginBottom: "2.4rem" }}>
-    <Box sx={{ fontSize: "1.4rem", fontWeight: 600, marginBottom: "1.2rem" }}>
-      {title}
-    </Box>
-    {children}
-  </Box>
+  <Accordion
+    defaultExpanded={defaultExpanded}
+    sx={{
+      backgroundColor: "#FFF",
+      border: "0.1rem solid #DADCE0",
+      borderRadius: "0.8rem",
+      boxShadow: "none",
+      marginBottom: "1.2rem",
+      overflow: "hidden",
+      "&:before": { display: "none" },
+      "&:last-of-type": { marginBottom: 0 },
+    }}
+  >
+    <AccordionSummary
+      expandIcon={<ExpandMoreIcon />}
+      sx={{
+        backgroundColor: "#FAFBFC",
+        "& .MuiAccordionSummary-content": {
+          alignItems: "center",
+          display: "flex",
+          gap: "0.8rem",
+          margin: "1.2rem 0",
+        },
+        minHeight: "5.6rem",
+        padding: "0 1.6rem",
+      }}
+    >
+      <Box>{title}</Box>
+    </AccordionSummary>
+    <AccordionDetails sx={{ padding: "1.6rem" }}>{children}</AccordionDetails>
+  </Accordion>
 );
 
 const EmptyRow = ({ colSpan }: { colSpan: number }) => (
@@ -345,7 +378,12 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
     {!streams.length && <EmptyRow colSpan={STREAM_COLUMN_COUNT} />}
     {streams.map((stream) => (
       <TableRow key={stream.stream} sx={bodyRowSx}>
-        <BodyCell column={streamColumns.stream} title={stream.stream} wrap>
+        <BodyCell
+          column={streamColumns.stream}
+          monospace
+          title={stream.stream}
+          wrap
+        >
           {stream.stream}
         </BodyCell>
         <BodyCell align="center" column={streamColumns.partition}>
@@ -377,7 +415,6 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
           {formatOptional(stream.replicas)}
         </BodyCell>
         <BodyCell
-          align="center"
           column={streamColumns.leader}
           title={String(formatOptional(stream.leader))}
         >
@@ -395,12 +432,18 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
       <TableRow key={`${consumer.stream}-${consumer.consumer}`} sx={bodyRowSx}>
         <BodyCell
           column={consumerColumns.consumer}
+          monospace
           title={consumer.consumer}
           wrap
         >
           {consumer.consumer}
         </BodyCell>
-        <BodyCell column={consumerColumns.stream} title={consumer.stream} wrap>
+        <BodyCell
+          column={consumerColumns.stream}
+          monospace
+          title={consumer.stream}
+          wrap
+        >
           {consumer.stream}
         </BodyCell>
         <BodyCell align="center" column={consumerColumns.partition}>
@@ -431,7 +474,6 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
           {formatOptional(consumer.maxAckPending)}
         </BodyCell>
         <BodyCell
-          align="center"
           column={consumerColumns.leader}
           title={String(formatOptional(consumer.leader))}
         >
@@ -447,7 +489,12 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
     {!kvStores.length && <EmptyRow colSpan={KV_STORE_COLUMN_COUNT} />}
     {kvStores.map((kvStore) => (
       <TableRow key={kvStore.stream} sx={bodyRowSx}>
-        <BodyCell column={kvStoreColumns.bucket} title={kvStore.bucket} wrap>
+        <BodyCell
+          column={kvStoreColumns.bucket}
+          monospace
+          title={kvStore.bucket}
+          wrap
+        >
           {kvStore.bucket}
         </BodyCell>
         <BodyCell align="center" column={kvStoreColumns.scope}>
@@ -485,7 +532,6 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
           {formatOptional(kvStore.replicas)}
         </BodyCell>
         <BodyCell
-          align="center"
           column={kvStoreColumns.leader}
           title={String(formatOptional(kvStore.leader))}
         >
@@ -501,13 +547,16 @@ const MonitorErrorsSection = ({ errors }: { errors: ISBMonitorError[] }) => {
     return null;
   }
   return (
-    <DebugSection title="Monitor Errors">
+    <DebugAccordionSection
+      title="Monitor Errors"
+      defaultExpanded
+    >
       <TableContainer sx={tableContainerSx}>
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <HeaderCell label="Pod" />
-              <HeaderCell label="Error" />
+              <HeaderCell label="Pod" align="left" />
+              <HeaderCell label="Error" align="left" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -520,7 +569,7 @@ const MonitorErrorsSection = ({ errors }: { errors: ISBMonitorError[] }) => {
           </TableBody>
         </Table>
       </TableContainer>
-    </DebugSection>
+    </DebugAccordionSection>
   );
 };
 
@@ -578,7 +627,10 @@ export function PipelineISBDebugInfo({
           buffer and may be shared by multiple inbound edges.
         </Box>
       )}
-      <DebugSection title="Consumer Information">
+      <DebugAccordionSection
+        title="Consumer Information"
+        defaultExpanded
+      >
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={consumerColumnLayouts}
@@ -589,9 +641,14 @@ export function PipelineISBDebugInfo({
               <TableRow>
                 <HeaderCell
                   label="Consumer"
+                  align="left"
                   column={consumerColumns.consumer}
                 />
-                <HeaderCell label="Stream" column={consumerColumns.stream} />
+                <HeaderCell
+                  label="Stream"
+                  align="left"
+                  column={consumerColumns.stream}
+                />
                 <HeaderCell
                   label="Partition"
                   align="center"
@@ -641,6 +698,7 @@ export function PipelineISBDebugInfo({
                 />
                 <HeaderCell
                   label="Leader"
+                  align="left"
                   column={consumerColumns.leader}
                   tooltip="JetStream server currently leading this consumer state"
                   testId="isb-debug-header-help-consumer-leader"
@@ -656,9 +714,9 @@ export function PipelineISBDebugInfo({
             )}
           </ISBTable>
         </TableContainer>
-      </DebugSection>
+      </DebugAccordionSection>
 
-      <DebugSection title="Stream Information">
+      <DebugAccordionSection title="Stream Information">
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={streamColumnLayouts}
@@ -667,7 +725,11 @@ export function PipelineISBDebugInfo({
           >
             <TableHead>
               <TableRow>
-                <HeaderCell label="Stream" column={streamColumns.stream} />
+                <HeaderCell
+                  label="Stream"
+                  align="left"
+                  column={streamColumns.stream}
+                />
                 <HeaderCell
                   label="Partition"
                   align="center"
@@ -703,6 +765,7 @@ export function PipelineISBDebugInfo({
                 />
                 <HeaderCell
                   label="Last Timestamp"
+                  align="left"
                   column={streamColumns.lastTimestamp}
                   tooltip="Timestamp of the latest retained message in this stream"
                   testId="isb-debug-header-help-stream-last-timestamp"
@@ -723,6 +786,7 @@ export function PipelineISBDebugInfo({
                 />
                 <HeaderCell
                   label="Leader"
+                  align="left"
                   column={streamColumns.leader}
                   tooltip="JetStream server currently leading this stream replica group"
                   testId="isb-debug-header-help-stream-leader"
@@ -738,9 +802,9 @@ export function PipelineISBDebugInfo({
             )}
           </ISBTable>
         </TableContainer>
-      </DebugSection>
+      </DebugAccordionSection>
 
-      <DebugSection title="KV Stores">
+      <DebugAccordionSection title="KV Stores">
         <TableContainer sx={tableContainerSx}>
           <ISBTable
             columns={kvStoreColumnLayouts}
@@ -749,7 +813,11 @@ export function PipelineISBDebugInfo({
           >
             <TableHead>
               <TableRow>
-                <HeaderCell label="Bucket" column={kvStoreColumns.bucket} />
+                <HeaderCell
+                  label="Bucket"
+                  align="left"
+                  column={kvStoreColumns.bucket}
+                />
                 <HeaderCell
                   label="Scope"
                   align="center"
@@ -804,6 +872,7 @@ export function PipelineISBDebugInfo({
                 />
                 <HeaderCell
                   label="Leader"
+                  align="left"
                   column={kvStoreColumns.leader}
                   tooltip="JetStream server currently leading this KV bucket backing stream"
                   testId="isb-debug-header-help-kv-leader"
@@ -819,7 +888,7 @@ export function PipelineISBDebugInfo({
             )}
           </ISBTable>
         </TableContainer>
-      </DebugSection>
+      </DebugAccordionSection>
 
       <MonitorErrorsSection errors={monitorErrors} />
     </Box>

@@ -73,8 +73,8 @@ export const usePipelineISBDebugFetch = ({
 
   const baseUrl = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/isb`;
   const requestIdentity = useMemo(
-    () => `${baseUrl}${queryString}:${shouldFetch}`,
-    [baseUrl, queryString, shouldFetch]
+    () => `${baseUrl}${queryString}`,
+    [baseUrl, queryString]
   );
   const requestToken = `${requestIdentity}:${options.requestKey || ""}`;
   const requestTokenRef = useRef(requestToken);
@@ -128,8 +128,6 @@ export const usePipelineISBDebugFetch = ({
       return;
     }
     if (!shouldFetch) {
-      setData(undefined);
-      setError(undefined);
       setLoading(false);
       return;
     }

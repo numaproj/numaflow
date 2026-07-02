@@ -103,8 +103,6 @@ const HeaderCell = ({
       backgroundColor: "#F4F4F4",
       borderBottom: "0.1rem solid #C6C6C6",
       color: "#393939",
-      fontSize: "1.1rem",
-      fontWeight: 700,
     }}
   >
     <Box sx={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -133,7 +131,7 @@ const DebugSection = ({
   children: React.ReactNode;
 }) => (
   <Box sx={{ marginBottom: "2.4rem" }}>
-    <Box sx={{ fontSize: "1.4rem", fontWeight: 600, marginBottom: "1.2rem" }}>
+    <Box sx={{ marginBottom: "1.2rem" }}>
       {title}
     </Box>
     {children}
@@ -219,24 +217,14 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
               ))}
               {!!summary.length && (
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Total</TableCell>
+                  <TableCell>Total</TableCell>
                   <TableCell>-</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {formatNumber(total.streams)}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {formatNumber(total.consumers)}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {formatNumber(total.messages)}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {formatBytes(total.bytes)}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {formatNumber(total.apiRequests)}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
+                  <TableCell>{formatNumber(total.streams)}</TableCell>
+                  <TableCell>{formatNumber(total.consumers)}</TableCell>
+                  <TableCell>{formatNumber(total.messages)}</TableCell>
+                  <TableCell>{formatBytes(total.bytes)}</TableCell>
+                  <TableCell>{formatNumber(total.apiRequests)}</TableCell>
+                  <TableCell>
                     {formatApiErrors(total.apiErrors, totalApiErrorRate)}
                   </TableCell>
                 </TableRow>

@@ -44,6 +44,29 @@ const mockBuffers = [
   },
 ];
 
+const mockISBDebugData = {
+  streams: {
+    streams: [
+      {
+        namespace: "default",
+        pipeline: "simple-pipeline",
+        vertex: "cat",
+        partition: 0,
+        stream: "default-simple-pipeline-cat-0",
+        messages: 9,
+        bytes: 1024,
+        consumerCount: 1,
+        firstSeq: 1,
+        lastSeq: 9,
+        scope: "vertex",
+        sharedByInboundEdges: false,
+      },
+    ],
+  },
+  consumers: { consumers: [] },
+  kvStores: { kvStores: [] },
+};
+
 const renderBuffers = (buffers = mockBuffers) => {
   const Wrapper = () => {
     const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
@@ -74,35 +97,18 @@ const renderBuffers = (buffers = mockBuffers) => {
 
 describe("Buffers", () => {
   beforeEach(() => {
-    mockUsePipelineISBDebugFetch.mockImplementation((props) => ({
-      data: props.enabled
-        ? {
-            streams: {
-              streams: [
-                {
-                  namespace: "default",
-                  pipeline: "simple-pipeline",
-                  vertex: "cat",
-                  partition: 0,
-                  stream: "default-simple-pipeline-cat-0",
-                  messages: 9,
-                  bytes: 1024,
-                  consumerCount: 1,
-                  firstSeq: 1,
-                  lastSeq: 9,
-                  scope: "vertex",
-                  sharedByInboundEdges: false,
-                },
-              ],
-            },
-            consumers: { consumers: [] },
-            kvStores: { kvStores: [] },
-          }
-        : undefined,
-      loading: false,
-      error: undefined,
-      refresh: mockISBDebugRefresh,
-    }));
+    let hasLoadedISBDebug = false;
+    mockUsePipelineISBDebugFetch.mockImplementation((props) => {
+      if (props.enabled) {
+        hasLoadedISBDebug = true;
+      }
+      return {
+        data: hasLoadedISBDebug ? mockISBDebugData : undefined,
+        loading: false,
+        error: undefined,
+        refresh: mockISBDebugRefresh,
+      };
+    });
     mockISBDebugRefresh.mockClear();
   });
 
@@ -169,6 +175,23 @@ describe("Buffers", () => {
 
     await waitFor(() => {
       expect(mockISBDebugRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByText("Advanced ISB Diagnostics"));
+
+    await waitFor(() => {
+      const lastFetchProps =
+        mockUsePipelineISBDebugFetch.mock.calls[
+          mockUsePipelineISBDebugFetch.mock.calls.length - 1
+        ][0];
+      expect(lastFetchProps).toEqual(
+        expect.objectContaining({
+          enabled: false,
+        })
+      );
+      expect(
+        screen.queryByText("ISB information is not available yet.")
+      ).not.toBeInTheDocument();
     });
   });
 });

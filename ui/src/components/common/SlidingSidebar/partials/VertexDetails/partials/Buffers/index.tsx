@@ -56,8 +56,6 @@ const BufferHeaderCell = ({
       backgroundColor: "#F4F4F4",
       borderBottom: "0.1rem solid #C6C6C6",
       color: "#393939",
-      fontSize: "1.1rem",
-      fontWeight: 700,
       padding: "1.2rem 1.6rem",
       whiteSpace: "nowrap",
       width,
@@ -93,7 +91,6 @@ const BufferBodyCell = ({
     data-testid={testId}
     sx={{
       borderBottom: "0.1rem solid #E0E0E0",
-      fontSize: "1.2rem",
       padding: "1.2rem 1.6rem",
       verticalAlign: "middle",
       whiteSpace: "nowrap",
@@ -351,9 +348,7 @@ export function Buffers({
             zIndex: 10,
           }}
         >
-          <Box sx={{ fontSize: "1.6rem", fontWeight: 600 }}>
-            Advanced ISB Diagnostics
-          </Box>
+          <Box>Advanced ISB Diagnostics</Box>
         </AccordionSummary>
         <AccordionDetails sx={{ padding: "1.6rem" }}>
           <PipelineISBDebugInfo

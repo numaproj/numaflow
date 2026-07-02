@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PipelineISBDebugInfo } from "./index";
 
 import "@testing-library/jest-dom";
@@ -183,11 +183,19 @@ describe("PipelineISBDebugInfo", () => {
       expect(screen.getByText("Stream Information")).toBeInTheDocument();
       expect(
         screen.getByTestId("isb-debug-consumers-table")
-      ).toBeInTheDocument();
-      expect(screen.getByTestId("isb-debug-streams-table")).toBeInTheDocument();
+      ).toBeVisible();
+      expect(screen.getByTestId("isb-debug-streams-table")).not.toBeVisible();
       expect(
         screen.getByTestId("isb-debug-kv-stores-table")
-      ).toBeInTheDocument();
+      ).not.toBeVisible();
+    });
+
+    fireEvent.click(screen.getByText("Stream Information"));
+    fireEvent.click(screen.getByText("KV Stores"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("isb-debug-streams-table")).toBeVisible();
+      expect(screen.getByTestId("isb-debug-kv-stores-table")).toBeVisible();
       expect(screen.getByText("Stored Messages")).toBeInTheDocument();
       expect(screen.getAllByText("Bytes").length).toBeGreaterThan(0);
       expect(screen.getByText("First Seq")).toBeInTheDocument();
@@ -233,6 +241,70 @@ describe("PipelineISBDebugInfo", () => {
     });
   });
 
+  it("keeps stream and kv store sections collapsed until opened", async () => {
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        streams={{
+          streams: [
+            {
+              stream: "ns-pl-cat-0",
+              partition: 0,
+              messages: 10,
+              bytes: 1024,
+              firstSeq: 1,
+              lastSeq: 10,
+              lastTimestamp: "2026-06-30T00:01:00Z",
+              consumerCount: 1,
+            },
+          ],
+        }}
+        consumers={{
+          consumers: [
+            {
+              stream: "ns-pl-cat-0",
+              consumer: "ns-pl-cat-0",
+              partition: 0,
+              ackWaitSeconds: 30,
+              maxAckPending: 25000,
+              numRedelivered: 1,
+              numWaiting: 0,
+              deliveredStreamSeq: 10,
+              ackFloorStreamSeq: 8,
+            },
+          ],
+        }}
+        kvStores={{
+          kvStores: [
+            {
+              bucket: "ns-pl-in-cat_OT",
+              stream: "KV_ns-pl-in-cat_OT",
+              scope: "edge",
+              values: 2,
+              bytes: 2048,
+            },
+          ],
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("isb-debug-consumers-table")).toBeVisible();
+      expect(screen.getByTestId("isb-debug-streams-table")).not.toBeVisible();
+      expect(
+        screen.getByTestId("isb-debug-kv-stores-table")
+      ).not.toBeVisible();
+    });
+
+    fireEvent.click(screen.getByText("Stream Information"));
+    fireEvent.click(screen.getByText("KV Stores"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("isb-debug-streams-table")).toBeVisible();
+      expect(screen.getByTestId("isb-debug-kv-stores-table")).toBeVisible();
+    });
+  });
+
   it("renders shared edge scope notice", async () => {
     render(
       <PipelineISBDebugInfo
@@ -261,6 +333,11 @@ describe("PipelineISBDebugInfo", () => {
       expect(
         screen.getByText("Some ISB information is not available yet.")
       ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("KV Stores"));
+
+    await waitFor(() => {
       expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
       expect(
         screen.getAllByText("ISB information is not available yet.").length
