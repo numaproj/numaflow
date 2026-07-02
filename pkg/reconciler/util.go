@@ -19,6 +19,7 @@ package reconciler
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -34,8 +35,8 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 		return true, "NoPodsFound", "No Pods found", false
 	} else {
 		for _, pod := range pods.Items {
-			if podHealthy, msg, transient := isPodHealthy(&pod); !podHealthy {
-				return false, "Pod" + msg, fmt.Sprintf("Pod %s is unhealthy", pod.Name), transient
+			if podHealthy, podReason, details, transient := isPodHealthy(&pod); !podHealthy {
+				return false, "Pod" + podReason, fmt.Sprintf("Pod %s: %s", pod.Name, details), transient
 			}
 		}
 	}
@@ -46,50 +47,95 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 // The reason of transient unhealthy status is because of the logic of checking RecentRestart,
 // which would not end up with another reconciliation when it reaches the time limit,
 // but we have to trigger it explicitly.
-func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhealthy bool) {
+// When unhealthy, message carries the free-form per-container failure detail (e.g. OOMKilled,
+// ImagePullBackOff) so it can be surfaced in the PodsHealthy condition.
+func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string, isTransientUnhealthy bool) {
 	// Skip pods that are terminating or already completed
 	if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
-		return true, "", false
+		return true, "", "", false
 	}
 
 	// check both container and initContainer statuses
-	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)
+	healthy, reason, message, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)
 	if !healthy {
-		return healthy, reason, isTransientUnhealthy
+		return healthy, reason, message, isTransientUnhealthy
 	}
-	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.InitContainerStatuses)
+	healthy, reason, message, isTransientUnhealthy = checkContainerStatuses(pod.Status.InitContainerStatuses)
 	if !healthy {
-		return healthy, reason, isTransientUnhealthy
+		return healthy, reason, message, isTransientUnhealthy
 	}
 
-	return true, "", false
+	return true, "", "", false
 
 }
 
-func checkContainerStatuses(containers []corev1.ContainerStatus) (bool, string, bool) {
+// checkContainerStatuses inspects a set of container statuses and, when any are unhealthy,
+// returns a single short reason token (the first failing container's) plus a free-form message
+// aggregating the detail of every failed container in the set.
+func checkContainerStatuses(containers []corev1.ContainerStatus) (healthy bool, reason string, message string, transient bool) {
 	var lastRestartTime time.Time
+	var firstReason string
+	var details []string
+	var restartDetails []string
 	for _, c := range containers {
-		if c.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, c.State.Waiting.Reason) {
-			return false, c.State.Waiting.Reason, false
-		}
-		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
-			return false, c.State.Terminated.Reason, false
-		}
-		if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
-			if lastRestartTime.IsZero() || x.FinishedAt.After(lastRestartTime) {
+		switch {
+		case c.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, c.State.Waiting.Reason):
+			if firstReason == "" {
+				firstReason = c.State.Waiting.Reason
+			}
+			details = append(details, formatContainerFailure(c, c.State.Waiting.Reason, c.State.Waiting.Message))
+		case c.State.Terminated != nil && c.State.Terminated.Reason == "Error":
+			if firstReason == "" {
+				firstReason = c.State.Terminated.Reason
+			}
+			details = append(details, formatContainerFailure(c, c.State.Terminated.Reason, c.State.Terminated.Message))
+		default:
+			if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
 				// Only check OOM or exit with Error
 				// TODO: revisit later if needed.
 				if x.ExitCode == 137 || (x.ExitCode == 143 && x.Reason == "Error") {
-					lastRestartTime = x.FinishedAt.Time
+					if lastRestartTime.IsZero() || x.FinishedAt.After(lastRestartTime) {
+						lastRestartTime = x.FinishedAt.Time
+					}
+					restartDetails = append(restartDetails, formatRecentRestart(c, x))
 				}
 			}
 		}
 	}
-	// Container restart happened in the last 2 mins
-	if !lastRestartTime.IsZero() && lastRestartTime.Add(2*time.Minute).After(time.Now()) {
-		return false, "RecentRestart", true
+	// Waiting/terminated failures take precedence and are not transient.
+	if len(details) > 0 {
+		return false, firstReason, strings.Join(details, "; "), false
 	}
-	return true, "", false
+	// Otherwise, a recent OOM/error restart on an otherwise-running container (within the last 2 mins).
+	if !lastRestartTime.IsZero() && lastRestartTime.Add(2*time.Minute).After(time.Now()) {
+		return false, "RecentRestart", strings.Join(restartDetails, "; "), true
+	}
+	return true, "", "", false
+}
+
+// formatContainerFailure renders one failed container's detail. When the container has a previous
+// termination (e.g. a crash-looping container that was OOMKilled), that underlying cause is appended
+// so it isn't masked by the current waiting reason like CrashLoopBackOff.
+func formatContainerFailure(c corev1.ContainerStatus, reason, msg string) string {
+	detail := fmt.Sprintf("container %q %s", c.Name, reason)
+	if msg != "" {
+		detail += ": " + msg
+	}
+	if x := c.LastTerminationState.Terminated; x != nil && x.Reason != "" && x.Reason != reason {
+		detail += fmt.Sprintf(" (last termination: %s, exit code %d)", x.Reason, x.ExitCode)
+	}
+	return detail
+}
+
+// formatRecentRestart renders a container that recently OOM/Error-restarted.
+// Reason, message and exit code are reported verbatim (no OOM is inferred); the message is included
+// only when present, since it is empty for a typical OOM kill.
+func formatRecentRestart(c corev1.ContainerStatus, x *corev1.ContainerStateTerminated) string {
+	detail := fmt.Sprintf("container %q restarted recently: %s", c.Name, x.Reason)
+	if x.Message != "" {
+		detail += " " + x.Message
+	}
+	return detail + fmt.Sprintf(" (exit code %d)", x.ExitCode)
 }
 
 func NumOfReadyPods(pods corev1.PodList) int {
