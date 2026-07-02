@@ -370,7 +370,7 @@ var (
 func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset status as true", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
-		status, reason, msg := CheckStatefulSetStatus(testSts)
+		status, reason, msg := CheckStatefulSetStatus(testSts, 3)
 		assert.Equal(t, "Healthy", reason)
 		assert.True(t, status)
 		assert.Equal(t, "statefulset rolling update complete 3 pods at revision isbsvc-default-js-597b7f74d7...\n", msg)
@@ -379,7 +379,7 @@ func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset status as false", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
 		testSts.Status.UpdateRevision = "isbsvc-default-js-597b7f73a1"
-		status, reason, msg := CheckStatefulSetStatus(testSts)
+		status, reason, msg := CheckStatefulSetStatus(testSts, 3)
 		assert.Equal(t, "Progressing", reason)
 		assert.False(t, status)
 		assert.Equal(t, "waiting for statefulset rolling update to complete 3 pods at revision isbsvc-default-js-597b7f73a1...", msg)
@@ -388,10 +388,46 @@ func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset with ObservedGeneration as zero", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
 		testSts.Status.ObservedGeneration = 0
-		status, reason, msg := CheckStatefulSetStatus(testSts)
+		status, reason, msg := CheckStatefulSetStatus(testSts, 3)
 		assert.Equal(t, "Progressing", reason)
 		assert.False(t, status)
 		assert.Equal(t, "Waiting for statefulset spec update to be observed...", msg)
+	})
+
+	t.Run("Test 3-replica statefulset healthy at quorum (2/3 ready)", func(t *testing.T) {
+		replicas := int32(3)
+		testSts := statefulSet.DeepCopy()
+		testSts.Spec.Replicas = &replicas
+		testSts.Status.ReadyReplicas = 2
+		// quorum = ⌊3/2⌋+1 = 2
+		status, reason, msg := CheckStatefulSetStatus(testSts, 2)
+		assert.True(t, status)
+		assert.Equal(t, "Healthy", reason)
+		assert.Contains(t, msg, "statefulset rolling update complete")
+	})
+
+	t.Run("Test 3-replica statefulset unhealthy below quorum (1/3 ready)", func(t *testing.T) {
+		replicas := int32(3)
+		testSts := statefulSet.DeepCopy()
+		testSts.Spec.Replicas = &replicas
+		testSts.Status.ReadyReplicas = 1
+		// quorum = ⌊3/2⌋+1 = 2; 1 ready < 2 quorum → unhealthy
+		status, reason, msg := CheckStatefulSetStatus(testSts, 2)
+		assert.False(t, status)
+		assert.Equal(t, "Unavailable", reason)
+		assert.Contains(t, msg, "Waiting for 1 pods to be ready")
+	})
+
+	t.Run("Test 1-replica statefulset all-or-nothing (0/1 ready)", func(t *testing.T) {
+		replicas := int32(1)
+		testSts := statefulSet.DeepCopy()
+		testSts.Spec.Replicas = &replicas
+		testSts.Status.ReadyReplicas = 0
+		// quorum = ⌊1/2⌋+1 = 1; single replica must be ready
+		status, reason, msg := CheckStatefulSetStatus(testSts, 1)
+		assert.False(t, status)
+		assert.Equal(t, "Unavailable", reason)
+		assert.Contains(t, msg, "Waiting for 1 pods to be ready")
 	})
 }
 
