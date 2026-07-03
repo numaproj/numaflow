@@ -46628,49 +46628,53 @@ data:
     This metric represents a histogram to keep track of the total time taken by transformer(if
     present).\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n\n- name: vertex_histogram\n
-    \ objects: \n    - vertex\n  title: Pipeline Histogram Metrics\n  description:
-    This pattern is for P99, P95, P90 and P50 quantiles for a vertex across different
-    dimensions\n  expr: |\n    histogram_quantile($quantile, sum by($dimension,le)
-    (rate($metric_name{$filters}[$duration])))\n  params:\n    - name: quantile\n
-    \     required: true\n    - name: duration\n      required: true\n    - name:
-    start_time\n      required: false\n    - name: end_time\n      required: false\n
-    \ metrics:\n    - metric_name: forwarder_write_processing_time_bucket\n      display_name:
-    Vertex Write Processing Time Latency\n      metric_description: This metric represents
-    a histogram to keep track of the total time taken to write a message.\n      required_filters:\n
+    \           - name: pod\n              required: false\n    - metric_name: monovtx_udf_time_bucket\n
+    \     display_name: MonoVertex UDF Processing Time Latency\n      metric_description:
+    This metric represents a histogram to keep track of the total time taken by UDF.\n
+    \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
+    \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n\n- name: vertex_histogram\n  objects:
+    \n    - vertex\n  title: Pipeline Histogram Metrics\n  description: This pattern
+    is for P99, P95, P90 and P50 quantiles for a vertex across different dimensions\n
+    \ expr: |\n    histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))\n
+    \ params:\n    - name: quantile\n      required: true\n    - name: duration\n
+    \     required: true\n    - name: start_time\n      required: false\n    - name:
+    end_time\n      required: false\n  metrics:\n    - metric_name: forwarder_write_processing_time_bucket\n
+    \     display_name: Vertex Write Processing Time Latency\n      metric_description:
+    This metric represents a histogram to keep track of the total time taken to write
+    a message.\n      required_filters:\n        - namespace\n        - pipeline\n
+    \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: forwarder_read_processing_time_bucket\n      display_name: Vertex
+    Read Processing Time Latency\n      metric_description: This metric represents
+    a histogram to keep track of the total time taken to read messages.\n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: vertex\n        - name: pod\n          filters:\n            -
-    name: pod\n              required: false\n    - metric_name: forwarder_read_processing_time_bucket\n
-    \     display_name: Vertex Read Processing Time Latency\n      metric_description:
-    This metric represents a histogram to keep track of the total time taken to read
+    name: pod\n              required: false\n    - metric_name: forwarder_ack_processing_time_bucket\n
+    \     display_name: Vertex Ack Processing Time Latency\n      metric_description:
+    This metric represents a histogram to keep track of the total time taken to ack
     messages.\n      required_filters:\n        - namespace\n        - pipeline\n
     \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
     \         filters:\n            - name: pod\n              required: false\n    -
-    metric_name: forwarder_ack_processing_time_bucket\n      display_name: Vertex
-    Ack Processing Time Latency\n      metric_description: This metric represents
-    a histogram to keep track of the total time taken to ack messages.\n      required_filters:\n
-    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
-    \       - name: vertex\n        - name: pod\n          filters:\n            -
-    name: pod\n              required: false\n    - metric_name: forwarder_processing_time_bucket\n
-    \     display_name: Vertex Processing Time Latency\n      metric_description:
-    This metric represents a histogram to keep track of the total time taken to process
-    messages (only available in Rust runtime mode).\n      required_filters:\n        -
+    metric_name: forwarder_processing_time_bucket\n      display_name: Vertex Processing
+    Time Latency\n      metric_description: This metric represents a histogram to
+    keep track of the total time taken to process messages (only available in Rust
+    runtime mode).\n      required_filters:\n        - namespace\n        - pipeline\n
+    \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: forwarder_udf_processing_time_bucket\n      display_name: UDF Processing
+    Time Latency\n      metric_description: This metric represents a histogram to
+    keep track of the total time taken by udf.\n      required_filters:\n        -
     namespace\n        - pipeline\n        - vertex\n      dimensions:\n        -
     name: vertex\n        - name: pod\n          filters:\n            - name: pod\n
-    \             required: false\n    - metric_name: forwarder_udf_processing_time_bucket\n
-    \     display_name: UDF Processing Time Latency\n      metric_description: This
-    metric represents a histogram to keep track of the total time taken by udf.\n
-    \     required_filters:\n        - namespace\n        - pipeline\n        - vertex\n
-    \     dimensions:\n        - name: vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n\n- name: vertex_throughput\n
-    \ objects:\n    - vertex\n  title: Vertex Throughput and Message Rates\n  description:
-    This pattern measures the throughput of a vertex in messages per second across
-    different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration])) by
-    ($dimension)\n  params:\n    - name: duration\n      required: true\n    - name:
-    start_time\n      required: false\n    - name: end_time\n      required: false\n
-    \ metrics:\n    - metric_name: forwarder_data_read_total\n      display_name:
-    Vertex Read Processing Rate\n      metric_description: This metric represents
-    the total number of data messages read per second.\n      required_filters:\n
+    \             required: false\n\n- name: vertex_throughput\n  objects:\n    -
+    vertex\n  title: Vertex Throughput and Message Rates\n  description: This pattern
+    measures the throughput of a vertex in messages per second across different dimensions\n
+    \ expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)\n  params:\n
+    \   - name: duration\n      required: true\n    - name: start_time\n      required:
+    false\n    - name: end_time\n      required: false\n  metrics:\n    - metric_name:
+    forwarder_data_read_total\n      display_name: Vertex Read Processing Rate\n      metric_description:
+    This metric represents the total number of data messages read per second.\n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n    - metric_name: forwarder_write_total\n
@@ -46703,22 +46707,31 @@ data:
     total number of data messages written by sink per second.\n      required_filters:\n
     \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
     \       - name: pod\n          filters:\n            - name: pod\n              required:
-    false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
-    \   - vertex\n  title: CPU and Memory Utilisation by Pod\n  description: This
-    pattern represents the CPU and Memory utilisation by pod for mono-vertex and vertex\n
-    \ expr: avg_over_time($metric_name{$filters}[$duration])\n  params:\n    - name:
-    duration\n      required: true\n    - name: start_time\n      required: false\n
-    \   - name: end_time\n      required: false\n  metrics: \n    # set your cpu metric
-    name here\n    - metric_name: namespace_pod_cpu_utilization\n      display_name:
-    Pod CPU Utilization\n      metric_description: This metric represents the percentage
-    utilization of cpu usage over cpu resource limits for a pod.\n      required_filters:\n
-    \       - namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n
-    \         filters: \n            - name: pod\n              # expr: optional expression
-    for prometheus query\n              # overrides the default expression\n              required:
-    false\n        - name: vertex\n          filters: \n            - name: pod\n
-    \             # expr: optional expression for prometheus query\n              #
-    overrides the default expression \n              required: false\n    # set your
-    memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
+    false\n    - metric_name: monovtx_udf_error_total\n      display_name: MonoVertex
+    UDF Error Rate\n      metric_description: This metric represents the total number
+    of UDF errors per second.\n      required_filters:\n        - namespace\n        -
+    mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: monovtx_udf_drop_total\n      display_name: MonoVertex UDF Drop Rate\n
+    \     metric_description: This metric represents the total number of messages
+    dropped by UDF per second.\n      required_filters:\n        - namespace\n        -
+    mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n    - vertex\n
+    \ title: CPU and Memory Utilisation by Pod\n  description: This pattern represents
+    the CPU and Memory utilisation by pod for mono-vertex and vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:
+    \n    # set your cpu metric name here\n    - metric_name: namespace_pod_cpu_utilization\n
+    \     display_name: Pod CPU Utilization\n      metric_description: This metric
+    represents the percentage utilization of cpu usage over cpu resource limits for
+    a pod.\n      required_filters:\n        - namespace\n        - pod  \n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: pod\n              #
+    expr: optional expression for prometheus query\n              # overrides the
+    default expression\n              required: false\n        - name: vertex\n          filters:
+    \n            - name: pod\n              # expr: optional expression for prometheus
+    query\n              # overrides the default expression \n              required:
+    false\n    # set your memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
     \     display_name: Pod Memory Utilization\n      metric_description: This metric
     represents the percentage utilization of memory usage in bytes over memory resource
     limits for a pod.\n      required_filters:\n        - namespace\n        - pod
