@@ -182,8 +182,10 @@ describe("getMonoVertexInternalStages", () => {
     const stages = getMonoVertexInternalStages(createSourceOnlySpec());
 
     expect(stages).toHaveLength(2);
-    expect(getStage(stages, "source").x).toBe(154);
-    expect(getStage(stages, "sink").x).toBe(234);
+    expect(getStage(stages, "source").x).toBe(86);
+    expect(getStage(stages, "sink").x).toBe(174);
+    expect(getStage(stages, "source").y).toBe(67);
+    expect(getStage(stages, "sink").y).toBe(67);
   });
 
   it("aligns fallback horizontally when it is the only optional sink output", () => {
@@ -202,8 +204,8 @@ describe("getMonoVertexInternalStages", () => {
     const sink = getStage(stages, "sink");
     const fallback = getStage(stages, "fallback");
 
-    expect(sink.x).toBe(274);
-    expect(fallback.x).toBe(354);
+    expect(sink.x).toBe(280.5);
+    expect(fallback.x).toBe(366);
     expect(fallback.y).toBe(sink.y);
     expect(fallback.x).toBeGreaterThan(sink.x);
     expect(stages.find((s) => s.key === "onSuccess")).toBeUndefined();
@@ -225,8 +227,8 @@ describe("getMonoVertexInternalStages", () => {
     const sink = getStage(stages, "sink");
     const onSuccess = getStage(stages, "onSuccess");
 
-    expect(sink.x).toBe(274);
-    expect(onSuccess.x).toBe(354);
+    expect(sink.x).toBe(280.5);
+    expect(onSuccess.x).toBe(366);
     expect(onSuccess.y).toBe(sink.y);
     expect(onSuccess.x).toBeGreaterThan(sink.x);
     expect(stages.find((s) => s.key === "fallback")).toBeUndefined();
@@ -246,11 +248,11 @@ describe("getMonoVertexInternalStages", () => {
     );
 
     expect(stages).toHaveLength(4);
-    expect(getStage(stages, "source").x).toBe(74);
-    expect(getStage(stages, "udf").x).toBe(154);
-    expect(getStage(stages, "sink").x).toBe(234);
-    expect(getStage(stages, "fallback").x).toBe(314);
-    expect(getStage(stages, "fallback").y).toBe(76);
+    expect(getStage(stages, "source").x).toBe(63);
+    expect(getStage(stages, "udf").x).toBe(151);
+    expect(getStage(stages, "sink").x).toBe(239);
+    expect(getStage(stages, "fallback").x).toBe(327);
+    expect(getStage(stages, "fallback").y).toBe(80);
   });
 
   it("fans out onSuccess and fallback when both optional sink outputs exist", () => {
@@ -277,12 +279,12 @@ describe("getMonoVertexInternalStages", () => {
     const onSuccess = getStage(stages, "onSuccess");
     const fallback = getStage(stages, "fallback");
 
-    expect(sink.y).toBe(76);
-    expect(sink.x).toBe(274);
-    expect(onSuccess.x).toBe(354);
-    expect(fallback.x).toBe(354);
-    expect(onSuccess.y).toBe(44);
-    expect(fallback.y).toBe(106);
+    expect(sink.y).toBe(90);
+    expect(sink.x).toBe(298);
+    expect(onSuccess.x).toBe(386);
+    expect(fallback.x).toBe(386);
+    expect(onSuccess.y).toBe(54);
+    expect(fallback.y).toBe(126);
     expect(onSuccess.y).toBeLessThan(sink.y);
     expect(fallback.y).toBeGreaterThan(sink.y);
   });
@@ -324,6 +326,14 @@ describe("useMonoVertexViewFetch", () => {
           ?.data?.podnum
       ).toBe(1);
     });
+    expect(
+      result.current.vertices.find((node) => node.id === MONO_VERTEX_NAME)
+        ?.data?.containerWidth
+    ).toBe(300);
+    expect(
+      result.current.vertices.find((node) => node.id === MONO_VERTEX_NAME)
+        ?.data?.containerHeight
+    ).toBe(150);
 
     monoVertexName.current = nextMonoVertexName;
     rerender({ pipelineId: nextMonoVertexName });
