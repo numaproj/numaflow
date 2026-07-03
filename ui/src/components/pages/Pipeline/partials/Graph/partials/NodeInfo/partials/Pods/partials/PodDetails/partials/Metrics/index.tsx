@@ -14,6 +14,11 @@ import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import {
   dimensionReverseMap,
+  MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_UDF_DROP_RATE,
+  MONO_VERTEX_UDF_ERROR_RATE,
+  MONO_VERTEX_UDF_PROCESSING_TIME_LATENCY,
+  SOURCE_TRANSFORMER_PROCESSING_TIME_LATENCY,
   UDF_READ_PROCESSING_RATE,
   UDF_WRITE_PROCESSING_RATE,
   UDF_PROCESSING_TIME_LATENCY,
@@ -28,6 +33,22 @@ import {
 import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
 
 import "./style.css";
+
+const UDF_METRICS = [
+  UDF_READ_PROCESSING_RATE,
+  UDF_WRITE_PROCESSING_RATE,
+  UDF_PROCESSING_TIME_LATENCY,
+  UDF_DROP_TOTAL,
+  UDF_ERROR_TOTAL,
+  MONO_VERTEX_UDF_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_UDF_ERROR_RATE,
+  MONO_VERTEX_UDF_DROP_RATE,
+];
+
+const TRANSFORMER_METRICS = [
+  SOURCE_TRANSFORMER_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY,
+];
 
 export interface MetricsProps {
   namespaceId: string;
@@ -93,11 +114,25 @@ export function Metrics({
 
   if (discoveredMetrics == undefined) return <Box>No metrics found</Box>;
 
+  const hasContainer = (containerName: string) =>
+    !pod?.containers || pod.containers.includes(containerName);
+
+  const shouldShowMetric = (metric: any) => {
+    const displayName = metric?.display_name;
+    if (UDF_METRICS.includes(displayName) && !hasContainer("udf")) return false;
+    if (
+      TRANSFORMER_METRICS.includes(displayName) &&
+      !hasContainer("transformer")
+    )
+      return false;
+    return true;
+  };
+
   if (metricDisplayName) {
     const discoveredMetric = discoveredMetrics?.data?.find(
       (m: any) => m?.display_name === metricDisplayName
     );
-    if (discoveredMetric) {
+    if (discoveredMetric && shouldShowMetric(discoveredMetric)) {
       if (setMetricsFound)
         setTimeout(() => {
           setMetricsFound(true);
@@ -127,6 +162,8 @@ export function Metrics({
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
+        if (!shouldShowMetric(metric)) return null;
+
         if (
           type !== "udf" &&
           [

@@ -48,6 +48,8 @@ export const UDF_ERROR_TOTAL = "UDF Error Total";
 
 // MonoVertex Counters
 export const MONO_VERTEX_PROCESSING_RATE = "MonoVertex Read Processing Rate";
+export const MONO_VERTEX_UDF_ERROR_RATE = "MonoVertex UDF Error Rate";
+export const MONO_VERTEX_UDF_DROP_RATE = "MonoVertex UDF Drop Rate";
 
 // CPU/Memory
 export const POD_CPU_UTILIZATION = "Pod CPU Utilization";
@@ -81,3 +83,5 @@ export const MONO_VERTEX_SINK_WRITE_TIME_LATENCY =
   "MonoVertex Sink Write Time Latency";
 export const MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY =
   "MonoVertex Fallback Sink Write Time Latency";
+export const MONO_VERTEX_UDF_PROCESSING_TIME_LATENCY =
+  "MonoVertex UDF Processing Time Latency";
