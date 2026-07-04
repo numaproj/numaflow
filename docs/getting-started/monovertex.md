@@ -1,6 +1,6 @@
 # MonoVertex
 
-A [MonoVertex](../core-concepts/monovertex.md) is the simplest way to run Numaflow. It is a single vertex that reads from a [Source](../user-guide/sources/overview.md), optionally transforms or maps the data, and writes to a [Sink](../user-guide/sinks/overview.md). Because there is only one vertex and no edges, a MonoVertex needs **no Inter-Step Buffer Service**.
+A [MonoVertex](../core-concepts/monovertex.md) is the simplest way to run Numaflow. It is a single vertex that reads from a [Source](../user-guide/sources/overview.md), optionally transforms or maps the data, and writes to a [Sink](../user-guide/sinks/overview.md). Because there is only one vertex and no edges, a MonoVertex needs no [Inter-Step Buffer Service](../core-concepts/inter-step-buffer-service.md).
 
 This page builds up in two steps:
 

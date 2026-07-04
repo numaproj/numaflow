@@ -1,6 +1,6 @@
 # Pipeline
 
-A [Pipeline](../core-concepts/pipeline.md) connects multiple [vertices](../core-concepts/vertex.md) with [edges](../core-concepts/pipeline.md). Unlike a [MonoVertex](monovertex.md), a pipeline can have many processing stages, branch data to different destinations, join streams, and run windowed aggregation (reduce). Vertices exchange data through an [Inter-Step Buffer Service (ISB)](../core-concepts/inter-step-buffer-service.md).
+A [Pipeline](../core-concepts/pipeline.md) connects multiple [vertices](../core-concepts/vertex.md) with [edges](../core-concepts/pipeline.md). Unlike a [MonoVertex](monovertex.md), a pipeline can have many processing stages, branch data to different destinations, join streams, and run windowed aggregation (reduce). Vertices exchange data through an [Inter-Step Buffer Service (isbsvc)](../core-concepts/inter-step-buffer-service.md).
 
 This page builds up in two steps:
 
@@ -208,7 +208,7 @@ The source code for the `even-odd` [user-defined function](../user-guide/user-de
 
 ## Going Further: Reduce (Aggregation)
 
-Windowed aggregation - grouping messages over time and reducing them - is a pipeline-only feature. It requires the full pipeline because data must be shuffled across keys, which a single-vertex MonoVertex cannot do. To set up an example pipeline with the [Reduce UDF](../user-guide/user-defined-functions/reduce/reduce.md), see [Reduce Examples](../user-guide/user-defined-functions/reduce/examples.md).
+Windowed aggregation - grouping messages over time and reducing them - is a **pipeline-only** feature. It requires the full pipeline because data must be shuffled across keys, which a single-vertex MonoVertex cannot do. To set up an example pipeline with the [Reduce UDF](../user-guide/user-defined-functions/reduce/reduce.md), see [Reduce Examples](../user-guide/user-defined-functions/reduce/examples.md).
 
 ## Next Step
 
