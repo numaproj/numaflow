@@ -48,4 +48,4 @@ That's all you need to deploy a MonoVertex. The [Inter-Step Buffer Service](../c
 
 ## Next Step
 
-With Numaflow installed, continue to [Your First MonoVertex](monovertex.md) to deploy the simplest possible workload.
+With Numaflow installed, continue to the [MonoVertex](monovertex.md) guide to deploy the simplest possible workload.

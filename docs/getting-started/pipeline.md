@@ -1,4 +1,4 @@
-# Your First Pipeline
+# Pipeline
 
 A [Pipeline](../core-concepts/pipeline.md) connects multiple [vertices](../core-concepts/vertex.md) with [edges](../core-concepts/pipeline.md). Unlike a [MonoVertex](monovertex.md), a pipeline can have many processing stages, branch data to different destinations, join streams, and run windowed aggregation (reduce). Vertices exchange data through an [Inter-Step Buffer Service (ISB)](../core-concepts/inter-step-buffer-service.md).
 
@@ -7,7 +7,7 @@ This page builds up in two steps:
 1. [A simple pipeline](#a-simple-pipeline) - a source, a processing vertex, and a sink connected by edges.
 2. [An advanced pipeline](#an-advanced-pipeline) - conditional forwarding to multiple sinks.
 
-> This page assumes you have already completed [Prerequisites & Installation](prerequisites-and-installation.md). The containers you learned about in [Your First MonoVertex](monovertex.md) - sources, sinks, transformers, and map UDFs - work exactly the same way here.
+> This page assumes you have already completed [Prerequisites & Installation](prerequisites-and-installation.md). The containers you learned about in the [MonoVertex](monovertex.md) guide - sources, sinks, transformers, and map UDFs - work exactly the same way here.
 
 ## Deploy the Inter-Step Buffer Service
 

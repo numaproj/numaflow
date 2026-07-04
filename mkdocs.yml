@@ -46,8 +46,8 @@ nav:
   - Getting Started:
       - Overview: quick-start.md
       - Prerequisites & Installation: getting-started/prerequisites-and-installation.md
-      - Your First MonoVertex: getting-started/monovertex.md
-      - Your First Pipeline: getting-started/pipeline.md
+      - MonoVertex: getting-started/monovertex.md
+      - Pipeline: getting-started/pipeline.md
       - What's Next: getting-started/whats-next.md
   - User Guide:
       - Core Concepts:

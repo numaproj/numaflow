@@ -1,4 +1,4 @@
-# Your First MonoVertex
+# MonoVertex
 
 A [MonoVertex](../core-concepts/monovertex.md) is the simplest way to run Numaflow. It is a single vertex that reads from a [Source](../user-guide/sources/overview.md), optionally transforms or maps the data, and writes to a [Sink](../user-guide/sinks/overview.md). Because there is only one vertex and no edges, a MonoVertex needs **no Inter-Step Buffer Service**.
 
@@ -144,14 +144,11 @@ To view logs from the `udsink` container, run the following. Replace `xxxxx` wit
 kubectl logs -f simple-mono-vertex-mv-0-xxxxx -c udsink
 ```
 
-You should see output similar to:
+Because the map only echoes the messages, the output looks the same as the source data:
 
 ```shell
-107705990
-107705991
-107705992
-107705993
-107705994
+2025/05/09 11:23:38 (sink)  Payload -  {"value":1746789818182898304}  Keys -  [key-0-0]  EventTime -  1746789818182  Headers -    ID -  0-0
+2025/05/09 11:23:38 (sink)  Payload -  {"value":1746789818182898304}  Keys -  [key-0-0]  EventTime -  1746789818182  Headers -    ID -  1-0
 ```
 
 ### Access the Numaflow UI
@@ -185,4 +182,4 @@ To write your own, start with the [SDKs overview](../user-guide/sdks/overview.md
 
 ## Next Step
 
-A MonoVertex is ideal when you read from a source, optionally transform, and write to a sink. When you need multiple processing stages, branching, joins, or windowed aggregation, you need a full pipeline. Continue to [Your First Pipeline](pipeline.md).
+A MonoVertex is ideal when you read from a source, optionally transform, and write to a sink. When you need multiple processing stages, branching, joins, or windowed aggregation, you need a full pipeline. Continue to the [Pipeline](pipeline.md) guide.
