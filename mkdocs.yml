@@ -44,7 +44,11 @@ markdown_extensions:
 nav:
   - Home: README.md
   - Getting Started:
-      - quick-start.md
+      - Overview: quick-start.md
+      - Prerequisites & Installation: getting-started/prerequisites-and-installation.md
+      - Your First MonoVertex: getting-started/monovertex.md
+      - Your First Pipeline: getting-started/pipeline.md
+      - What's Next: getting-started/whats-next.md
   - User Guide:
       - Core Concepts:
           - Overview: "core-concepts/overview.md"
