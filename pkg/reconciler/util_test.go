@@ -457,6 +457,40 @@ func TestGetVertexStatus(t *testing.T) {
 		assert.Equal(t, "Unavailable", reason)
 		assert.Equal(t, `Vertex "test-vertex" is not healthy`, message)
 	})
+	t.Run("Test Vertex status returns detailed message", func(t *testing.T) {
+		vertices := dfv1.VertexList{
+			Items: []dfv1.Vertex{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Generation: 2,
+					},
+					Spec: dfv1.VertexSpec{
+						AbstractVertex: dfv1.AbstractVertex{
+							Name: "test-vertex",
+						},
+					},
+					Status: dfv1.VertexStatus{
+						Phase:              "Pending",
+						ObservedGeneration: 2,
+						Message:            "failed to connect to source",
+					},
+				},
+			},
+		}
+
+		vertices.Items[0].Status.Conditions = []metav1.Condition{
+			{
+				Type:   string(dfv1.VertexConditionPodsHealthy),
+				Status: metav1.ConditionTrue,
+			},
+		}
+
+		status, reason, message := CheckVertexStatus(&vertices)
+
+		assert.False(t, status)
+		assert.Equal(t, "Unavailable", reason)
+		assert.Equal(t, `Vertex "test-vertex" error: failed to connect to source`, message)
+	})
 }
 
 var (
