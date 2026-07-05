@@ -172,6 +172,9 @@ func CheckVertexStatus(vertices *dfv1.VertexList) (healthy bool, reason string, 
 			return false, "Progressing", `Vertex "` + vertex.Spec.Name + `" Waiting for reconciliation`
 		}
 		if !vertex.Status.IsHealthy() {
+			if vertex.Status.Message != "" {
+				return false, "Unavailable", `Vertex "` + vertex.Spec.Name + `" error: ` + vertex.Status.Message
+			}
 			return false, "Unavailable", `Vertex "` + vertex.Spec.Name + `" is not healthy`
 		}
 	}
