@@ -221,15 +221,15 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
         : getColor,
       strokeWidth:
         data?.monoVertexBypassEdge
-          ? 1.2
+          ? 2
           : isMonoVertexEdge
-          ? 1.2
+          ? 2
           : 2,
       ...(data?.monoVertexBypassEdge
         ? {
             animation: "monoVertexBypassFlow 0.8s linear infinite",
             pointerEvents: "none",
-            strokeDasharray: "4 4",
+            strokeDasharray: "5 5",
             strokeDashoffset: 0,
           }
         : {}),
