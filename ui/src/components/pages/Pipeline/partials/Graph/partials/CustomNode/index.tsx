@@ -462,7 +462,7 @@ const CustomNode: FC<NodeProps> = ({
       ...commonStyle,
     };
   }, [highlightValues, data, hasBothSinks]);
-  const monoVertexNodeStyle = isMonoVertex
+  const resolvedNodeStyle = isMonoVertex
     ? {
         ...nodeStyle,
         border: `${
@@ -535,7 +535,7 @@ const CustomNode: FC<NodeProps> = ({
       <Box
         className={nodeInputClass}
         onClick={handleClick}
-        style={monoVertexNodeStyle}
+        style={resolvedNodeStyle}
       >
         {data?.type !== "monoVertex" && (
           <Box className="node-info">{data?.name}</Box>
