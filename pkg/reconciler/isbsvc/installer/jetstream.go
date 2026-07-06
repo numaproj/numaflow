@@ -557,6 +557,10 @@ func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVo
 	return pvcl.Items, nil
 }
 
+// CheckChildrenResourceStatus evaluates the JetStream StatefulSet and pod health.
+// Returns (needsRequeue, error): needsRequeue is true when the failure is transient
+// (a pod had a recent OOM or error restart) and the controller must explicitly requeue,
+// since no Kubernetes event fires when the 2-minute transient window expires.
 func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) (bool, error) {
 	var isbStatefulSet appv1.StatefulSet
 	if err := r.client.Get(ctx, client.ObjectKey{
