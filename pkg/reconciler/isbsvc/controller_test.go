@@ -102,7 +102,7 @@ func TestReconcileJetStream(t *testing.T) {
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
-		err := r.reconcile(ctx, testIsb)
+		_, err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
 		testIsb.Status.MarkChildrenResourceHealthy("RolloutFinished", "All service healthy")
 		assert.True(t, testIsb.Status.IsHealthy())

@@ -19,6 +19,7 @@ package isbsvc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -78,7 +79,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	}
 	ctx = logging.WithLogger(ctx, log)
 	isbSvcCopy := isbSvc.DeepCopy()
-	reconcileErr := r.reconcile(ctx, isbSvcCopy)
+	result, reconcileErr := r.reconcile(ctx, isbSvcCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
@@ -104,11 +105,11 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{}, reconcileErr
+	return result, reconcileErr
 }
 
 // reconcile does the real logic
-func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
+func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
 	if !isbSvc.DeletionTimestamp.IsZero() {
 		log.Info("Deleting ISB Service")
@@ -117,14 +118,14 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
 				isbSvc.Status.SetPhase(dfv1.ISBSvcPhaseDeleting, err.Error())
-				return err
+				return ctrl.Result{}, err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
 			controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
-		return nil
+		return ctrl.Result{}, nil
 	}
 	if controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
 		controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
@@ -144,9 +145,15 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	if err := validator.ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
-		return err
+		return ctrl.Result{}, err
 	} else {
 		isbSvc.Status.MarkConfigured()
 	}
-	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
+	needsRequeue, err := installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
+	if needsRequeue {
+		// A pod had a recent restart; requeue to re-evaluate once the transient window expires,
+		// since no Kubernetes event will fire when the 2-minute restart window lapses.
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	}
+	return ctrl.Result{}, err
 }

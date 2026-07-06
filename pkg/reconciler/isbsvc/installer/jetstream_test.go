@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -190,6 +191,158 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 	t.Run("test uninstall", func(t *testing.T) {
 		err := i.Uninstall(ctx)
 		assert.NoError(t, err)
+	})
+}
+
+func TestCheckChildrenResourceStatusQuorum(t *testing.T) {
+	ctx := context.TODO()
+	stsName := generateJetStreamStatefulSetName(testJetStreamIsbSvc)
+	replicas := int32(3)
+	baseSts := &appv1.StatefulSet{
+		ObjectMeta: testJetStreamIsbSvc.ObjectMeta,
+		Spec: appv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			CurrentRevision:    "rev-1",
+			UpdateRevision:     "rev-1",
+			CurrentReplicas:    3,
+			Replicas:           3,
+		},
+	}
+	baseSts.Name = stsName
+
+	healthyPod := func(name string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+
+	crashingPod := func(name string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+					}},
+				},
+			},
+		}
+	}
+
+	childrenHealthy := func(isbSvc *dfv1.InterStepBufferService) bool {
+		c := isbSvc.Status.GetCondition(dfv1.ISBSvcConditionChildrenResourcesHealthy)
+		return c != nil && c.Status == "True"
+	}
+
+	t.Run("healthy at quorum (2/3 ready, no pod errors)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 2
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1")).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.False(t, needsRequeue)
+		assert.True(t, childrenHealthy(isbSvc), "2/3 ready with no pod errors should be healthy at quorum=2")
+	})
+
+	t.Run("unhealthy below quorum (1/3 ready)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 1
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.False(t, needsRequeue)
+		assert.False(t, childrenHealthy(isbSvc), "1/3 ready should be unhealthy below quorum=2")
+	})
+
+	t.Run("unhealthy at quorum with CrashLoopBackOff pod (persistent failure)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 2
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1"), crashingPod("pod-2")).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.False(t, needsRequeue, "CrashLoopBackOff is not transient — no requeue needed")
+		assert.False(t, childrenHealthy(isbSvc), "quorum met but CrashLoopBackOff pod should be unhealthy")
+	})
+
+	t.Run("unhealthy with recent-restart pod (transient — needs requeue)", func(t *testing.T) {
+		sts := baseSts.DeepCopy()
+		sts.Status.ReadyReplicas = 3
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		recentRestart := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-2-restarting",
+				Namespace: testJetStreamIsbSvc.Namespace,
+				Labels:    testLabels,
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								ExitCode:   137,
+								FinishedAt: metav1.Now(),
+							},
+						},
+					},
+				},
+			},
+		}
+		cl := fake.NewClientBuilder().WithObjects(sts, healthyPod("pod-0"), healthyPod("pod-1"), recentRestart).Build()
+		i := &jetStreamInstaller{
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+		needsRequeue, err := i.CheckChildrenResourceStatus(ctx)
+		assert.NoError(t, err)
+		assert.True(t, needsRequeue, "recent OOM restart is transient — controller must requeue")
+		assert.False(t, childrenHealthy(isbSvc), "recent OOM restart should still be unhealthy")
 	})
 }
 
