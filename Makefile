@@ -296,7 +296,7 @@ ifdef IMAGE_IMPORT_CMD
 endif
 
 /usr/local/bin/mkdocs:
-	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
+	$(PYTHON) -m pip install mkdocs==1.6.1 mkdocs_material==9.7.6 mkdocs-embed-external-markdown==3.0.2
 
 /usr/local/bin/lychee:
 ifeq (, $(shell which lychee))
