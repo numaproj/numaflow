@@ -45,6 +45,7 @@ import {
   MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY,
   MONO_VERTEX_READ_TIME_LATENCY,
   MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY,
+  MONO_VERTEX_UDF_PROCESSING_TIME_LATENCY,
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
@@ -203,6 +204,7 @@ const getDefaultFormatter = (value: number, displayName: string) => {
     case MONO_VERTEX_READ_TIME_LATENCY:
     case MONO_VERTEX_ACK_PROCESSING_TIME_LATENCY:
     case MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY:
+    case MONO_VERTEX_UDF_PROCESSING_TIME_LATENCY:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
@@ -435,11 +437,11 @@ const LineChartComponent = ({
     formattedTime: string,
     timestamp: number,
     labelVal: string,
-    value: string
+    value: number
   ): Record<string, any> => ({
     time: formattedTime,
     timestamp,
-    [labelVal]: parseFloat(value),
+    [labelVal]: value,
   });
 
   const periodOrder = {
@@ -505,9 +507,12 @@ const LineChartComponent = ({
         labelVal = labelVal.substring(1);
       }
 
-      labels.push(labelVal);
-
+      let hasValidValue = false;
       item?.values?.forEach(([timestamp, value]: [number, string]) => {
+        const parsedValue = parseFloat(value);
+        if (!Number.isFinite(parsedValue)) return;
+
+        hasValidValue = true;
         const formattedTime = formatTime(timestamp);
 
         const existingElement = transformedData?.find(
@@ -515,12 +520,13 @@ const LineChartComponent = ({
         );
         if (!existingElement) {
           transformedData.push(
-            createDataObject(formattedTime, timestamp, labelVal, value)
+            createDataObject(formattedTime, timestamp, labelVal, parsedValue)
           );
         } else {
-          existingElement[labelVal] = parseFloat(value);
+          existingElement[labelVal] = parsedValue;
         }
       });
+      if (hasValidValue) labels.push(labelVal);
     });
     transformedData?.sort((a, b) => {
       return a?.timestamp - b?.timestamp;
