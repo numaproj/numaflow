@@ -139,8 +139,21 @@
 }
 
 .react-flow__node-input--source-with-containers {
-  min-height: 11.2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 7.8rem;
+  height: 7.8rem;
+}
+
+.react-flow__node-input--source-with-containers .node-info {
+  flex: 0 0 auto;
   height: auto;
+}
+
+.react-flow__node-input--source-with-containers .pipeline-source-container-row {
+  flex: 0 0 auto;
+  padding: 0.2rem 0 0.6rem;
 }
 
 .react-flow__node-input--mono-vertex {

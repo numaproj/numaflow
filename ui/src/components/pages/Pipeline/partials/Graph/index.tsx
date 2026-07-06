@@ -96,7 +96,6 @@ const getNodeLayoutHeight = (node: Node): number => {
   const nodeInfo = d.nodeInfo as Record<string, any> | undefined;
   if (d.type === "monoVertex") return monoVertexNodeHeight;
   if (d.type === "monoVertexInternal") return 32;
-  if (d.type === "source" && nodeInfo?.source?.transformer) return nodeHeightTall;
   if (d.type === "sink" && (nodeInfo?.sink?.onSuccess || nodeInfo?.sink?.fallback)) return nodeHeightTall;
   return nodeHeight;
 };

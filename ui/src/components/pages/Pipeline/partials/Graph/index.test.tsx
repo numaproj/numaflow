@@ -525,6 +525,55 @@ describe("Graph", () => {
     });
   });
 
+  it("renders source transformer inside the standard source node", async () => {
+    const dataWithSourceTransformer = {
+      ...mockData,
+      vertices: mockData.vertices.map((vertex) =>
+        vertex.id === "in"
+          ? {
+              ...vertex,
+              data: {
+                ...vertex.data,
+                nodeInfo: {
+                  ...vertex.data.nodeInfo,
+                  source: {
+                    ...vertex.data.nodeInfo.source,
+                    transformer: {
+                      container: {
+                        image: "quay.io/numaio/numaflow-go/mapt-event-time-filter:stable",
+                      },
+                    },
+                  },
+                },
+              },
+            }
+          : vertex
+      ),
+    };
+
+    render(
+      <AppContext.Provider value={mockContext}>
+        <Graph
+          namespaceId="test"
+          data={dataWithSourceTransformer}
+          pipelineId="simple-pipeline"
+          refresh={() => {
+            return;
+          }}
+        />
+      </AppContext.Provider>
+    );
+
+    const transformerIcon = await screen.findByAltText(
+      "transformer-container"
+    );
+
+    expect(screen.getByAltText("source-container")).toBeInTheDocument();
+    expect(transformerIcon.closest(".react-flow__node-input")).toHaveClass(
+      "react-flow__node-input--source-with-containers"
+    );
+  });
+
   it("renders MonoVertex legend with internal stage icons", async () => {
     render(
       <AppContext.Provider value={mockContext}>
