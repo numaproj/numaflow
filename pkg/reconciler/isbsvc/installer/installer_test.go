@@ -106,14 +106,14 @@ func TestInstall(t *testing.T) {
 	t.Run("test jetstream error", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
 		testObj.Spec.JetStream = nil
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		_, err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.Error(t, err)
 		assert.Equal(t, "invalid isb service spec", err.Error())
 	})
 
 	t.Run("test jetstream install ok", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		_, err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 		testObj.Status.MarkChildrenResourceHealthy("RolloutFinished", "partitioned roll out complete: 3 new pods have been updated...")
 		assert.True(t, testObj.Status.IsReady())
@@ -130,7 +130,7 @@ func TestInstall(t *testing.T) {
 	t.Run("test child resource not ready", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
 		testObj.Name = "fake-isb"
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		_, err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 		testObj.Status.MarkChildrenResourceUnHealthy("reason", "message")
 		assert.False(t, testObj.Status.IsReady())
