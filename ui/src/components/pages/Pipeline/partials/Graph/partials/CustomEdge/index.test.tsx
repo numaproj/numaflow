@@ -447,7 +447,7 @@ describe("Custom Edge", () => {
       );
       expect(edge).toBeInTheDocument();
       expect(edge).toHaveStyle("stroke: #8D9096");
-      expect(edge).toHaveStyle("stroke-width: 1.2");
+      expect(edge).toHaveStyle("stroke-width: 2");
       expect(edge.getAttribute("style")).not.toContain("stroke-dasharray");
     });
   });
@@ -497,12 +497,12 @@ describe("Custom Edge", () => {
       );
       expect(edge).toBeInTheDocument();
       expect(edge).toHaveStyle("stroke: var(--mono-vertex-bypass-color)");
-      expect(edge).toHaveStyle("stroke-width: 1.2");
+      expect(edge).toHaveStyle("stroke-width: 2");
       expect(edge).toHaveStyle(
         "animation: monoVertexBypassFlow 0.8s linear infinite"
       );
       expect(edge).toHaveStyle("pointer-events: none");
-      expect(edge).toHaveStyle("stroke-dasharray: 4 4");
+      expect(edge).toHaveStyle("stroke-dasharray: 5 5");
       expect(edge).toHaveStyle("stroke-dashoffset: 0");
       expect(edge).toHaveAttribute(
         "d",

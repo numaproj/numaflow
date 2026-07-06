@@ -144,8 +144,10 @@
 }
 
 .react-flow__node-input--mono-vertex {
-  width: 42rem;
-  height: 17rem;
+  width: auto;
+  height: auto;
+  min-width: 30rem;
+  min-height: 15rem;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -178,9 +180,10 @@
 .node-info-mono {
   display: flex;
   position: relative;
-  top: -1.2rem;
+  top: -0.6rem;
   width: 100%;
-  height: 4.8rem;
+  height: 4rem;
+  padding: 0 1.2rem;
   flex-direction: column;
   justify-content: center;
   color: var(--node-text);
@@ -307,7 +310,7 @@
   fill: none;
   stroke: var(--mono-vertex-bypass-color);
   stroke-width: 2;
-  stroke-dasharray: 4 4;
+  stroke-dasharray: 5 5;
 }
 
 .mono-vertex-img-wrapper {
@@ -341,11 +344,14 @@
 }
 
 .mono-vertex-internal-node {
-  height: 3.2rem;
-  width: 3.2rem;
+  height: 4rem;
+  width: 4rem;
   border-radius: 50%;
   border: 1px solid var(--border-secondary);
   background: var(--bg-secondary);
+  box-shadow:
+    0 0 0 0.12rem rgba(141, 144, 150, 0.16),
+    0 0.1rem 0.35rem rgba(39, 76, 119, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,16 +366,16 @@
 }
 
 .mono-vertex-internal-node-icon > img {
-  height: 1.4rem;
-  width: 1.4rem;
+  height: 2.2rem;
+  width: 2.2rem;
 }
 
 .mono-vertex-bypass-handle {
   position: absolute;
-  bottom: -1rem;
+  bottom: -1.2rem;
   left: 50%;
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.4rem;
+  height: 1.4rem;
   cursor: pointer;
   opacity: 0.85;
   z-index: 2;
