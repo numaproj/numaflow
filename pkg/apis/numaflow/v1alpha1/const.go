@@ -271,5 +271,7 @@ const (
 var (
 	// unhealthyWaitingStatus contains the status messages for a pod in waiting state
 	// which should be considered as unhealthy
-	UnhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
+	UnhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff", "InvalidImageName",
+		"ErrImageNeverPull", "CreateContainerConfigError", "CreateContainerError", "ErrImagePull",
+		"ImageInspectError", "RunContainerError"}
 )
