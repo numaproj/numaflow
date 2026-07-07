@@ -22,8 +22,12 @@ use super::{
     update_udf_read_metric, update_udf_write_only_metric,
 };
 
-/// Type alias for the stream response - raw results from the UDF
-pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
+/// Response event for a single stream map request.
+#[derive(Debug)]
+pub(in crate::mapper) enum StreamMapResponse {
+    Results(Vec<map::map_response::Result>),
+    Eot,
+}
 
 /// Type aliases for HashMap used to track the oneshot response sender for each request keyed by
 /// message id.
@@ -76,8 +80,7 @@ impl MapStreamTask {
             otel::TraceStage::Map,
         );
 
-        // Store parent message info before sending to UDF
-        // parent_info contains offset, so we don't need to clone it separately
+        // Store parent message info before sending to UDF.
         let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
         let request: MapRequest = self.msg_handle.message().clone().into();
@@ -98,10 +101,25 @@ impl MapStreamTask {
             .await
             .expect("failed to reset tracker");
 
+        let mut received_eot = false;
         loop {
-            let result = receiver.recv().await;
+            let result =
+                match tokio::time::timeout(self.shared_ctx.read_timeout, receiver.recv()).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        let error =
+                            Error::Mapper("stream map response timed out before EOT".to_string());
+                        warn!(
+                            offset = ?parent_info.offset,
+                            "stream map response timed out before EOT"
+                        );
+                        mark_failed!(self.msg_handle, &error, None);
+                        let _ = self.shared_ctx.error_tx.send(error).await;
+                        return;
+                    }
+                };
             match result {
-                Some(Ok(results)) => {
+                Some(Ok(StreamMapResponse::Results(results))) => {
                     // Convert raw results to Messages using parent info.
                     // Strip tracing_udf from each result (map stage is done; no-op when no key
                     // was injected).
@@ -151,6 +169,10 @@ impl MapStreamTask {
                             .expect("failed to send response");
                     }
                 }
+                Some(Ok(StreamMapResponse::Eot)) => {
+                    received_eot = true;
+                    break;
+                }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e, None);
@@ -158,8 +180,18 @@ impl MapStreamTask {
                     return;
                 }
                 None => {
-                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
-                    // finished after sending all results). Fall through to mark_success below.
+                    if !received_eot {
+                        let error = Error::Mapper(
+                            "stream map response channel closed before EOT".to_string(),
+                        );
+                        warn!(
+                            offset = ?parent_info.offset,
+                            "stream map response channel closed before EOT"
+                        );
+                        mark_failed!(self.msg_handle, &error, None);
+                        let _ = self.shared_ctx.error_tx.send(error).await;
+                        return;
+                    }
                     break;
                 }
             }
@@ -270,10 +302,12 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
         };
 
-        // once we get eot, we can drop the sender to let the callee
-        // know that we are done sending responses
+        // once we get EOT, notify the callee and then drop the sender so the request can finish.
         if let Some(map::TransmissionStatus { eot: true }) = resp.status {
             update_udf_process_time_metric(is_mono_vertex());
+            if let Some(response_sender) = response_sender_entry {
+                let _ = response_sender.send(Ok(StreamMapResponse::Eot)).await;
+            }
             return Ok(());
         }
 
@@ -300,7 +334,11 @@ impl UserDefinedStreamMap {
                 return Ok(());
             }
 
-            if response_sender.send(Ok(resp.results)).await.is_err() {
+            if response_sender
+                .send(Ok(StreamMapResponse::Results(resp.results)))
+                .await
+                .is_err()
+            {
                 {
                     let mut sender_guard =
                         sender_map.lock().expect("failed to acquire poisoned lock");
@@ -401,7 +439,9 @@ impl UserDefinedStreamMap {
 #[cfg(test)]
 mod tests {
     use crate::error::Error as MapError;
-    use crate::mapper::map::stream::{StreamSenderMapState, UserDefinedStreamMap};
+    use crate::mapper::map::stream::{
+        StreamMapResponse, StreamSenderMapState, UserDefinedStreamMap,
+    };
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
@@ -484,8 +524,10 @@ mod tests {
         // Collect all response batches
         let mut all_results = vec![];
         while let Some(response) = rx.recv().await {
-            let results = response?;
-            all_results.extend(results);
+            match response? {
+                StreamMapResponse::Results(results) => all_results.extend(results),
+                StreamMapResponse::Eot => break,
+            }
         }
 
         assert_eq!(all_results.len(), 3);
@@ -604,11 +646,8 @@ mod tests {
             UserDefinedStreamMap::process_response(&sender_map, make_response("0", true)).await;
         assert!(result.is_ok(), "EOT path should return Ok");
 
-        // EOT does not deliver a payload to the response sender.
-        assert!(matches!(
-            rx.try_recv(),
-            Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected)
-        ));
+        let received = rx.recv().await.expect("expected EOT on response channel");
+        assert!(matches!(received, Ok(StreamMapResponse::Eot)));
 
         // EOT removes the sender from the map (and never re-inserts it),
         // letting the corresponding receiver loop terminate.
@@ -709,7 +748,10 @@ mod tests {
             .await;
         let mut all = vec![];
         while let Some(resp) = rx.recv().await {
-            all.extend(resp.expect("ok"));
+            match resp.expect("ok") {
+                StreamMapResponse::Results(results) => all.extend(results),
+                StreamMapResponse::Eot => break,
+            }
         }
         let result = all.first().expect("one result");
         assert!(result.tags.contains(&"U+005C__NACK__".to_string()));
