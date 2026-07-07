@@ -53,6 +53,9 @@ var (
 					ReadOnlyRootFilesystem:   ptr.To(true),
 					AllowPrivilegeEscalation: ptr.To(false),
 				},
+				Env: []corev1.EnvVar{
+					{Name: "ct-only-env", Value: "ct-only-val"},
+				},
 			},
 			Scale: Scale{
 				Min: ptr.To[int32](2),
@@ -225,6 +228,17 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.True(t, *podSpec.InitContainers[0].SecurityContext.RunAsNonRoot)
 		assert.True(t, *podSpec.InitContainers[0].SecurityContext.ReadOnlyRootFilesystem)
 		assert.False(t, *podSpec.InitContainers[0].SecurityContext.AllowPrivilegeEscalation)
+		// The monitor sidecar must only pick up SecurityContext from ContainerTemplate,
+		// not its Resources or Env -- those stay at the monitor's own hardcoded defaults.
+		assert.Equal(t, "10m", podSpec.InitContainers[0].Resources.Requests.Cpu().String())
+		assert.Equal(t, "20Mi", podSpec.InitContainers[0].Resources.Requests.Memory().String())
+		assert.Equal(t, "0", podSpec.InitContainers[0].Resources.Limits.Cpu().String())
+		assert.Equal(t, "0", podSpec.InitContainers[0].Resources.Limits.Memory().String())
+		var monitorEnvNames []string
+		for _, env := range podSpec.InitContainers[0].Env {
+			monitorEnvNames = append(monitorEnvNames, env.Name)
+		}
+		assert.NotContains(t, monitorEnvNames, "ct-only-env")
 		assert.Equal(t, "test-image1", podSpec.InitContainers[1].Image)
 		assert.Equal(t, "test-image2", podSpec.InitContainers[2].Image)
 		assert.Equal(t, "test-image3", podSpec.InitContainers[3].Image)
@@ -247,6 +261,7 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		}
 		assert.Contains(t, envNames, "ENV_VAR_NAME")
 		assert.Contains(t, envNames, EnvMonoVertexObject)
+		assert.Contains(t, envNames, "ct-only-env")
 		assert.Equal(t, 2, len(podSpec.Containers[0].VolumeMounts))
 		assert.NotNil(t, podSpec.Containers[0].ReadinessProbe)
 		assert.Equal(t, int32(24), podSpec.Containers[0].ReadinessProbe.InitialDelaySeconds)

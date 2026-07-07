@@ -471,12 +471,13 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 
 	// TODO(deprecate): remove this when we remove monitor_container.
-	// ApplyToNumaflowContainers won't cover monitor without risking double-apply, so
-	// apply the template to it directly here, before it's copied into init/main below.
-	if mv.Spec.ContainerTemplate != nil {
+	// Only SecurityContext is propagated to the monitor sidecar (not the full
+	// ContainerTemplate) to avoid overriding its fixed resource footprint or
+	// leaking the main container's env into it.
+	if mv.Spec.ContainerTemplate != nil && mv.Spec.ContainerTemplate.SecurityContext != nil {
 		for i := range sidecarContainers {
 			if sidecarContainers[i].Name == CtrMonitor {
-				mv.Spec.ContainerTemplate.ApplyToContainer(&sidecarContainers[i])
+				sidecarContainers[i].SecurityContext = mv.Spec.ContainerTemplate.SecurityContext
 			}
 		}
 	}

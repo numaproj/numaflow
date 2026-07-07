@@ -282,6 +282,9 @@ func TestGetPodSpec(t *testing.T) {
 				ReadOnlyRootFilesystem:   ptr.To(true),
 				AllowPrivilegeEscalation: ptr.To(false),
 			},
+			Env: []corev1.EnvVar{
+				{Name: "ct-only-env", Value: "ct-only-val"},
+			},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -316,6 +319,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvVertexName)
 		assert.Contains(t, envNames, EnvVertexObject)
 		assert.Contains(t, envNames, EnvReplica)
+		assert.Contains(t, envNames, "ct-only-env")
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 2, len(s.InitContainers))
@@ -328,6 +332,17 @@ func TestGetPodSpec(t *testing.T) {
 		assert.True(t, *s.InitContainers[1].SecurityContext.RunAsNonRoot)
 		assert.True(t, *s.InitContainers[1].SecurityContext.ReadOnlyRootFilesystem)
 		assert.False(t, *s.InitContainers[1].SecurityContext.AllowPrivilegeEscalation)
+		// The monitor sidecar must only pick up SecurityContext from ContainerTemplate,
+		// not its Resources or Env -- those stay at the monitor's own hardcoded defaults.
+		assert.Equal(t, "10m", s.InitContainers[1].Resources.Requests.Cpu().String())
+		assert.Equal(t, "20Mi", s.InitContainers[1].Resources.Requests.Memory().String())
+		assert.Equal(t, "0", s.InitContainers[1].Resources.Limits.Cpu().String())
+		assert.Equal(t, "0", s.InitContainers[1].Resources.Limits.Memory().String())
+		var monitorEnvNames []string
+		for _, e := range s.InitContainers[1].Env {
+			monitorEnvNames = append(monitorEnvNames, e.Name)
+		}
+		assert.NotContains(t, monitorEnvNames, "ct-only-env")
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
