@@ -373,10 +373,8 @@ fn extract_container_name(error_message: &str) -> String {
 }
 
 fn extract_container_name_or(error_message: &str, fallback_container_name: Option<&str>) -> String {
-    if let Some(start) = error_message.find('(')
-        && let Some(end) = error_message[start + 1..].find(')')
-    {
-        return error_message[start + 1..start + 1 + end].to_string();
+    if let Some(container_name) = extract_container_name_from_marker(error_message) {
+        return container_name;
     }
     if let Some(fallback_container_name) = fallback_container_name {
         return fallback_container_name.to_string();
@@ -388,6 +386,21 @@ fn extract_container_name_or(error_message: &str, fallback_container_name: Optio
     //    https://github.com/grpc/grpc-go/issues/7641
     // 2. The error is not a gRPC error, and no container name could be extracted from the error message.
     String::from("numa")
+}
+
+fn extract_container_name_from_marker(error_message: &str) -> Option<String> {
+    const ERROR_MARKERS: [&str; 2] = ["UDF_EXECUTION_ERROR(", "UDF_PARTIAL_RESPONSE("];
+
+    for marker in ERROR_MARKERS {
+        if let Some(start) = error_message.find(marker) {
+            let container_start = start + marker.len();
+            if let Some(end) = error_message[container_start..].find(')') {
+                return Some(error_message[container_start..container_start + end].to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Extracts structured error details from protobuf-encoded gRPC status.
@@ -648,9 +661,23 @@ mod tests {
 
     #[test]
     fn test_extract_container_name_with_valid_pattern() {
-        let error_message = "Error occurred in container (my-container)";
+        let error_message = "UDF_EXECUTION_ERROR(my-container): Test error message";
         let container_name = extract_container_name(error_message);
         assert_eq!(container_name, "my-container");
+    }
+
+    #[test]
+    fn test_extract_container_name_with_partial_response_marker() {
+        let error_message = "UDF_PARTIAL_RESPONSE(batch_map)";
+        let container_name = extract_container_name(error_message);
+        assert_eq!(container_name, "batch_map");
+    }
+
+    #[test]
+    fn test_extract_container_name_ignores_non_sdk_parentheses_with_fallback() {
+        let error_message = "No such file or directory (os error 2)";
+        let container_name = extract_container_name_or(error_message, Some("udf"));
+        assert_eq!(container_name, "udf");
     }
 
     #[test]
