@@ -470,6 +470,17 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	}
 
+	// TODO(deprecate): remove this when we remove monitor_container.
+	// ApplyToNumaflowContainers won't cover monitor without risking double-apply, so
+	// apply the template to it directly here, before it's copied into init/main below.
+	if mv.Spec.ContainerTemplate != nil {
+		for i := range sidecarContainers {
+			if sidecarContainers[i].Name == CtrMonitor {
+				mv.Spec.ContainerTemplate.ApplyToContainer(&sidecarContainers[i])
+			}
+		}
+	}
+
 	initContainers := []corev1.Container{}
 	initContainers = append(initContainers, mv.Spec.InitContainers...)
 	// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29

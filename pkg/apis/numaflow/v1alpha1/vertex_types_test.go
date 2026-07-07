@@ -277,6 +277,11 @@ func TestGetPodSpec(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("200Mi"),
 				},
 			},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsNonRoot:             ptr.To(true),
+				ReadOnlyRootFilesystem:   ptr.To(true),
+				AllowPrivilegeEscalation: ptr.To(false),
+			},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -318,6 +323,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
+		assert.Nil(t, s.InitContainers[0].SecurityContext)
+		assert.NotNil(t, s.InitContainers[1].SecurityContext)
+		assert.True(t, *s.InitContainers[1].SecurityContext.RunAsNonRoot)
+		assert.True(t, *s.InitContainers[1].SecurityContext.ReadOnlyRootFilesystem)
+		assert.False(t, *s.InitContainers[1].SecurityContext.AllowPrivilegeEscalation)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())

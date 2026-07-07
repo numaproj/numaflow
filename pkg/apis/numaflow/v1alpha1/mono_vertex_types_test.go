@@ -48,6 +48,11 @@ var (
 					FailureThreshold:    ptr.To[int32](1),
 					TimeoutSeconds:      ptr.To[int32](11),
 				},
+				SecurityContext: &corev1.SecurityContext{
+					RunAsNonRoot:             ptr.To(true),
+					ReadOnlyRootFilesystem:   ptr.To(true),
+					AllowPrivilegeEscalation: ptr.To(false),
+				},
 			},
 			Scale: Scale{
 				Min: ptr.To[int32](2),
@@ -216,9 +221,14 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.Equal(t, "100Mi", podSpec.Containers[0].Resources.Requests.Memory().String())
 		assert.Equal(t, "200Mi", podSpec.Containers[0].Resources.Limits.Memory().String())
 		assert.Equal(t, CtrMonitor, podSpec.InitContainers[0].Name)
+		assert.NotNil(t, podSpec.InitContainers[0].SecurityContext)
+		assert.True(t, *podSpec.InitContainers[0].SecurityContext.RunAsNonRoot)
+		assert.True(t, *podSpec.InitContainers[0].SecurityContext.ReadOnlyRootFilesystem)
+		assert.False(t, *podSpec.InitContainers[0].SecurityContext.AllowPrivilegeEscalation)
 		assert.Equal(t, "test-image1", podSpec.InitContainers[1].Image)
 		assert.Equal(t, "test-image2", podSpec.InitContainers[2].Image)
 		assert.Equal(t, "test-image3", podSpec.InitContainers[3].Image)
+		assert.Nil(t, podSpec.InitContainers[1].SecurityContext)
 		for i, c := range podSpec.Containers {
 			if i != 0 {
 				assert.Equal(t, 1, len(c.VolumeMounts))

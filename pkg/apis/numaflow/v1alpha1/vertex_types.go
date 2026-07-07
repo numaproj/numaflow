@@ -410,6 +410,17 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 	}
 
+	// TODO(deprecate): remove this when we remove monitor_container.
+	// ApplyToNumaflowContainers won't cover monitor without risking double-apply, so
+	// apply the template to it directly here, before it's copied into init/main below.
+	if v.Spec.ContainerTemplate != nil {
+		for i := range sidecarContainers {
+			if sidecarContainers[i].Name == CtrMonitor {
+				v.Spec.ContainerTemplate.ApplyToContainer(&sidecarContainers[i])
+			}
+		}
+	}
+
 	// Add the sidecar containers
 	// TODO: (k8s 1.29) clean this up once we deprecate the support for k8s <1.29
 	if isSidecarSupported() {
