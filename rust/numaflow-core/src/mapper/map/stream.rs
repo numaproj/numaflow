@@ -101,23 +101,8 @@ impl MapStreamTask {
             .await
             .expect("failed to reset tracker");
 
-        let mut received_eot = false;
         loop {
-            let result =
-                match tokio::time::timeout(self.shared_ctx.read_timeout, receiver.recv()).await {
-                    Ok(result) => result,
-                    Err(_) => {
-                        let error =
-                            Error::Mapper("stream map response timed out before EOT".to_string());
-                        warn!(
-                            offset = ?parent_info.offset,
-                            "stream map response timed out before EOT"
-                        );
-                        mark_failed!(self.msg_handle, &error, None);
-                        let _ = self.shared_ctx.error_tx.send(error).await;
-                        return;
-                    }
-                };
+            let result = receiver.recv().await;
             match result {
                 Some(Ok(StreamMapResponse::Results(results))) => {
                     // Convert raw results to Messages using parent info.
@@ -170,7 +155,6 @@ impl MapStreamTask {
                     }
                 }
                 Some(Ok(StreamMapResponse::Eot)) => {
-                    received_eot = true;
                     break;
                 }
                 Some(Err(e)) => {
@@ -180,19 +164,15 @@ impl MapStreamTask {
                     return;
                 }
                 None => {
-                    if !received_eot {
-                        let error = Error::Mapper(
-                            "stream map response channel closed before EOT".to_string(),
-                        );
-                        warn!(
-                            offset = ?parent_info.offset,
-                            "stream map response channel closed before EOT"
-                        );
-                        mark_failed!(self.msg_handle, &error, None);
-                        let _ = self.shared_ctx.error_tx.send(error).await;
-                        return;
-                    }
-                    break;
+                    let error =
+                        Error::Mapper("stream map response channel closed before EOT".to_string());
+                    warn!(
+                        offset = ?parent_info.offset,
+                        "stream map response channel closed before EOT"
+                    );
+                    mark_failed!(self.msg_handle, &error, None);
+                    let _ = self.shared_ctx.error_tx.send(error).await;
+                    return;
                 }
             }
         }

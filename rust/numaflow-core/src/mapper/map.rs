@@ -178,7 +178,6 @@ impl MapHandle {
                         bypass_router,
                         hard_shutdown_token,
                         is_mono_vertex: is_mono_vertex(),
-                        read_timeout: self.read_timeout,
                     });
                     let ctx = ConcurrentMapContext {
                         error_rx,
@@ -346,7 +345,6 @@ pub(in crate::mapper) struct SharedMapTaskContext {
     pub bypass_router: Option<MvtxBypassRouter>,
     pub hard_shutdown_token: CancellationToken,
     pub is_mono_vertex: bool,
-    pub read_timeout: Duration,
 }
 
 /// Context for concurrent (unary/stream) map processing.
@@ -666,7 +664,6 @@ mod tests {
             bypass_router: None,
             hard_shutdown_token: CancellationToken::new(),
             is_mono_vertex: false,
-            read_timeout: Duration::from_secs(1),
         });
 
         MapUnaryTask {
