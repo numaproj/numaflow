@@ -9878,6 +9878,9 @@ spec:
                       - retryUntilSuccess
                       - discardLatest
                       type: string
+                    partitions:
+                      format: int32
+                      type: integer
                     to:
                       type: string
                   required:
@@ -23014,6 +23017,9 @@ spec:
                           - retryUntilSuccess
                           - discardLatest
                           type: string
+                        partitions:
+                          format: int32
+                          type: integer
                         to:
                           type: string
                       required:
@@ -38276,6 +38282,9 @@ spec:
                       - retryUntilSuccess
                       - discardLatest
                       type: string
+                    partitions:
+                      format: int32
+                      type: integer
                     to:
                       type: string
                     toVertexLimits:
@@ -44412,6 +44421,9 @@ spec:
                       - retryUntilSuccess
                       - discardLatest
                       type: string
+                    partitions:
+                      format: int32
+                      type: integer
                     to:
                       type: string
                     toVertexLimits:

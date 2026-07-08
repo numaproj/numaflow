@@ -847,6 +847,12 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 		vTo := pl.GetVertex(e.To)
 		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
 		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits)
+		// The number of partitions of an edge's buffer defaults to the "to" vertex's
+		// partition count, but a per-edge override takes precedence when set.
+		toVertexPartitionCount := int32(vTo.GetPartitionCount())
+		if e.Partitions != nil && *e.Partitions >= 1 {
+			toVertexPartitionCount = *e.Partitions
+		}
 		combinedEdge := dfv1.CombinedEdge{
 			Edge:                     e,
 			FromVertexType:           vFrom.GetVertexType(),
@@ -854,7 +860,7 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 			FromVertexLimits:         &fromVertexLimits,
 			ToVertexLimits:           &toVertexLimits,
 			ToVertexType:             vTo.GetVertexType(),
-			ToVertexPartitionCount:   ptr.To[int32](int32(vTo.GetPartitionCount())),
+			ToVertexPartitionCount:   ptr.To[int32](toVertexPartitionCount),
 			ToVertexOrdered:          getOrderedConfig(pl, vTo),
 		}
 		result = append(result, combinedEdge)

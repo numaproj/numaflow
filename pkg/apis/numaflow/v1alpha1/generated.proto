@@ -475,6 +475,13 @@ message Edge {
   // +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
   // +optional
   optional string onFull = 4;
+
+  // Partitions overrides the number of partitions for the buffer of this edge.
+  // If not set, the number of partitions defaults to the "to" vertex's partition count.
+  // This allows an edge to a high-throughput source of a join to have more partitions
+  // than the vertex default.
+  // +optional
+  optional int32 partitions = 5;
 }
 
 // FixedWindow describes a fixed window

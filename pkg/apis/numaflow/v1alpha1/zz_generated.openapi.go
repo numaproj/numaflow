@@ -893,6 +893,13 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Format:      "",
 						},
 					},
+					"partitions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Partitions overrides the number of partitions for the buffer of this edge. If not set, the number of partitions defaults to the \"to\" vertex's partition count. This allows an edge to a high-throughput source of a join to have more partitions than the vertex default.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"fromVertexType": {
 						SchemaProps: spec.SchemaProps{
 							Description: "From vertex type.",
@@ -1374,6 +1381,13 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"partitions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Partitions overrides the number of partitions for the buffer of this edge. If not set, the number of partitions defaults to the \"to\" vertex's partition count. This allows an edge to a high-throughput source of a join to have more partitions than the vertex default.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},

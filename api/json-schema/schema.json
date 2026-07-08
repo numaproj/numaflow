@@ -19883,6 +19883,11 @@
           "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
           "type": "string"
         },
+        "partitions": {
+          "description": "Partitions overrides the number of partitions for the buffer of this edge. If not set, the number of partitions defaults to the \"to\" vertex's partition count. This allows an edge to a high-throughput source of a join to have more partitions than the vertex default.",
+          "format": "int32",
+          "type": "integer"
+        },
         "to": {
           "type": "string"
         },
@@ -20122,6 +20127,11 @@
         "onFull": {
           "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
           "type": "string"
+        },
+        "partitions": {
+          "description": "Partitions overrides the number of partitions for the buffer of this edge. If not set, the number of partitions defaults to the \"to\" vertex's partition count. This allows an edge to a high-throughput source of a join to have more partitions than the vertex default.",
+          "format": "int32",
+          "type": "integer"
         },
         "to": {
           "type": "string"

@@ -1702,3 +1702,64 @@ func TestValidateOrderedProcessing(t *testing.T) {
 		})
 	}
 }
+
+func Test_validateReduceJoinPartitions(t *testing.T) {
+	// helper to build a two-source join into a keyed reduce vertex, with optional
+	// per-edge partition overrides.
+	build := func(reducePartitions int32, e1Parts, e2Parts *int32) dfv1.Pipeline {
+		return dfv1.Pipeline{
+			Spec: dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "s1", Source: &dfv1.Source{}},
+					{Name: "s2", Source: &dfv1.Source{}},
+					{
+						Name:       "reduce",
+						Partitions: ptr.To[int32](reducePartitions),
+						UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{
+							Keyed:   true,
+							Storage: &dfv1.PBQStorage{PersistentVolumeClaim: &dfv1.PersistenceStrategy{}},
+						}},
+					},
+				},
+				Edges: []dfv1.Edge{
+					{From: "s1", To: "reduce", Partitions: e1Parts},
+					{From: "s2", To: "reduce", Partitions: e2Parts},
+				},
+			},
+		}
+	}
+
+	t.Run("equal via vertex default", func(t *testing.T) {
+		pl := build(3, nil, nil)
+		assert.NoError(t, validateReduceJoinPartitions(pl))
+	})
+
+	t.Run("equal via matching overrides", func(t *testing.T) {
+		pl := build(3, ptr.To[int32](4), ptr.To[int32](4))
+		assert.NoError(t, validateReduceJoinPartitions(pl))
+	})
+
+	t.Run("unequal overrides rejected", func(t *testing.T) {
+		pl := build(3, ptr.To[int32](4), ptr.To[int32](2))
+		err := validateReduceJoinPartitions(pl)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "same number of partitions")
+	})
+
+	t.Run("one override differs from vertex default rejected", func(t *testing.T) {
+		pl := build(3, ptr.To[int32](4), nil)
+		assert.Error(t, validateReduceJoinPartitions(pl))
+	})
+
+	t.Run("non-keyed reduce exempt", func(t *testing.T) {
+		pl := build(1, ptr.To[int32](4), ptr.To[int32](2))
+		pl.Spec.Vertices[2].UDF.GroupBy.Keyed = false
+		assert.NoError(t, validateReduceJoinPartitions(pl))
+	})
+
+	t.Run("single incoming edge not a join", func(t *testing.T) {
+		pl := build(3, ptr.To[int32](4), nil)
+		pl.Spec.Edges = pl.Spec.Edges[:1] // only s1->reduce
+		assert.NoError(t, validateReduceJoinPartitions(pl))
+	})
+}

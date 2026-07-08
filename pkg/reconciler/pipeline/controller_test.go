@@ -796,6 +796,20 @@ func Test_copyEdges(t *testing.T) {
 		assert.Equal(t, int32(2), *result[0].FromVertexPartitionCount)
 	})
 
+	t.Run("test edge partitions override", func(t *testing.T) {
+		pl := testReducePipeline.DeepCopy()
+		// p2's vertex default partition count is 2; a per-edge override wins.
+		edges := []dfv1.Edge{{From: "p1", To: "p2", Partitions: ptr.To[int32](5)}}
+		result := copyEdges(pl, edges)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, int32(5), *result[0].ToVertexPartitionCount)
+
+		// An unset override falls back to the vertex default.
+		edges = []dfv1.Edge{{From: "p1", To: "p2"}}
+		result = copyEdges(pl, edges)
+		assert.Equal(t, int32(2), *result[0].ToVertexPartitionCount)
+	})
+
 }
 
 func Test_buildISBBatchJob(t *testing.T) {

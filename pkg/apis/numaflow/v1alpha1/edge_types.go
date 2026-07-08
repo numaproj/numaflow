@@ -30,6 +30,12 @@ type Edge struct {
 	// +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
 	// +optional
 	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,4,opt,name=onFull"`
+	// Partitions overrides the number of partitions for the buffer of this edge.
+	// If not set, the number of partitions defaults to the "to" vertex's partition count.
+	// This allows an edge to a high-throughput source of a join to have more partitions
+	// than the vertex default.
+	// +optional
+	Partitions *int32 `json:"partitions,omitempty" protobuf:"varint,5,opt,name=partitions"`
 }
 
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.

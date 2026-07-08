@@ -171,6 +171,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateReduceJoinPartitions(*pl); err != nil {
+		return err
+	}
+
 	if err := validateIdleSource(*pl); err != nil {
 		return err
 	}
@@ -386,6 +390,40 @@ func validateSideInputs(pl dfv1.Pipeline) error {
 				return fmt.Errorf("vertex %q: side input %q is defined more than once", v.Name, si)
 			}
 			namesInVertex[si] = true
+		}
+	}
+	return nil
+}
+
+// validateReduceJoinPartitions ensures that all incoming edges of a keyed reduce
+// vertex resolve to the same number of buffer partitions. A keyed reduce shuffles by
+// key hash into N partitions and reduce pod i reads partition i from every incoming
+// edge; if the edges disagree on N, the same key would land on different pods (via
+// key%N differing per edge), splitting the aggregation. Non-keyed reduce always has
+// a single partition, and map/sink joins have no key-grouping contract, so both are
+// exempt.
+func validateReduceJoinPartitions(pl dfv1.Pipeline) error {
+	for _, v := range pl.Spec.Vertices {
+		if !v.IsReduceUDF() || !v.UDF.GroupBy.Keyed {
+			continue
+		}
+		fromEdges := pl.GetFromEdges(v.Name)
+		if len(fromEdges) <= 1 {
+			continue // not a join
+		}
+		partitions := -1
+		for _, e := range fromEdges {
+			// Resolve the edge's buffer partition count the same way copyEdges does:
+			// per-edge override if set, else the to (reduce) vertex's partition count.
+			p := v.GetPartitionCount()
+			if e.Partitions != nil && *e.Partitions >= 1 {
+				p = int(*e.Partitions)
+			}
+			if partitions == -1 {
+				partitions = p
+			} else if p != partitions {
+				return fmt.Errorf("reduce vertex %q: all incoming edges must have the same number of partitions, but edge %q->%q resolves to %d while others resolve to %d", v.Name, e.From, e.To, p, partitions)
+			}
 		}
 	}
 	return nil

@@ -134,13 +134,24 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	return partitions
 }
 
+// numOfBufferPartitions returns the number of partitions for an edge's buffer.
+// It defaults to the "to" vertex's partition count, but a per-edge override
+// (Edge.Partitions) takes precedence when set. This must stay in sync with how the
+// controller resolves ToVertexPartitionCount in copyEdges.
+func (p Pipeline) numOfBufferPartitions(e Edge) int {
+	if e.Partitions != nil && *e.Partitions >= 1 {
+		return int(*e.Partitions)
+	}
+	return p.NumOfPartitions(e.To)
+}
+
 // FindVertexWithBuffer returns the downstream (to) vertex of the edge that owns the
 // given buffer. The to vertex's limits define the buffer's length/usage caps, which
 // is what the callers use it for. With edge-owned buffers a buffer name is of the form
 // {ns}-{pl}-{from}-{to}-{partition}; we match on the edge and return the to vertex.
 func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
 	for _, e := range p.ListAllEdges() {
-		for _, b := range GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To)) {
+		for _, b := range GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.numOfBufferPartitions(e)) {
 			if buffer == b {
 				return p.GetVertex(e.To)
 			}
@@ -174,7 +185,7 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 func (p Pipeline) GetAllBuffers() []string {
 	r := []string{}
 	for _, e := range p.ListAllEdges() {
-		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.numOfBufferPartitions(e))...)
 	}
 	return r
 }
@@ -183,7 +194,7 @@ func (p Pipeline) GetAllBuffers() []string {
 func (p Pipeline) GetFromBuffers(vertexName string) []string {
 	r := []string{}
 	for _, e := range p.GetFromEdges(vertexName) {
-		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.numOfBufferPartitions(e))...)
 	}
 	return r
 }
@@ -192,7 +203,7 @@ func (p Pipeline) GetFromBuffers(vertexName string) []string {
 func (p Pipeline) GetToBuffers(vertexName string) []string {
 	r := []string{}
 	for _, e := range p.GetToEdges(vertexName) {
-		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.numOfBufferPartitions(e))...)
 	}
 	return r
 }

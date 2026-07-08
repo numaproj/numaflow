@@ -25,6 +25,9 @@ pub struct Edge {
     /// OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"
     #[serde(rename = "onFull", skip_serializing_if = "Option::is_none")]
     pub on_full: Option<String>,
+    /// Partitions overrides the number of partitions for the buffer of this edge. If not set, the number of partitions defaults to the \"to\" vertex's partition count. This allows an edge to a high-throughput source of a join to have more partitions than the vertex default.
+    #[serde(rename = "partitions", skip_serializing_if = "Option::is_none")]
+    pub partitions: Option<i32>,
     #[serde(rename = "to")]
     pub to: String,
 }
@@ -35,6 +38,7 @@ impl Edge {
             conditions: None,
             from,
             on_full: None,
+            partitions: None,
             to,
         }
     }

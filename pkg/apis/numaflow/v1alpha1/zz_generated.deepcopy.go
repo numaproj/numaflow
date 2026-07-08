@@ -655,6 +655,11 @@ func (in *Edge) DeepCopyInto(out *Edge) {
 		*out = new(BufferFullWritingStrategy)
 		**out = **in
 	}
+	if in.Partitions != nil {
+		in, out := &in.Partitions, &out.Partitions
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

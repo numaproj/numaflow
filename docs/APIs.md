@@ -2534,6 +2534,28 @@ discardLatest. if not provided, the default value is set to
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>partitions</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Partitions overrides the number of partitions for the buffer of this
+edge. If not set, the number of partitions defaults to the “to” vertex’s
+partition count. This allows an edge to a high-throughput source of a
+join to have more partitions than the vertex default.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
