@@ -142,10 +142,10 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	resp := new(daemon.GetVertexMetricsResponse)
 
 	pipelineName := ps.pipeline.Name
-	namespace := ps.pipeline.Namespace
 	vertexName := req.GetVertex()
 	abstractVertex := ps.pipeline.GetVertex(vertexName)
-	bufferList := abstractVertex.OwnedBufferNames(namespace, pipelineName)
+	// Vertex metrics (pending) are measured on the buffers the vertex reads from.
+	bufferList := ps.pipeline.GetFromBuffers(vertexName)
 	vertexType := abstractVertex.GetVertexType()
 
 	// source vertex will have a single partition, which is the vertex name itself

@@ -77,10 +77,11 @@ func Test_GetFromEdges(t *testing.T) {
 }
 
 func Test_GetAllBuffers(t *testing.T) {
+	// One buffer per edge: input->p1 and p1->output.
 	s := testPipeline.GetAllBuffers()
 	assert.Equal(t, 2, len(s))
-	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-p1-0")
-	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-output-0")
+	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-input-p1-0")
+	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-p1-output-0")
 }
 
 func Test_GetVertex(t *testing.T) {
@@ -480,8 +481,10 @@ func Test_GetAllBuckets(t *testing.T) {
 }
 
 func Test_FindVertexWithBuffer(t *testing.T) {
-	v := testPipeline.FindVertexWithBuffer(GenerateBufferName(testNamespace, testPipelineName, "p1", 0))
+	// Buffer for the input->p1 edge; FindVertexWithBuffer returns the to vertex (p1).
+	v := testPipeline.FindVertexWithBuffer(GenerateBufferName(testNamespace, testPipelineName, "input", "p1", 0))
 	assert.NotNil(t, v)
+	assert.Equal(t, "p1", v.Name)
 }
 
 func Test_GetSideInputManagerDeployments(t *testing.T) {

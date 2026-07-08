@@ -111,7 +111,14 @@ func TestGetVertexMetrics(t *testing.T) {
 	vertexPartition := int32(1)
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
-		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in", Source: &v1alpha1.Source{}},
+				{Name: vertexName, Partitions: &vertexPartition},
+			},
+			// cat reads from one incoming edge, so it has one input buffer.
+			Edges: []v1alpha1.Edge{{From: "in", To: vertexName}},
+		},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(jsc)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), client, pipeline, &mockRater_TestGetVertexMetrics{}, nil)
@@ -185,7 +192,7 @@ func TestGetBuffer(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
-	bufferName := "numaflow-system-simple-pipeline-cat-0"
+	bufferName := "numaflow-system-simple-pipeline-in-cat-0"
 
 	req := &daemon.GetBufferRequest{Pipeline: pipelineName, Buffer: bufferName}
 
