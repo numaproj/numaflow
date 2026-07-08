@@ -563,7 +563,9 @@ func getBufferInfos(
 	targetAvailableBufferLength = int64(0)
 	totalBufferLengthLimit = int64(0)
 	totalCurrentPending = int64(0)
-	for _, bufferName := range vertex.OwnedBuffers() {
+	// Autoscaling sizes a vertex from the depth of its input queue, i.e. the buffers
+	// it reads from, not the buffers it writes to.
+	for _, bufferName := range vertex.GetFromBuffers() {
 		if bInfo, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
 			err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
 			return bufferLength, bufferLengthLimit, targetAvailableBufferLength, totalBufferLengthLimit, totalCurrentPending, err

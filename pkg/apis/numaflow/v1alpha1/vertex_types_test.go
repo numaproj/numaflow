@@ -89,14 +89,26 @@ var (
 )
 
 func TestOwnedBuffers(t *testing.T) {
+	// A vertex owns the buffers it writes to, i.e. one per outgoing edge (vtx->output).
 	f := testVertex.OwnedBuffers()
 	assert.Equal(t, 1, len(f))
-	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
 }
 
 func TestOwnedBuffersSource(t *testing.T) {
+	// With edge-owned buffers a source owns its output buffer (src->output).
 	f := testSrcVertex.OwnedBuffers()
-	assert.Equal(t, 0, len(f))
+	assert.Equal(t, 1, len(f))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s-0", testSrcVertex.Namespace, testSrcVertex.Spec.PipelineName, testSrcVertex.Spec.Name, "output"))
+}
+
+func TestGetFromBuffers(t *testing.T) {
+	// A vertex reads from one buffer per incoming edge (input->vtx).
+	f := testVertex.GetFromBuffers()
+	assert.Equal(t, 1, len(f))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, "input", testVertex.Spec.Name))
+	// A source reads from the external source, not from an ISB buffer.
+	assert.Equal(t, 0, len(testSrcVertex.GetFromBuffers()))
 }
 
 func TestGetFromBuckets(t *testing.T) {
@@ -111,7 +123,7 @@ func TestGetFromBuckets(t *testing.T) {
 func TestGetToBuffers(t *testing.T) {
 	f := testVertex.GetToBuffers()
 	assert.Equal(t, 1, len(f))
-	assert.Contains(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, "output"))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
 }
 
 func TestGetToBuffersSink(t *testing.T) {

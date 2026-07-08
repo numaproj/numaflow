@@ -591,7 +591,9 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		bfs = append(bfs, pl.GetAllBuffers()...)
 		bks = append(bks, pl.GetAllBuckets()...)
 	} else {
-		bfs = append(bfs, vertex.OwnedBuffers()...)
+		// The init container validates that the buffers this pod reads from exist
+		// before the pod starts. With edge-owned buffers those are the from buffers.
+		bfs = append(bfs, vertex.GetFromBuffers()...)
 		bks = append(bks, vertex.GetFromBuckets()...)
 		bks = append(bks, vertex.GetToBuckets()...)
 	}

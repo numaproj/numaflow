@@ -134,11 +134,15 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	return partitions
 }
 
+// FindVertexWithBuffer returns the downstream (to) vertex of the edge that owns the
+// given buffer. The to vertex's limits define the buffer's length/usage caps, which
+// is what the callers use it for. With edge-owned buffers a buffer name is of the form
+// {ns}-{pl}-{from}-{to}-{partition}; we match on the edge and return the to vertex.
 func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
-	for _, v := range p.Spec.Vertices {
-		for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
+	for _, e := range p.ListAllEdges() {
+		for _, b := range GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To)) {
 			if buffer == b {
-				return &v
+				return p.GetVertex(e.To)
 			}
 		}
 	}
@@ -165,10 +169,30 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
+// GetAllBuffers returns all the inter-step buffers in the pipeline, one set of
+// partitioned buffers per edge, named {ns}-{pl}-{from}-{to}-{partition}.
 func (p Pipeline) GetAllBuffers() []string {
 	r := []string{}
-	for _, v := range p.Spec.Vertices {
-		r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+	for _, e := range p.ListAllEdges() {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+	}
+	return r
+}
+
+// GetFromBuffers returns the buffers a vertex reads from, one set per incoming edge.
+func (p Pipeline) GetFromBuffers(vertexName string) []string {
+	r := []string{}
+	for _, e := range p.GetFromEdges(vertexName) {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+	}
+	return r
+}
+
+// GetToBuffers returns the buffers a vertex writes to, one set per outgoing edge.
+func (p Pipeline) GetToBuffers(vertexName string) []string {
+	r := []string{}
+	for _, e := range p.GetToEdges(vertexName) {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
 	}
 	return r
 }

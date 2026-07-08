@@ -471,9 +471,15 @@ func (vs VertexSpec) DeepCopyWithoutReplicasAndLifecycle() VertexSpec {
 	return x
 }
 
-// OwnedBuffers returns the buffers that the vertex owns
+// OwnedBuffers returns the buffers that the vertex owns, i.e. the buffers it writes
+// to (one set per outgoing edge) and is responsible for creating/deleting.
 func (v Vertex) OwnedBuffers() []string {
 	return v.Spec.OwnedBufferNames(v.Namespace, v.Spec.PipelineName)
+}
+
+// GetFromBuffers returns the buffers the vertex reads from (one set per incoming edge).
+func (v Vertex) GetFromBuffers() []string {
+	return v.Spec.GetFromBufferNames(v.Namespace, v.Spec.PipelineName)
 }
 
 // GetFromBuckets returns the buckets that the vertex reads from.
@@ -508,9 +514,7 @@ func (v Vertex) GetToBuffers() []string {
 		return r
 	}
 	for _, vt := range v.Spec.ToEdges {
-		for i := 0; i < vt.GetToVertexPartitionCount(); i++ {
-			r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt.To, i))
-		}
+		r = append(r, GenerateBufferNames(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.To, vt.GetToVertexPartitionCount())...)
 	}
 	return r
 }
@@ -733,13 +737,32 @@ func (av AbstractVertex) IsReduceUDF() bool {
 	return av.UDF != nil && av.UDF.GroupBy != nil
 }
 
-func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
+// OwnedBufferNames returns the buffers owned by the vertex, i.e. the buffers it
+// writes to and is responsible for creating/deleting. With edge-owned buffers, a
+// vertex owns one set of partitioned buffers per outgoing edge. Sinks own nothing.
+// The edges (with their resolved partition counts) live on VertexSpec, not on the
+// bare AbstractVertex, so this is defined on VertexSpec.
+func (vs VertexSpec) OwnedBufferNames(namespace, pipeline string) []string {
 	var r []string
-	if av.IsASource() {
+	if vs.IsASink() {
 		return r
 	}
-	for i := 0; i < av.GetPartitionCount(); i++ {
-		r = append(r, GenerateBufferName(namespace, pipeline, av.Name, i))
+	for _, e := range vs.ToEdges {
+		r = append(r, GenerateBufferNames(namespace, pipeline, vs.Name, e.To, e.GetToVertexPartitionCount())...)
+	}
+	return r
+}
+
+// GetFromBufferNames returns the buffers the vertex reads from, i.e. one set of
+// partitioned buffers per incoming edge. Sources read from the external source, not
+// from an inter-step buffer, so they return nothing.
+func (vs VertexSpec) GetFromBufferNames(namespace, pipeline string) []string {
+	var r []string
+	if vs.IsASource() {
+		return r
+	}
+	for _, e := range vs.FromEdges {
+		r = append(r, GenerateBufferNames(namespace, pipeline, e.From, vs.Name, e.GetToVertexPartitionCount())...)
 	}
 	return r
 }
@@ -897,14 +920,18 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-func GenerateBufferName(namespace, pipelineName, vertex string, index int) string {
-	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, index)
+// GenerateBufferName returns the name of the inter-step buffer for an edge.
+// Buffers are owned by the edge (i.e. by the upstream/from vertex) rather than by
+// the downstream/to vertex, so the name includes both ends of the edge. This gives
+// each source of a join its own physical buffer, enabling independent backpressure.
+func GenerateBufferName(namespace, pipelineName, from, to string, index int) string {
+	return fmt.Sprintf("%s-%s-%s-%s-%d", namespace, pipelineName, from, to, index)
 }
 
-func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
+func GenerateBufferNames(namespace, pipelineName, from, to string, numOfPartitions int) []string {
 	var result []string
 	for i := 0; i < numOfPartitions; i++ {
-		result = append(result, GenerateBufferName(namespace, pipelineName, vertex, i))
+		result = append(result, GenerateBufferName(namespace, pipelineName, from, to, i))
 	}
 	return result
 }
