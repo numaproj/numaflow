@@ -52,6 +52,11 @@ import {
   timeAgo,
   getBaseHref,
 } from "../../../../../utils";
+import {
+  MONO_VERTEX_INTERNAL_NODE_WIDTH,
+  MONO_VERTEX_MAX_CONTAINER_HEIGHT,
+  MONO_VERTEX_MAX_CONTAINER_WIDTH,
+} from "../../../../../utils/monoVertexGraphLayout";
 import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import { CollapseContext } from "../../../../common/SummaryPageLayout";
 import lock from "../../../../../images/lock.svg";
@@ -79,14 +84,18 @@ import "./style.css";
 const nodeWidth = 252;
 const nodeHeight = 72;
 const nodeHeightTall = 112;
-const monoVertexNodeWidth = 420;
-const monoVertexNodeHeight = 170;
 const graphDirection = "LR";
+const NODE_DATA_TYPES = {
+  MONO_VERTEX: "monoVertex",
+  MONO_VERTEX_INTERNAL: "monoVertexInternal",
+} as const;
 
 const getNodeLayoutWidth = (node: Node): number => {
   const d = node?.data as Record<string, any> | undefined;
-  if (d?.type === "monoVertex") return monoVertexNodeWidth;
-  if (d?.type === "monoVertexInternal") return 32;
+  if (d?.type === NODE_DATA_TYPES.MONO_VERTEX)
+    return d.containerWidth ?? MONO_VERTEX_MAX_CONTAINER_WIDTH;
+  if (d?.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL)
+    return MONO_VERTEX_INTERNAL_NODE_WIDTH;
   return nodeWidth;
 };
 
@@ -94,8 +103,10 @@ const getNodeLayoutHeight = (node: Node): number => {
   const d = node?.data as Record<string, any> | undefined;
   if (!d) return nodeHeight;
   const nodeInfo = d.nodeInfo as Record<string, any> | undefined;
-  if (d.type === "monoVertex") return monoVertexNodeHeight;
-  if (d.type === "monoVertexInternal") return 32;
+  if (d.type === NODE_DATA_TYPES.MONO_VERTEX)
+    return d.containerHeight ?? MONO_VERTEX_MAX_CONTAINER_HEIGHT;
+  if (d.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL)
+    return MONO_VERTEX_INTERNAL_NODE_WIDTH;
   if (d.type === "source" && nodeInfo?.source?.transformer) return nodeHeightTall;
   if (d.type === "sink" && (nodeInfo?.sink?.onSuccess || nodeInfo?.sink?.fallback)) return nodeHeightTall;
   return nodeHeight;
@@ -125,7 +136,7 @@ const getLayoutedElements = (
   dagreGraph.setGraph({ rankdir: direction, ranksep: 240, edgesep: 180 });
 
   nodes.forEach((node) => {
-    if (node?.data?.type === "monoVertexInternal") return;
+    if (node?.data?.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL) return;
     const w = getNodeLayoutWidth(node);
     const h = getNodeLayoutHeight(node);
     dagreGraph.setNode(node.id, { width: w, height: h });
@@ -148,7 +159,7 @@ const getLayoutedElements = (
     if (
       node?.data?.type !== "sideInput" &&
       node?.data?.type !== "generator" &&
-      node?.data?.type !== "monoVertexInternal"
+      node?.data?.type !== NODE_DATA_TYPES.MONO_VERTEX_INTERNAL
     ) {
       const nodeWithPosition = dagreGraph.node(node.id);
       max_pos = Math.max(max_pos, nodeWithPosition.y);
@@ -156,7 +167,7 @@ const getLayoutedElements = (
   });
   let cnt = 2;
   nodes.forEach((node) => {
-    if (node?.data?.type === "monoVertexInternal") {
+    if (node?.data?.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL) {
       node.targetPosition = isHorizontal ? Position.Left : Position.Top;
       node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
       return;
@@ -207,7 +218,7 @@ const Flow = (props: FlowProps) => {
     type,
   } = props;
   const fitViewOptions = useMemo(
-    () => (type === "monoVertex" ? { padding: 0.25, maxZoom: 2.5 } : undefined),
+    () => (type === "monoVertex" ? { padding: 0.35, maxZoom: 1.60 } : undefined),
     [type]
   );
 
@@ -769,7 +780,11 @@ export default function Graph(props: GraphProps) {
       const updated = {
         type: SidebarType.EDGE_DETAILS,
         edgeDetailsProps: {
+          namespaceId,
+          pipelineId,
           edgeId: edge.id,
+          from: edge?.data?.source || edge.source,
+          to: edge?.data?.target || edge.target,
           watermarks: edge?.data?.edgeWatermark?.watermarks,
         },
       };
@@ -779,7 +794,7 @@ export default function Graph(props: GraphProps) {
       }
       setSidebarProps(updated);
     },
-    [setSidebarProps, sidebarProps]
+    [setSidebarProps, sidebarProps, namespaceId, pipelineId]
   );
 
   const handleEdgeClick = useCallback(
@@ -869,7 +884,7 @@ export default function Graph(props: GraphProps) {
 
   const handleNodeClick = useCallback(
     (event: MouseEvent | undefined, node: Node) => {
-      if (node?.data?.type === "monoVertexInternal") {
+      if (node?.data?.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL) {
         return;
       }
       setNodeId(node.id);

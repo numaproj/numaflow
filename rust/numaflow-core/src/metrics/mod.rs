@@ -88,6 +88,7 @@ const WRITE_ERROR_TOTAL: &str = "write_error";
 const ACK_TOTAL: &str = "ack";
 const UDF_ERROR_TOTAL: &str = "udf_error";
 const CRITICAL_ERROR_TOTAL: &str = "critical_error";
+const MONOVTX_UDF_ERROR_TOTAL: &str = "error";
 
 pub(crate) mod critical_error_reasons {
     pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
@@ -754,7 +755,7 @@ impl MonoVtxMetrics {
             metrics.udf.time.clone(),
         );
         udf_registry.register(
-            UDF_ERROR_TOTAL,
+            MONOVTX_UDF_ERROR_TOTAL,
             "Total number of UDF Errors",
             metrics.udf.errors_total.clone(),
         );
@@ -2012,6 +2013,11 @@ mod tests {
             .dropped_total
             .get_or_create(&common_labels)
             .inc_by(3);
+        metrics
+            .udf
+            .errors_total
+            .get_or_create(&common_labels)
+            .inc_by(4);
 
         metrics.sink.write_total.get_or_create(&common_labels).inc();
         metrics
@@ -2117,6 +2123,7 @@ mod tests {
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_udf_drop_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3"#,
+            r#"monovtx_udf_error_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,

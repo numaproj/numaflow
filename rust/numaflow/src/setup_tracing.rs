@@ -259,12 +259,9 @@ mod tests {
     use super::*;
     use opentelemetry::{
         Context,
-        trace::{
-            SamplingDecision, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId,
-            TraceState,
-        },
+        trace::{SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId, TraceState},
     };
-    use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider, ShouldSample};
+    use opentelemetry_sdk::trace::{Sampler, SamplingDecision, SdkTracerProvider, ShouldSample};
 
     fn sampling_decision(
         sampler: &Sampler,

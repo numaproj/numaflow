@@ -151,6 +151,18 @@ data:
               filters:
                 - name: pod
                   required: false
+        - metric_name: monovtx_udf_time_bucket
+          display_name: MonoVertex UDF Processing Time Latency
+          metric_description: This metric represents a histogram to keep track of the total time taken by UDF.
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
 
     - name: vertex_histogram
       objects: 
@@ -331,6 +343,30 @@ data:
         - metric_name: monovtx_sink_write_total
           display_name: MonoVertex Sink Write Processing Rate
           metric_description: This metric represents the total number of data messages written by sink per second.
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
+        - metric_name: monovtx_udf_error_total
+          display_name: MonoVertex UDF Error Rate
+          metric_description: This metric represents the total number of UDF errors per second.
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
+        - metric_name: monovtx_udf_drop_total
+          display_name: MonoVertex UDF Drop Rate
+          metric_description: This metric represents the total number of messages dropped by UDF per second.
           required_filters:
             - namespace
             - mvtx_name
