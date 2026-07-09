@@ -7,6 +7,10 @@ import Box from "@mui/material/Box";
 import { HighlightContext } from "../../index";
 import { GeneratorColorContext } from "../../../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
+import {
+  MONO_VERTEX_MAX_CONTAINER_HEIGHT,
+  MONO_VERTEX_MAX_CONTAINER_WIDTH,
+} from "../../../../../../../utils/monoVertexGraphLayout";
 // import healthy from "../../../../../../../images/heart-fill.svg";
 import source from "../../../../../../../images/source.png";
 import map from "../../../../../../../images/map.png";
@@ -458,6 +462,16 @@ const CustomNode: FC<NodeProps> = ({
       ...commonStyle,
     };
   }, [highlightValues, data, hasBothSinks]);
+  const resolvedNodeStyle = isMonoVertex
+    ? {
+        ...nodeStyle,
+        border: `${
+          highlightValues[data?.name] ? "0.3rem" : "0.15rem"
+        } solid ${getBorderColor(data?.type)}`,
+        width: data?.containerWidth ?? MONO_VERTEX_MAX_CONTAINER_WIDTH,
+        height: data?.containerHeight ?? MONO_VERTEX_MAX_CONTAINER_HEIGHT,
+      }
+    : nodeStyle;
 
   // arrow for containers in monoVertex
   const arrowSvg = useMemo(() => {
@@ -521,7 +535,7 @@ const CustomNode: FC<NodeProps> = ({
       <Box
         className={nodeInputClass}
         onClick={handleClick}
-        style={nodeStyle}
+        style={resolvedNodeStyle}
       >
         {data?.type !== "monoVertex" && (
           <Box className="node-info">{data?.name}</Box>

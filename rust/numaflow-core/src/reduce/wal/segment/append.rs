@@ -21,6 +21,7 @@ use tracing::{debug, error, info};
 const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30);
 
 /// The Command that has to be operated on the Segment.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum SegmentWriteMessage {
     /// Writes a message to the WAL. The message will be converted to bytes internally.
     /// After successful write, mark_success() is called on the MessageHandle to ACK.
@@ -151,7 +152,7 @@ impl SegmentWriteActor {
                     }
                     Err(e) => {
                         error!(?e, "Failed to write message to WAL");
-                        read_message.mark_failed(&e);
+                        read_message.mark_failed(&e, None);
                         Err(e)
                     }
                 }

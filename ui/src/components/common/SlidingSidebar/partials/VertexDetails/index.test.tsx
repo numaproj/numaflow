@@ -11,6 +11,8 @@ import { BrowserRouter } from "react-router-dom";
 
 import "@testing-library/jest-dom";
 
+const mockBuffersComponent = jest.fn();
+
 jest.mock("./partials/VertexUpdate", () => {
   const originalModule = jest.requireActual("./partials/VertexUpdate");
   // Mock any module exports here
@@ -56,7 +58,10 @@ jest.mock("./partials/Buffers", () => {
     __esModule: true,
     ...originalModule,
     // Named export mocks
-    Buffers: () => <div>Mocked buffers</div>,
+    Buffers: (props) => {
+      mockBuffersComponent(props);
+      return <div>Mocked buffers</div>;
+    },
   };
 });
 jest.mock(
@@ -214,6 +219,48 @@ describe("VertexDetails", () => {
     });
     await waitFor(() => {
       expect(screen.getByText("Mocked buffers")).toBeInTheDocument();
+      expect(screen.queryByTestId("isb-tab")).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders source ISB details under Buffers when buffer rows are absent", async () => {
+    render(
+      <VertexDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        vertexId="test-vertex"
+        vertexSpecs={{}}
+        vertexMetrics={{}}
+        buffers={null}
+        type="source"
+        setModalOnClose={jest.fn()}
+        refresh={jest.fn()}
+      />,
+      { wrapper: BrowserRouter }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Input Vertex")).toBeInTheDocument();
+      expect(screen.getByTestId("buffers-tab")).toBeInTheDocument();
+      expect(screen.queryByTestId("isb-tab")).not.toBeInTheDocument();
+    });
+
+    act(() => {
+      const tab = screen.getByTestId("buffers-tab");
+      fireEvent.click(tab);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Mocked buffers")).toBeInTheDocument();
+      expect(mockBuffersComponent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          buffers: [],
+          namespaceId: "test-namespace",
+          pipelineId: "test-pipeline",
+          vertexId: "test-vertex",
+          type: "source",
+        })
+      );
     });
   });
 

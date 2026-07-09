@@ -1,7 +1,7 @@
 # Numaflow
 
 [![Built with Rust](https://img.shields.io/badge/built_with-Rust-dca282.svg)](https://github.com/numaproj/numaflow)
-[![Go Report Card](https://goreportcard.com/badge/github.com/numaproj/numaflow)](https://goreportcard.com/report/github.com/numaproj/numaflow)
+[![Rust Report Card](https://rust-reportcard.xuri.me/badge/github.com/numaproj/numaflow)](https://rust-reportcard.xuri.me/report/github.com/numaproj/numaflow)
 [![slack](https://img.shields.io/badge/slack-numaproj-brightgreen.svg?logo=slack)](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg)
 [![GoDoc](https://godoc.org/github.com/numaproj/numaflow?status.svg)](https://godoc.org/github.com/numaproj/numaflow/pkg/apis)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
