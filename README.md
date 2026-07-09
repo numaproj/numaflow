@@ -37,7 +37,7 @@ Numaflow, created by the Intuit Argo team to address community needs for continu
 
 ## Roadmap
 
-- Metadata propagation and Open Telemetry Tracing, Deprecate `monitor` container (1.7)
+- Per Message Nack support with redelivery options, avoid `numa` restarts on UDF crashes, remove `monitor` container and move its functionality to `numa`, LWF (Lowest-Watermark First) ISB reader (1.9)
 
 ## Demo
 
