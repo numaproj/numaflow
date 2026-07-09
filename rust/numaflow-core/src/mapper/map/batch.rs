@@ -511,7 +511,7 @@ impl UserDefinedBatchMap {
 mod tests {
     use crate::error::Error as MapError;
     use crate::mapper::map::batch::{BatchSenderMapState, UserDefinedBatchMap};
-    use crate::shared::grpc::create_rpc_channel;
+    use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
@@ -1009,5 +1009,130 @@ mod tests {
         assert!(senders.lock().unwrap().map.is_empty());
 
         receiver_handle.await.expect("receiver task should finish");
+    }
+
+    fn dummy_reconnect_config() -> UdfReconnectConfig {
+        UdfReconnectConfig::new(
+            GrpcClientConfig::new(
+                "/tmp/missing-batch-map.sock",
+                "/tmp/missing-server-info",
+                1024,
+            ),
+            CancellationToken::new(),
+            Duration::from_millis(1),
+        )
+    }
+
+    fn test_request(id: &str) -> MapRequest {
+        MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_once_returns_redrive_when_sender_map_is_closed() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        senders.lock().unwrap().closed = true;
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders,
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let results = mapper
+            .batch_once(vec![test_request("closed")], CancellationToken::new())
+            .await;
+        assert_eq!(results.len(), 1);
+        let err = results
+            .into_iter()
+            .next()
+            .expect("expected one result")
+            .expect_err("closed sender map should be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(err.to_string().contains("batch map stream closed"));
+    }
+
+    #[tokio::test]
+    async fn batch_reconnect_without_config_returns_redrive() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::new(Mutex::new(BatchSenderMapState::default())),
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let err = mapper
+            .reconnect()
+            .await
+            .expect_err("missing reconnect config should be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(
+            err.to_string()
+                .contains("batch map reconnect config missing")
+        );
+    }
+
+    #[tokio::test]
+    async fn batch_reconnect_drains_senders_before_missing_socket_error() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let (tx, rx) = oneshot::channel();
+        senders
+            .lock()
+            .unwrap()
+            .map
+            .insert("pending".to_string(), tx);
+
+        let reconnect_config = dummy_reconnect_config();
+        reconnect_config.cln_token().cancel();
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
+            reconnect_config: Some(reconnect_config),
+        };
+
+        let err = mapper
+            .reconnect()
+            .await
+            .expect_err("cancelled reconnect should return an error");
+        assert!(
+            matches!(err, MapError::UdfRedrive(_) | MapError::Cancelled()),
+            "unexpected reconnect error: {err:?}"
+        );
+        assert!(senders.lock().unwrap().closed);
+        let drained = rx.await.expect("pending sender should be drained");
+        assert!(matches!(drained, Err(MapError::UdfRedrive(_))));
     }
 }

@@ -463,7 +463,7 @@ impl UserDefinedUnaryMap {
 mod tests {
     use crate::error::Error as MapError;
     use crate::mapper::map::unary::{UnarySenderMapState, UserDefinedUnaryMap};
-    use crate::shared::grpc::create_rpc_channel;
+    use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
     use numaflow::map;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
@@ -748,6 +748,113 @@ mod tests {
         assert!(
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
+        );
+    }
+
+    fn dummy_reconnect_config() -> UdfReconnectConfig {
+        UdfReconnectConfig::new(
+            GrpcClientConfig::new("/tmp/missing-map.sock", "/tmp/missing-server-info", 1024),
+            CancellationToken::new(),
+            Duration::from_millis(1),
+        )
+    }
+
+    fn test_request(id: &str) -> MapRequest {
+        MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn unary_once_returns_redrive_when_sender_map_is_closed() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
+        senders.lock().unwrap().closed = true;
+        let mapper = UserDefinedUnaryMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
+                generation: 0,
+                read_tx,
+                senders,
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let err = mapper
+            .unary_once(test_request("closed"), CancellationToken::new())
+            .await
+            .expect_err("expected closed sender map to be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(err.to_string().contains("unary map stream closed"));
+    }
+
+    #[tokio::test]
+    async fn unary_reconnect_without_config_returns_redrive() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let mapper = UserDefinedUnaryMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
+                generation: 0,
+                read_tx,
+                senders: Arc::new(Mutex::new(UnarySenderMapState::default())),
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let err = mapper
+            .reconnect(0)
+            .await
+            .expect_err("missing reconnect config should be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(
+            err.to_string()
+                .contains("unary map reconnect config missing")
+        );
+    }
+
+    #[tokio::test]
+    async fn unary_reconnect_skips_stale_generation() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
+        let mapper = UserDefinedUnaryMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
+                generation: 2,
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
+            reconnect_config: Some(dummy_reconnect_config()),
+        };
+
+        mapper
+            .reconnect(1)
+            .await
+            .expect("stale generation should be a no-op");
+        assert!(
+            !senders.lock().unwrap().closed,
+            "stale reconnect should not drain the current sender map"
         );
     }
 }

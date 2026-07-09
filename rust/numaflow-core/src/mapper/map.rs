@@ -1293,4 +1293,35 @@ mod tests {
         assert!(!msg_plain.nacked());
         assert_eq!(msg_plain.nack_options, None);
     }
+
+    #[test]
+    fn grpc_error_to_redrive_converts_grpc_errors() {
+        let result: error::Result<()> = Err(Error::Grpc(Box::new(tonic::Status::unavailable(
+            "map unavailable",
+        ))));
+
+        let err = grpc_error_to_redrive(result).expect_err("gRPC error should be redrivable");
+        assert!(matches!(err, Error::UdfRedrive(_)));
+        assert!(err.to_string().contains("map unavailable"));
+    }
+
+    #[test]
+    fn grpc_error_to_redrive_preserves_non_grpc_errors() {
+        let result: error::Result<()> = Err(Error::Mapper("terminal mapper error".to_string()));
+
+        let err = grpc_error_to_redrive(result).expect_err("non-gRPC error should be preserved");
+        assert!(matches!(err, Error::Mapper(_)));
+        assert!(err.to_string().contains("terminal mapper error"));
+    }
+
+    #[tokio::test]
+    async fn wait_before_map_redrive_returns_cancelled_when_token_is_cancelled() {
+        let cln_token = CancellationToken::new();
+        cln_token.cancel();
+
+        let err = wait_before_map_redrive(&cln_token)
+            .await
+            .expect_err("cancelled token should interrupt redrive wait");
+        assert!(matches!(err, Error::Cancelled()));
+    }
 }
