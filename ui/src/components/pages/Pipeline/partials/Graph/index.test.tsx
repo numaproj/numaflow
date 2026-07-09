@@ -570,7 +570,109 @@ describe("Graph", () => {
 
     expect(screen.getByAltText("source-container")).toBeInTheDocument();
     expect(transformerIcon.closest(".react-flow__node-input")).toHaveClass(
-      "react-flow__node-input--source-with-containers"
+      "react-flow__node-input--with-containers"
+    );
+    expect(transformerIcon.closest(".react-flow__node-input")).not.toHaveClass(
+      "react-flow__node-input--with-containers-tall"
+    );
+  });
+
+  it("renders sink with fallback using compact with-containers sizing", async () => {
+    const dataWithSinkFallback = {
+      ...mockData,
+      vertices: mockData.vertices.map((vertex) =>
+        vertex.id === "out"
+          ? {
+              ...vertex,
+              data: {
+                ...vertex.data,
+                nodeInfo: {
+                  ...vertex.data.nodeInfo,
+                  sink: {
+                    ...vertex.data.nodeInfo.sink,
+                    fallback: {
+                      log: {},
+                    },
+                  },
+                },
+              },
+            }
+          : vertex
+      ),
+    };
+
+    render(
+      <AppContext.Provider value={mockContext}>
+        <Graph
+          namespaceId="test"
+          data={dataWithSinkFallback}
+          pipelineId="simple-pipeline"
+          refresh={() => {
+            return;
+          }}
+        />
+      </AppContext.Provider>
+    );
+
+    const fallbackIcon = await screen.findByAltText("fallback-sink-container");
+
+    expect(screen.getByAltText("sink-container")).toBeInTheDocument();
+    expect(fallbackIcon.closest(".react-flow__node-input")).toHaveClass(
+      "react-flow__node-input--with-containers"
+    );
+    expect(fallbackIcon.closest(".react-flow__node-input")).not.toHaveClass(
+      "react-flow__node-input--with-containers-tall"
+    );
+  });
+
+  it("renders sink with both onSuccess and fallback using tall sizing", async () => {
+    const dataWithBothSinks = {
+      ...mockData,
+      vertices: mockData.vertices.map((vertex) =>
+        vertex.id === "out"
+          ? {
+              ...vertex,
+              data: {
+                ...vertex.data,
+                nodeInfo: {
+                  ...vertex.data.nodeInfo,
+                  sink: {
+                    ...vertex.data.nodeInfo.sink,
+                    onSuccess: {
+                      log: {},
+                    },
+                    fallback: {
+                      log: {},
+                    },
+                  },
+                },
+              },
+            }
+          : vertex
+      ),
+    };
+
+    render(
+      <AppContext.Provider value={mockContext}>
+        <Graph
+          namespaceId="test"
+          data={dataWithBothSinks}
+          pipelineId="simple-pipeline"
+          refresh={() => {
+            return;
+          }}
+        />
+      </AppContext.Provider>
+    );
+
+    const fallbackIcon = await screen.findByAltText("fallback-sink-container");
+
+    expect(screen.getByAltText("sink-container")).toBeInTheDocument();
+    expect(
+      screen.getByAltText("on-success-sink-container")
+    ).toBeInTheDocument();
+    expect(fallbackIcon.closest(".react-flow__node-input")).toHaveClass(
+      "react-flow__node-input--with-containers-tall"
     );
   });
 

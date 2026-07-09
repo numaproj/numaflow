@@ -494,26 +494,22 @@ const CustomNode: FC<NodeProps> = ({
     );
   }, []);
 
-  const isSinkWithContainers =
-    data?.type === "sink" &&
-    data?.nodeInfo?.sink &&
-    (data?.nodeInfo?.sink?.onSuccess || data?.nodeInfo?.sink?.fallback);
-
-  const isSourceWithContainers =
-    data?.type === "source" &&
-    data?.nodeInfo?.source &&
-    data?.nodeInfo?.source?.transformer;
+  const hasSecondaryContainers =
+    (data?.type === "source" && data?.nodeInfo?.source?.transformer) ||
+    (data?.type === "sink" &&
+      data?.nodeInfo?.sink &&
+      (data?.nodeInfo?.sink?.onSuccess || data?.nodeInfo?.sink?.fallback));
 
   let nodeInputClass = "react-flow__node-input";
   if (isMonoVertex) {
     nodeInputClass =
       "react-flow__node-input react-flow__node-input--mono-vertex";
-  } else if (isSinkWithContainers) {
+  } else if (hasBothSinks) {
     nodeInputClass =
-      "react-flow__node-input react-flow__node-input--sink-with-containers";
-  } else if (isSourceWithContainers) {
+      "react-flow__node-input react-flow__node-input--with-containers-tall";
+  } else if (hasSecondaryContainers) {
     nodeInputClass =
-      "react-flow__node-input react-flow__node-input--source-with-containers";
+      "react-flow__node-input react-flow__node-input--with-containers";
   }
 
   return (
@@ -540,7 +536,7 @@ const CustomNode: FC<NodeProps> = ({
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              flex: 1,
+              flex: hasBothSinks ? 1 : "0 0 auto",
               gap: 0,
             }}
           >
@@ -678,7 +674,7 @@ const CustomNode: FC<NodeProps> = ({
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              flex: 1,
+              flex: "0 0 auto",
               gap: "0.4rem",
             }}
           >

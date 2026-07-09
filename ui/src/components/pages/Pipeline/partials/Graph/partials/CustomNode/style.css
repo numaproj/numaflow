@@ -133,12 +133,8 @@
   cursor: pointer;
 }
 
-.react-flow__node-input--sink-with-containers {
-  min-height: 11.2rem;
-  height: auto;
-}
-
-.react-flow__node-input--source-with-containers {
+/* Shared compact sizing for source+transformer or sink+single secondary */
+.react-flow__node-input--with-containers {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -146,12 +142,32 @@
   height: 7.8rem;
 }
 
-.react-flow__node-input--source-with-containers .node-info {
+.react-flow__node-input--with-containers .node-info {
   flex: 0 0 auto;
   height: auto;
 }
 
-.react-flow__node-input--source-with-containers .pipeline-source-container-row {
+.react-flow__node-input--with-containers .pipeline-source-container-row,
+.react-flow__node-input--with-containers .pipeline-sink-container-row {
+  flex: 0 0 auto;
+  padding: 0.2rem 0 0.6rem;
+}
+
+/* Tall only when sink has both onSuccess and fallback (vertical stack) */
+.react-flow__node-input--with-containers-tall {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 11.2rem;
+  height: auto;
+}
+
+.react-flow__node-input--with-containers-tall .node-info {
+  flex: 0 0 auto;
+  height: auto;
+}
+
+.react-flow__node-input--with-containers-tall .pipeline-sink-container-row {
   flex: 0 0 auto;
   padding: 0.2rem 0 0.6rem;
 }
