@@ -218,7 +218,7 @@ where
 
 /// Gracefully shutdown the server on receiving SIGINT or SIGTERM
 /// by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
+async fn graceful_shutdown(handle: Handle<SocketAddr>, duration_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await

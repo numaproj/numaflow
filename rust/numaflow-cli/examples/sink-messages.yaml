@@ -1,0 +1,139 @@
+# Sample sink input. Run with:
+#   nfcli sink --socket /var/run/numaflow/sink.sock -f examples/sink-messages.yaml --batch-size 5
+# 22 messages → 5 batches (5+5+5+5+2). A mix of plain, keyed, headered, multi-line,
+# JSON, base64/binary payloads, custom ids, and metadata.
+
+# ---- batch 1 ----
+---
+payload: plain-1
+# no keys, no headers, auto id msg-1
+
+---
+payload: '{"order": 1001, "item": "widget", "qty": 3}'
+keys: [orders]
+headers:
+  content-type: application/json
+  source: checkout
+
+---
+payload: keyed-only
+keys: [alice, region-west]
+
+---
+payload: headered-only
+headers:
+  trace-id: abc-123
+  retry: "0"
+
+---
+payload: order-with-custom-id
+keys: [orders]
+id: order-9007
+
+# ---- batch 2 ----
+---
+payload: |-
+  line one
+  line two
+  line three
+keys: [logs]
+headers:
+  format: multiline
+
+---
+payload: '{"user": "bob", "event": "login", "ts": "2026-07-06T10:00:00Z"}'
+keys: [bob]
+headers:
+  content-type: application/json
+
+---
+payloadBase64: "3q2+7w=="        # 0xDEADBEEF — binary payload
+keys: [binary]
+headers:
+  content-type: application/octet-stream
+
+---
+payload: repeated-msg
+keys: [bulk]
+repeat: 2                          # expands to two messages (auto ids)
+
+---
+payload: plain-10
+
+# ---- batch 3 ----
+---
+payload: '{"order": 1002, "item": "gadget", "qty": 1}'
+keys: [orders]
+headers:
+  content-type: application/json
+  source: mobile-app
+
+---
+payload: with-event-time
+keys: [timed]
+eventTime: "2026-07-06T12:34:56Z"
+
+---
+payload: with-watermark-lag
+keys: [timed]
+eventTime: "2026-07-06T12:35:10Z"
+watermark: "2026-07-06T12:35:00Z"   # watermark lags event time
+
+---
+payload: poison-pill                 # a sink that rejects this will report FAILURE (exit 4)
+keys: [orders]
+id: order-BAD
+
+---
+payload: with-user-metadata
+keys: [enriched]
+userMetadata:
+  provenance:
+    ingested_by: nfcli
+    schema: v2
+previousVertex: source-vertex
+
+# ---- batch 4 ----
+---
+payload: '{"level": "error", "msg": "disk full"}'
+keys: [logs, error]
+headers:
+  content-type: application/json
+  severity: high
+
+---
+payload: plain-17
+headers:
+  x-partition: "3"
+
+---
+payload: keyed-multi
+keys: [tenant-42, us-east-1, shard-7]
+
+---
+payload: |
+  {
+    "nested": {
+      "a": 1,
+      "b": [2, 3, 4]
+    }
+  }
+keys: [orders]
+headers:
+  content-type: application/json
+
+---
+payload: plain-20
+
+# ---- batch 5 (partial: 2 messages) ----
+---
+payload: '{"order": 1003, "item": "sprocket", "qty": 12}'
+keys: [orders]
+headers:
+  content-type: application/json
+  source: batch-import
+
+---
+payload: final-message
+keys: [tail]
+id: msg-final

@@ -85,7 +85,7 @@ async fn handle_runtime_app_errors(State(state): State<Arc<AppState>>) -> impl I
 }
 
 /// Gracefully shutdown the server when a termination signal is received.
-async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
+async fn graceful_shutdown(handle: Handle<SocketAddr>, server_config: MonitorServerConfig) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
