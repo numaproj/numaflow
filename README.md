@@ -37,7 +37,12 @@ Numaflow, created by the Intuit Argo team to address community needs for continu
 
 ## Roadmap
 
-- Per Message Nack support with redelivery options, avoid `numa` restarts on UDF crashes, remove `monitor` container and move its functionality to `numa`, LWF (Lowest-Watermark First) ISB reader (1.9)
+- Per Message Nack support with redelivery options (1.9)
+- Avoid `numa` restarts on UDF crashes (1.9)
+- Remove `monitor` container and move its functionality to `numa` (1.9)
+- LWF (Lowest-Watermark First) ISB reader (1.9)
+- Support to stream responses from sink (1.10)
+- Monovertex streaming (1.10)
 
 ## Demo
 
