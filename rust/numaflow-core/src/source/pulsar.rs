@@ -15,7 +15,7 @@ impl TryFrom<PulsarMessage> for Message {
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
         let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
 
-        Ok(Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![message.key]),
             tags: None,
@@ -33,7 +33,9 @@ impl TryFrom<PulsarMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             nack_options: None,
-        })
+        };
+        message.set_num_delivered(1);
+        Ok(message)
     }
 }
 

@@ -181,7 +181,7 @@ mod stream_generator {
                 data = self.generate_payload(value);
             }
 
-            Message {
+            let mut message = Message {
                 typ: Default::default(),
                 keys: Arc::from(self.next_key_to_be_fetched()),
                 tags: None,
@@ -199,7 +199,9 @@ mod stream_generator {
                 metadata: Some(Arc::new(crate::metadata::Metadata::default())),
                 is_late: false,
                 nack_options: None,
-            }
+            };
+            message.set_num_delivered(1);
+            message
         }
 
         /// generates a set of messages to be returned.

@@ -446,6 +446,15 @@ impl Message {
             .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
         Arc::make_mut(metadata).set_sink_retry_count(count);
     }
+
+    /// Records the number of source/buffer delivery attempts so UDFs can observe it.
+    /// Metadata is created if it is absent.
+    pub(crate) fn set_num_delivered(&mut self, count: u64) {
+        let metadata = self
+            .metadata
+            .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
+        Arc::make_mut(metadata).set_num_delivered(count);
+    }
 }
 
 /// IntOffset is integer based offset enum type.
@@ -1082,6 +1091,62 @@ mod tests {
                 .get(RETRY_COUNT_KEY)
                 .unwrap(),
             &Bytes::from("2")
+        );
+    }
+
+    #[test]
+    fn set_num_delivered_creates_metadata() {
+        let mut msg = Message::default();
+
+        msg.set_num_delivered(3);
+
+        assert_eq!(msg.metadata.as_ref().unwrap().num_delivered(), Some(3));
+    }
+
+    #[test]
+    fn set_num_delivered_preserves_existing_metadata() {
+        use crate::metadata::{KeyValueGroup, MESSAGE_METADATA_GROUP, NUM_DELIVERED_KEY};
+
+        let mut msg = Message {
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: "source".to_string(),
+                sys_metadata: HashMap::from([(
+                    "existing-system-group".to_string(),
+                    KeyValueGroup {
+                        key_value: HashMap::from([(
+                            "system-key".to_string(),
+                            Bytes::from("system-value"),
+                        )]),
+                    },
+                )]),
+                user_metadata: HashMap::from([(
+                    "existing-user-group".to_string(),
+                    KeyValueGroup {
+                        key_value: HashMap::from([(
+                            "user-key".to_string(),
+                            Bytes::from("user-value"),
+                        )]),
+                    },
+                )]),
+            })),
+            ..Default::default()
+        };
+
+        msg.set_num_delivered(4);
+
+        let metadata = msg.metadata.as_ref().unwrap();
+        assert_eq!(metadata.previous_vertex, "source");
+        assert!(metadata.sys_metadata.contains_key("existing-system-group"));
+        assert!(metadata.user_metadata.contains_key("existing-user-group"));
+        assert_eq!(
+            metadata
+                .sys_metadata
+                .get(MESSAGE_METADATA_GROUP)
+                .unwrap()
+                .key_value
+                .get(NUM_DELIVERED_KEY)
+                .unwrap(),
+            &Bytes::from("4")
         );
     }
 }

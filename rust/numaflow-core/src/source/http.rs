@@ -24,7 +24,7 @@ impl From<numaflow_http::Error> for crate::error::Error {
 
 impl From<HttpMessage> for Message {
     fn from(value: HttpMessage) -> Self {
-        Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(value.keys),
             tags: None,
@@ -42,7 +42,9 @@ impl From<HttpMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             nack_options: None,
-        }
+        };
+        message.set_num_delivered(1);
+        message
     }
 }
 
@@ -297,6 +299,7 @@ mod tests {
         for (i, message) in messages.iter().enumerate() {
             assert!(message.headers.contains_key("X-Numaflow-Id"));
             assert!(message.headers.contains_key("content-type"));
+            assert_eq!(message.metadata.as_ref().unwrap().num_delivered(), Some(1));
 
             // Ensure current time is set when x-numaflow-event-time header is not specified
             assert!(

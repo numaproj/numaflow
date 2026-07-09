@@ -3,6 +3,7 @@
 
 use crate::config::components::reduce::StorageConfig;
 use crate::message::{IntOffset, Message, Offset};
+use crate::metadata::Metadata;
 use crate::reduce::error::Error;
 use crate::reduce::pbq::WAL;
 use crate::reduce::wal::segment::WalType;
@@ -53,7 +54,7 @@ impl TryFrom<WalMessage> for Bytes {
             }),
             read_offset: int_offset.offset,
             watermark: message.watermark.map(prost_timestamp_from_utc),
-            metadata: None,
+            ..Default::default()
         };
 
         Ok(Bytes::from(prost::Message::encode_to_vec(&proto_message)))
@@ -92,6 +93,8 @@ impl TryFrom<Bytes> for WalMessage {
                 .expect("event time should be present"),
             watermark: proto_read_message.watermark.map(utc_from_timestamp),
             id: header.id.map(Into::into).unwrap_or_default(),
+            headers: Arc::new(header.headers),
+            metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
             ..Default::default()
         };
@@ -109,6 +112,75 @@ impl From<WalMessage> for Message {
 impl From<Message> for WalMessage {
     fn from(value: Message) -> Self {
         WalMessage { message: value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metadata::{KeyValueGroup, MESSAGE_METADATA_GROUP, NUM_DELIVERED_KEY};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use std::collections::HashMap;
+
+    #[test]
+    fn wal_round_trip_preserves_headers_and_metadata() {
+        let mut message = Message {
+            keys: Arc::from(vec!["key".to_string()]),
+            value: Bytes::from("payload"),
+            offset: Offset::Int(IntOffset::new(10, 2)),
+            event_time: Utc::now(),
+            headers: Arc::new(HashMap::from([(
+                "source-header".to_string(),
+                "source-value".to_string(),
+            )])),
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: "source".to_string(),
+                sys_metadata: HashMap::from([(
+                    "existing-system-group".to_string(),
+                    KeyValueGroup {
+                        key_value: HashMap::from([(
+                            "system-key".to_string(),
+                            Bytes::from("system-value"),
+                        )]),
+                    },
+                )]),
+                user_metadata: HashMap::from([(
+                    "existing-user-group".to_string(),
+                    KeyValueGroup {
+                        key_value: HashMap::from([(
+                            "user-key".to_string(),
+                            Bytes::from("user-value"),
+                        )]),
+                    },
+                )]),
+            })),
+            ..Default::default()
+        };
+        message.set_num_delivered(5);
+
+        let encoded: Bytes = WalMessage::from(message).try_into().unwrap();
+        let decoded = WalMessage::try_from(encoded).unwrap().message;
+
+        assert_eq!(
+            decoded.headers.get("source-header").map(String::as_str),
+            Some("source-value")
+        );
+        let metadata = decoded.metadata.as_ref().unwrap();
+        assert_eq!(metadata.previous_vertex, "source");
+        assert!(metadata.sys_metadata.contains_key("existing-system-group"));
+        assert!(metadata.user_metadata.contains_key("existing-user-group"));
+        assert_eq!(metadata.num_delivered(), Some(5));
+        assert_eq!(
+            metadata
+                .sys_metadata
+                .get(MESSAGE_METADATA_GROUP)
+                .unwrap()
+                .key_value
+                .get(NUM_DELIVERED_KEY)
+                .unwrap(),
+            &Bytes::from("5")
+        );
     }
 }
 

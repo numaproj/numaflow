@@ -140,10 +140,15 @@ func (x *MessageInfo) GetIsLate() bool {
 	return false
 }
 
-// MessageMetadata is the metadata of the message
+// MessageMetadata is the metadata of the message.
+// Deprecated: use Header.metadata.sys_metadata["message"]["num_delivered"] instead.
+//
+// Deprecated: Marked as deprecated in pkg/apis/proto/isb/message.proto.
 type MessageMetadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// NumDelivered is the number of times the message has been delivered.
+	//
+	// Deprecated: Marked as deprecated in pkg/apis/proto/isb/message.proto.
 	NumDelivered  uint64 `protobuf:"varint,1,opt,name=num_delivered,json=numDelivered,proto3" json:"num_delivered,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -179,6 +184,7 @@ func (*MessageMetadata) Descriptor() ([]byte, []int) {
 	return file_pkg_apis_proto_isb_message_proto_rawDescGZIP(), []int{1}
 }
 
+// Deprecated: Marked as deprecated in pkg/apis/proto/isb/message.proto.
 func (x *MessageMetadata) GetNumDelivered() uint64 {
 	if x != nil {
 		return x.NumDelivered
@@ -450,6 +456,9 @@ type ReadMessage struct {
 	// Watermark is the watermark timestamp
 	Watermark *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=watermark,proto3" json:"watermark,omitempty"`
 	// Metadata is the metadata of the message after a message is read from the buffer.
+	// Deprecated: use Message.header.metadata.sys_metadata["message"]["num_delivered"] instead.
+	//
+	// Deprecated: Marked as deprecated in pkg/apis/proto/isb/message.proto.
 	Metadata      *MessageMetadata `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -506,6 +515,7 @@ func (x *ReadMessage) GetWatermark() *timestamppb.Timestamp {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in pkg/apis/proto/isb/message.proto.
 func (x *ReadMessage) GetMetadata() *MessageMetadata {
 	if x != nil {
 		return x.Metadata
@@ -576,9 +586,9 @@ const file_pkg_apis_proto_isb_message_proto_rawDesc = "" +
 	"\vMessageInfo\x129\n" +
 	"\n" +
 	"event_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\teventTime\x12\x17\n" +
-	"\ais_late\x18\x02 \x01(\bR\x06isLate\"6\n" +
-	"\x0fMessageMetadata\x12#\n" +
-	"\rnum_delivered\x18\x01 \x01(\x04R\fnumDelivered\"\xb7\x02\n" +
+	"\ais_late\x18\x02 \x01(\bR\x06isLate\">\n" +
+	"\x0fMessageMetadata\x12'\n" +
+	"\rnum_delivered\x18\x01 \x01(\x04B\x02\x18\x01R\fnumDelivered:\x02\x18\x01\"\xb7\x02\n" +
 	"\x06Header\x123\n" +
 	"\fmessage_info\x18\x01 \x01(\v2\x10.isb.MessageInfoR\vmessageInfo\x12$\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x10.isb.MessageKindR\x04kind\x12\x1e\n" +
@@ -598,13 +608,13 @@ const file_pkg_apis_proto_isb_message_proto_rawDesc = "" +
 	"\apayload\x18\x01 \x01(\fR\apayload\"M\n" +
 	"\aMessage\x12#\n" +
 	"\x06header\x18\x01 \x01(\v2\v.isb.HeaderR\x06header\x12\x1d\n" +
-	"\x04body\x18\x02 \x01(\v2\t.isb.BodyR\x04body\"\xc2\x01\n" +
+	"\x04body\x18\x02 \x01(\v2\t.isb.BodyR\x04body\"\xc6\x01\n" +
 	"\vReadMessage\x12&\n" +
 	"\amessage\x18\x01 \x01(\v2\f.isb.MessageR\amessage\x12\x1f\n" +
 	"\vread_offset\x18\x02 \x01(\x03R\n" +
 	"readOffset\x128\n" +
-	"\twatermark\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\twatermark\x120\n" +
-	"\bmetadata\x18\x04 \x01(\v2\x14.isb.MessageMetadataR\bmetadata\"J\n" +
+	"\twatermark\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\twatermark\x124\n" +
+	"\bmetadata\x18\x04 \x01(\v2\x14.isb.MessageMetadataB\x02\x18\x01R\bmetadata\"J\n" +
 	"\fWriteMessage\x12&\n" +
 	"\amessage\x18\x01 \x01(\v2\f.isb.MessageR\amessage\x12\x12\n" +
 	"\x04tags\x18\x02 \x03(\tR\x04tags* \n" +

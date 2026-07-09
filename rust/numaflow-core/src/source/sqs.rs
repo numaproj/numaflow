@@ -9,11 +9,19 @@ use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
+const SQS_APPROXIMATE_RECEIVE_COUNT: &str = "ApproximateReceiveCount";
+
 impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+        let num_delivered = message
+            .system_attributes
+            .get(SQS_APPROXIMATE_RECEIVE_COUNT)
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(1)
+            .max(1);
 
         let metadata = if message.custom_attributes.is_empty() {
             Some(Arc::new(Metadata::default()))
@@ -32,7 +40,7 @@ impl TryFrom<SqsMessage> for Message {
             }))
         };
 
-        Ok(Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![message.key]),
             tags: None,
@@ -49,7 +57,9 @@ impl TryFrom<SqsMessage> for Message {
             metadata,
             is_late: false,
             nack_options: None,
-        })
+        };
+        message.set_num_delivered(num_delivered);
+        Ok(message)
     }
 }
 
@@ -163,6 +173,7 @@ pub mod tests {
         let ts = Utc::now();
         let mut headers = HashMap::new();
         headers.insert("foo".to_string(), "bar".to_string());
+        headers.insert("ApproximateReceiveCount".to_string(), "3".to_string());
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
@@ -187,6 +198,7 @@ pub mod tests {
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
+        assert_eq!(message.metadata.as_ref().unwrap().num_delivered(), Some(3));
     }
 
     #[tokio::test]
@@ -226,6 +238,7 @@ pub mod tests {
         );
 
         let metadata = message.metadata.expect("missing metadata");
+        assert_eq!(metadata.num_delivered(), Some(1));
         assert!(metadata.user_metadata.contains_key(SQS_METADATA_KEY));
 
         let sqs_meta = metadata.user_metadata.get(SQS_METADATA_KEY).unwrap();

@@ -20,7 +20,8 @@ impl From<JetstreamMessage> for Message {
             *get_vertex_replica(),
         ));
 
-        Message {
+        let num_delivered = message.num_delivered;
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
@@ -38,7 +39,9 @@ impl From<JetstreamMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             nack_options: None,
-        }
+        };
+        message.set_num_delivered(num_delivered);
+        message
     }
 }
 
@@ -133,6 +136,7 @@ mod tests {
         let jetstream_message = JetstreamMessage {
             value: Bytes::from("test_value"),
             stream_sequence: 42,
+            num_delivered: 2,
             headers: {
                 let mut headers = HashMap::new();
                 headers.insert("key".to_string(), "value".to_string());
@@ -146,7 +150,9 @@ mod tests {
         assert_eq!(message.value, Bytes::from("test_value"));
         assert_eq!(message.offset.to_string(), "42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
-        assert_eq!(message.metadata.unwrap().previous_vertex, "");
+        let metadata = message.metadata.unwrap();
+        assert_eq!(metadata.previous_vertex, "");
+        assert_eq!(metadata.num_delivered(), Some(2));
 
         // Verify that the published timestamp is correctly used as event_time
         assert_eq!(message.event_time, test_timestamp);

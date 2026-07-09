@@ -36,10 +36,13 @@ message MessageInfo {
   bool is_late = 2;
 }
 
-// MessageMetadata is the metadata of the message
+// MessageMetadata is the metadata of the message.
+// Deprecated: use Header.metadata.sys_metadata["message"]["num_delivered"] instead.
 message MessageMetadata {
+  option deprecated = true;
+
   // NumDelivered is the number of times the message has been delivered.
-  uint64 num_delivered = 1;
+  uint64 num_delivered = 1 [deprecated = true];
 }
 
 // Header is the header of the message
@@ -91,7 +94,8 @@ message ReadMessage {
   // Watermark is the watermark timestamp
   google.protobuf.Timestamp watermark = 3;
   // Metadata is the metadata of the message after a message is read from the buffer.
-  MessageMetadata metadata = 4;
+  // Deprecated: use Message.header.metadata.sys_metadata["message"]["num_delivered"] instead.
+  MessageMetadata metadata = 4 [deprecated = true];
 }
 
 // WriteMessage is a wrapper for an isb message with tag information which will be used for conditional forwarding.

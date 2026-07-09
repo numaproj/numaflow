@@ -225,7 +225,7 @@ impl TryFrom<read_response::Result> for Message {
             }
         };
 
-        Ok(Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(result.keys),
             tags: None,
@@ -250,7 +250,9 @@ impl TryFrom<read_response::Result> for Message {
             })),
             is_late: false,
             nack_options: None,
-        })
+        };
+        message.set_num_delivered(1);
+        Ok(message)
     }
 }
 

@@ -9,10 +9,12 @@ pub struct MessageInfo {
     #[prost(bool, tag = "2")]
     pub is_late: bool,
 }
-/// MessageMetadata is the metadata of the message
+/// MessageMetadata is the metadata of the message.
+/// Deprecated: use Header.metadata.sys_metadata\["message"\]\["num_delivered"\] instead.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct MessageMetadata {
     /// NumDelivered is the number of times the message has been delivered.
+    #[deprecated]
     #[prost(uint64, tag = "1")]
     pub num_delivered: u64,
 }
@@ -82,6 +84,8 @@ pub struct ReadMessage {
     #[prost(message, optional, tag = "3")]
     pub watermark: ::core::option::Option<::prost_types::Timestamp>,
     /// Metadata is the metadata of the message after a message is read from the buffer.
+    /// Deprecated: use Message.header.metadata.sys_metadata\["message"\]\["num_delivered"\] instead.
+    #[deprecated]
     #[prost(message, optional, tag = "4")]
     pub metadata: ::core::option::Option<MessageMetadata>,
 }

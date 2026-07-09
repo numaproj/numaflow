@@ -36,7 +36,7 @@ impl TryFrom<KafkaMessage> for Message {
             }
         };
 
-        Ok(Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(message.key.map(|k| vec![k]).unwrap_or_default()),
             tags: None,
@@ -54,7 +54,9 @@ impl TryFrom<KafkaMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             nack_options: None,
-        })
+        };
+        message.set_num_delivered(1);
+        Ok(message)
     }
 }
 
@@ -196,6 +198,7 @@ mod tests {
         // where partition_idx is the Kafka partition number
         assert_eq!(message.offset.to_string(), "test_topic:1:42-1");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
+        assert_eq!(message.metadata.as_ref().unwrap().num_delivered(), Some(1));
         // Verify that the event time is set from the Kafka timestamp
         assert_eq!(message.event_time.timestamp_millis(), 1640995200000);
     }

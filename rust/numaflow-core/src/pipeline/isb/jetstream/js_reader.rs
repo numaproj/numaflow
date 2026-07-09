@@ -65,7 +65,7 @@ impl JSWrappedMessage {
             self.partition_idx,
         ));
 
-        Ok(Message {
+        let mut message = Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
@@ -90,7 +90,9 @@ impl JSWrappedMessage {
             metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
             nack_options: None,
-        })
+        };
+        message.set_num_delivered(u64::try_from(msg_info.delivered).unwrap_or(1).max(1));
+        Ok(message)
     }
 }
 

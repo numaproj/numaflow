@@ -22,7 +22,7 @@ pub(crate) async fn new_nats_source(
 impl From<NatsMessage> for Message {
     fn from(message: NatsMessage) -> Self {
         let offset = Offset::String(StringOffset::new(message.id.clone(), *get_vertex_replica()));
-        Message {
+        let mut message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
@@ -40,7 +40,9 @@ impl From<NatsMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             nack_options: None,
-        }
+        };
+        message.set_num_delivered(1);
+        message
     }
 }
 
