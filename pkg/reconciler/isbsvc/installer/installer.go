@@ -35,29 +35,35 @@ type Installer interface {
 	// Uninstall only needs to handle those resources not cascade deleted.
 	// For example, undeleted PVCs not automatically deleted when deleting a StatefulSet
 	Uninstall(ctx context.Context) error
-	// CheckChildrenResourceStatus checks the status of the resources created by the ISB Service
-	CheckChildrenResourceStatus(ctx context.Context) error
+	// CheckChildrenResourceStatus checks the status of the resources created by the ISB Service.
+	// Returns (needsRequeue, error): needsRequeue is true when the unhealthy state is transient
+	// (e.g. a pod had a recent restart) and the controller must explicitly requeue to re-evaluate
+	// once the transient window expires, since no Kubernetes event will trigger it.
+	CheckChildrenResourceStatus(ctx context.Context) (bool, error)
 }
 
-// Install function installs the ISB Service
-func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) error {
+// Install installs the ISB Service and checks child resource status.
+// Returns (needsRequeue, error): needsRequeue mirrors CheckChildrenResourceStatus's signal
+// for transient pod failures that require an explicit requeue.
+func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) (bool, error) {
 	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger, recorder)
 	if err != nil {
 		logger.Errorw("failed to get an installer", zap.Error(err))
-		return err
+		return false, err
 	}
 	bufferConfig, err := installer.Install(ctx)
 	if err != nil {
 		logger.Errorw("installation error", zap.Error(err))
-		return err
+		return false, err
 	}
-	if err := installer.CheckChildrenResourceStatus(ctx); err != nil {
+	needsRequeue, err := installer.CheckChildrenResourceStatus(ctx)
+	if err != nil {
 		logger.Errorw("failed to check children resource status", zap.Error(err))
-		return err
+		return false, err
 	}
 	isbSvc.Status.Config = *bufferConfig
 
-	return nil
+	return needsRequeue, nil
 }
 
 // GetInstaller returns Installer implementation

@@ -172,6 +172,9 @@ func CheckVertexStatus(vertices *dfv1.VertexList) (healthy bool, reason string, 
 			return false, "Progressing", `Vertex "` + vertex.Spec.Name + `" Waiting for reconciliation`
 		}
 		if !vertex.Status.IsHealthy() {
+			if vertex.Status.Message != "" {
+				return false, "Unavailable", `Vertex "` + vertex.Spec.Name + `" error: ` + vertex.Status.Message
+			}
 			return false, "Unavailable", `Vertex "` + vertex.Spec.Name + `" is not healthy`
 		}
 	}
@@ -219,8 +222,9 @@ func getDeploymentCondition(status appv1.DeploymentStatus, condType appv1.Deploy
 }
 
 // CheckStatefulSetStatus returns a message describing statefulset status, and a bool value indicating if the status is considered done.
+// minReadyReplicas controls the readiness threshold: pass the desired replica count for all-or-nothing semantics, or ⌊replicas/2⌋+1 for quorum-based semantics (e.g. NATS JetStream).
 // Borrowed at kubernetes/kubectl/rollout_status.go https://github.com/kubernetes/kubernetes/blob/cea1d4e20b4a7886d8ff65f34c6d4f95efcb4742/staging/src/k8s.io/kubectl/pkg/polymorphichelpers/rollout_status.go#L130
-func CheckStatefulSetStatus(sts *appv1.StatefulSet) (done bool, reason string, message string) {
+func CheckStatefulSetStatus(sts *appv1.StatefulSet, minReadyReplicas int32) (done bool, reason string, message string) {
 	if sts.Status.ObservedGeneration == 0 || sts.Generation > sts.Status.ObservedGeneration {
 		return false, "Progressing", "Waiting for statefulset spec update to be observed..."
 	}
@@ -228,8 +232,8 @@ func CheckStatefulSetStatus(sts *appv1.StatefulSet) (done bool, reason string, m
 		return false, "Progressing", fmt.Sprintf("waiting for statefulset rolling update to complete %d pods at revision %s...",
 			sts.Status.UpdatedReplicas, sts.Status.UpdateRevision)
 	}
-	if sts.Spec.Replicas != nil && sts.Status.ReadyReplicas < *sts.Spec.Replicas {
-		return false, "Unavailable", fmt.Sprintf("Waiting for %d pods to be ready...\n", *sts.Spec.Replicas-sts.Status.ReadyReplicas)
+	if sts.Status.ReadyReplicas < minReadyReplicas {
+		return false, "Unavailable", fmt.Sprintf("Waiting for %d pods to be ready...\n", minReadyReplicas-sts.Status.ReadyReplicas)
 	}
 	if sts.Spec.UpdateStrategy.Type == appv1.RollingUpdateStatefulSetStrategyType && sts.Spec.UpdateStrategy.RollingUpdate != nil {
 		if sts.Spec.Replicas != nil && sts.Spec.UpdateStrategy.RollingUpdate.Partition != nil {

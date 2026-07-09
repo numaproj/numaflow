@@ -557,7 +557,11 @@ func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVo
 	return pvcl.Items, nil
 }
 
-func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) error {
+// CheckChildrenResourceStatus evaluates the JetStream StatefulSet and pod health.
+// Returns (needsRequeue, error): needsRequeue is true when the failure is transient
+// (a pod had a recent OOM or error restart) and the controller must explicitly requeue,
+// since no Kubernetes event fires when the 2-minute transient window expires.
+func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) (bool, error) {
 	var isbStatefulSet appv1.StatefulSet
 	if err := r.client.Get(ctx, client.ObjectKey{
 		Namespace: r.isbSvc.Namespace,
@@ -566,18 +570,41 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		if apierrors.IsNotFound(err) {
 			r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed",
 				"StatefulSet not found, might be still under creation")
-			return nil
+			return false, nil
 		}
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed", err.Error())
-		return err
+		return false, err
 	}
-	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
-	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet); status {
-		r.isbSvc.Status.MarkChildrenResourceHealthy(reason, msg)
-	} else {
+	// NATS JetStream maintains quorum at ⌊replicas/2⌋+1. A single missing pod must not mark
+	// the ISBSvc unhealthy when the cluster can still serve writes (e.g. during a rolling node upgrade).
+	// Single-replica ISBSvc (replicas==1) keeps all-or-nothing semantics: quorum evaluates to 1.
+	quorum := int32(r.isbSvc.Spec.JetStream.GetReplicas()/2 + 1)
+	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet, quorum); !status {
 		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
+		return false, nil
 	}
-	return nil
+	// Quorum is met, but individual pods may be in a persistent failure state
+	// (CrashLoopBackOff, ImagePullBackOff, OOMKill) that will never self-resolve.
+	// Terminating pods from a node eviction are skipped by CheckPodsStatus, so this
+	// check distinguishes transient unavailability from permanent pod failures.
+	// Limitation: a pod stuck in Pending (e.g. unschedulable) is not detected here;
+	// a follow-up time-based escalation would be needed to catch that case.
+	podList := &corev1.PodList{}
+	if err := r.client.List(ctx, podList, &client.ListOptions{
+		Namespace:     r.isbSvc.Namespace,
+		LabelSelector: labels.SelectorFromSet(r.labels),
+	}); err != nil {
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy("ListPodsFailed", err.Error())
+		return false, err
+	}
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(podList); !healthy {
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
+		// transientUnhealthy means the pod had a recent restart (OOM/error exit within 2 minutes)
+		// and may stabilise without a Kubernetes event to trigger re-reconciliation.
+		return transientUnhealthy, nil
+	}
+	r.isbSvc.Status.MarkChildrenResourceHealthy("Healthy", "JetStream cluster is healthy")
+	return false, nil
 }
 
 func generateJetStreamServerSecretName(isbSvc *dfv1.InterStepBufferService) string {
