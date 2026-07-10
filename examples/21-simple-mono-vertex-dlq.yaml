@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: MonoVertex
 metadata:
-  name: oms-source-mono-vertex
+  name: oms-dlq-mono-vertex
   annotations:
     kubectl.kubernetes.io/default-container: numa
   labels:
@@ -17,7 +17,7 @@ spec:
     udsource:
       container:
         args:
-          - --spring.config.location=file:/conf/oms-config.yaml
+          - --spring.config.location=file:/conf/oms-dlq-config.yaml
           - --numaflow.handler=oms-source
         image: docker.intuit.com/personal/vtiwari5/oms-numaflow:0.0.4
         imagePullPolicy: Always
@@ -30,7 +30,7 @@ spec:
             value: "8089"
         volumeMounts:
           - mountPath: /conf
-            name: oms-config-volume
+            name: oms-dlq-config-volume
   containerTemplate:
     resources: { }
   scale:
@@ -40,12 +40,8 @@ spec:
     - configMap:
         items:
           - key: configuration
-            path: oms-config.yaml
-        name: oms-config
-      name: oms-config-volume
-  udf:
-    container:
-      image: docker.intuit.com/personal/vtiwari5/numaflow-rs/map-cat:nack
-      imagePullPolicy: Always
+            path: oms-dlq-config.yaml
+        name: oms-dlq-config
+      name: oms-dlq-config-volume
   sink:
     log: {}
