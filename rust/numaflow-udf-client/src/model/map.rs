@@ -15,6 +15,12 @@ pub struct UnaryMapResponse {
 /// representation explicit without introducing a second model that could drift.
 pub type BatchMapResponse = UnaryMapResponse;
 
+/// One result chunk for a streaming map request.
+///
+/// Stream map uses the same response envelope as unary and batch map. The stream ends when the
+/// shared client observes the per-ID EOT frame and closes the corresponding response channel.
+pub type StreamMapResponse = UnaryMapResponse;
+
 /// One output produced by a map UDF.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapResult {

@@ -8,14 +8,17 @@ use crate::error::{Result, UdfClientError};
 use crate::wire::map::handshake_request;
 
 /// An established MapFn stream after a validated start-of-transmission handshake.
-pub struct MapRpcStream {
+pub(super) struct MapRpcStream {
     request_tx: mpsc::Sender<MapRequest>,
     response_stream: Streaming<MapResponse>,
 }
 
 impl MapRpcStream {
     /// Opens MapFn, sends its handshake, and validates the handshake response.
-    pub async fn open(mut client: MapClient<Channel>, request_buffer: usize) -> Result<Self> {
+    pub(super) async fn open(
+        mut client: MapClient<Channel>,
+        request_buffer: usize,
+    ) -> Result<Self> {
         if request_buffer == 0 {
             return Err(UdfClientError::InvalidConfig(
                 "map request buffer must be greater than zero".to_string(),
@@ -51,7 +54,7 @@ impl MapRpcStream {
     }
 
     /// Splits the established stream into its raw sender and response stream.
-    pub fn into_parts(self) -> (mpsc::Sender<MapRequest>, Streaming<MapResponse>) {
+    pub(super) fn into_parts(self) -> (mpsc::Sender<MapRequest>, Streaming<MapResponse>) {
         (self.request_tx, self.response_stream)
     }
 }

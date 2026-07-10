@@ -1,46 +1,24 @@
 //! Map driver: unary, batch, and stream modes over the unified `map.v1.Map/MapFn` bidi RPC.
 
-use std::collections::HashSet;
 use std::time::Instant;
 
-use anyhow::anyhow;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use tokio::sync::mpsc;
 use tonic::transport::Channel;
 
 use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::map::{MapRequest, MapResponse, map_request};
 use numaflow_udf_client::{
-    BatchMapEvent, BatchMapSession, KeyValueGroup, MapRpcStream, UdfClientError, UdfDatum,
+    BatchMapEvent, BatchMapSession, KeyValueGroup, StreamMapSession, UdfClientError, UdfDatum,
     UdfMetadata, UnaryMapResponse, UnaryMapSession,
 };
 
 use crate::cli::{MapArgs, MapMode, OutputOpts, ServiceKind, TuningOpts};
-use crate::drivers::{
-    ResponseTimeout, batches, connect_and_ready, maybe_delay, next_with_timeout, send_with_timeout,
-};
+use crate::drivers::{ResponseTimeout, batches, connect_and_ready, maybe_delay};
 use crate::exit::{CliError, CliResult, ExitCode};
 use crate::input::{LoadOptions, load_messages, resolve_base_time};
 use crate::message::Message;
 use crate::output::{Reporter, ResultContext, ResultRecord};
-
-/// Transitional protobuf builder used only by stream mode.
-fn data_request(message: &Message) -> MapRequest {
-    MapRequest {
-        request: Some(map_request::Request {
-            keys: message.keys.clone(),
-            value: message.value.clone(),
-            event_time: Some(message.event_time_pb()),
-            watermark: Some(message.watermark_pb()),
-            headers: message.headers.clone(),
-            metadata: message.metadata(),
-        }),
-        id: message.id.clone(),
-        handshake: None,
-        status: None,
-    }
-}
 
 pub async fn run(args: MapArgs, tuning: &TuningOpts, output: &OutputOpts) -> CliResult<()> {
     let base = resolve_base_time(&args.input, chrono::Utc::now()).map_err(CliError::usage)?;
@@ -66,20 +44,9 @@ pub async fn run(args: MapArgs, tuning: &TuningOpts, output: &OutputOpts) -> Cli
             drive_batch(session, &messages, &args, tuning, &mut reporter).await
         }
         MapMode::Stream => {
-            let stream = open_map_rpc_stream(client, tuning).await?;
+            let session = open_stream_session(client, tuning).await?;
             reporter.status(format!("✓ ready ({}) · handshake ok", target.label()));
-            let (tx, mut response_stream) = stream.into_parts();
-            let result = drive_stream(
-                &tx,
-                &mut response_stream,
-                &messages,
-                &args,
-                tuning,
-                &mut reporter,
-            )
-            .await;
-            drop(tx);
-            result
+            drive_stream(session, &messages, &args, tuning, &mut reporter).await
         }
     };
 
@@ -89,11 +56,11 @@ pub async fn run(args: MapArgs, tuning: &TuningOpts, output: &OutputOpts) -> Cli
     reporter.exit_result()
 }
 
-async fn open_map_rpc_stream(
+async fn open_stream_session(
     client: MapClient<Channel>,
     tuning: &TuningOpts,
-) -> CliResult<MapRpcStream> {
-    tokio::time::timeout(tuning.timeout, MapRpcStream::open(client, 256))
+) -> CliResult<StreamMapSession> {
+    tokio::time::timeout(tuning.timeout, StreamMapSession::open(client, 256))
         .await
         .map_err(|_| {
             CliError::protocol(
@@ -153,29 +120,6 @@ fn map_session_error(error: UdfClientError) -> CliError {
             CliError::protocol(anyhow::Error::new(status).context("gRPC error mid-stream"))
         }
         other => CliError::protocol(anyhow::Error::new(other)),
-    }
-}
-
-/// Print protobuf results used by transitional stream mode.
-fn emit_response(reporter: &mut Reporter, response: &MapResponse) {
-    let records = response
-        .results
-        .iter()
-        .map(|result| ResultRecord {
-            keys: result.keys.clone(),
-            tags: result.tags.clone(),
-            value: result.value.clone(),
-            nack_delay_ms: result.nack_options.as_ref().and_then(|nack| nack.delay),
-            nack_reason: result
-                .nack_options
-                .as_ref()
-                .and_then(|nack| nack.reason.clone()),
-            ..Default::default()
-        })
-        .collect::<Vec<_>>();
-    reporter.group_header(format!("[{}] {} result(s)", response.id, records.len()));
-    for (index, record) in records.iter().enumerate() {
-        reporter.result(record, index + 1, &ResultContext::id(response.id.clone()));
     }
 }
 
@@ -311,43 +255,94 @@ async fn drive_batch(
     Ok(())
 }
 
+enum StreamDriverEvent {
+    Response(UnaryMapResponse),
+    Eot(String),
+}
+
 /// Stream: send n; each id's response stream is read until its own EOT-marked response.
 async fn drive_stream(
-    tx: &mpsc::Sender<MapRequest>,
-    stream: &mut tonic::Streaming<MapResponse>,
+    session: StreamMapSession,
     messages: &[Message],
     args: &MapArgs,
     tuning: &TuningOpts,
     reporter: &mut Reporter,
 ) -> CliResult<()> {
     for batch in batches(messages, args.pacing.batch_size) {
-        let mut pending: HashSet<String> = batch.iter().map(|m| m.id.clone()).collect();
+        let (event_tx, mut event_rx) = mpsc::channel(1);
+        let mut pending = FuturesUnordered::new();
         for message in batch {
-            send_with_timeout(tx, data_request(message), tuning.timeout)
-                .await
-                .map_err(CliError::protocol)?;
-        }
-        while !pending.is_empty() {
-            let response = next_with_timeout(stream, tuning.timeout)
-                .await
-                .map_err(response_error)?
-                .ok_or_else(|| {
-                    CliError::protocol(anyhow!(
-                        "stream closed with {} id(s) still streaming",
-                        pending.len()
-                    ))
-                })?;
-            if response.status.map(|status| status.eot) == Some(true) {
-                if !pending.remove(&response.id) {
-                    reporter.trace(format!("EOT for unknown id {}", response.id));
-                } else {
-                    reporter.trace(format!("← EOT for {}", response.id));
+            let session = session.clone();
+            let datum = udf_datum_from_message(message);
+            let id = datum.id.clone();
+            let timeout = tuning.timeout;
+            let event_tx = event_tx.clone();
+            pending.push(async move {
+                let mut receiver = match tokio::time::timeout(timeout, session.stream(datum)).await
+                {
+                    Ok(result) => result.map_err(map_session_error)?,
+                    Err(_) => {
+                        return Err(response_error(anyhow::Error::new(ResponseTimeout(timeout))));
+                    }
+                };
+
+                // Drain every per-ID receiver concurrently. A streaming UDF may interleave result
+                // chunks across IDs, so waiting for one ID at a time could apply backpressure to
+                // the shared response pump and prevent another ID's EOT from being observed.
+                loop {
+                    match tokio::time::timeout(timeout, receiver.recv()).await {
+                        Ok(Some(Ok(response))) => {
+                            event_tx
+                                .send(StreamDriverEvent::Response(response))
+                                .await
+                                .map_err(|_| {
+                                    CliError::protocol(anyhow::anyhow!(
+                                        "stream result receiver closed"
+                                    ))
+                                })?;
+                        }
+                        Ok(Some(Err(error))) => return Err(map_session_error(error)),
+                        Ok(None) => {
+                            event_tx
+                                .send(StreamDriverEvent::Eot(id))
+                                .await
+                                .map_err(|_| {
+                                    CliError::protocol(anyhow::anyhow!(
+                                        "stream result receiver closed"
+                                    ))
+                                })?;
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            return Err(response_error(anyhow::Error::new(ResponseTimeout(
+                                timeout,
+                            ))));
+                        }
+                    }
                 }
-                continue;
+            });
+        }
+        drop(event_tx);
+
+        // Poll the per-ID operations and their output channel together so result chunks are
+        // reported as they arrive rather than being buffered until EOT.
+        while !pending.is_empty() {
+            tokio::select! {
+                Some(completed) = pending.next() => completed?,
+                Some(event) = event_rx.recv() => emit_stream_event(reporter, event),
             }
-            emit_response(reporter, &response);
+        }
+        while let Some(event) = event_rx.recv().await {
+            emit_stream_event(reporter, event);
         }
         maybe_delay(args.pacing.delay).await;
     }
     Ok(())
+}
+
+fn emit_stream_event(reporter: &mut Reporter, event: StreamDriverEvent) {
+    match event {
+        StreamDriverEvent::Response(response) => emit_shared_response(reporter, &response),
+        StreamDriverEvent::Eot(id) => reporter.trace(format!("← EOT for {id}")),
+    }
 }

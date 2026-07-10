@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{self, MapRequest, map_client::MapClient};
+use numaflow_pb::clients::map::{self, map_client::MapClient};
 use numaflow_udf_client::{
     BatchMapSession, KeyValueGroup as SharedKeyValueGroup, MapResult as SharedMapResult,
-    UdfClientError, UdfDatum, UdfMetadata, UnaryMapSession,
+    StreamMapSession, UdfClientError, UdfDatum, UdfMetadata, UnaryMapSession,
 };
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
@@ -22,7 +22,6 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
 
 pub(super) mod batch;
@@ -35,7 +34,7 @@ use crate::metrics::{
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use batch::MapBatchTask;
-use stream::{MapStreamTask, UserDefinedStreamMap};
+use stream::MapStreamTask;
 use unary::MapUnaryTask;
 
 /// ConcurrentMapper represents mappers that process messages concurrently (one task per message).
@@ -43,7 +42,7 @@ use unary::MapUnaryTask;
 #[derive(Clone)]
 enum ConcurrentMapper {
     Unary(UnaryMapSession),
-    Stream(UserDefinedStreamMap),
+    Stream(StreamMapSession),
 }
 
 /// MapperType is an enum to store the different types of mappers.
@@ -80,9 +79,6 @@ pub(crate) struct MapHandle {
     health_checker: Option<MapClient<Channel>>,
 }
 
-/// Response channel size for streaming map.
-const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
-
 impl MapHandle {
     /// Creates a new mapper with the given batch size, concurrency, client, and
     /// tracker handle. It creates the appropriate mapper based on the map mode.
@@ -103,7 +99,9 @@ impl MapHandle {
                     .map_err(map_udf_client_error)?,
             )),
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
-                UserDefinedStreamMap::new(batch_size, client.clone()).await?,
+                StreamMapSession::open(client.clone(), batch_size)
+                    .await
+                    .map_err(map_udf_client_error)?,
             )),
             MapMode::Batch => MapperType::Batch(
                 BatchMapSession::open(client.clone(), batch_size)
@@ -471,25 +469,6 @@ impl From<&Message> for ParentMessageInfo {
             start_time: Instant::now(),
             current_index: message.id.index,
             metadata: message.metadata.clone(),
-        }
-    }
-}
-
-/// Transitional protobuf conversion used only by stream map.
-impl From<Message> for MapRequest {
-    fn from(message: Message) -> Self {
-        Self {
-            request: Some(map::map_request::Request {
-                keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
-                event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                watermark: message.watermark.map(prost_timestamp_from_utc),
-                headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
-            }),
-            id: message.id.to_string(),
-            handshake: None,
-            status: None,
         }
     }
 }
