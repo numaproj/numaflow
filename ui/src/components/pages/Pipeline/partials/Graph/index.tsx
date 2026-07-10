@@ -107,8 +107,13 @@ const getNodeLayoutHeight = (node: Node): number => {
     return d.containerHeight ?? MONO_VERTEX_MAX_CONTAINER_HEIGHT;
   if (d.type === NODE_DATA_TYPES.MONO_VERTEX_INTERNAL)
     return MONO_VERTEX_INTERNAL_NODE_WIDTH;
-  if (d.type === "source" && nodeInfo?.source?.transformer) return nodeHeightTall;
-  if (d.type === "sink" && (nodeInfo?.sink?.onSuccess || nodeInfo?.sink?.fallback)) return nodeHeightTall;
+  if (
+    d.type === "sink" &&
+    nodeInfo?.sink?.onSuccess &&
+    nodeInfo?.sink?.fallback
+  ) {
+    return nodeHeightTall;
+  }
   return nodeHeight;
 };
 
