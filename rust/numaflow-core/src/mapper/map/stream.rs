@@ -8,6 +8,7 @@ use crate::message::{Message, MessageHandle};
 use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use numaflow_udf_client::MapRpcStream;
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -18,7 +19,7 @@ use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
+    map_udf_client_error, update_udf_error_metric, update_udf_process_time_metric,
     update_udf_read_metric, update_udf_write_only_metric,
 };
 
@@ -182,10 +183,12 @@ impl UserDefinedStreamMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
     pub(in crate::mapper) async fn new(
         batch_size: usize,
-        mut client: MapClient<Channel>,
+        client: MapClient<Channel>,
     ) -> Result<Self> {
-        let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let stream = MapRpcStream::open(client, batch_size)
+            .await
+            .map_err(map_udf_client_error)?;
+        let (read_tx, resp_stream) = stream.into_parts();
 
         // map to track the mpsc response sender for each request
         let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));

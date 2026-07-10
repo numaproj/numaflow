@@ -32,6 +32,7 @@ numaflow-models.workspace = true
 numaflow-pb.workspace = true
 numaflow-shared.workspace = true
 numaflow-throttling.workspace = true
+numaflow-udf-client.workspace = true
 serving.workspace = true
 backoff.workspace = true
 
@@ -70,7 +71,7 @@ numaflow-testing = { path = "../numaflow-testing" }
 tempfile = "3.11.0"
 # TODO: revert to the published crate (e.g. numaflow = "0.6.0") once
 # numaproj/numaflow-rs#178 merges and releases a version with nack support.
-numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "128dedad7ed3ccafc40ef23f9530a27be3ddfd0f" }
+numaflow.workspace = true
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"

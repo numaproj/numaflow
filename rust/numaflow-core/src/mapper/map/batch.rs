@@ -1,5 +1,5 @@
 use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    ParentMessageInfo, UserDefinedMessage, map_udf_client_error, update_udf_error_metric,
     update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
 };
 use crate::config::is_mono_vertex;
@@ -12,6 +12,7 @@ use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
 use bytes::Bytes;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use numaflow_udf_client::MapRpcStream;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -189,10 +190,12 @@ impl UserDefinedBatchMap {
     /// Performs handshake with the server and creates a new UserDefinedBatchMap.
     pub(in crate::mapper) async fn new(
         batch_size: usize,
-        mut client: MapClient<Channel>,
+        client: MapClient<Channel>,
     ) -> Result<Self> {
-        let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let stream = MapRpcStream::open(client, batch_size)
+            .await
+            .map_err(map_udf_client_error)?;
+        let (read_tx, resp_stream) = stream.into_parts();
 
         // map to track the oneshot response sender for each request
         let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));

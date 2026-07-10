@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 numaflow-pb.workspace = true
+numaflow-udf-client.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 prost.workspace = true
@@ -26,9 +27,10 @@ humantime = "2.1"
 anyhow = "1.0"
 clap_complete = "4.6.7"
 serde_yaml_ng = "0.10.0"
+futures.workspace = true
 
 [dev-dependencies]
-numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "913cc7c8f14af6b93154719e0f68cd02df2912e8" }
+numaflow.workspace = true
 tempfile = "3"
 
 [lints]

@@ -33,6 +33,18 @@ impl numaflow::map::Mapper for NackingMapper {
     }
 }
 
+struct OutOfOrderMapper;
+
+#[tonic::async_trait]
+impl numaflow::map::Mapper for OutOfOrderMapper {
+    async fn map(&self, input: numaflow::map::MapRequest) -> Vec<numaflow::map::Message> {
+        if input.value == b"A" {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        vec![numaflow::map::Message::new(input.value)]
+    }
+}
+
 #[tokio::test]
 async fn map_unary_echoes_uppercased() {
     let tmp = tempfile::tempdir().unwrap();
@@ -80,6 +92,52 @@ async fn map_unary_echoes_uppercased() {
         "expected uppercased payload, stdout={stdout}"
     );
     assert!(stdout.contains("mapped"), "expected tag, stdout={stdout}");
+}
+
+#[tokio::test]
+async fn map_unary_correlates_out_of_order_responses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let sock = tmp.path().join("map.sock");
+    let info = tmp.path().join("map-server-info");
+    let (tx, rx) = oneshot::channel();
+
+    let s = sock.clone();
+    let i = info.clone();
+    let server = tokio::spawn(async move {
+        numaflow::map::Server::new(OutOfOrderMapper)
+            .with_socket_file(s)
+            .with_server_info_file(i)
+            .start_with_shutdown(rx)
+            .await
+            .expect("map server failed");
+    });
+    wait_for_socket(&sock).await;
+
+    let sock_str = sock.to_string_lossy().to_string();
+    let (code, stdout, stderr) = tokio::task::spawn_blocking(move || {
+        run_nfcli(
+            &[
+                "map",
+                "--socket",
+                &sock_str,
+                "--file",
+                "-",
+                "--batch-size",
+                "2",
+            ],
+            Some("id: A\npayload: A\n---\nid: B\npayload: B\n"),
+        )
+    })
+    .await
+    .unwrap();
+
+    let _ = tx.send(());
+    let _ = server.await;
+
+    assert_eq!(code, 0, "stdout={stdout}\nstderr={stderr}");
+    let b = stdout.find("[B] 1 result(s)").expect("B response header");
+    let a = stdout.find("[A] 1 result(s)").expect("A response header");
+    assert!(b < a, "B should be emitted before A, stdout={stdout}");
 }
 
 #[tokio::test]
@@ -617,7 +675,12 @@ impl numaflow::source::Sourcer for FixedSource {
 
     async fn ack(&self, _offsets: Vec<numaflow::source::Offset>) {}
 
-    async fn nack(&self, _offsets: Vec<numaflow::source::NackOffset>) {}
+    async fn nack(
+        &self,
+        _offsets: Vec<numaflow::source::Offset>,
+        _options: Option<numaflow::shared::NackOptions>,
+    ) {
+    }
 
     async fn pending(&self) -> Option<usize> {
         Some(7)
@@ -642,7 +705,12 @@ impl numaflow::source::Sourcer for PanickingSource {
 
     async fn ack(&self, _offsets: Vec<numaflow::source::Offset>) {}
 
-    async fn nack(&self, _offsets: Vec<numaflow::source::NackOffset>) {}
+    async fn nack(
+        &self,
+        _offsets: Vec<numaflow::source::Offset>,
+        _options: Option<numaflow::shared::NackOptions>,
+    ) {
+    }
 
     async fn pending(&self) -> Option<usize> {
         Some(0)

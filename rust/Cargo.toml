@@ -12,6 +12,7 @@ members = [
     "numaflow-throttling",
     "numaflow-testing",
     "numaflow-cli",
+    "numaflow-udf-client",
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
@@ -79,6 +80,8 @@ numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }
 numaflow-throttling = { path = "numaflow-throttling" }
+numaflow-udf-client = { path = "numaflow-udf-client" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "128dedad7ed3ccafc40ef23f9530a27be3ddfd0f" }
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.18"
 tokio-util = { version = "0.7", features = ["rt"] }

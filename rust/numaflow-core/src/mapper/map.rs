@@ -3,14 +3,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use numaflow_pb::clients::map::{self, MapRequest, map_client::MapClient};
+use numaflow_udf_client::{MapResult as SharedMapResult, UdfClientError, UnaryMapSession};
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tonic::Request;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
 use tracing::{error, info, warn};
 
 use crate::config::pipeline::map::MapMode;
@@ -32,13 +33,13 @@ use crate::metrics::{
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
-use unary::{MapUnaryTask, UserDefinedUnaryMap};
+use unary::MapUnaryTask;
 
 /// ConcurrentMapper represents mappers that process messages concurrently (one task per message).
 /// Both Unary and Stream mappers spawn individual tasks for each message.
 #[derive(Clone)]
 enum ConcurrentMapper {
-    Unary(UserDefinedUnaryMap),
+    Unary(UnaryMapSession),
     Stream(UserDefinedStreamMap),
 }
 
@@ -94,7 +95,9 @@ impl MapHandle {
         // Based on the map mode, create the appropriate mapper
         let mapper = match map_mode {
             MapMode::Unary => MapperType::Concurrent(ConcurrentMapper::Unary(
-                UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
+                UnaryMapSession::open(client.clone(), batch_size)
+                    .await
+                    .map_err(map_udf_client_error)?,
             )),
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
                 UserDefinedStreamMap::new(batch_size, client.clone()).await?,
@@ -524,43 +527,65 @@ impl From<UserDefinedMessage<'_>> for Message {
     }
 }
 
-/// Performs handshake with the server and returns the response stream to receive responses.
-async fn create_response_stream(
-    read_tx: mpsc::Sender<MapRequest>,
-    read_rx: mpsc::Receiver<MapRequest>,
-    client: &mut MapClient<Channel>,
-) -> error::Result<Streaming<MapResponse>> {
-    let handshake_request = MapRequest {
-        request: None,
-        id: "".to_string(),
-        handshake: Some(map::Handshake { sot: true }),
-        status: None,
-    };
-
-    read_tx
-        .send(handshake_request)
-        .await
-        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
-
-    let mut resp_stream = client
-        .map_fn(Request::new(ReceiverStream::new(read_rx)))
-        .await
-        .map_err(|e| Error::Grpc(Box::new(e)))?
-        .into_inner();
-
-    let handshake_response = resp_stream
-        .message()
-        .await
-        .map_err(|e| Error::Grpc(Box::new(e)))?
-        .ok_or(Error::Mapper(
-            "failed to receive handshake response".to_string(),
-        ))?;
-
-    if handshake_response.handshake.is_none_or(|h| !h.sot) {
-        return Err(Error::Mapper("invalid handshake response".to_string()));
+pub(super) fn map_udf_client_error(error: UdfClientError) -> Error {
+    match error {
+        UdfClientError::MapFnStart(status) | UdfClientError::Grpc(status) => {
+            Error::Grpc(Box::new(status))
+        }
+        other => Error::Mapper(other.to_string()),
     }
+}
 
-    Ok(resp_stream)
+fn shared_result_to_proto(result: SharedMapResult) -> map::map_response::Result {
+    map::map_response::Result {
+        keys: result.keys,
+        value: result.value.to_vec(),
+        tags: result.tags,
+        metadata: result
+            .metadata
+            .map(|metadata| numaflow_pb::common::metadata::Metadata {
+                previous_vertex: metadata.previous_vertex,
+                sys_metadata: metadata
+                    .sys_metadata
+                    .into_iter()
+                    .map(|(name, group)| {
+                        (
+                            name,
+                            numaflow_pb::common::metadata::KeyValueGroup {
+                                key_value: group
+                                    .key_value
+                                    .into_iter()
+                                    .map(|(key, value)| (key, value.to_vec()))
+                                    .collect(),
+                            },
+                        )
+                    })
+                    .collect(),
+                user_metadata: metadata
+                    .user_metadata
+                    .into_iter()
+                    .map(|(name, group)| {
+                        (
+                            name,
+                            numaflow_pb::common::metadata::KeyValueGroup {
+                                key_value: group
+                                    .key_value
+                                    .into_iter()
+                                    .map(|(key, value)| (key, value.to_vec()))
+                                    .collect(),
+                            },
+                        )
+                    })
+                    .collect(),
+            }),
+        nack_options: result.nack_options.map(|options| {
+            numaflow_pb::common::nack_options::NackOptions {
+                reason: options.reason,
+                max_deliveries: options.max_deliveries,
+                delay: options.delay,
+            }
+        }),
+    }
 }
 
 #[cfg(test)]
