@@ -4,7 +4,10 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, map_client::MapClient};
-use numaflow_udf_client::{MapResult as SharedMapResult, UdfClientError, UnaryMapSession};
+use numaflow_udf_client::{
+    BatchMapSession, KeyValueGroup as SharedKeyValueGroup, MapResult as SharedMapResult,
+    UdfClientError, UdfDatum, UdfMetadata, UnaryMapSession,
+};
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -31,7 +34,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
-use batch::{MapBatchTask, UserDefinedBatchMap};
+use batch::MapBatchTask;
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::MapUnaryTask;
 
@@ -49,7 +52,7 @@ enum MapperType {
     /// Concurrent mappers (Unary/Stream) process messages individually with concurrency control.
     Concurrent(ConcurrentMapper),
     /// Batch mapper processes messages in batches sequentially.
-    Batch(UserDefinedBatchMap),
+    Batch(BatchMapSession),
 }
 
 /// MapHandle is responsible for reading messages from the stream and invoke the map operation on
@@ -102,9 +105,11 @@ impl MapHandle {
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
                 UserDefinedStreamMap::new(batch_size, client.clone()).await?,
             )),
-            MapMode::Batch => {
-                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
-            }
+            MapMode::Batch => MapperType::Batch(
+                BatchMapSession::open(client.clone(), batch_size)
+                    .await
+                    .map_err(map_udf_client_error)?,
+            ),
         };
 
         Ok(Self {
@@ -363,7 +368,7 @@ struct BatchMapContext {
     output_tx: mpsc::Sender<MessageHandle>,
     cln_token: CancellationToken,
     bypass_router: Option<MvtxBypassRouter>,
-    batch_mapper: UserDefinedBatchMap,
+    batch_mapper: BatchMapSession,
 }
 
 fn update_udf_error_metric(is_mono_vertex: bool) {
@@ -470,7 +475,7 @@ impl From<&Message> for ParentMessageInfo {
     }
 }
 
-/// Conversion from Message to MapRequest
+/// Transitional protobuf conversion used only by stream map.
 impl From<Message> for MapRequest {
     fn from(message: Message) -> Self {
         Self {
@@ -486,6 +491,48 @@ impl From<Message> for MapRequest {
             handshake: None,
             status: None,
         }
+    }
+}
+
+/// Converts core's internal message into the protocol-neutral datum used by shared map sessions.
+pub(super) fn udf_datum_from_message(message: Message) -> UdfDatum {
+    UdfDatum {
+        id: message.id.to_string(),
+        keys: message.keys.to_vec(),
+        value: message.value,
+        event_time: message.event_time,
+        watermark: message.watermark,
+        headers: Arc::unwrap_or_clone(message.headers),
+        metadata: message.metadata.map(|metadata| {
+            let metadata = Arc::unwrap_or_clone(metadata);
+            UdfMetadata {
+                previous_vertex: metadata.previous_vertex,
+                sys_metadata: metadata
+                    .sys_metadata
+                    .into_iter()
+                    .map(|(name, group)| {
+                        (
+                            name,
+                            SharedKeyValueGroup {
+                                key_value: group.key_value,
+                            },
+                        )
+                    })
+                    .collect(),
+                user_metadata: metadata
+                    .user_metadata
+                    .into_iter()
+                    .map(|(name, group)| {
+                        (
+                            name,
+                            SharedKeyValueGroup {
+                                key_value: group.key_value,
+                            },
+                        )
+                    })
+                    .collect(),
+            }
+        }),
     }
 }
 
@@ -532,6 +579,17 @@ pub(super) fn map_udf_client_error(error: UdfClientError) -> Error {
         UdfClientError::MapFnStart(status) | UdfClientError::Grpc(status) => {
             Error::Grpc(Box::new(status))
         }
+        UdfClientError::PartialBatchResponse { .. } => Error::Grpc(Box::new(
+            tonic::Status::with_details(
+                tonic::Code::Internal,
+                "UDF_PARTIAL_RESPONSE(batch_map)",
+                bytes::Bytes::from_static(
+                    b"received End-Of-Transmission (EOT) before all responses are received from the batch map. \
+                    This indicates that there is a bug in the user-code. Please check whether you are accidentally \
+                    skipping the messages.",
+                ),
+            ),
+        )),
         other => Error::Mapper(other.to_string()),
     }
 }

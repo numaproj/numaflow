@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{Handshake, MapRequest, MapResponse, map_request, map_response};
+use numaflow_pb::clients::map::{
+    Handshake, MapRequest, MapResponse, TransmissionStatus, map_request, map_response,
+};
 use numaflow_pb::common::{metadata, nack_options};
 use prost_types::Timestamp;
 
@@ -32,6 +34,15 @@ pub(crate) fn data_request(datum: UdfDatum) -> MapRequest {
         id: datum.id,
         handshake: None,
         status: None,
+    }
+}
+
+pub(crate) fn eot_request() -> MapRequest {
+    MapRequest {
+        request: None,
+        id: String::new(),
+        handshake: None,
+        status: Some(TransmissionStatus { eot: true }),
     }
 }
 
@@ -215,6 +226,16 @@ mod tests {
         assert_eq!(user.key_value.get("name").expect("user name"), b"numaflow");
         assert!(request.handshake.is_none());
         assert!(request.status.is_none(), "unary data must not contain EOT");
+    }
+
+    #[test]
+    fn eot_has_exact_control_shape() {
+        let request = eot_request();
+
+        assert_eq!(request.id, "");
+        assert!(request.request.is_none());
+        assert!(request.handshake.is_none());
+        assert_eq!(request.status.map(|status| status.eot), Some(true));
     }
 
     #[test]

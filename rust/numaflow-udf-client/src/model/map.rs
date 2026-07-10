@@ -2,12 +2,18 @@ use bytes::Bytes;
 
 use super::UdfMetadata;
 
-/// Correlated response for one unary map request.
+/// Correlated response for one map request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryMapResponse {
     pub id: String,
     pub results: Vec<MapResult>,
 }
+
+/// Correlated response for one datum in a batch map request.
+///
+/// Unary and batch map use the same response envelope on the wire. The alias keeps that shared
+/// representation explicit without introducing a second model that could drift.
+pub type BatchMapResponse = UnaryMapResponse;
 
 /// One output produced by a map UDF.
 #[derive(Debug, Clone, PartialEq, Eq)]

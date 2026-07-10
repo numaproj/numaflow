@@ -25,21 +25,30 @@ pub enum UdfClientError {
     #[error("map response stream closed")]
     ResponseStreamClosed,
 
-    #[error("unary map session is closed: {0}")]
+    #[error("map session is closed: {0}")]
     SessionClosed(String),
 
-    #[error("unary map request id is empty")]
+    #[error("map request id is empty")]
     EmptyRequestId,
 
-    #[error("duplicate in-flight unary map request id: {0}")]
+    #[error("duplicate in-flight map request id: {0}")]
     DuplicateRequestId(String),
 
-    #[error("unexpected unary map response id: {0}")]
+    #[error("unexpected map response id: {0}")]
     UnexpectedResponseId(String),
 
-    #[error("unexpected unary map control frame: {0}")]
+    #[error("unexpected map control frame: {0}")]
     UnexpectedControlFrame(String),
 
-    #[error("unary map response channel closed for id: {0}")]
+    #[error("map response channel closed for id: {0}")]
     ResponseChannelClosed(String),
+
+    #[error(
+        "UDF_PARTIAL_RESPONSE(batch_map): received EOT before all batch responses; \
+         unanswered ids: {pending_ids:?}"
+    )]
+    PartialBatchResponse { pending_ids: Vec<String> },
+
+    #[error("batch map operation was abandoned before EOT")]
+    BatchOperationAbandoned,
 }

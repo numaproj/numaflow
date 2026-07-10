@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use numaflow_udf_client::{
-    KeyValueGroup as SharedKeyValueGroup, UdfDatum, UdfMetadata, UnaryMapSession,
-};
+use numaflow_udf_client::UnaryMapSession;
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::error;
 
@@ -13,8 +11,8 @@ use crate::{mark_failed, mark_success};
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, map_udf_client_error,
-    shared_result_to_proto, update_udf_error_metric, update_udf_read_metric,
-    update_udf_write_metric,
+    shared_result_to_proto, udf_datum_from_message, update_udf_error_metric,
+    update_udf_read_metric, update_udf_write_metric,
 };
 
 /// MapUnaryTask encapsulates all the context needed to execute a unary map operation per message.
@@ -146,46 +144,5 @@ impl MapUnaryTask {
         // The original msg_handle held ref_count=1; mark_success brings it to 0 contribution,
         // and the downstream handles will each call mark_success when written to ISB/sink.
         mark_success!(self.msg_handle);
-    }
-}
-
-fn udf_datum_from_message(message: Message) -> UdfDatum {
-    UdfDatum {
-        id: message.id.to_string(),
-        keys: message.keys.to_vec(),
-        value: message.value,
-        event_time: message.event_time,
-        watermark: message.watermark,
-        headers: Arc::unwrap_or_clone(message.headers),
-        metadata: message.metadata.map(|metadata| {
-            let metadata = Arc::unwrap_or_clone(metadata);
-            UdfMetadata {
-                previous_vertex: metadata.previous_vertex,
-                sys_metadata: metadata
-                    .sys_metadata
-                    .into_iter()
-                    .map(|(name, group)| {
-                        (
-                            name,
-                            SharedKeyValueGroup {
-                                key_value: group.key_value,
-                            },
-                        )
-                    })
-                    .collect(),
-                user_metadata: metadata
-                    .user_metadata
-                    .into_iter()
-                    .map(|(name, group)| {
-                        (
-                            name,
-                            SharedKeyValueGroup {
-                                key_value: group.key_value,
-                            },
-                        )
-                    })
-                    .collect(),
-            }
-        }),
     }
 }

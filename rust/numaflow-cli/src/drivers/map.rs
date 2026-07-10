@@ -10,10 +10,10 @@ use tokio::sync::mpsc;
 use tonic::transport::Channel;
 
 use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::map::{MapRequest, MapResponse, TransmissionStatus, map_request};
+use numaflow_pb::clients::map::{MapRequest, MapResponse, map_request};
 use numaflow_udf_client::{
-    KeyValueGroup, MapRpcStream, UdfClientError, UdfDatum, UdfMetadata, UnaryMapResponse,
-    UnaryMapSession,
+    BatchMapEvent, BatchMapSession, KeyValueGroup, MapRpcStream, UdfClientError, UdfDatum,
+    UdfMetadata, UnaryMapResponse, UnaryMapSession,
 };
 
 use crate::cli::{MapArgs, MapMode, OutputOpts, ServiceKind, TuningOpts};
@@ -25,7 +25,7 @@ use crate::input::{LoadOptions, load_messages, resolve_base_time};
 use crate::message::Message;
 use crate::output::{Reporter, ResultContext, ResultRecord};
 
-/// Transitional protobuf builder used only by batch and stream modes.
+/// Transitional protobuf builder used only by stream mode.
 fn data_request(message: &Message) -> MapRequest {
     MapRequest {
         request: Some(map_request::Request {
@@ -39,16 +39,6 @@ fn data_request(message: &Message) -> MapRequest {
         id: message.id.clone(),
         handshake: None,
         status: None,
-    }
-}
-
-/// Transitional EOT builder used only by batch mode.
-fn eot_request() -> MapRequest {
-    MapRequest {
-        request: None,
-        id: String::new(),
-        handshake: None,
-        status: Some(TransmissionStatus { eot: true }),
     }
 }
 
@@ -71,20 +61,9 @@ pub async fn run(args: MapArgs, tuning: &TuningOpts, output: &OutputOpts) -> Cli
             drive_unary(session, &messages, &args, tuning, &mut reporter).await
         }
         MapMode::Batch => {
-            let stream = open_map_rpc_stream(client, tuning).await?;
+            let session = open_batch_session(client, tuning).await?;
             reporter.status(format!("✓ ready ({}) · handshake ok", target.label()));
-            let (tx, mut response_stream) = stream.into_parts();
-            let result = drive_batch(
-                &tx,
-                &mut response_stream,
-                &messages,
-                &args,
-                tuning,
-                &mut reporter,
-            )
-            .await;
-            drop(tx);
-            result
+            drive_batch(session, &messages, &args, tuning, &mut reporter).await
         }
         MapMode::Stream => {
             let stream = open_map_rpc_stream(client, tuning).await?;
@@ -140,6 +119,21 @@ async fn open_unary_session(
         .map_err(open_error)
 }
 
+async fn open_batch_session(
+    client: MapClient<Channel>,
+    tuning: &TuningOpts,
+) -> CliResult<BatchMapSession> {
+    tokio::time::timeout(tuning.timeout, BatchMapSession::open(client, 256))
+        .await
+        .map_err(|_| {
+            CliError::protocol(
+                anyhow::Error::new(ResponseTimeout(tuning.timeout))
+                    .context("timed out opening MapFn or waiting for its handshake"),
+            )
+        })?
+        .map_err(open_error)
+}
+
 fn open_error(error: UdfClientError) -> CliError {
     match error {
         UdfClientError::MapFnStart(status) => CliError::new(
@@ -153,7 +147,7 @@ fn open_error(error: UdfClientError) -> CliError {
     }
 }
 
-fn unary_error(error: UdfClientError) -> CliError {
+fn map_session_error(error: UdfClientError) -> CliError {
     match error {
         UdfClientError::MapFnStart(status) | UdfClientError::Grpc(status) => {
             CliError::protocol(anyhow::Error::new(status).context("gRPC error mid-stream"))
@@ -162,7 +156,7 @@ fn unary_error(error: UdfClientError) -> CliError {
     }
 }
 
-/// Print protobuf results used by transitional batch and stream modes.
+/// Print protobuf results used by transitional stream mode.
 fn emit_response(reporter: &mut Reporter, response: &MapResponse) {
     let records = response
         .results
@@ -185,7 +179,7 @@ fn emit_response(reporter: &mut Reporter, response: &MapResponse) {
     }
 }
 
-fn emit_unary_response(reporter: &mut Reporter, response: &UnaryMapResponse) {
+fn emit_shared_response(reporter: &mut Reporter, response: &UnaryMapResponse) {
     let records = response
         .results
         .iter()
@@ -234,14 +228,14 @@ async fn drive_unary(
             let timeout = tuning.timeout;
             pending.push(async move {
                 match tokio::time::timeout(timeout, session.map(datum)).await {
-                    Ok(result) => result.map_err(unary_error),
+                    Ok(result) => result.map_err(map_session_error),
                     Err(_) => Err(response_error(anyhow::Error::new(ResponseTimeout(timeout)))),
                 }
             });
         }
 
         while let Some(response) = pending.next().await {
-            emit_unary_response(reporter, &response?);
+            emit_shared_response(reporter, &response?);
         }
         maybe_delay(args.pacing.delay).await;
     }
@@ -288,45 +282,29 @@ fn udf_datum_from_message(message: &Message) -> UdfDatum {
 
 /// Batch: send n + EOT, await one response per id plus the terminating EOT response.
 async fn drive_batch(
-    tx: &mpsc::Sender<MapRequest>,
-    stream: &mut tonic::Streaming<MapResponse>,
+    session: BatchMapSession,
     messages: &[Message],
     args: &MapArgs,
     tuning: &TuningOpts,
     reporter: &mut Reporter,
 ) -> CliResult<()> {
     for batch in batches(messages, args.pacing.batch_size) {
-        let mut pending: HashSet<String> = batch.iter().map(|m| m.id.clone()).collect();
-        for message in batch {
-            send_with_timeout(tx, data_request(message), tuning.timeout)
-                .await
-                .map_err(CliError::protocol)?;
-        }
-        send_with_timeout(tx, eot_request(), tuning.timeout)
-            .await
-            .map_err(CliError::protocol)?;
-        reporter.trace("→ EOT");
+        let data = batch.iter().map(udf_datum_from_message).collect();
+        let operation = session.batch_with_event_handler(data, |event| match event {
+            BatchMapEvent::ClientEotSent => reporter.trace("→ EOT"),
+            BatchMapEvent::ServerEotReceived => reporter.trace("← EOT"),
+        });
 
-        loop {
-            let response = next_with_timeout(stream, tuning.timeout)
-                .await
-                .map_err(response_error)?
-                .ok_or_else(|| CliError::protocol(anyhow!("stream closed before EOT response")))?;
-            if response.status.map(|status| status.eot) == Some(true) {
-                reporter.trace("← EOT");
-                if !pending.is_empty() {
-                    return Err(CliError::protocol(anyhow!(
-                        "partial response: EOT arrived with {} id(s) unanswered: {:?}",
-                        pending.len(),
-                        pending
-                    )));
-                }
-                break;
+        let responses = match tokio::time::timeout(tuning.timeout, operation).await {
+            Ok(result) => result.map_err(map_session_error)?,
+            Err(_) => {
+                return Err(response_error(anyhow::Error::new(ResponseTimeout(
+                    tuning.timeout,
+                ))));
             }
-            if !pending.remove(&response.id) {
-                reporter.trace(format!("unexpected/duplicate response id {}", response.id));
-            }
-            emit_response(reporter, &response);
+        };
+        for response in &responses {
+            emit_shared_response(reporter, response);
         }
         maybe_delay(args.pacing.delay).await;
     }
