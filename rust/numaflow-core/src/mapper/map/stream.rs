@@ -11,9 +11,10 @@ use crate::{mark_failed, mark_success};
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, map_udf_client_error,
-    shared_result_to_proto, udf_datum_from_message, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+    shared_result_to_proto, update_udf_error_metric, update_udf_process_time_metric,
+    update_udf_read_metric, update_udf_write_only_metric,
 };
+use crate::shared::udf::udf_datum_from_message;
 
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
 pub(in crate::mapper) struct MapStreamTask {

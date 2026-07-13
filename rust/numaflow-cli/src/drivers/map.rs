@@ -9,8 +9,8 @@ use tonic::transport::Channel;
 
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_udf_client::{
-    BatchMapEvent, BatchMapSession, KeyValueGroup, StreamMapSession, UdfClientError, UdfDatum,
-    UdfMetadata, UnaryMapResponse, UnaryMapSession,
+    BatchMapEvent, BatchMapSession, StreamMapSession, UdfClientError, UnaryMapResponse,
+    UnaryMapSession,
 };
 
 use crate::cli::{MapArgs, MapMode, OutputOpts, ServiceKind, TuningOpts};
@@ -168,7 +168,7 @@ async fn drive_unary(
         let mut pending = FuturesUnordered::new();
         for message in batch {
             let session = session.clone();
-            let datum = udf_datum_from_message(message);
+            let datum = message.to_udf_datum();
             let timeout = tuning.timeout;
             pending.push(async move {
                 match tokio::time::timeout(timeout, session.map(datum)).await {
@@ -186,44 +186,6 @@ async fn drive_unary(
     Ok(())
 }
 
-fn udf_datum_from_message(message: &Message) -> UdfDatum {
-    let metadata = if message.user_metadata.is_empty() && message.previous_vertex.is_empty() {
-        None
-    } else {
-        Some(UdfMetadata {
-            previous_vertex: message.previous_vertex.clone(),
-            sys_metadata: Default::default(),
-            user_metadata: message
-                .user_metadata
-                .iter()
-                .map(|(group, values)| {
-                    (
-                        group.clone(),
-                        KeyValueGroup {
-                            key_value: values
-                                .iter()
-                                .map(|(key, value)| {
-                                    (key.clone(), value.clone().into_bytes().into())
-                                })
-                                .collect(),
-                        },
-                    )
-                })
-                .collect(),
-        })
-    };
-
-    UdfDatum {
-        id: message.id.clone(),
-        keys: message.keys.clone(),
-        value: message.value.clone().into(),
-        event_time: message.event_time,
-        watermark: Some(message.watermark),
-        headers: message.headers.clone(),
-        metadata,
-    }
-}
-
 /// Batch: send n + EOT, await one response per id plus the terminating EOT response.
 async fn drive_batch(
     session: BatchMapSession,
@@ -233,7 +195,7 @@ async fn drive_batch(
     reporter: &mut Reporter,
 ) -> CliResult<()> {
     for batch in batches(messages, args.pacing.batch_size) {
-        let data = batch.iter().map(udf_datum_from_message).collect();
+        let data = batch.iter().map(Message::to_udf_datum).collect();
         let operation = session.batch_with_event_handler(data, |event| match event {
             BatchMapEvent::ClientEotSent => reporter.trace("→ EOT"),
             BatchMapEvent::ServerEotReceived => reporter.trace("← EOT"),
@@ -273,7 +235,7 @@ async fn drive_stream(
         let mut pending = FuturesUnordered::new();
         for message in batch {
             let session = session.clone();
-            let datum = udf_datum_from_message(message);
+            let datum = message.to_udf_datum();
             let id = datum.id.clone();
             let timeout = tuning.timeout;
             let event_tx = event_tx.clone();

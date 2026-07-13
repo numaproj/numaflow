@@ -42,90 +42,108 @@
 //! behavior and not a data-loss scenario.
 //!
 //! [Sliding Window]: (https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/sliding/)
-//! [Fixed Window]: crate::reduce::reducer::aligned::windower::fixed
+//! [Fixed Window]: super::fixed
 //! [WAL]: crate::reduce::wal
 
 use std::collections::BTreeSet;
-use std::fs;
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, atomic::AtomicI64};
 use std::time::Duration;
 
-use crate::message::Message;
-use crate::reduce::error::{Error, ReduceResult};
-use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, AlignedWindowOperation, Window, truncate_to_duration, window_to_pnf_slot,
-};
-use crate::shared::grpc::utc_from_timestamp;
+use super::{AlignedWindowAction, truncate_to_duration};
+use crate::model::Window;
 use chrono::{DateTime, TimeZone, Utc};
-use numaflow_pb::objects::wal::Window as ProtoWindow;
-use numaflow_pb::objects::wal::WindowManagerState;
-use prost::Message as ProtoMessage;
-use tracing::{error, info};
 
-/// Sliding window manager is responsible for managing the sliding windows. It saves the state of the
-/// active windows to a file on shutdown and loads it on startup to avoid duplicate processing.
+/// Snapshot of sliding window manager state for restart.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlidingWindowSnapshot {
+    pub windows: Vec<Window>,
+    pub max_deleted_window_end_time: i64,
+}
+
+/// Sliding window manager is responsible for managing the sliding windows.
 #[derive(Debug, Clone)]
-pub(crate) struct SlidingWindowManager {
+pub struct SlidingWindowManager {
     /// Duration of each window.
     window_length: Duration,
     /// Slide duration.
     slide: Duration,
-    /// Active windows sorted by end time. The state is saved to a file on shutdown and loaded on
-    /// startup.
+    /// Active windows sorted by end time.
     /// NOTE: During replay we will assume that these windows are opened when we get the first message.
     /// Since we do not differentiate between the first message and subsequent messages, we does an
     /// "append" and in the "append" we "open" the stream if stream doesn't exist.
     /// TODO: perhaps we can differentiate between replayed window vs new window during normal operation.
-    active_windows: Arc<RwLock<BTreeSet<Window>>>,
+    pub(crate) active_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
     /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
     /// closed window end time. The oldest window in the active_window will be greater than the latest
     /// closed window.
-    closed_windows: Arc<RwLock<BTreeSet<Window>>>,
-    /// Optional path to save/load window state.
-    active_window_state_file: Option<PathBuf>,
+    pub(crate) closed_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// max end time of the deleted windows, used to avoid creating
     /// windows twice during replay.
     max_deleted_window_end_time: Arc<AtomicI64>,
 }
 
 impl SlidingWindowManager {
-    /// Creates a new SlidingWindowManager and repopulates the active windows from the state file if
-    /// it exists.
-    pub(crate) fn new(
-        window_length: Duration,
-        slide: Duration,
-        state_file_path: Option<PathBuf>,
-    ) -> Self {
-        let manager = Self {
+    pub fn new(window_length: Duration, slide: Duration) -> Self {
+        Self {
             window_length,
             slide,
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
             closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
             max_deleted_window_end_time: Arc::new(AtomicI64::new(-1)),
-            active_window_state_file: state_file_path,
-        };
-
-        // If state file path is provided, try to load state from file
-        if let Some(path) = &manager.active_window_state_file
-            && let Err(e) = manager.load_state(path)
-        {
-            error!("Failed to load window state from file: {}", e);
         }
+    }
 
+    /// Restores manager state from a snapshot (for example after restart).
+    pub fn from_snapshot(
+        window_length: Duration,
+        slide: Duration,
+        snapshot: SlidingWindowSnapshot,
+    ) -> Self {
+        let manager = Self::new(window_length, slide);
+        manager
+            .active_windows
+            .write()
+            .expect("Poisoned lock for active_windows")
+            .extend(snapshot.windows);
+        manager
+            .max_deleted_window_end_time
+            .store(snapshot.max_deleted_window_end_time, Ordering::Relaxed);
         manager
     }
 
-    /// Creates windows for the given message
-    fn create_windows(&self, msg: &Message) -> Vec<Window> {
+    /// Returns a snapshot suitable for persisting across restarts.
+    pub fn snapshot_for_restart(&self) -> SlidingWindowSnapshot {
+        let windows: Vec<Window> = {
+            let active_windows = self
+                .active_windows
+                .read()
+                .expect("Poisoned lock for active_windows");
+            let closed_windows = self
+                .closed_windows
+                .read()
+                .expect("Poisoned lock for closed_windows");
+
+            closed_windows
+                .iter()
+                .chain(active_windows.iter())
+                .cloned()
+                .collect()
+        };
+
+        SlidingWindowSnapshot {
+            windows,
+            max_deleted_window_end_time: self.max_deleted_window_end_time.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Creates windows for the given event time (descending start-time order).
+    fn create_windows(&self, event_time: DateTime<Utc>) -> Vec<Window> {
         let mut windows = Vec::new();
         let window_length_millis = self.window_length.as_millis() as i64;
         let slide_millis = self.slide.as_millis() as i64;
-        let event_time_millis = msg.event_time.timestamp_millis();
+        let event_time_millis = event_time.timestamp_millis();
 
         // Calculate the start time of the largest window that contains the event
         // use the highest integer multiple of slide length which is less than the eventTime
@@ -157,7 +175,7 @@ impl SlidingWindowManager {
     }
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
-    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
+    pub fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowAction> {
         let windows_to_close: Vec<Window> = {
             let mut active_windows = self
                 .active_windows
@@ -180,15 +198,25 @@ impl SlidingWindowManager {
 
         windows_to_close
             .into_iter()
-            .map(|window| AlignedWindowMessage {
-                pnf_slot: window_to_pnf_slot(&window),
-                operation: AlignedWindowOperation::Close { window },
-            })
+            .map(|window| AlignedWindowAction::Close { window })
             .collect()
     }
 
+    /// Closes all active windows (same end-time order as [`Self::close_windows`] with a terminal watermark).
+    pub fn close_all(&self) -> Vec<AlignedWindowAction> {
+        let watermark = self
+            .active_windows
+            .read()
+            .expect("Poisoned lock for active_windows")
+            .iter()
+            .last()
+            .map(|window| window.end_time)
+            .unwrap_or_else(|| Utc.timestamp_millis_opt(0).unwrap());
+        self.close_windows(watermark)
+    }
+
     /// Deletes a window after it is closed and GC is done.
-    pub(crate) fn gc_window(&self, window: Window) {
+    pub fn gc_window(&self, window: Window) {
         // Update max_deleted_window_end_time if this window's end time is greater
         self.max_deleted_window_end_time
             .fetch_max(window.end_time.timestamp_millis(), Ordering::Relaxed);
@@ -201,7 +229,7 @@ impl SlidingWindowManager {
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    pub(crate) fn oldest_window(&self) -> Option<Window> {
+    pub fn oldest_window(&self) -> Option<Window> {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
@@ -224,7 +252,7 @@ impl SlidingWindowManager {
     }
 
     /// Returns the number of currently active windows.
-    pub(crate) fn active_window_count(&self) -> usize {
+    pub fn active_window_count(&self) -> usize {
         self.active_windows
             .read()
             .expect("Poisoned lock for active_windows")
@@ -232,112 +260,18 @@ impl SlidingWindowManager {
     }
 
     /// Returns the number of closed windows awaiting GC.
-    pub(crate) fn closed_window_count(&self) -> usize {
+    pub fn closed_window_count(&self) -> usize {
         self.closed_windows
             .read()
             .expect("Poisoned lock for closed_windows")
             .len()
     }
 
-    /// Helper method to format sorted window information for logging.
-    fn format_windows_for_log(windows: &[ProtoWindow]) -> String {
-        let formatted_windows: String = windows
-            .iter()
-            .map(|window| {
-                let start_time = utc_from_timestamp(window.start_time.unwrap()).timestamp_millis();
-                let end_time = utc_from_timestamp(window.end_time.unwrap()).timestamp_millis();
-                format!("[{start_time} - {end_time}]")
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        format!("{} windows: {}", windows.len(), formatted_windows)
-    }
-
-    /// Saves the current window state to the specified file.
-    pub(crate) fn save_state(&self) -> ReduceResult<()> {
-        let path = match &self.active_window_state_file {
-            Some(path) => path,
-            None => return Ok(()),
-        };
-
-        let all_windows: Vec<ProtoWindow> = {
-            let active_windows = self
-                .active_windows
-                .read()
-                .expect("Poisoned lock for active_windows");
-            let closed_windows = self
-                .closed_windows
-                .read()
-                .expect("Poisoned lock for closed_windows");
-
-            closed_windows
-                .iter()
-                .chain(active_windows.iter())
-                .map(Into::into)
-                .collect()
-        };
-
-        let state = WindowManagerState {
-            windows: all_windows,
-            max_deleted_window_end_time: self.max_deleted_window_end_time.load(Ordering::Relaxed),
-        };
-
-        info!(
-            path = %path.display(),
-            "Saving window state: {}",
-            Self::format_windows_for_log(&state.windows)
-        );
-
-        let mut buf = Vec::new();
-        state
-            .encode(&mut buf)
-            .map_err(|e| Error::Other(e.to_string()))?;
-
-        File::create(path)
-            .and_then(|mut file| file.write_all(&buf))
-            .map_err(|e| Error::Other(e.to_string()))?;
-
-        Ok(())
-    }
-
-    /// Loads window state from the specified file
-    fn load_state(&self, path: &PathBuf) -> ReduceResult<()> {
-        if !path.exists() {
-            info!(path = %path.display(), "Window state file does not exist");
-            return Ok(());
-        }
-
-        let buf = fs::read(path).map_err(|e| Error::Other(e.to_string()))?;
-
-        let state =
-            WindowManagerState::decode(&buf[..]).map_err(|e| Error::Other(e.to_string()))?;
-
-        self.active_windows
-            .write()
-            .expect("Poisoned lock for active_windows")
-            .extend(state.windows.iter().map(Into::into));
-
-        self.max_deleted_window_end_time
-            .store(state.max_deleted_window_end_time, Ordering::Relaxed);
-
-        info!(
-            "Loaded window state: {}",
-            Self::format_windows_for_log(&state.windows)
-        );
-
-        // remove the state file, else we will load the state file on next restart in case of crash (SIGKILL)
-        fs::remove_file(path).map_err(|e| Error::Other(e.to_string()))?;
-        info!("Removed window state file: {}", path.display());
-
-        Ok(())
-    }
-
-    /// Assigns windows to a message. It first figures all the windows that the message belongs to and
-    /// then checks if the window already exists. If it does, it appends the message to the window,
-    /// else it creates a new window and adds the message to it.
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        let windows = self.create_windows(&msg);
+    /// Assigns windows to an event time. It first figures all the windows that the event belongs to and
+    /// then checks if the window already exists. If it does, it appends to the window,
+    /// else it creates a new window.
+    pub fn assign_windows(&self, event_time: DateTime<Utc>) -> Vec<AlignedWindowAction> {
+        let windows = self.create_windows(event_time);
         let mut result = Vec::new();
 
         // Check if windows already exist and create appropriate operations
@@ -345,13 +279,8 @@ impl SlidingWindowManager {
 
         for window in &windows {
             if active_windows.contains(window) {
-                // Window exists, append message
-                result.push(AlignedWindowMessage {
-                    operation: AlignedWindowOperation::Append {
-                        message: msg.clone(),
-                        window: window.clone(),
-                    },
-                    pnf_slot: window_to_pnf_slot(window),
+                result.push(AlignedWindowAction::Append {
+                    window: window.clone(),
                 });
             } else if window.end_time.timestamp_millis()
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
@@ -362,12 +291,8 @@ impl SlidingWindowManager {
                 // time, during replay we might get the same message again and again, so we need to
                 // avoid creating the materialized window again.
                 active_windows.insert(window.clone());
-                result.push(AlignedWindowMessage {
-                    operation: AlignedWindowOperation::Open {
-                        message: msg.clone(),
-                        window: window.clone(),
-                    },
-                    pnf_slot: window_to_pnf_slot(window),
+                result.push(AlignedWindowAction::Open {
+                    window: window.clone(),
                 });
             }
         }
@@ -379,103 +304,76 @@ impl SlidingWindowManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
 
-    #[tokio::test]
-    async fn test_assign_windows_length_divisible_by_slide() {
+    #[test]
+    fn test_assign_windows_length_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 20s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
 
         // Base time: 60000ms (60s)
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
-        // Create a test message with event time at base_time + 10s
-        let msg = Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["test_key".to_string()]),
-            tags: None,
-            value: "test_value".as_bytes().to_vec().into(),
-            offset: Default::default(),
-            event_time: Utc
-                .timestamp_millis_opt(base_time.timestamp_millis() + 10000)
-                .unwrap(),
-            ..Default::default()
-        };
+        let event_time = Utc
+            .timestamp_millis_opt(base_time.timestamp_millis() + 10000)
+            .unwrap();
 
         // Assign windows
-        let window_msgs = windower.assign_windows(msg.clone());
+        let window_actions = windower.assign_windows(event_time);
 
         // Verify results - should be assigned to exactly 3 windows
-        assert_eq!(window_msgs.len(), 3);
+        assert_eq!(window_actions.len(), 3);
 
         // Check first window: [60000, 120000)
-        match &window_msgs
+        match window_actions
             .first()
-            .expect("Expected at least one window message")
-            .operation
+            .expect("Expected at least one window action")
         {
-            AlignedWindowOperation::Open { window, .. } => {
+            AlignedWindowAction::Open { window } => {
                 assert_eq!(window.start_time.timestamp_millis(), 60000);
                 assert_eq!(window.end_time.timestamp_millis(), 120000);
             }
             _ => panic!("Expected Open operation"),
         }
 
-        // Assign another message to the same windows
-        let msg2 = Message {
-            event_time: Utc
-                .timestamp_millis_opt(base_time.timestamp_millis() + 1000)
-                .unwrap(),
-            ..msg.clone()
-        };
+        let event_time2 = Utc
+            .timestamp_millis_opt(base_time.timestamp_millis() + 1000)
+            .unwrap();
 
-        let window_msgs2 = windower.assign_windows(msg2.clone());
+        let window_actions2 = windower.assign_windows(event_time2);
 
         // Verify results - should be assigned to exactly 3 windows
-        assert_eq!(window_msgs2.len(), 3);
+        assert_eq!(window_actions2.len(), 3);
 
         // All operations should be Append
-        for window_msg in &window_msgs2 {
-            match &window_msg.operation {
-                AlignedWindowOperation::Append { .. } => {}
+        for action in &window_actions2 {
+            match action {
+                AlignedWindowAction::Append { .. } => {}
                 _ => panic!("Expected Append operation"),
             }
         }
     }
 
-    #[tokio::test]
-    async fn test_assign_windows_length_not_divisible_by_slide() {
+    #[test]
+    fn test_assign_windows_length_not_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 40s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(40), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(40));
 
         // Base time: 600s
         let base_time = Utc.timestamp_opt(600, 0).unwrap();
 
-        // Create a test message with event time at base_time + 10s
-        let msg = Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["test_key".to_string()]),
-            tags: None,
-            value: "test_value".as_bytes().to_vec().into(),
-            offset: Default::default(),
-            event_time: Utc.timestamp_opt(base_time.timestamp() + 10, 0).unwrap(),
-            ..Default::default()
-        };
+        let event_time = Utc.timestamp_opt(base_time.timestamp() + 10, 0).unwrap();
 
         // Assign windows
-        let window_msgs = windower.assign_windows(msg.clone());
+        let window_actions = windower.assign_windows(event_time);
 
         // Verify results - should be assigned to exactly 2 windows
-        assert_eq!(window_msgs.len(), 2);
+        assert_eq!(window_actions.len(), 2);
 
-        match &window_msgs
+        match window_actions
             .first()
-            .expect("Expected at least one window message")
-            .operation
+            .expect("Expected at least one window action")
         {
-            AlignedWindowOperation::Open { window, .. } => {
+            AlignedWindowAction::Open { window } => {
                 assert_eq!(window.start_time.timestamp(), 600);
                 assert_eq!(window.end_time.timestamp(), 660);
             }
@@ -483,12 +381,11 @@ mod tests {
         }
 
         // Check second window: [560, 620)
-        match &window_msgs
+        match window_actions
             .get(1)
-            .expect("Expected at least two window messages")
-            .operation
+            .expect("Expected at least two window actions")
         {
-            AlignedWindowOperation::Open { window, .. } => {
+            AlignedWindowAction::Open { window } => {
                 assert_eq!(window.start_time.timestamp(), 560);
                 assert_eq!(window.end_time.timestamp(), 620);
             }
@@ -505,21 +402,17 @@ mod tests {
             active_windows.insert(window2.clone());
         }
 
-        // Assign another message to the same windows
-        let msg2 = Message {
-            event_time: Utc.timestamp_opt(base_time.timestamp() + 1, 0).unwrap(),
-            ..msg.clone()
-        };
+        let event_time2 = Utc.timestamp_opt(base_time.timestamp() + 1, 0).unwrap();
 
-        let window_msgs2 = windower.assign_windows(msg2.clone());
+        let window_actions2 = windower.assign_windows(event_time2);
 
         // Should also be assigned to 2 windows
-        assert_eq!(window_msgs2.len(), 2);
+        assert_eq!(window_actions2.len(), 2);
 
         // All operations should be Append
-        for window_msg in &window_msgs2 {
-            match &window_msg.operation {
-                AlignedWindowOperation::Append { .. } => {}
+        for action in &window_actions2 {
+            match action {
+                AlignedWindowAction::Append { .. } => {}
                 _ => panic!("Expected Append operation"),
             }
         }
@@ -531,8 +424,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -562,36 +454,27 @@ mod tests {
         assert_eq!(closed.len(), 3);
 
         // Check that all windows are closed in order of end time
-        match &closed
-            .first()
-            .expect("Expected at least one closed message")
-            .operation
-        {
-            AlignedWindowOperation::Close { window } => {
+        match closed.first().expect("Expected at least one closed action") {
+            AlignedWindowAction::Close { window } => {
                 assert_eq!(window.start_time, base_time - chrono::Duration::seconds(20));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(40));
             }
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed
-            .get(1)
-            .expect("Expected at least two closed messages")
-            .operation
-        {
-            AlignedWindowOperation::Close { window } => {
+        match closed.get(1).expect("Expected at least two closed actions") {
+            AlignedWindowAction::Close { window } => {
                 assert_eq!(window.start_time, base_time - chrono::Duration::seconds(10));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(50));
             }
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed
+        match closed
             .get(2)
-            .expect("Expected at least three closed messages")
-            .operation
+            .expect("Expected at least three closed actions")
         {
-            AlignedWindowOperation::Close { window } => {
+            AlignedWindowAction::Close { window } => {
                 assert_eq!(window.start_time, base_time);
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
             }
@@ -611,8 +494,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -686,8 +568,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -786,23 +667,16 @@ mod tests {
             ),
         ];
 
-        // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager {
-            window_length: Duration::from_secs(60),
-            slide: Duration::from_secs(10),
-            active_windows: Arc::new(RwLock::new(BTreeSet::from_iter(
-                active_windows.iter().cloned(),
-            ))),
-            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
-            active_window_state_file: None,
-            max_deleted_window_end_time: Arc::new(Default::default()),
-        };
+        let windower = SlidingWindowManager::from_snapshot(
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+            SlidingWindowSnapshot {
+                windows: active_windows.to_vec(),
+                max_deleted_window_end_time: -1,
+            },
+        );
 
-        // Create a test message with event time at 105s
-        let msg = Message {
-            event_time: Utc.timestamp_millis_opt(105000).unwrap(),
-            ..Default::default()
-        };
+        let event_time = Utc.timestamp_millis_opt(105000).unwrap();
 
         // Pre-populate expected windows
         // For event time 105000ms (105s):
@@ -840,37 +714,25 @@ mod tests {
         ];
 
         // Assign windows
-        let window_msgs = windower.assign_windows(msg.clone());
+        let window_actions = windower.assign_windows(event_time);
 
         // Should also be assigned to 6 windows (5 are already open, 1 is new)
-        assert_eq!(window_msgs.len(), expected_windows.len());
+        assert_eq!(window_actions.len(), expected_windows.len());
 
         // Check all windows match expected windows
-        for (i, window_msg) in window_msgs.iter().enumerate() {
-            // Check operation type and extract window
-            let window = match &window_msg.operation {
-                AlignedWindowOperation::Open {
-                    message: open_msg,
-                    window,
-                } => {
-                    assert_eq!(open_msg.event_time, msg.event_time);
+        for (i, action) in window_actions.iter().enumerate() {
+            let window = match action {
+                AlignedWindowAction::Open { window } => {
                     assert_eq!(window.start_time, Utc.timestamp_millis_opt(100000).unwrap());
                     assert_eq!(window.end_time, Utc.timestamp_millis_opt(160000).unwrap());
                     window
                 }
-                AlignedWindowOperation::Append {
-                    message: append_msg,
-                    window,
-                } => {
-                    assert_eq!(append_msg.event_time, msg.event_time);
-                    window
-                }
-                AlignedWindowOperation::Close { .. } => {
+                AlignedWindowAction::Append { window } => window,
+                AlignedWindowAction::Close { .. } => {
                     panic!("Expected Open or Append operation");
                 }
             };
 
-            // Verify window matches expected window
             let expected = expected_windows
                 .get(i)
                 .expect("Expected window should exist at index");
@@ -878,27 +740,15 @@ mod tests {
             assert_eq!(window.end_time, expected.end_time);
         }
 
-        // Assign another message to the same window
-        let msg2 = Message {
-            event_time: Utc.timestamp_millis_opt(105000).unwrap(),
-            ..Default::default()
-        };
-
-        let window_msgs_two = windower.assign_windows(msg2.clone());
+        let window_actions_two = windower.assign_windows(event_time);
 
         // Should also be assigned to 6 windows, all append
-        assert_eq!(window_msgs_two.len(), 6);
+        assert_eq!(window_actions_two.len(), 6);
 
-        for window_msg in &window_msgs_two {
-            // largest window should be open, rest are append
-            match &window_msg.operation {
-                AlignedWindowOperation::Append {
-                    message: append_msg,
-                    ..
-                } => {
-                    assert_eq!(append_msg.event_time, msg2.event_time);
-                }
-                AlignedWindowOperation::Close { .. } | AlignedWindowOperation::Open { .. } => {
+        for action in &window_actions_two {
+            match action {
+                AlignedWindowAction::Append { .. } => {}
+                AlignedWindowAction::Close { .. } | AlignedWindowAction::Open { .. } => {
                     panic!("Expected Append operation");
                 }
             }
@@ -906,65 +756,85 @@ mod tests {
     }
 
     #[test]
-    fn test_save_and_load_state() {
-        use tempfile::tempdir;
-
-        // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
-        let state_file_path = temp_dir.path().join("window_state.bin");
-
-        // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager::new(
+    fn deleted_window_bound_suppresses_recreation() {
+        let windower = SlidingWindowManager::from_snapshot(
             Duration::from_secs(60),
             Duration::from_secs(10),
-            Some(state_file_path.clone()),
+            SlidingWindowSnapshot {
+                windows: Vec::new(),
+                max_deleted_window_end_time: 110_000,
+            },
         );
 
-        // Base time: 60000ms (60s)
+        let actions = windower.assign_windows(Utc.timestamp_millis_opt(105_000).unwrap());
+        let windows: Vec<&Window> = actions
+            .iter()
+            .map(|action| match action {
+                AlignedWindowAction::Open { window } => window,
+                other => panic!("expected OPEN, got {other:?}"),
+            })
+            .collect();
+
+        assert_eq!(windows.len(), 5);
+        assert!(
+            windows
+                .iter()
+                .all(|window| window.end_time.timestamp_millis() > 110_000)
+        );
+        assert!(
+            windows
+                .iter()
+                .all(|window| window.start_time.timestamp_millis() != 50_000)
+        );
+    }
+
+    #[test]
+    fn close_all_matches_a_terminal_watermark() {
+        let close_all_manager =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        let watermark_manager =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        for event_ms in [105_000, 125_000] {
+            let event_time = Utc.timestamp_millis_opt(event_ms).unwrap();
+            close_all_manager.assign_windows(event_time);
+            watermark_manager.assign_windows(event_time);
+        }
+
+        let close_all = close_all_manager.close_all();
+        let terminal = watermark_manager.close_windows(Utc.timestamp_millis_opt(180_000).unwrap());
+
+        assert_eq!(close_all, terminal);
+        assert_eq!(close_all_manager.active_window_count(), 0);
+        assert_eq!(close_all_manager.closed_window_count(), terminal.len());
+    }
+
+    #[test]
+    fn test_snapshot_for_restart_round_trip() {
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
-
-        // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
-        let window2 = Window::new(
-            base_time - chrono::Duration::seconds(10),
-            base_time + chrono::Duration::seconds(50),
-        );
-        let window3 = Window::new(
-            base_time - chrono::Duration::seconds(20),
-            base_time + chrono::Duration::seconds(40),
-        );
-
-        // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.write().unwrap();
-            active_windows.insert(window1.clone());
-            active_windows.insert(window2.clone());
-            active_windows.insert(window3.clone());
+            let mut active = windower.active_windows.write().unwrap();
+            active.insert(window1.clone());
         }
+        windower.close_windows(base_time + chrono::Duration::seconds(30));
+        windower.gc_window(window1.clone());
 
-        // Manually save state
-        windower.save_state().unwrap();
-
-        // Verify file exists
-        assert!(state_file_path.exists());
-
-        // Create a new windower with the same state file
-        let windower2 = SlidingWindowManager::new(
+        let snapshot = windower.snapshot_for_restart();
+        let max_deleted = snapshot.max_deleted_window_end_time;
+        let restored = SlidingWindowManager::from_snapshot(
             Duration::from_secs(60),
             Duration::from_secs(10),
-            Some(state_file_path.clone()),
+            snapshot,
         );
 
-        // Verify windows were loaded
-        {
-            let active_windows = windower2.active_windows.read().unwrap();
-            assert_eq!(active_windows.len(), 3);
-            assert!(active_windows.contains(&window1));
-            assert!(active_windows.contains(&window2));
-            assert!(active_windows.contains(&window3));
-        }
-
-        // Clean up
-        temp_dir.close().unwrap();
+        assert_eq!(
+            restored.active_window_count(),
+            windower.active_window_count()
+        );
+        assert_eq!(
+            restored.snapshot_for_restart().max_deleted_window_end_time,
+            max_deleted
+        );
     }
 }

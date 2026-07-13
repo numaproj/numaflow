@@ -51,4 +51,28 @@ pub enum UdfClientError {
 
     #[error("batch map operation was abandoned before EOT")]
     BatchOperationAbandoned,
+
+    #[error("invalid reduce response timestamp: {0}")]
+    InvalidReduceResponseTimestamp(String),
+
+    #[error("failed to start ReduceFn: {0}")]
+    ReduceFnStart(#[source] tonic::Status),
+
+    #[error("reduce gRPC stream failed: {0}")]
+    ReduceGrpc(#[source] tonic::Status),
+
+    #[error("reduce request stream is closed")]
+    ReduceRequestStreamClosed,
+
+    #[error("reduce response channel closed")]
+    ReduceResponseChannelClosed,
+
+    #[error("invalid reduce response result: {0}")]
+    InvalidReduceResponseResult(String),
+
+    #[error("invalid reduce response window: {0}")]
+    InvalidReduceResponseWindow(String),
+
+    #[error("reduce response window mismatch: expected {expected}, got {actual}")]
+    ReduceResponseWindowMismatch { expected: String, actual: String },
 }

@@ -1,10 +1,10 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
-use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::shared::udf::udf_datum_from_message;
 use crate::{Result, jh_abort_guard};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
-use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
+use numaflow_udf_client::{AlignedReduceBook, AlignedReduceResult, UdfClientError};
 use std::ops::Sub;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -14,103 +14,21 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::info;
 
-impl From<Message> for reduce_request::Payload {
-    fn from(msg: Message) -> Self {
-        Self {
-            keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
-            event_time: Some(prost_timestamp_from_utc(msg.event_time)),
-            watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: Arc::unwrap_or_clone(msg.headers),
-            metadata: msg.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
+/// Effective request channel capacity for one aligned reduce book (matches prior adapter).
+const REDUCE_REQUEST_BUFFER: usize = 500;
+
+fn reduce_udf_client_error(error: UdfClientError) -> crate::Error {
+    match error {
+        UdfClientError::ReduceFnStart(status) | UdfClientError::ReduceGrpc(status) => {
+            crate::Error::Grpc(Box::new(status))
         }
+        other => crate::Error::Reduce(other.to_string()),
     }
 }
 
-impl From<&Message> for reduce_request::Payload {
-    fn from(msg: &Message) -> Self {
-        Self {
-            keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
-            event_time: Some(prost_timestamp_from_utc(msg.event_time)),
-            watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: (*msg.headers).clone(),
-            metadata: msg.metadata.clone().map(|m| (*m).clone().into()),
-        }
-    }
-}
-
-impl From<AlignedWindowMessage> for ReduceRequest {
-    fn from(value: AlignedWindowMessage) -> Self {
-        // Process the operation and extract window and message
-        match value.operation {
-            AlignedWindowOperation::Open { message, window } => {
-                let window_obj = numaflow_pb::clients::reduce::Window {
-                    start: Some(prost_timestamp_from_utc(window.start_time)),
-                    end: Some(prost_timestamp_from_utc(window.end_time)),
-                    slot: "0".to_string(),
-                };
-
-                let operation = Some(reduce_request::WindowOperation {
-                    event: reduce_request::window_operation::Event::Open as i32,
-                    windows: vec![window_obj],
-                });
-
-                ReduceRequest {
-                    payload: Some(message.into()),
-                    operation,
-                }
-            }
-            AlignedWindowOperation::Close { window } => {
-                let window_obj = numaflow_pb::clients::reduce::Window {
-                    start: Some(prost_timestamp_from_utc(window.start_time)),
-                    end: Some(prost_timestamp_from_utc(window.end_time)),
-                    slot: "0".to_string(),
-                };
-
-                let operation = Some(reduce_request::WindowOperation {
-                    event: reduce_request::window_operation::Event::Close as i32,
-                    windows: vec![window_obj],
-                });
-
-                // For Close operations, we still need to set payload to Some
-                // even though there's no message, to ensure consistent behavior
-                ReduceRequest {
-                    payload: Some(reduce_request::Payload {
-                        keys: vec![],
-                        value: vec![],
-                        event_time: None,
-                        watermark: None,
-                        headers: Default::default(),
-                        metadata: None,
-                    }),
-                    operation,
-                }
-            }
-            AlignedWindowOperation::Append { message, window } => {
-                let window_obj = numaflow_pb::clients::reduce::Window {
-                    start: Some(prost_timestamp_from_utc(window.start_time)),
-                    end: Some(prost_timestamp_from_utc(window.end_time)),
-                    slot: "0".to_string(),
-                };
-
-                let operation = Some(reduce_request::WindowOperation {
-                    event: reduce_request::window_operation::Event::Append as i32,
-                    windows: vec![window_obj],
-                });
-
-                ReduceRequest {
-                    payload: Some(message.into()),
-                    operation,
-                }
-            }
-        }
-    }
-}
-
-/// Wrapper for ReduceResponse that includes index and vertex name.
+/// Wrapper for reduce results that includes index and vertex name.
 struct UdReducerResponse {
-    pub response: ReduceResponse,
+    pub result: AlignedReduceResult,
     pub index: i32,
     pub vertex_name: &'static str,
     pub vertex_replica: u16,
@@ -118,14 +36,13 @@ struct UdReducerResponse {
 
 impl From<UdReducerResponse> for Message {
     fn from(wrapper: UdReducerResponse) -> Self {
-        let result = wrapper.response.result.unwrap_or_default();
-        let window = wrapper.response.window.unwrap_or_default();
+        let result = wrapper.result;
+        let window = result.window;
 
-        // Create offset from window start and end time
         let offset_str = format!(
             "{}-{}",
-            utc_from_timestamp(window.start.expect("window start missing")).timestamp_millis(),
-            utc_from_timestamp(window.end.expect("window end missing")).timestamp_millis()
+            window.start_time.timestamp_millis(),
+            window.end_time.timestamp_millis()
         );
 
         Message {
@@ -136,13 +53,10 @@ impl From<UdReducerResponse> for Message {
             } else {
                 Some(Arc::from(result.tags))
             },
-            value: result.value.into(),
+            value: result.value,
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: utc_from_timestamp(window.end.unwrap())
-                .sub(chrono::Duration::milliseconds(1)),
-            watermark: window
-                .end
-                .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
+            event_time: window.end_time.sub(chrono::Duration::milliseconds(1)),
+            watermark: Some(window.end_time - chrono::Duration::milliseconds(1)),
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
@@ -174,78 +88,82 @@ impl UserDefinedAlignedReduce {
         result_tx: tokio::sync::mpsc::Sender<MessageHandle>,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        // Convert AlignedWindowMessage stream to ReduceRequest stream
-        let (req_tx, req_rx) = tokio::sync::mpsc::channel(500);
+        let mut stream = stream;
 
-        // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
-        // NOTE: - This is not really required (for client side streaming reduce), we do this because
-        //         `tonic` does not return a stream from the reduce_fn unless there is some output.
-        //       - This implementation works for reduce bidi streaming.
-        let request_handle = tokio::spawn(async move {
-            let mut stream = stream;
-            while let Some(window_msg) = stream.next().await {
-                let reduce_req: ReduceRequest = window_msg.into();
-                if req_tx.send(reduce_req).await.is_err() {
-                    break;
-                }
-            }
-        });
+        let first = stream.next().await.ok_or_else(|| {
+            crate::Error::Reduce("aligned reduce input stream ended before first message".into())
+        })?;
 
-        // Create a guard that will automatically abort the request handle when this function returns
-        let _guard = jh_abort_guard!(request_handle);
-
-        // Call the gRPC reduce_fn with the converted stream, but also watch for cancellation
-        let mut response_stream = tokio::select! {
-            // Wait for the gRPC call to complete
-            result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
-                match result {
-                    Ok(response) => response.into_inner(),
-                    Err(e) => {
-                        return Err(crate::Error::Grpc(Box::new(e)));
-                    }
-                }
-            }
-
-            // Check for cancellation
-            _ = cln_token.cancelled() => {
-                info!("Cancellation detected while waiting for reduce_fn response");
-                return Err(crate::Error::Cancelled());
+        let (message, window) = match first.operation {
+            AlignedWindowOperation::Open { message, window } => (message, window),
+            // Replay recovery converts APPEND to OPEN at the actor; accept APPEND as book start.
+            AlignedWindowOperation::Append { message, window } => (message, window),
+            AlignedWindowOperation::Close { .. } => {
+                return Err(crate::Error::Reduce(
+                    "aligned reduce input stream started with Close".into(),
+                ));
             }
         };
 
-        // Process the response stream
+        // NOTE: `AlignedReduceBook::open` returns immediately after queuing OPEN and starting the
+        // response pump. That avoids the tonic client-streaming deadlock where `reduce_fn` does not
+        // return a response stream until the server has read request data.
+        let (book, mut receiver) = AlignedReduceBook::open(
+            self.client.clone(),
+            window,
+            udf_datum_from_message(message),
+            REDUCE_REQUEST_BUFFER,
+        )
+        .await
+        .map_err(reduce_udf_client_error)?;
+
+        // Pump remaining window messages into the book; stream end closes the ReduceFn request side.
+        let request_handle = tokio::spawn(async move {
+            while let Some(window_msg) = stream.next().await {
+                match window_msg.operation {
+                    AlignedWindowOperation::Append { message, .. } => {
+                        if book.append(udf_datum_from_message(message)).await.is_err() {
+                            break;
+                        }
+                    }
+                    AlignedWindowOperation::Open { message, .. } => {
+                        if book.append(udf_datum_from_message(message)).await.is_err() {
+                            break;
+                        }
+                    }
+                    AlignedWindowOperation::Close { .. } => break,
+                }
+            }
+            book.close();
+        });
+
+        let _guard = jh_abort_guard!(request_handle);
+
         let vertex_name = get_vertex_name();
         let mut index = 0;
 
         loop {
             tokio::select! {
-                // Check for cancellation
                 _ = cln_token.cancelled() => {
-                    info!("Cancellation detected while processing responses, stopping");
+                    info!("Cancellation detected while processing reduce responses, stopping");
                     return Err(crate::Error::Cancelled());
                 }
 
-                // Process next response
-                response = response_stream.message() => {
-                    let response = response.map_err(|e| crate::Error::Grpc(Box::new(e)))?;
-                    let Some(response) = response else {
+                item = receiver.recv() => {
+                    let Some(item) = item else {
                         break;
                     };
 
-                    if response.eof {
-                        break;
-                    }
+                    let result = item.map_err(reduce_udf_client_error)?;
 
-                    // convert to Message so it can be sent to the ISB write channel
                     let message: Message = UdReducerResponse {
-                        response,
+                        result,
                         index,
                         vertex_name,
                         vertex_replica: *get_vertex_replica(),
                     }
                     .into();
 
-                    // Send to ISB writer (message is converted to MessageHandle via From trait)
                     result_tx
                         .send(message.into())
                         .await
@@ -323,6 +241,81 @@ mod tests {
         }
     }
 
+    struct MultiResult;
+    struct MultiResultCreator;
+
+    impl reduce::ReducerCreator for MultiResultCreator {
+        type R = MultiResult;
+
+        fn create(&self) -> Self::R {
+            MultiResult
+        }
+    }
+
+    #[tonic::async_trait]
+    impl reduce::Reducer for MultiResult {
+        async fn reduce(
+            &self,
+            keys: Vec<String>,
+            mut input: mpsc::Receiver<reduce::ReduceRequest>,
+            _md: &reduce::Metadata,
+        ) -> Vec<reduce::Message> {
+            while input.recv().await.is_some() {}
+            vec![
+                reduce::Message::new(b"first".to_vec()).with_keys(keys.clone()),
+                reduce::Message::new(b"second".to_vec()).with_keys(keys),
+            ]
+        }
+    }
+
+    async fn run_reduce_on_messages(
+        client: &mut UserDefinedAlignedReduce,
+        window: Window,
+        messages: &[Message],
+    ) -> Vec<MessageHandle> {
+        let mut window_messages = Vec::with_capacity(messages.len());
+        for (i, message) in messages.iter().enumerate() {
+            let operation = if i == 0 {
+                AlignedWindowOperation::Open {
+                    message: message.clone(),
+                    window: window.clone(),
+                }
+            } else {
+                AlignedWindowOperation::Append {
+                    message: message.clone(),
+                    window: window.clone(),
+                }
+            };
+            window_messages.push(AlignedWindowMessage {
+                operation,
+                pnf_slot: window_to_pnf_slot(&window),
+            });
+        }
+
+        let (window_tx, window_rx) = mpsc::channel(10);
+        for msg in window_messages {
+            window_tx.send(msg).await.unwrap();
+        }
+        drop(window_tx);
+
+        let (result_tx, mut result_rx) = mpsc::channel(10);
+        let cln_token = CancellationToken::new();
+
+        client
+            .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        let mut results = Vec::new();
+        while let Some(result) = tokio::time::timeout(Duration::from_secs(5), result_rx.recv())
+            .await
+            .expect("timeout waiting for result")
+        {
+            results.push(result);
+        }
+        results
+    }
+
     #[tokio::test]
     async fn test_reduce_operations() -> Result<()> {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -341,19 +334,16 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
             UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
                 .await;
 
-        // Create a window
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
         let window = Window::new(window_start, window_end);
 
-        // Create messages
         let messages = [
             Message {
                 typ: Default::default(),
@@ -402,77 +392,127 @@ mod tests {
             },
         ];
 
-        // Create window messages
-        let window_messages = vec![
-            // Open window
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Open {
-                    message: messages.first().expect("Expected message 0").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            // Append messages
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: messages.get(1).expect("Expected message 1").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: messages.get(2).expect("Expected message 2").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-        ];
+        let results = run_reduce_on_messages(&mut client, window.clone(), &messages).await;
+        assert_eq!(results.len(), 1);
+        let result = results.first().expect("one result");
 
-        // Create a channel to send window messages
-        let (window_tx, window_rx) = mpsc::channel(10);
-        for msg in window_messages {
-            window_tx.send(msg).await.unwrap();
-        }
-        drop(window_tx); // Close the channel to signal end of input
-
-        // Create a channel to receive results
-        let (result_tx, mut result_rx) = mpsc::channel(10);
-
-        // Create a cancellation token
-        let cln_token = CancellationToken::new();
-
-        // Call reduce_fn
-        let reduce_handle = tokio::spawn(async move {
-            client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
-                .await
-                .expect("reduce_fn failed");
-        });
-
-        // Wait for the result
-        let result = tokio::time::timeout(Duration::from_secs(5), result_rx.recv())
-            .await
-            .expect("timeout waiting for result")
-            .expect("no result received");
-
-        // Verify the result
         assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
         assert_eq!(
             String::from_utf8(result.message().value.to_vec()).unwrap(),
             "3"
-        ); // Counter should be 3
+        );
+        assert!(result.message().tags.is_none());
+        assert!(matches!(result.message().offset, Offset::Int(_)));
+        assert_eq!(
+            result.message().event_time,
+            window_end - chrono::Duration::milliseconds(1)
+        );
+        assert_eq!(
+            result.message().watermark,
+            Some(window_end - chrono::Duration::milliseconds(1))
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&result.message().id.offset),
+            format!(
+                "{}-{}",
+                window.start_time.timestamp_millis(),
+                window.end_time.timestamp_millis()
+            )
+        );
+        assert_eq!(result.message().id.index, 0);
 
-        // Shutdown the server
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
         tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
 
-        // Wait for the reduce handle to complete
-        reduce_handle.await.expect("reduce handle failed");
+        Ok(())
+    }
 
-        // Wait for the server to shut down
+    #[tokio::test]
+    async fn multiple_results_preserve_core_message_identity() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("reduce_multi_result.sock");
+        let server_info_file = tmp_dir.path().join("reduce_multi_result-server-info");
+
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            reduce::Server::new(MultiResultCreator)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info_file)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+        let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+        let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
+        let window = Window::new(window_start, window_end);
+        let messages = [Message {
+            keys: Arc::from(vec!["key1".into()]),
+            value: "value".into(),
+            event_time: window_start + chrono::Duration::seconds(10),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        }];
+
+        let results = run_reduce_on_messages(&mut client, window.clone(), &messages).await;
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results
+                .first()
+                .expect("first result")
+                .message()
+                .value
+                .as_ref(),
+            b"first"
+        );
+        assert_eq!(
+            results
+                .get(1)
+                .expect("second result")
+                .message()
+                .value
+                .as_ref(),
+            b"second"
+        );
+        for (index, result) in results.iter().enumerate() {
+            assert_eq!(result.message().id.index, index as i32);
+            assert_eq!(
+                String::from_utf8_lossy(&result.message().id.offset),
+                format!(
+                    "{}-{}",
+                    window.start_time.timestamp_millis(),
+                    window.end_time.timestamp_millis()
+                )
+            );
+            assert_eq!(
+                result.message().event_time,
+                window.end_time - chrono::Duration::milliseconds(1)
+            );
+            assert_eq!(
+                result.message().watermark,
+                Some(result.message().event_time)
+            );
+        }
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"
@@ -499,19 +539,16 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
             UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
                 .await;
 
-        // Create two windows for different keys
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
         let window = Window::new(window_start, window_end);
 
-        // Create messages for key1
         let key1_messages = [
             Message {
                 typ: Default::default(),
@@ -545,7 +582,6 @@ mod tests {
             },
         ];
 
-        // Create messages for key2
         let key2_messages = [
             Message {
                 typ: Default::default(),
@@ -594,126 +630,29 @@ mod tests {
             },
         ];
 
-        // Create window messages
-        let window_messages = vec![
-            // Open window for key1
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Open {
-                    message: key1_messages
-                        .first()
-                        .expect("Expected key1 message 0")
-                        .clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            // Append message for key1
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: key1_messages
-                        .get(1)
-                        .expect("Expected key1 message 1")
-                        .clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            // Open window for key2
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Open {
-                    message: key2_messages
-                        .first()
-                        .expect("Expected key2 message 0")
-                        .clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            // Append messages for key2
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: key2_messages
-                        .get(1)
-                        .expect("Expected key2 message 1")
-                        .clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: key2_messages
-                        .get(2)
-                        .expect("Expected key2 message 2")
-                        .clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-        ];
-
-        // Create a channel to send window messages
-        let (window_tx, window_rx) = mpsc::channel(100);
-        for msg in window_messages {
-            window_tx.send(msg).await.unwrap();
-        }
-        drop(window_tx); // Close the channel to signal end of input
-
-        // Create a channel to receive results
-        let (result_tx, mut result_rx) = mpsc::channel(100);
-
-        // Create a cancellation token
-        let cln_token = CancellationToken::new();
-
-        // Call reduce_fn
-        let reduce_handle = tokio::spawn(async move {
-            client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
-                .await
-                .expect("reduce_fn failed");
-        });
-
-        // Collect all results
-        let mut results = Vec::new();
-        while let Some(result) = tokio::time::timeout(Duration::from_secs(2), result_rx.recv())
-            .await
-            .expect("timeout waiting for result")
-        {
-            results.push(result);
-        }
-
-        // Verify the results
+        let messages: Vec<Message> = key1_messages.into_iter().chain(key2_messages).collect();
+        let mut results = run_reduce_on_messages(&mut client, window, &messages).await;
+        results.sort_by_key(|result| result.message().keys.to_vec());
         assert_eq!(results.len(), 2);
 
-        // Sort results by key for deterministic testing
-        results.sort_by_key(|a| a.message().keys.to_vec());
-
-        // Check key1 result
-        let result0 = results.first().expect("Expected result for key1");
-        assert_eq!(result0.message().keys.to_vec(), vec!["key1"]);
+        let result_key1 = results.first().expect("key1 result");
+        assert_eq!(result_key1.message().keys.to_vec(), vec!["key1"]);
         assert_eq!(
-            String::from_utf8(result0.message().value.to_vec()).unwrap(),
+            String::from_utf8(result_key1.message().value.to_vec()).unwrap(),
             "2"
-        ); // Counter should be 2
+        );
 
-        // Check key2 result
-        let result1 = results.get(1).expect("Expected result for key2");
-        assert_eq!(result1.message().keys.to_vec(), vec!["key2"]);
+        let result_key2 = results.get(1).expect("key2 result");
+        assert_eq!(result_key2.message().keys.to_vec(), vec!["key2"]);
         assert_eq!(
-            String::from_utf8(result1.message().value.to_vec()).unwrap(),
+            String::from_utf8(result_key2.message().value.to_vec()).unwrap(),
             "3"
-        ); // Counter should be 3
+        );
 
-        // Shutdown the server
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
         tokio::time::sleep(Duration::from_millis(50)).await;
-
-        // Wait for the reduce handle to complete
-        reduce_handle.await.expect("reduce handle failed");
-
-        // Wait for the server to shut down
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"
@@ -740,19 +679,16 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
             UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
                 .await;
 
-        // Create a sliding window
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
         let window = Window::new(window_start, window_end);
 
-        // Create messages
         let messages = [
             Message {
                 typ: Default::default(),
@@ -801,78 +737,21 @@ mod tests {
             },
         ];
 
-        // Create window messages
-        let window_messages = vec![
-            // Open window
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Open {
-                    message: messages.first().expect("Expected message 0").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            // Append messages
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: messages.get(1).expect("Expected message 1").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-            AlignedWindowMessage {
-                operation: AlignedWindowOperation::Append {
-                    message: messages.get(2).expect("Expected message 2").clone(),
-                    window: window.clone(),
-                },
-                pnf_slot: window_to_pnf_slot(&window),
-            },
-        ];
+        let results = run_reduce_on_messages(&mut client, window, &messages).await;
+        assert_eq!(results.len(), 1);
+        let result = results.first().expect("one result");
 
-        // Create a channel to send window messages
-        let (window_tx, window_rx) = mpsc::channel(100);
-        for msg in window_messages {
-            window_tx.send(msg).await.unwrap();
-        }
-        drop(window_tx); // Close the channel to signal end of input
-
-        // Create a channel to receive results
-        let (result_tx, mut result_rx) = mpsc::channel(100);
-
-        // Create a cancellation token
-        let cln_token = CancellationToken::new();
-
-        // Call reduce_fn
-        let reduce_handle = tokio::spawn(async move {
-            client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
-                .await
-                .expect("reduce_fn failed");
-        });
-
-        // Wait for the result
-        let result = tokio::time::timeout(Duration::from_secs(2), result_rx.recv())
-            .await
-            .expect("timeout waiting for result")
-            .expect("no result received");
-
-        // Verify the result
         assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
         assert_eq!(
             String::from_utf8(result.message().value.to_vec()).unwrap(),
             "3"
-        ); // Counter should be 3
+        );
 
-        // Shutdown the server
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
 
         tokio::time::sleep(Duration::from_millis(50)).await;
-
-        // Wait for the reduce handle to complete
-        reduce_handle.await.expect("reduce handle failed");
-
-        // Wait for the server to shut down
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"

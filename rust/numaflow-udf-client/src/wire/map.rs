@@ -1,16 +1,11 @@
-use std::collections::HashMap;
-
-use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{
     Handshake, MapRequest, MapResponse, TransmissionStatus, map_request, map_response,
 };
-use numaflow_pb::common::{metadata, nack_options};
-use prost_types::Timestamp;
+use numaflow_pb::common::nack_options;
 
 use crate::error::Result;
-use crate::model::{
-    KeyValueGroup, MapResult, UdfDatum, UdfMetadata, UdfNackOptions, UnaryMapResponse,
-};
+use crate::model::{MapResult, UdfDatum, UdfNackOptions, UnaryMapResponse};
+use crate::wire::common::{decode_metadata, encode_metadata, timestamp};
 
 pub(crate) fn handshake_request() -> MapRequest {
     MapRequest {
@@ -53,41 +48,6 @@ pub(crate) fn decode_results(response: MapResponse) -> Result<UnaryMapResponse> 
     })
 }
 
-fn timestamp(value: DateTime<Utc>) -> Timestamp {
-    Timestamp {
-        seconds: value.timestamp(),
-        nanos: value.timestamp_subsec_nanos() as i32,
-    }
-}
-
-fn encode_metadata(value: UdfMetadata) -> metadata::Metadata {
-    metadata::Metadata {
-        previous_vertex: value.previous_vertex,
-        sys_metadata: encode_groups(value.sys_metadata),
-        user_metadata: encode_groups(value.user_metadata),
-    }
-}
-
-fn encode_groups(
-    groups: HashMap<String, KeyValueGroup>,
-) -> HashMap<String, metadata::KeyValueGroup> {
-    groups
-        .into_iter()
-        .map(|(name, group)| {
-            (
-                name,
-                metadata::KeyValueGroup {
-                    key_value: group
-                        .key_value
-                        .into_iter()
-                        .map(|(key, value)| (key, value.to_vec()))
-                        .collect(),
-                },
-            )
-        })
-        .collect()
-}
-
 fn decode_result(value: map_response::Result) -> MapResult {
     MapResult {
         keys: value.keys,
@@ -96,34 +56,6 @@ fn decode_result(value: map_response::Result) -> MapResult {
         metadata: value.metadata.map(decode_metadata),
         nack_options: value.nack_options.map(decode_nack_options),
     }
-}
-
-fn decode_metadata(value: metadata::Metadata) -> UdfMetadata {
-    UdfMetadata {
-        previous_vertex: value.previous_vertex,
-        sys_metadata: decode_groups(value.sys_metadata),
-        user_metadata: decode_groups(value.user_metadata),
-    }
-}
-
-fn decode_groups(
-    groups: HashMap<String, metadata::KeyValueGroup>,
-) -> HashMap<String, KeyValueGroup> {
-    groups
-        .into_iter()
-        .map(|(name, group)| {
-            (
-                name,
-                KeyValueGroup {
-                    key_value: group
-                        .key_value
-                        .into_iter()
-                        .map(|(key, value)| (key, value.into()))
-                        .collect(),
-                },
-            )
-        })
-        .collect()
 }
 
 fn decode_nack_options(value: nack_options::NackOptions) -> UdfNackOptions {
@@ -139,9 +71,12 @@ mod tests {
     use std::collections::HashMap;
 
     use bytes::Bytes;
-    use chrono::{TimeZone, Utc};
+    use chrono::{DateTime, TimeZone, Utc};
     use numaflow_pb::clients::map::{MapResponse, map_response};
     use numaflow_pb::common::{metadata, nack_options};
+    use prost_types::Timestamp;
+
+    use crate::model::{KeyValueGroup, UdfMetadata};
 
     use super::*;
 

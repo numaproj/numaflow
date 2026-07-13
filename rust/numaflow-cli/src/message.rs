@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Utc};
+use numaflow_udf_client::{KeyValueGroup, UdfDatum, UdfMetadata};
 use prost_types::Timestamp;
 
 /// A fully-resolved message ready to send. All defaults have been applied.
@@ -52,6 +53,45 @@ impl Message {
 
     pub fn watermark_pb(&self) -> Timestamp {
         to_timestamp(self.watermark)
+    }
+
+    /// Convert this CLI message into a shared [`UdfDatum`] for map/reduce drivers.
+    pub fn to_udf_datum(&self) -> UdfDatum {
+        let metadata = if self.user_metadata.is_empty() && self.previous_vertex.is_empty() {
+            None
+        } else {
+            Some(UdfMetadata {
+                previous_vertex: self.previous_vertex.clone(),
+                sys_metadata: Default::default(),
+                user_metadata: self
+                    .user_metadata
+                    .iter()
+                    .map(|(group, values)| {
+                        (
+                            group.clone(),
+                            KeyValueGroup {
+                                key_value: values
+                                    .iter()
+                                    .map(|(key, value)| {
+                                        (key.clone(), value.clone().into_bytes().into())
+                                    })
+                                    .collect(),
+                            },
+                        )
+                    })
+                    .collect(),
+            })
+        };
+
+        UdfDatum {
+            id: self.id.clone(),
+            keys: self.keys.clone(),
+            value: self.value.clone().into(),
+            event_time: self.event_time,
+            watermark: Some(self.watermark),
+            headers: self.headers.clone(),
+            metadata,
+        }
     }
 }
 

@@ -1,27 +1,26 @@
-//! Aligned reduce driver (fixed & sliding windows). The CLI emulates numa's windower: each
-//! message is assigned to its epoch-aligned window(s); each window gets a dedicated `ReduceFn`
-//! bidi stream (OPEN + APPEND …), and end-of-input closes every window by closing its request
-//! stream (for aligned reduce, stream-close *is* the CLOSE signal).
+//! Aligned reduce driver (fixed & sliding windows). Uses the shared production windower and
+//! one `AlignedReduceBook` per window; end-of-input closes every book's request stream (aligned
+//! reduce treats stream-close as the CLOSE signal).
 
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Channel;
+use tokio::task::JoinHandle;
 
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
-use numaflow_pb::clients::reduce::reduce_request::window_operation::Event;
-use numaflow_pb::clients::reduce::reduce_request::{Payload, WindowOperation};
-use numaflow_pb::clients::reduce::{ReduceRequest, Window};
+use numaflow_udf_client::{
+    AlignedReduceBook, AlignedReduceReceiver, AlignedWindowAction, AlignedWindowManager,
+    FixedWindowManager, SlidingWindowManager, UdfClientError, Window,
+};
 
 use crate::cli::{OutputOpts, ReduceArgs, ServiceKind, TuningOpts, WindowKind};
-use crate::drivers::{Pacer, connect_and_ready, next_with_timeout, send_with_timeout};
+use crate::drivers::{Pacer, ResponseTimeout, connect_and_ready};
 use crate::exit::{CliError, CliResult, ExitCode};
 use crate::input::{LoadOptions, load_messages, resolve_base_time};
-use crate::message::{Message, to_timestamp};
 use crate::output::{Reporter, ResultContext, ResultRecord};
-use crate::windower::{WindowMs, event_ms, fixed_window, sliding_windows};
+
+const REDUCE_REQUEST_BUFFER: usize = 256;
 
 /// Build the epoch-truncated fallback base time for the reduce family: now, truncated down to
 /// the window boundary so `+0s..+59s` land in one window.
@@ -32,47 +31,15 @@ fn reduce_base_fallback(length: Duration) -> chrono::DateTime<chrono::Utc> {
     chrono::DateTime::from_timestamp_millis(truncated).unwrap_or_else(chrono::Utc::now)
 }
 
-fn payload_of(m: &Message) -> Payload {
-    Payload {
-        keys: m.keys.clone(),
-        value: m.value.clone(),
-        event_time: Some(m.event_time_pb()),
-        watermark: Some(m.watermark_pb()),
-        headers: m.headers.clone(),
-        metadata: m.metadata(),
-    }
+struct WindowState {
+    book: AlignedReduceBook,
+    collector: JoinHandle<CliResult<Vec<ResultRecord>>>,
+    sent: usize,
 }
 
-fn window_pb(w: &WindowMs) -> Window {
-    Window {
-        start: w.start_dt().map(to_timestamp),
-        end: w.end_dt().map(to_timestamp),
-        slot: "0".to_string(),
-    }
-}
-
-fn open_request(m: &Message, w: &WindowMs) -> ReduceRequest {
-    ReduceRequest {
-        payload: Some(payload_of(m)),
-        operation: Some(WindowOperation {
-            event: Event::Open as i32,
-            windows: vec![window_pb(w)],
-        }),
-    }
-}
-
-fn append_request(m: &Message, w: &WindowMs) -> ReduceRequest {
-    ReduceRequest {
-        payload: Some(payload_of(m)),
-        operation: Some(WindowOperation {
-            event: Event::Append as i32,
-            windows: vec![window_pb(w)],
-        }),
-    }
-}
+type PendingWindowClose = (String, usize, JoinHandle<CliResult<Vec<ResultRecord>>>);
 
 pub async fn run(args: ReduceArgs, tuning: &TuningOpts, output: &OutputOpts) -> CliResult<()> {
-    // Validate window options.
     if args.window == WindowKind::Sliding && args.slide.is_none() {
         return Err(CliError::usage(anyhow!(
             "--slide is required for sliding windows"
@@ -89,112 +56,255 @@ pub async fn run(args: ReduceArgs, tuning: &TuningOpts, output: &OutputOpts) -> 
     let messages = load_messages(&args.input, base, LoadOptions { ignores_id: true })
         .map_err(CliError::usage)?;
 
-    let length_ms = args.length.as_millis() as i64;
-
-    // Assign each message to its window(s), preserving file order per window.
-    // BTreeMap keeps windows sorted by (start, end) for deterministic output.
-    let mut windows: std::collections::BTreeMap<WindowMs, Vec<Message>> =
-        std::collections::BTreeMap::new();
-    for m in &messages {
-        let et = event_ms(m);
-        let assigned = match args.window {
-            WindowKind::Fixed => vec![fixed_window(et, length_ms)],
-            WindowKind::Sliding => {
-                let slide_ms = args.slide.expect("validated").as_millis() as i64;
-                sliding_windows(et, length_ms, slide_ms)
-            }
-        };
-        for w in assigned {
-            windows.entry(w).or_default().push(m.clone());
-        }
-    }
+    let manager = match args.window {
+        WindowKind::Fixed => AlignedWindowManager::Fixed(FixedWindowManager::new(args.length)),
+        WindowKind::Sliding => AlignedWindowManager::Sliding(SlidingWindowManager::new(
+            args.length,
+            args.slide.expect("validated"),
+        )),
+    };
 
     let mut reporter = Reporter::new(output);
     let (target, channel) = connect_and_ready(&args.connect, ServiceKind::Reduce, tuning).await?;
     reporter.status(format!("✓ ready ({})", target.label()));
 
+    let client = ReduceClient::new(channel)
+        .max_encoding_message_size(tuning.max_message_size)
+        .max_decoding_message_size(tuning.max_message_size);
+
     let start = Instant::now();
     let mut sent_total = 0usize;
     let mut pacer = Pacer::new(&args.pacing);
+    let mut active: BTreeMap<Window, WindowState> = BTreeMap::new();
 
-    for (w, msgs) in &windows {
-        sent_total += drive_window(&channel, tuning, w, msgs, &mut reporter, &mut pacer).await?;
+    for message in &messages {
+        let datum = message.to_udf_datum();
+        let actions = manager.assign_windows(message.event_time);
+        for action in actions {
+            match action {
+                AlignedWindowAction::Open { window } => {
+                    let win_label = window.to_string();
+                    reporter.trace(format!("window {win_label} OPEN"));
+                    let (book, receiver) = with_send_timeout(
+                        tuning.timeout,
+                        AlignedReduceBook::open(
+                            client.clone(),
+                            window.clone(),
+                            datum.clone(),
+                            REDUCE_REQUEST_BUFFER,
+                        ),
+                    )
+                    .await?;
+                    let collector = spawn_collector(receiver);
+                    active.insert(
+                        window,
+                        WindowState {
+                            book,
+                            collector,
+                            sent: 1,
+                        },
+                    );
+                    sent_total += 1;
+                    pacer.tick().await;
+                }
+                AlignedWindowAction::Append { window } => {
+                    let state = active.get_mut(&window).ok_or_else(|| {
+                        CliError::protocol(anyhow!(
+                            "append for window {window} with no active book"
+                        ))
+                    })?;
+                    append_with_timeout(tuning.timeout, state, datum.clone()).await?;
+                    state.sent += 1;
+                    sent_total += 1;
+                    pacer.tick().await;
+                }
+                AlignedWindowAction::Close { .. } => {
+                    return Err(CliError::protocol(anyhow!(
+                        "unexpected CLOSE during input assignment"
+                    )));
+                }
+            }
+        }
+    }
+
+    let close_actions = manager.close_all();
+    let mut closing: BTreeMap<Window, WindowState> = BTreeMap::new();
+    for action in close_actions {
+        let AlignedWindowAction::Close { window } = action else {
+            return Err(CliError::protocol(anyhow!(
+                "expected CLOSE at end of input"
+            )));
+        };
+        let state = active.remove(&window).ok_or_else(|| {
+            CliError::protocol(anyhow!("close for window {window} with no active book"))
+        })?;
+        closing.insert(window, state);
+    }
+
+    let window_count = closing.len();
+    let mut awaiting: Vec<PendingWindowClose> = Vec::with_capacity(window_count);
+    for (window, state) in closing {
+        let win_label = window.to_string();
+        let WindowState {
+            book,
+            collector,
+            sent,
+        } = state;
+        book.close();
+        awaiting.push((win_label, sent, collector));
+    }
+    for (win_label, _, _) in &awaiting {
+        reporter.trace(format!("window {win_label} CLOSE (stream close)"));
+    }
+    for (win_label, sent, collector) in awaiting {
+        let results = match tokio::time::timeout(tuning.timeout, collector).await {
+            Ok(join_result) => join_result
+                .map_err(|e| CliError::protocol(anyhow!("collector task failed: {e}")))?,
+            Err(_) => {
+                return Err(CliError::protocol(anyhow::Error::new(ResponseTimeout(
+                    tuning.timeout,
+                ))));
+            }
+        }?;
+
+        reporter.group_header(format!(
+            "window {win_label} · {} msg(s) sent · closed",
+            sent
+        ));
+        for (i, r) in results.iter().enumerate() {
+            reporter.result(r, i + 1, &ResultContext::window(win_label.clone()));
+        }
     }
 
     reporter.tally.sent = sent_total;
     reporter.summary(&[
-        ("windows", windows.len().to_string()),
+        ("windows", window_count.to_string()),
         ("elapsed", format!("{}ms", start.elapsed().as_millis())),
     ]);
     reporter.exit_result()
 }
 
-async fn drive_window(
-    channel: &Channel,
-    tuning: &TuningOpts,
-    w: &WindowMs,
-    msgs: &[Message],
-    reporter: &mut Reporter,
-    pacer: &mut Pacer,
-) -> CliResult<usize> {
-    let mut client = ReduceClient::new(channel.clone())
-        .max_encoding_message_size(tuning.max_message_size)
-        .max_decoding_message_size(tuning.max_message_size);
-
-    let (tx, rx) = mpsc::channel::<ReduceRequest>(256);
-    let mut stream = client
-        .reduce_fn(ReceiverStream::new(rx))
-        .await
-        .map_err(|e| CliError::new(ExitCode::Connect, anyhow!("ReduceFn failed: {e}")))?
-        .into_inner();
-
-    let win_label = format!("{w}");
-    reporter.trace(format!("window {win_label} OPEN"));
-
-    // Send OPEN for the first message, APPEND for the rest.
-    let mut sent = 0usize;
-    for (i, m) in msgs.iter().enumerate() {
-        let req = if i == 0 {
-            open_request(m, w)
-        } else {
-            append_request(m, w)
-        };
-        send_with_timeout(&tx, req, tuning.timeout)
-            .await
-            .map_err(CliError::protocol)?;
-        sent += 1;
-        pacer.tick().await;
+async fn with_send_timeout<T, F>(timeout: Duration, future: F) -> CliResult<T>
+where
+    F: std::future::Future<Output = Result<T, UdfClientError>>,
+{
+    match tokio::time::timeout(timeout, future).await {
+        Err(_) => Err(CliError::protocol(anyhow::Error::new(ResponseTimeout(
+            timeout,
+        )))),
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(error)) => Err(reduce_send_error(error)),
     }
-    // End of input for this window: closing the stream is the CLOSE signal (aligned reduce).
-    drop(tx);
-    reporter.trace(format!("window {win_label} CLOSE (stream close)"));
+}
 
-    // Collect this window's results.
-    let mut results: Vec<ResultRecord> = Vec::new();
-    loop {
-        let resp = next_with_timeout(&mut stream, tuning.timeout)
-            .await
-            .map_err(CliError::protocol)?;
-        let Some(resp) = resp else { break };
-        if resp.eof {
-            break;
+async fn append_with_timeout(
+    timeout: Duration,
+    state: &mut WindowState,
+    datum: numaflow_udf_client::UdfDatum,
+) -> CliResult<()> {
+    match tokio::time::timeout(timeout, state.book.append(datum)).await {
+        Err(_) => Err(CliError::protocol(anyhow::Error::new(ResponseTimeout(
+            timeout,
+        )))),
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(reduce_append_error(error, timeout, &mut state.collector).await),
+    }
+}
+
+/// A background ReduceFn startup failure closes the request receiver before APPEND observes it.
+/// Prefer the collector's typed startup error so the CLI keeps the connect exit code.
+async fn reduce_append_error(
+    error: UdfClientError,
+    timeout: Duration,
+    collector: &mut JoinHandle<CliResult<Vec<ResultRecord>>>,
+) -> CliError {
+    if matches!(&error, UdfClientError::ReduceRequestStreamClosed) {
+        match tokio::time::timeout(timeout, collector).await {
+            Ok(Ok(Err(collector_error))) => return collector_error,
+            Ok(Err(join_error)) => {
+                return CliError::protocol(anyhow!("collector task failed: {join_error}"));
+            }
+            Ok(Ok(Ok(_))) | Err(_) => {}
         }
-        if let Some(r) = resp.result {
+    }
+
+    reduce_send_error(error)
+}
+
+fn spawn_collector(receiver: AlignedReduceReceiver) -> JoinHandle<CliResult<Vec<ResultRecord>>> {
+    tokio::spawn(async move {
+        let mut receiver = receiver;
+        let mut results = Vec::new();
+        while let Some(item) = receiver.recv().await {
+            let result = item.map_err(reduce_recv_error)?;
             results.push(ResultRecord {
-                keys: r.keys,
-                tags: r.tags,
-                value: r.value,
+                keys: result.keys,
+                tags: result.tags,
+                value: result.value.to_vec(),
                 ..Default::default()
             });
         }
+        Ok(results)
+    })
+}
+
+fn reduce_send_error(error: UdfClientError) -> CliError {
+    match error {
+        UdfClientError::ReduceFnStart(status) => CliError::new(
+            ExitCode::Connect,
+            anyhow::Error::new(status).context("ReduceFn failed"),
+        ),
+        other => CliError::protocol(anyhow::Error::new(other)),
+    }
+}
+
+fn reduce_recv_error(error: UdfClientError) -> CliError {
+    match error {
+        UdfClientError::ReduceFnStart(status) => CliError::new(
+            ExitCode::Connect,
+            anyhow::Error::new(status).context("ReduceFn failed"),
+        ),
+        UdfClientError::ReduceGrpc(status) => {
+            CliError::protocol(anyhow::Error::new(status).context("gRPC error mid-stream"))
+        }
+        other => CliError::protocol(anyhow::Error::new(other)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn closed_append_prefers_collector_startup_error() {
+        let mut collector = tokio::spawn(async {
+            Err(CliError::new(
+                ExitCode::Connect,
+                anyhow!("ReduceFn failed during startup"),
+            ))
+        });
+
+        let error = reduce_append_error(
+            UdfClientError::ReduceRequestStreamClosed,
+            Duration::from_secs(1),
+            &mut collector,
+        )
+        .await;
+
+        assert_eq!(error.code, ExitCode::Connect);
     }
 
-    reporter.group_header(format!(
-        "window {win_label} · {} msg(s) sent · closed",
-        msgs.len()
-    ));
-    for (i, r) in results.iter().enumerate() {
-        reporter.result(r, i + 1, &ResultContext::window(win_label.clone()));
+    #[tokio::test]
+    async fn closed_append_without_collector_error_remains_protocol_error() {
+        let mut collector = tokio::spawn(async { Ok(Vec::new()) });
+
+        let error = reduce_append_error(
+            UdfClientError::ReduceRequestStreamClosed,
+            Duration::from_secs(1),
+            &mut collector,
+        )
+        .await;
+
+        assert_eq!(error.code, ExitCode::Protocol);
     }
-    Ok(sent)
 }

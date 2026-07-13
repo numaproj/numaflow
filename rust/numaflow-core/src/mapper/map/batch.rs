@@ -1,13 +1,14 @@
 use super::{
     ParentMessageInfo, UserDefinedMessage, map_udf_client_error, shared_result_to_proto,
-    udf_datum_from_message, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_metric,
+    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_metric,
 };
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
+use crate::shared::udf::udf_datum_from_message;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
 use numaflow_udf_client::{BatchMapSession, MapResult as SharedMapResult, UdfClientError};

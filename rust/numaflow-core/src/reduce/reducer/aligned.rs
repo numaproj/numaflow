@@ -3,8 +3,8 @@
 //! across all data streams. This alignment simplifies aggregation and analysis by providing uniform
 //! time slices for grouping events.
 //! There are two main types of aligned windows:
-//!   * [Fixed](windower::fixed) (tumbling)
-//!   * [Sliding](windower::sliding).
+//!   * Fixed (tumbling)
+//!   * Sliding.
 //! Fixed windows divide the timeline into non-overlapping intervals of equal length,
 //! such as every 10 seconds, with each event assigned to exactly one window. In contrast, sliding
 //! windows also have a fixed duration but move forward by a smaller slide interval, resulting in
@@ -16,5 +16,7 @@
 pub(crate) mod reducer;
 /// User-defined Reduce for Aligned and Unaligned Windows.
 pub(crate) mod user_defined;
+/// Sliding window manager persistence across restarts.
+pub(crate) mod window_state;
 /// Windower for Aligned Windows.
 pub(crate) mod windower;
