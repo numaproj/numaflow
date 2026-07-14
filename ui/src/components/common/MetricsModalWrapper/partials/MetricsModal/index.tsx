@@ -12,6 +12,8 @@ import { Pod } from "../../../../../types/declarations/pods";
 
 import "./style.css";
 
+const METRICS_TAB_INDEX = 1;
+
 const modalStyle = {
   position: "absolute",
   top: "50%",
@@ -50,7 +52,7 @@ export function MetricsModal({
   presets,
   pod,
 }: MetricsModalProps) {
-  const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
+  const { setVertexTab, setExpanded, setPresets } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
   const [metricsFound, setMetricsFound] = useState<boolean>(false);
@@ -58,8 +60,7 @@ export function MetricsModal({
   const handleRedirect = useCallback(() => {
     handleCloseModal();
     if (presets) setPresets(presets);
-    setVertexTab(0);
-    setPodsViewTab(1);
+    setVertexTab(METRICS_TAB_INDEX);
     // expand the respective metrics accordion
     const discoveredMetric = discoveredMetrics?.data?.find(
       (m: any) => m?.display_name === metricDisplayName
@@ -71,7 +72,6 @@ export function MetricsModal({
     presets,
     setPresets,
     setVertexTab,
-    setPodsViewTab,
     discoveredMetrics,
     metricDisplayName,
     setExpanded,

@@ -17,6 +17,7 @@ import { Errors } from "./partials/Errors";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
+import { Metrics } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
 import { AppContext } from "../../../../../App";
@@ -36,11 +37,12 @@ import monoVertexIcon from "../../../../../images/monoVertex.svg";
 import "./style.css";
 
 const PODS_VIEW_TAB_INDEX = 0;
-const SPEC_TAB_INDEX = 1;
-const PROCESSING_RATES_TAB_INDEX = 2;
-const K8S_EVENTS_TAB_INDEX = 3;
-const ERRORS_TAB_INDEX = 4;
-const BUFFERS_TAB_INDEX = 5;
+const METRICS_TAB_INDEX = 1;
+const SPEC_TAB_INDEX = 2;
+const PROCESSING_RATES_TAB_INDEX = 3;
+const K8S_EVENTS_TAB_INDEX = 4;
+const ERRORS_TAB_INDEX = 5;
+const BUFFERS_TAB_INDEX = 6;
 
 export enum VertexType {
   SOURCE,
@@ -64,8 +66,6 @@ export interface VertexDetailsProps {
 
 export interface VertexDetailsContextProps {
   setVertexTab: Dispatch<SetStateAction<number>>;
-  podsViewTab: number;
-  setPodsViewTab: Dispatch<SetStateAction<number>>;
   expanded: Set<string>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
   presets: any;
@@ -75,9 +75,6 @@ export interface VertexDetailsContextProps {
 export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setVertexTab: () => {},
-  podsViewTab: 0,
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  setPodsViewTab: () => {},
   expanded: new Set(),
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setExpanded: () => {},
@@ -97,12 +94,12 @@ export function VertexDetails({
   setModalOnClose,
   refresh,
 }: VertexDetailsProps) {
-  const { addError } = useContext<AppContextProps>(AppContext);
+  const { addError, disableMetricsCharts } =
+    useContext<AppContextProps>(AppContext);
   const [errorsCount, setErrorsCount] = useState<number>(0);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState<number>(PODS_VIEW_TAB_INDEX);
-  const [podsViewTab, setPodsViewTab] = useState<number>(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [updateModalOnClose, setUpdateModalOnClose] = useState<
     SpecEditorModalProps | undefined
@@ -210,7 +207,6 @@ export function VertexDetails({
       } else {
         setTabValue(newValue);
         if (tabValue === PODS_VIEW_TAB_INDEX) {
-          setPodsViewTab(0);
           setExpanded(new Set());
         }
       }
@@ -298,8 +294,6 @@ export function VertexDetails({
     <VertexDetailsContext.Provider
       value={{
         setVertexTab: setTabValue,
-        podsViewTab,
-        setPodsViewTab,
         expanded,
         setExpanded,
         presets,
@@ -332,6 +326,18 @@ export function VertexDetails({
               label="Pods View"
               data-testid="pods-tab"
             />
+            {!disableMetricsCharts && (
+              <Tab
+                className={
+                  tabValue === METRICS_TAB_INDEX
+                    ? "vertex-details-tab-selected"
+                    : "vertex-details-tab"
+                }
+                value={METRICS_TAB_INDEX}
+                label="Metrics"
+                data-testid="metrics-tab"
+              />
+            )}
             <Tab
               className={
                 tabValue === SPEC_TAB_INDEX
@@ -407,6 +413,22 @@ export function VertexDetails({
             />
           )}
         </div>
+        {!disableMetricsCharts && (
+          <div
+            className="vertex-details-tab-panel vertex-details-tab-panel-metrics"
+            role="tabpanel"
+            hidden={tabValue !== METRICS_TAB_INDEX}
+          >
+            {tabValue === METRICS_TAB_INDEX && (
+              <Metrics
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                type={type}
+                vertexId={vertexId}
+              />
+            )}
+          </div>
+        )}
         <div
           className="vertex-details-tab-panel"
           role="tabpanel"

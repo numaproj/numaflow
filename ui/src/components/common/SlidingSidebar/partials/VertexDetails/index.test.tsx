@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { VertexDetails } from "./index";
 import { BrowserRouter } from "react-router-dom";
+import { AppContext } from "../../../../../App";
 
 import "@testing-library/jest-dom";
 
@@ -78,6 +79,12 @@ jest.mock(
       Pods: () => <div>Mocked pods</div>,
     };
   }
+);
+jest.mock(
+  "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics",
+  () => ({
+    Metrics: () => <div>Mocked metrics</div>,
+  })
 );
 
 describe("VertexDetails", () => {
@@ -170,6 +177,40 @@ describe("VertexDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("Sink Vertex")).toBeInTheDocument();
       expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+    });
+  });
+
+  it("renders Metrics immediately after Pods View", async () => {
+    render(
+      <AppContext.Provider
+        value={{ addError: jest.fn(), disableMetricsCharts: false } as any}
+      >
+        <BrowserRouter>
+          <VertexDetails
+            namespaceId="test-namespace"
+            pipelineId="test-pipeline"
+            vertexId="test-vertex"
+            vertexSpecs={{}}
+            vertexMetrics={{}}
+            buffers={[]}
+            type="sink"
+            setModalOnClose={jest.fn()}
+            refresh={jest.fn()}
+          />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.slice(0, 3).map((tab) => tab.textContent)).toEqual([
+      "Pods View",
+      "Metrics",
+      "Spec",
+    ]);
+
+    fireEvent.click(screen.getByTestId("metrics-tab"));
+    await waitFor(() => {
+      expect(screen.getByText("Mocked metrics")).toBeInTheDocument();
     });
   });
 

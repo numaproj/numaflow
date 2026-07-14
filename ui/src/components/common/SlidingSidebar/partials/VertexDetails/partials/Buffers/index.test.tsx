@@ -74,8 +74,6 @@ const renderBuffers = (buffers = mockBuffers) => {
       <VertexDetailsContext.Provider
         value={{
           setVertexTab: jest.fn(),
-          podsViewTab: 0,
-          setPodsViewTab: jest.fn(),
           expanded,
           setExpanded,
           presets: undefined,
