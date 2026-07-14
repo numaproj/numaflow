@@ -1604,10 +1604,6 @@ mod tests {
         prost::Message::encode_to_vec(&msg)
     }
 
-    /// **Required regression test (the reviewer's blocking finding).** Discriminates the
-    /// successor-based predicate from the original (unsound) `create(g) + max_segment_age`
-    /// predicate for a sparse-GC / stale-empty-segment workload.
-    ///
     /// Crafts the on-disk layout directly: a frozen GC segment `g` whose *own* `create_micros`
     /// is stale (as if it sat open+empty well past any realistic `max_segment_age` before
     /// finally receiving its one `GcEvent` - an empty segment never age-rotates, see
@@ -1620,9 +1616,9 @@ mod tests {
     /// test's own `max_segment_age_secs = 300`): the new successor predicate correctly
     /// **retains** `g` here (`T0 < S`), but the old `create(g)+A` predicate would have already
     /// fired at this very cycle (`T0 > T_STALE + A`, since the stale gap exceeds `A`) and
-    /// deleted `g` prematurely - exactly the bug the reviewer flagged. This is what makes the
-    /// `count == 1` assertion below discriminate the two predicates at cycle 1, not via a
-    /// boundary/equality fluke.
+    /// deleted `g` prematurely. This is what makes the `count == 1` assertion below discriminate
+    /// the two predicates at cycle 1, not via a boundary/equality fluke.
+    ///
     /// Cycle 2 (after freezing the tail's data segment and opening a new one with create `> S`):
     /// `g` is now safe to delete under the successor predicate, and the tail is correctly
     /// **dropped** (matched via `g`, which survived into this cycle) rather than leaked into the
@@ -1798,8 +1794,8 @@ mod tests {
                 // stale creation time would make it eligible for the gate the instant it is
                 // finally written to and frozen - an artifact of how this test drives the WAL,
                 // not something the fix needs to tolerate (see `append.rs::write_data`'s
-                // size-gated age check, which the design's retention-gate proof assumes is
-                // always what keeps a GC segment's create-time close to its events).
+                // size-gated age check, which is always what keeps a GC segment's create-time
+                // close to its events).
                 let gc_wal = AppendOnlyWal::new(WalType::Gc, path.clone(), 100, 1000, 300).await?;
                 let (gc_tx, gc_rx) = mpsc::channel(1);
                 let gc_handle = gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
