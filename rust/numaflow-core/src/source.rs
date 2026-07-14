@@ -1070,6 +1070,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         result
     }
+
     /// Per-message ack for the streaming path. Awaits a single message's oneshot, issues
     /// ack or nack for that one offset, then releases the in-flight permit. This runs as an
     /// independent background task per message, enabling out-of-order acknowledgement.
@@ -1115,9 +1116,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         let start = Instant::now();
         let ack_result = if disposition {
-            Self::ack_with_retry(source_handle, vec![offset], &cancel_token).await
+            let result = Self::ack_with_retry(source_handle, vec![offset], &cancel_token).await;
+            Self::send_ack_metrics(1, start, true);
+            result
         } else {
-            Self::nack_with_retry(
+            let result = Self::nack_with_retry(
                 source_handle,
                 vec![NackOffset {
                     offset,
@@ -1125,12 +1128,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }],
                 &cancel_token,
             )
-            .await
+            .await;
+            Self::send_nack_metrics(1, start, true);
+            result
         };
 
-        // streaming=true: ack_time and e2e_time are skipped on the mvtx path;
-        // ack_total still increments (n=1 per message — valid per-message counter).
-        Self::send_ack_metrics(e2e_start_time, 1, start, true);
+        Self::send_e2e_metrics(e2e_start_time, true);
 
         // Drop the permit here so the drain barrier sees one fewer in-flight message.
         // The drop happens after ack_with_retry so we never signal "done" before the
@@ -1175,17 +1178,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .expect("Failed to delete offset from tracker");
         }
 
-        let start = Instant::now();
+        let ack_start = Instant::now();
         if !offsets_to_ack.is_empty() {
+            let acked_offset_count = offsets_to_ack.len();
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
+            // Non-streaming path: record all batch-granular metrics (streaming=false).
+            Self::send_ack_metrics(acked_offset_count, ack_start, false);
         }
+        let nack_start = Instant::now();
         if !offsets_to_nack.is_empty() {
-            // Group offsets by their nack options so each distinct option set results in a
-            // single backend nack call; offsets sharing the same (or no) options are batched.
-            Self::nack_with_retry(source_handle.clone(), offsets_to_nack, &cancel_token).await?
+            let nacked_offset_count = offsets_to_nack.len();
+            Self::nack_with_retry(source_handle.clone(), offsets_to_nack, &cancel_token).await?;
+            // Non-streaming path: record all batch-granular metrics (streaming=false).
+            Self::send_nack_metrics(nacked_offset_count, nack_start, false);
         }
-        // Non-streaming path: record all batch-granular metrics (streaming=false).
-        Self::send_ack_metrics(e2e_start_time, n, start, false);
+        Self::send_e2e_metrics(e2e_start_time, false);
 
         Ok(())
     }
@@ -1364,12 +1371,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         }
     }
 
-    /// `streaming`: when `true` and `is_mono_vertex()`, `ack_time` and `e2e_time` observes
+    /// `streaming`: when `true` and `is_mono_vertex()`, `ack_time` observes
     /// are skipped — these batch-granular histograms are meaningless per-message (one sample
     /// per ack call would misrepresent the aggregate). `ack_total` always increments (n=1
     /// per message in the streaming path) since it is a valid per-message counter. The
     /// pipeline label path is always recorded unchanged.
-    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant, streaming: bool) {
+    fn send_ack_metrics(n: usize, start: Instant, streaming: bool) {
         if is_mono_vertex() {
             let mvtx_labels = mvtx_forward_metric_labels();
 
@@ -1379,10 +1386,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     .ack_time
                     .get_or_create(mvtx_labels)
                     .observe(start.elapsed().as_micros() as f64);
-                monovertex_metrics()
-                    .e2e_time
-                    .get_or_create(mvtx_labels)
-                    .observe(e2e_start_time.elapsed().as_micros() as f64);
             }
 
             // ack_total is a per-message counter — always valid, never gated.
@@ -1407,6 +1410,63 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .ack_total
                 .get_or_create(&pipeline_labels)
                 .inc_by(n as u64);
+        }
+    }
+
+    fn send_nack_metrics(n: usize, start: Instant, streaming: bool) {
+        if is_mono_vertex() {
+            let mvtx_labels = mvtx_forward_metric_labels();
+
+            // Gate batch-granular timing histograms off under streaming.
+            if !streaming {
+                monovertex_metrics()
+                    .nack_time
+                    .get_or_create(mvtx_labels)
+                    .observe(start.elapsed().as_micros() as f64);
+            }
+
+            // nack_total is a per-message counter — always valid, never gated.
+            monovertex_metrics()
+                .nack_total
+                .get_or_create(mvtx_labels)
+                .inc_by(n as u64);
+        } else {
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
+            pipeline_metrics()
+                .forwarder
+                .nack_processing_time
+                .get_or_create(&pipeline_labels)
+                .observe(start.elapsed().as_micros() as f64);
+
+            pipeline_metrics()
+                .forwarder
+                .nack_total
+                .get_or_create(&pipeline_labels)
+                .inc_by(n as u64);
+        }
+    }
+
+    fn send_e2e_metrics(e2e_start_time: Instant, streaming: bool) {
+        if is_mono_vertex() {
+            let mvtx_labels = mvtx_forward_metric_labels();
+
+            // Gate batch-granular timing histograms off under streaming.
+            if !streaming {
+                monovertex_metrics()
+                    .e2e_time
+                    .get_or_create(mvtx_labels)
+                    .observe(e2e_start_time.elapsed().as_micros() as f64);
+            }
+        } else {
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .e2e_time

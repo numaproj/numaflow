@@ -231,17 +231,26 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                                     params.stream_name,
                                     &params.labels,
                                     ack_start,
-                                    params.message_processing_start,
                                 );
                             }
                         },
                         ReadAck::Nak(option) => {
+                            let nack_start = Instant::now();
                             info!(?params.offset, "Nak received for offset");
                             if let Err(e) = Self::nak_with_retry(&params.reader, &params.offset, option, &params.cancel).await {
                                 error!(?e, ?params.offset, "Failed to nack message after retries");
+                            } else {
+                                Self::publish_nack_metrics(
+                                    params.stream_name,
+                                    &params.labels,
+                                    nack_start,
+                                );
                             }
                         },
                     }
+
+                    Self::publish_e2e_metric(&params.labels, params.message_processing_start);
+
                     params.tracker.delete(&params.offset).await.expect("Failed to remove offset from tracker");
                     break;
                 }
@@ -351,12 +360,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         })
     }
 
-    fn publish_ack_metrics(
-        stream_name: &'static str,
-        labels: &MetricLabels,
-        ack_start: Instant,
-        message_processing_start: Instant,
-    ) {
+    fn publish_ack_metrics(stream_name: &'static str, labels: &MetricLabels, ack_start: Instant) {
         pipeline_metrics()
             .jetstream_isb
             .ack_time_total
@@ -372,6 +376,27 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             .ack_total
             .get_or_create(labels)
             .inc();
+    }
+
+    fn publish_nack_metrics(stream_name: &'static str, labels: &MetricLabels, nack_start: Instant) {
+        pipeline_metrics()
+            .jetstream_isb
+            .nack_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(nack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .forwarder
+            .nack_processing_time
+            .get_or_create(labels)
+            .observe(nack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .forwarder
+            .nack_total
+            .get_or_create(labels)
+            .inc();
+    }
+
+    fn publish_e2e_metric(labels: &MetricLabels, message_processing_start: Instant) {
         pipeline_metrics()
             .forwarder
             .e2e_time
