@@ -142,6 +142,7 @@ mod tests {
             consumer_name: "test".into(),
             subscription: "test".into(),
             max_unack: 100,
+            dead_letter_policy: None,
             auth: None,
         };
         let mut pulsar = new_pulsar_source(

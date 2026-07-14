@@ -95,6 +95,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe":                            schema_pkg_apis_numaflow_v1alpha1_Probe(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth":                       schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarBasicAuth":                  schema_pkg_apis_numaflow_v1alpha1_PulsarBasicAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy":           schema_pkg_apis_numaflow_v1alpha1_PulsarDeadLetterPolicy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink":                       schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit":                        schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref),
@@ -4361,6 +4362,35 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarBasicAuth(ref common.ReferenceCallb
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_PulsarDeadLetterPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"topic": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Topic where messages exceeding the max redelivery count will be sent.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"maxRedelivery": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Maximum number of redelivery attempts before routing to the dead letter topic.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+				Required: []string{"topic", "maxRedelivery"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4450,12 +4480,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"),
 						},
 					},
+					"deadLetterPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Consumer level dead letter policy.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"),
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "consumerName", "subscriptionName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"},
 	}
 }
 
