@@ -846,12 +846,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
             let read_time = read_start_time.elapsed().as_micros() as f64;
 
-            Self::record_batch_read_metrics(
-                &pipeline_labels,
-                mvtx_labels,
-                read_time,
-                msgs_len,
-            );
+            Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
 
             for mut message in messages.drain(..) {
                 // Pre-compute per-source-offset trace context (same as non-streaming).
