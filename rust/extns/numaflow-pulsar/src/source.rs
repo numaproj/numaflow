@@ -12,10 +12,17 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
+use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
 use tracing::info;
 
 use crate::{Error, PulsarAuth, Result};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PulsarDeadLetterPolicy {
+    pub topic: String,
+    pub max_redelivery: usize,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulsarSourceConfig {
@@ -24,6 +31,9 @@ pub struct PulsarSourceConfig {
     pub consumer_name: String,
     pub subscription: String,
     pub max_unack: usize,
+
+    pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
+
     pub auth: Option<PulsarAuth>,
 }
 
@@ -97,13 +107,22 @@ impl ConsumerReaderActor {
             .await
             .map_err(|e| format!("Creating Pulsar client connection: {e:?}"))?;
 
-        let consumer: Consumer<Vec<u8>, TokioExecutor> = pulsar
+        let mut builder = pulsar
             .consumer()
             .with_topic(&config.topic)
             .with_consumer_name(&config.consumer_name)
             .with_subscription_type(SubType::Shared)
             .with_subscription(&config.subscription)
-            .with_options(ConsumerOptions::default().durable(true))
+            .with_options(ConsumerOptions::default().durable(true));
+
+        if let Some(policy) = &config.dead_letter_policy {
+            builder = builder.with_dead_letter_policy(DeadLetterPolicy {
+                max_redeliver_count: policy.max_redelivery,
+                dead_letter_topic: policy.topic.clone(),
+            });
+        }
+
+        let consumer = builder
             .build()
             .await
             .map_err(|e| format!("Creating a Pulsar consumer: {e:?}"))?;

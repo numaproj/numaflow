@@ -7848,6 +7848,17 @@ spec:
                         type: object
                       consumerName:
                         type: string
+                      deadLetterPolicy:
+                        properties:
+                          maxRedelivery:
+                            format: int32
+                            type: integer
+                          topic:
+                            type: string
+                        required:
+                        - maxRedelivery
+                        - topic
+                        type: object
                       maxUnack:
                         format: int32
                         type: integer
@@ -20988,6 +20999,17 @@ spec:
                               type: object
                             consumerName:
                               type: string
+                            deadLetterPolicy:
+                              properties:
+                                maxRedelivery:
+                                  format: int32
+                                  type: integer
+                                topic:
+                                  type: string
+                              required:
+                              - maxRedelivery
+                              - topic
+                              type: object
                             maxUnack:
                               format: int32
                               type: integer
@@ -34124,6 +34146,17 @@ spec:
                                   type: object
                                 consumerName:
                                   type: string
+                                deadLetterPolicy:
+                                  properties:
+                                    maxRedelivery:
+                                      format: int32
+                                      type: integer
+                                    topic:
+                                      type: string
+                                  required:
+                                  - maxRedelivery
+                                  - topic
+                                  type: object
                                 maxUnack:
                                   format: int32
                                   type: integer
@@ -43464,6 +43497,17 @@ spec:
                         type: object
                       consumerName:
                         type: string
+                      deadLetterPolicy:
+                        properties:
+                          maxRedelivery:
+                            format: int32
+                            type: integer
+                          topic:
+                            type: string
+                        required:
+                        - maxRedelivery
+                        - topic
+                        type: object
                       maxUnack:
                         format: int32
                         type: integer
