@@ -1499,6 +1499,14 @@ message PulsarBasicAuth {
   optional .k8s.io.api.core.v1.SecretKeySelector password = 2;
 }
 
+message PulsarDeadLetterPolicy {
+  // Topic where messages exceeding the max redelivery count will be sent.
+  optional string topic = 1;
+
+  // Maximum number of redelivery attempts before routing to the dead letter topic.
+  optional uint32 maxRedelivery = 2;
+}
+
 message PulsarSink {
   optional string serverAddr = 1;
 
@@ -1526,6 +1534,10 @@ message PulsarSource {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
+
+  // Consumer level dead letter policy.
+  // +optional
+  optional PulsarDeadLetterPolicy deadLetterPolicy = 7;
 }
 
 message RateLimit {

@@ -136,6 +136,13 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
     fn try_from(value: Box<PulsarSource>) -> Result<Self> {
         let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
         let pulsar_config = PulsarSourceConfig {
+            dead_letter_policy: value.dead_letter_policy.map(|p| {
+                numaflow_pulsar::source::PulsarDeadLetterPolicy {
+                    topic: p.topic,
+                    max_redelivery: p.max_redelivery as usize,
+                }
+            }),
+
             pulsar_server_addr: value.server_addr,
             topic: value.topic,
             consumer_name: value.consumer_name,
@@ -737,6 +744,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source);
@@ -774,6 +782,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
@@ -826,6 +835,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
@@ -873,6 +883,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -909,6 +920,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -938,6 +950,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -973,6 +986,7 @@ mod pulsar_source_tests {
             subscription_name: "test-subscription".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
+            dead_letter_policy: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);

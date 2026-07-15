@@ -9339,6 +9339,84 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarDeadLetterPolicy">
+
+PulsarDeadLetterPolicy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Topic where messages exceeding the max redelivery count will be sent.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxRedelivery</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+Maximum number of redelivery attempts before routing to the dead letter
+topic.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.PulsarSink">
 
 PulsarSink
@@ -9563,6 +9641,27 @@ limit is crossed, futher read requests will return empty list.
 <p>
 
 Auth information
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>deadLetterPolicy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarDeadLetterPolicy">
+PulsarDeadLetterPolicy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Consumer level dead letter policy.
 </p>
 
 </td>
