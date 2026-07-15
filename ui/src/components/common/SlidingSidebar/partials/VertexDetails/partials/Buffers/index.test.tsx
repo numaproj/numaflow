@@ -73,7 +73,7 @@ const renderBuffers = (buffers = mockBuffers) => {
     return (
       <VertexDetailsContext.Provider
         value={{
-          setVertexTab: jest.fn(),
+          openMetrics: jest.fn(),
           expanded,
           setExpanded,
           presets: undefined,

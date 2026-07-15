@@ -25,6 +25,7 @@ import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import {
   ContainerError,
+  Pod,
   ReplicaErrors,
 } from "../../../../../types/declarations/pods";
 import { BufferInfo } from "../../../../../types/declarations/pipeline";
@@ -65,16 +66,22 @@ export interface VertexDetailsProps {
 }
 
 export interface VertexDetailsContextProps {
-  setVertexTab: Dispatch<SetStateAction<number>>;
+  openMetrics: (options: OpenMetricsOptions) => void;
   expanded: Set<string>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
   presets: any;
   setPresets: Dispatch<SetStateAction<any>>;
 }
 
+export interface OpenMetricsOptions {
+  panelId: string;
+  presets?: any;
+  pod?: Pod;
+}
+
 export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
   // eslint-disable-next-line @typescript-eslint/no-empty-function
-  setVertexTab: () => {},
+  openMetrics: () => {},
   expanded: new Set(),
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setExpanded: () => {},
@@ -101,6 +108,7 @@ export function VertexDetails({
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState<number>(PODS_VIEW_TAB_INDEX);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [metricsPod, setMetricsPod] = useState<Pod | undefined>();
   const [updateModalOnClose, setUpdateModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
@@ -206,8 +214,9 @@ export function VertexDetails({
         setUpdateModalOpen(true);
       } else {
         setTabValue(newValue);
-        if (tabValue === PODS_VIEW_TAB_INDEX) {
-          setExpanded(new Set());
+        if (newValue === METRICS_TAB_INDEX) {
+          setMetricsPod(undefined);
+          setPresets(undefined);
         }
       }
     },
@@ -221,6 +230,10 @@ export function VertexDetails({
     setUpdateModalOnClose(undefined);
     setModalOnClose && setModalOnClose(undefined);
     // Change to tab requested
+    if (targetTab === METRICS_TAB_INDEX) {
+      setMetricsPod(undefined);
+      setPresets(undefined);
+    }
     setTabValue(targetTab || PODS_VIEW_TAB_INDEX);
   }, [targetTab]);
 
@@ -288,12 +301,34 @@ export function VertexDetails({
     setErrorsCount(filteredDetailsData.length);
   }, [constructedDetails, filterErrorsWithinLast24Hours]);
 
+  const openMetrics = useCallback(
+    ({ panelId, presets: nextPresets, pod }: OpenMetricsOptions) => {
+      if (disableMetricsCharts) return;
+
+      setMetricsPod(pod);
+      setPresets(nextPresets);
+      setExpanded((previousExpanded) =>
+        new Set(previousExpanded).add(panelId)
+      );
+      setTabValue(METRICS_TAB_INDEX);
+    },
+    [disableMetricsCharts]
+  );
+
+  useEffect(() => {
+    if (disableMetricsCharts && tabValue === METRICS_TAB_INDEX) {
+      setMetricsPod(undefined);
+      setPresets(undefined);
+      setTabValue(PODS_VIEW_TAB_INDEX);
+    }
+  }, [disableMetricsCharts, tabValue]);
+
   const showBuffersTab = !!buffers || type === "source";
 
   return (
     <VertexDetailsContext.Provider
       value={{
-        setVertexTab: setTabValue,
+        openMetrics,
         expanded,
         setExpanded,
         presets,
@@ -425,6 +460,7 @@ export function VertexDetails({
                 pipelineId={pipelineId}
                 type={type}
                 vertexId={vertexId}
+                pod={metricsPod}
               />
             )}
           </div>
