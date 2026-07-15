@@ -21751,6 +21751,24 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarDeadLetterPolicy": {
+      "type": "object",
+      "required": [
+        "topic",
+        "maxRedelivery"
+      ],
+      "properties": {
+        "maxRedelivery": {
+          "description": "Maximum number of redelivery attempts before routing to the dead letter topic.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "topic": {
+          "description": "Topic where messages exceeding the max redelivery count will be sent.",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PulsarSink": {
       "type": "object",
       "required": [
@@ -21789,6 +21807,10 @@
         },
         "consumerName": {
           "type": "string"
+        },
+        "deadLetterPolicy": {
+          "description": "Consumer level dead letter policy.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarDeadLetterPolicy"
         },
         "maxUnack": {
           "description": "Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.",

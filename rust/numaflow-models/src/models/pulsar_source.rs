@@ -22,6 +22,8 @@ pub struct PulsarSource {
     pub auth: Option<Box<crate::models::PulsarAuth>>,
     #[serde(rename = "consumerName")]
     pub consumer_name: String,
+    #[serde(rename = "deadLetterPolicy", skip_serializing_if = "Option::is_none")]
+    pub dead_letter_policy: Option<Box<crate::models::PulsarDeadLetterPolicy>>,
     /// Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
     #[serde(rename = "maxUnack", skip_serializing_if = "Option::is_none")]
     pub max_unack: Option<i64>,
@@ -43,6 +45,7 @@ impl PulsarSource {
         PulsarSource {
             auth: None,
             consumer_name,
+            dead_letter_policy: None,
             max_unack: None,
             server_addr,
             subscription_name,
