@@ -9,28 +9,28 @@
       
       
       
-        <link rel="prev" href="../../user-defined-functions/">
+        <link rel="prev" href="../per-message-nack/">
       
       
-        <link rel="next" href="../builtin-functions/">
+        <link rel="next" href="../configuration/pod-specifications/">
       
       
         
       
       
-      <link rel="icon" href="../../../../assets/numaproj.svg">
+      <link rel="icon" href="../../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Overview - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Memory profiling - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,7 +49,7 @@
       
     
     
-    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#map-udf" class="md-skip">
+        <a href="#memory-profiling" class="md-skip">
           Skip to content
         </a>
       
@@ -100,9 +100,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              Memory profiling
             
           </span>
         </div>
@@ -224,7 +224,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -245,7 +245,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../quick-start/" class="md-tabs__link">
+        <a href="../../../quick-start/" class="md-tabs__link">
           
   
   
@@ -276,7 +276,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../../core-concepts/overview/" class="md-tabs__link">
+        <a href="../../../core-concepts/overview/" class="md-tabs__link">
           
   
   
@@ -299,7 +299,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../operations/releases/" class="md-tabs__link">
+        <a href="../../../operations/releases/" class="md-tabs__link">
           
   
   
@@ -319,7 +319,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../development/development/" class="md-tabs__link">
+        <a href="../../../development/development/" class="md-tabs__link">
           
   
   
@@ -378,9 +378,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../../assets/logo.png" alt="logo">
 
     </a>
     Numaflow - Data/streaming processing platform on Kubernetes
@@ -407,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -484,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../quick-start/" class="md-nav__link">
+      <a href="../../../quick-start/" class="md-nav__link">
         
   
   
@@ -512,7 +512,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/prerequisites-and-installation/" class="md-nav__link">
+      <a href="../../../getting-started/prerequisites-and-installation/" class="md-nav__link">
         
   
   
@@ -540,7 +540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/monovertex/" class="md-nav__link">
+      <a href="../../../getting-started/monovertex/" class="md-nav__link">
         
   
   
@@ -568,7 +568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/pipeline/" class="md-nav__link">
+      <a href="../../../getting-started/pipeline/" class="md-nav__link">
         
   
   
@@ -596,7 +596,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/whats-next/" class="md-nav__link">
+      <a href="../../../getting-started/whats-next/" class="md-nav__link">
         
   
   
@@ -736,7 +736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/overview/" class="md-nav__link">
+      <a href="../../../core-concepts/overview/" class="md-nav__link">
         
   
   
@@ -764,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/pipeline/" class="md-nav__link">
+      <a href="../../../core-concepts/pipeline/" class="md-nav__link">
         
   
   
@@ -792,7 +792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/monovertex/" class="md-nav__link">
+      <a href="../../../core-concepts/monovertex/" class="md-nav__link">
         
   
   
@@ -820,7 +820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/serving/" class="md-nav__link">
+      <a href="../../../core-concepts/serving/" class="md-nav__link">
         
   
   
@@ -848,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/vertex/" class="md-nav__link">
+      <a href="../../../core-concepts/vertex/" class="md-nav__link">
         
   
   
@@ -876,7 +876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer/" class="md-nav__link">
+      <a href="../../../core-concepts/inter-step-buffer/" class="md-nav__link">
         
   
   
@@ -904,7 +904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
+      <a href="../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
         
   
   
@@ -932,7 +932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/streaming/" class="md-nav__link">
+      <a href="../../../core-concepts/streaming/" class="md-nav__link">
         
   
   
@@ -960,7 +960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/watermarks/" class="md-nav__link">
+      <a href="../../../core-concepts/watermarks/" class="md-nav__link">
         
   
   
@@ -1046,7 +1046,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/overview/" class="md-nav__link">
+      <a href="../../sources/overview/" class="md-nav__link">
         
   
   
@@ -1074,7 +1074,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/generator/" class="md-nav__link">
+      <a href="../../sources/generator/" class="md-nav__link">
         
   
   
@@ -1102,7 +1102,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/http/" class="md-nav__link">
+      <a href="../../sources/http/" class="md-nav__link">
         
   
   
@@ -1130,7 +1130,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/kafka/" class="md-nav__link">
+      <a href="../../sources/kafka/" class="md-nav__link">
         
   
   
@@ -1158,7 +1158,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/pulsar/" class="md-nav__link">
+      <a href="../../sources/pulsar/" class="md-nav__link">
         
   
   
@@ -1186,7 +1186,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/nats/" class="md-nav__link">
+      <a href="../../sources/nats/" class="md-nav__link">
         
   
   
@@ -1214,7 +1214,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/jetstream/" class="md-nav__link">
+      <a href="../../sources/jetstream/" class="md-nav__link">
         
   
   
@@ -1242,7 +1242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/sqs/" class="md-nav__link">
+      <a href="../../sources/sqs/" class="md-nav__link">
         
   
   
@@ -1270,7 +1270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/user-defined-sources/" class="md-nav__link">
+      <a href="../../sources/user-defined-sources/" class="md-nav__link">
         
   
   
@@ -1348,7 +1348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/transformer/overview/" class="md-nav__link">
+      <a href="../../sources/transformer/overview/" class="md-nav__link">
         
   
   
@@ -1426,7 +1426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/" class="md-nav__link">
         
   
   
@@ -1454,7 +1454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/filter/" class="md-nav__link">
         
   
   
@@ -1482,7 +1482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         
   
   
@@ -1510,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         
   
   
@@ -1612,7 +1612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/overview/" class="md-nav__link">
+      <a href="../../sinks/overview/" class="md-nav__link">
         
   
   
@@ -1640,7 +1640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/kafka/" class="md-nav__link">
+      <a href="../../sinks/kafka/" class="md-nav__link">
         
   
   
@@ -1668,7 +1668,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/log/" class="md-nav__link">
+      <a href="../../sinks/log/" class="md-nav__link">
         
   
   
@@ -1696,7 +1696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/blackhole/" class="md-nav__link">
+      <a href="../../sinks/blackhole/" class="md-nav__link">
         
   
   
@@ -1724,7 +1724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/sqs/" class="md-nav__link">
+      <a href="../../sinks/sqs/" class="md-nav__link">
         
   
   
@@ -1752,7 +1752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/user-defined-sinks/" class="md-nav__link">
+      <a href="../../sinks/user-defined-sinks/" class="md-nav__link">
         
   
   
@@ -1780,7 +1780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/fallback/" class="md-nav__link">
+      <a href="../../sinks/fallback/" class="md-nav__link">
         
   
   
@@ -1808,7 +1808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/on-success/" class="md-nav__link">
+      <a href="../../sinks/on-success/" class="md-nav__link">
         
   
   
@@ -1836,7 +1836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sinks/retry-strategy/" class="md-nav__link">
+      <a href="../../sinks/retry-strategy/" class="md-nav__link">
         
   
   
@@ -1869,8 +1869,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1881,11 +1879,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
         
           
           <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
@@ -1906,7 +1904,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1924,7 +1922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/" class="md-nav__link">
+      <a href="../../user-defined-functions/user-defined-functions/" class="md-nav__link">
         
   
   
@@ -1949,8 +1947,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1961,11 +1957,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4_2" >
         
           
           <label class="md-nav__link" for="__nav_3_4_2" id="__nav_3_4_2_label" tabindex="0">
@@ -1986,7 +1982,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_4_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2001,37 +1997,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../user-defined-functions/map/map/" class="md-nav__link">
         
   
   
@@ -2047,98 +2016,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unary-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unary Mode
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#streaming-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Streaming Mode
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#batch-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Batch Mode
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Batch Mode">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#important-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Important Considerations
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available Environment Variables
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2201,7 +2078,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/" class="md-nav__link">
         
   
   
@@ -2229,7 +2106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/cat/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         
   
   
@@ -2257,7 +2134,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/filter/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         
   
   
@@ -2293,7 +2170,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/examples/" class="md-nav__link">
         
   
   
@@ -2379,7 +2256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/reduce/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/reduce/" class="md-nav__link">
         
   
   
@@ -2457,7 +2334,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/windowing/windowing/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
         
   
   
@@ -2485,7 +2362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/windowing/fixed/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
         
   
   
@@ -2513,7 +2390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/windowing/sliding/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
         
   
   
@@ -2541,7 +2418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/windowing/session/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/session/" class="md-nav__link">
         
   
   
@@ -2569,7 +2446,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/windowing/accumulator/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
         
   
   
@@ -2605,7 +2482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reduce/examples/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/examples/" class="md-nav__link">
         
   
   
@@ -2699,7 +2576,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sdks/overview/" class="md-nav__link">
+      <a href="../../sdks/overview/" class="md-nav__link">
         
   
   
@@ -2727,7 +2604,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sdks/compatibility/" class="md-nav__link">
+      <a href="../../sdks/compatibility/" class="md-nav__link">
         
   
   
@@ -2755,7 +2632,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sdks/features/" class="md-nav__link">
+      <a href="../../sdks/features/" class="md-nav__link">
         
   
   
@@ -2788,6 +2665,8 @@
                 
   
   
+    
+  
   
   
     
@@ -2798,11 +2677,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" checked>
         
           
           <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
@@ -2823,7 +2702,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2841,7 +2720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/message-headers/" class="md-nav__link">
+      <a href="../../../core-concepts/message-headers/" class="md-nav__link">
         
   
   
@@ -2869,7 +2748,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/tracing/" class="md-nav__link">
+      <a href="../tracing/" class="md-nav__link">
         
   
   
@@ -2897,7 +2776,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/pipeline-tuning/" class="md-nav__link">
+      <a href="../pipeline-tuning/" class="md-nav__link">
         
   
   
@@ -2925,7 +2804,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/autoscaling/" class="md-nav__link">
+      <a href="../autoscaling/" class="md-nav__link">
         
   
   
@@ -2953,7 +2832,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/conditional-forwarding/" class="md-nav__link">
+      <a href="../conditional-forwarding/" class="md-nav__link">
         
   
   
@@ -2981,7 +2860,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/pipeline-operations/" class="md-nav__link">
+      <a href="../pipeline-operations/" class="md-nav__link">
         
   
   
@@ -3009,7 +2888,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/gpu/" class="md-nav__link">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -3037,7 +2916,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/join-vertex/" class="md-nav__link">
+      <a href="../join-vertex/" class="md-nav__link">
         
   
   
@@ -3065,7 +2944,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/multi-partition/" class="md-nav__link">
+      <a href="../multi-partition/" class="md-nav__link">
         
   
   
@@ -3093,7 +2972,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/ordered-processing/" class="md-nav__link">
+      <a href="../ordered-processing/" class="md-nav__link">
         
   
   
@@ -3121,7 +3000,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/side-inputs/" class="md-nav__link">
+      <a href="../side-inputs/" class="md-nav__link">
         
   
   
@@ -3149,7 +3028,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/mvtx-tuning/" class="md-nav__link">
+      <a href="../mvtx-tuning/" class="md-nav__link">
         
   
   
@@ -3177,7 +3056,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/mvtx-operations/" class="md-nav__link">
+      <a href="../mvtx-operations/" class="md-nav__link">
         
   
   
@@ -3205,7 +3084,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/mvtx-streaming/" class="md-nav__link">
+      <a href="../mvtx-streaming/" class="md-nav__link">
         
   
   
@@ -3233,7 +3112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/distributed-throttling/" class="md-nav__link">
+      <a href="../distributed-throttling/" class="md-nav__link">
         
   
   
@@ -3261,7 +3140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/monovertex-bypass/" class="md-nav__link">
+      <a href="../monovertex-bypass/" class="md-nav__link">
         
   
   
@@ -3289,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/per-message-nack/" class="md-nav__link">
+      <a href="../per-message-nack/" class="md-nav__link">
         
   
   
@@ -3314,10 +3193,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../reference/memory-profiling/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory profiling
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3333,6 +3239,198 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#numa-container-memory-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numa container memory profiling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Numa container memory profiling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-1-get-libbytehoundso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 - Get libbytehound.so
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-build-a-profilable-numaflow-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 - Build a profilable numaflow image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-point-the-controller-at-the-profiling-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 - Point the controller at the profiling image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-pipeline-spec-profiling-env-on-the-reduce-vertex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 - Pipeline spec: profiling env on the reduce vertex
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-verify-bytehound-is-attached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 - Verify bytehound is attached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-collect-the-dat-do-not-use-kubectl-cp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 - Collect the .dat (do NOT use kubectl cp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-7-analyze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 - Analyze
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ud-container-memory-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UD container memory profiling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="UD container memory profiling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rust-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rust SDK
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rust SDK">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#build-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build &amp; push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collect
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3395,7 +3493,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/pod-specifications/" class="md-nav__link">
+      <a href="../configuration/pod-specifications/" class="md-nav__link">
         
   
   
@@ -3423,7 +3521,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/container-resources/" class="md-nav__link">
+      <a href="../configuration/container-resources/" class="md-nav__link">
         
   
   
@@ -3451,7 +3549,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/volumes/" class="md-nav__link">
+      <a href="../configuration/volumes/" class="md-nav__link">
         
   
   
@@ -3479,7 +3577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/environment-variables/" class="md-nav__link">
+      <a href="../configuration/environment-variables/" class="md-nav__link">
         
   
   
@@ -3507,7 +3605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../configuration/labels-and-annotations/" class="md-nav__link">
         
   
   
@@ -3535,7 +3633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/init-containers/" class="md-nav__link">
+      <a href="../configuration/init-containers/" class="md-nav__link">
         
   
   
@@ -3563,7 +3661,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../configuration/sidecar-containers/" class="md-nav__link">
         
   
   
@@ -3591,7 +3689,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../configuration/liveness-and-readiness/" class="md-nav__link">
         
   
   
@@ -3619,7 +3717,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../configuration/pipeline-customization/" class="md-nav__link">
         
   
   
@@ -3647,7 +3745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/dra/" class="md-nav__link">
+      <a href="../configuration/dra/" class="md-nav__link">
         
   
   
@@ -3675,7 +3773,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/istio/" class="md-nav__link">
+      <a href="../configuration/istio/" class="md-nav__link">
         
   
   
@@ -3703,7 +3801,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/max-message-size/" class="md-nav__link">
+      <a href="../configuration/max-message-size/" class="md-nav__link">
         
   
   
@@ -3731,7 +3829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/update-strategy/" class="md-nav__link">
+      <a href="../configuration/update-strategy/" class="md-nav__link">
         
   
   
@@ -3767,7 +3865,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/kustomize/kustomize/" class="md-nav__link">
+      <a href="../kustomize/kustomize/" class="md-nav__link">
         
   
   
@@ -3795,7 +3893,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../APIs/" class="md-nav__link">
+      <a href="../../../APIs/" class="md-nav__link">
         
   
   
@@ -3881,7 +3979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../use-cases/overview/" class="md-nav__link">
+      <a href="../../use-cases/overview/" class="md-nav__link">
         
   
   
@@ -3909,7 +4007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../use-cases/monitoring-and-observability/" class="md-nav__link">
+      <a href="../../use-cases/monitoring-and-observability/" class="md-nav__link">
         
   
   
@@ -3995,7 +4093,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../UI/overview/" class="md-nav__link">
+      <a href="../../UI/overview/" class="md-nav__link">
         
   
   
@@ -4023,7 +4121,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../UI/errors/" class="md-nav__link">
+      <a href="../../UI/errors/" class="md-nav__link">
         
   
   
@@ -4051,7 +4149,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../UI/logs/" class="md-nav__link">
+      <a href="../../UI/logs/" class="md-nav__link">
         
   
   
@@ -4079,7 +4177,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../UI/metrics-tab/" class="md-nav__link">
+      <a href="../../UI/metrics-tab/" class="md-nav__link">
         
   
   
@@ -4107,7 +4205,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../UI/pods-view/" class="md-nav__link">
+      <a href="../../UI/pods-view/" class="md-nav__link">
         
   
   
@@ -4143,7 +4241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../FAQ/" class="md-nav__link">
+      <a href="../../FAQ/" class="md-nav__link">
         
   
   
@@ -4228,7 +4326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/releases/" class="md-nav__link">
+      <a href="../../../operations/releases/" class="md-nav__link">
         
   
   
@@ -4256,7 +4354,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/installation/" class="md-nav__link">
+      <a href="../../../operations/installation/" class="md-nav__link">
         
   
   
@@ -4284,7 +4382,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/validating-webhook/" class="md-nav__link">
+      <a href="../../../operations/validating-webhook/" class="md-nav__link">
         
   
   
@@ -4362,7 +4460,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/controller-configmap/" class="md-nav__link">
+      <a href="../../../operations/controller-configmap/" class="md-nav__link">
         
   
   
@@ -4440,7 +4538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/ui/ui-access-path/" class="md-nav__link">
+      <a href="../../../operations/ui/ui-access-path/" class="md-nav__link">
         
   
   
@@ -4518,7 +4616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/ui/authn/authentication/" class="md-nav__link">
+      <a href="../../../operations/ui/authn/authentication/" class="md-nav__link">
         
   
   
@@ -4546,7 +4644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/ui/authn/dex/" class="md-nav__link">
+      <a href="../../../operations/ui/authn/dex/" class="md-nav__link">
         
   
   
@@ -4574,7 +4672,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/ui/authn/local-users/" class="md-nav__link">
+      <a href="../../../operations/ui/authn/local-users/" class="md-nav__link">
         
   
   
@@ -4610,7 +4708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/ui/authz/rbac/" class="md-nav__link">
+      <a href="../../../operations/ui/authz/rbac/" class="md-nav__link">
         
   
   
@@ -4646,7 +4744,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/metrics/metrics/" class="md-nav__link">
+      <a href="../../../operations/metrics/metrics/" class="md-nav__link">
         
   
   
@@ -4674,7 +4772,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/grafana/" class="md-nav__link">
+      <a href="../../../operations/grafana/" class="md-nav__link">
         
   
   
@@ -4710,7 +4808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../operations/security/" class="md-nav__link">
+      <a href="../../../operations/security/" class="md-nav__link">
         
   
   
@@ -4795,7 +4893,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/development/" class="md-nav__link">
+      <a href="../../../development/development/" class="md-nav__link">
         
   
   
@@ -4873,7 +4971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/overview/" class="md-nav__link">
+      <a href="../../../specifications/overview/" class="md-nav__link">
         
   
   
@@ -4901,7 +4999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/controllers/" class="md-nav__link">
+      <a href="../../../specifications/controllers/" class="md-nav__link">
         
   
   
@@ -4929,7 +5027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/autoscaling/" class="md-nav__link">
+      <a href="../../../specifications/autoscaling/" class="md-nav__link">
         
   
   
@@ -4957,7 +5055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/edges-buffers-buckets/" class="md-nav__link">
+      <a href="../../../specifications/edges-buffers-buckets/" class="md-nav__link">
         
   
   
@@ -4985,7 +5083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/side-inputs/" class="md-nav__link">
+      <a href="../../../specifications/side-inputs/" class="md-nav__link">
         
   
   
@@ -5013,7 +5111,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/authorization/" class="md-nav__link">
+      <a href="../../../specifications/authorization/" class="md-nav__link">
         
   
   
@@ -5049,7 +5147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/debugging/" class="md-nav__link">
+      <a href="../../../development/debugging/" class="md-nav__link">
         
   
   
@@ -5077,7 +5175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/static-code-analysis/" class="md-nav__link">
+      <a href="../../../development/static-code-analysis/" class="md-nav__link">
         
   
   
@@ -5105,7 +5203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/releasing/" class="md-nav__link">
+      <a href="../../../development/releasing/" class="md-nav__link">
         
   
   
@@ -5187,44 +5285,99 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unary-mode" class="md-nav__link">
+  <a href="#numa-container-memory-profiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Unary Mode
+        Numa container memory profiling
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#streaming-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Streaming Mode
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#batch-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Batch Mode
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Batch Mode">
+    <nav class="md-nav" aria-label="Numa container memory profiling">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#important-considerations" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Important Considerations
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-1-get-libbytehoundso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 - Get libbytehound.so
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-build-a-profilable-numaflow-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 - Build a profilable numaflow image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-point-the-controller-at-the-profiling-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 - Point the controller at the profiling image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-pipeline-spec-profiling-env-on-the-reduce-vertex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 - Pipeline spec: profiling env on the reduce vertex
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-verify-bytehound-is-attached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 - Verify bytehound is attached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-collect-the-dat-do-not-use-kubectl-cp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 - Collect the .dat (do NOT use kubectl cp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-7-analyze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 - Analyze
       
     </span>
   </a>
@@ -5237,24 +5390,69 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
+  <a href="#ud-container-memory-profiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Available Environment Variables
+        UD container memory profiling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="UD container memory profiling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rust-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rust SDK
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rust SDK">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#build-push" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configuration
+        Build &amp; push
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collect
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5278,75 +5476,113 @@
   
 
 
-<h1 id="map-udf">Map UDF<a class="headerlink" href="#map-udf" title="Permanent link">&para;</a></h1>
-<p>Map in a Map vertex takes an input and returns 0, 1, or more outputs (also known as flat-map operation). Map is an element wise operator.</p>
-<p>After building a docker image for the written UDF, specify the image as below in the vertex spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-python-udf-example:latest</span>
+<h1 id="memory-profiling">Memory Profiling<a class="headerlink" href="#memory-profiling" title="Permanent link">&para;</a></h1>
+<h2 id="numa-container-memory-profiling">Numa container memory profiling<a class="headerlink" href="#numa-container-memory-profiling" title="Permanent link">&para;</a></h2>
+<p>This section explores attaching <a href="https://github.com/koute/bytehound">bytehound</a> (heap profiler via <code>LD_PRELOAD</code>) 
+mem profiler to the numaflow-core process in the <strong><code>numa</code> main container</strong> and captures a <code>.dat</code> for analysis offline</p>
+<p>The stock numaflow image <strong>cannot</strong> be profiled as-is since the rust binary is built with <code>-C target-feature=+crt-static</code> 
+(fully static -&gt; no dynamic loader) and the release image is <code>FROM scratch</code> (no <code>ld.so</code>/libc). 
+Both make <code>LD_PRELOAD</code> silently do nothing. We need a <em>dynamic glibc</em> binary on a <em>glibc</em> base.</p>
+<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
+<ul>
+<li>bytehound prebuilt is <strong>x86_64 only</strong> (v0.11.0). Cluster nodes must be x86_64, or build bytehound from source for arm64. </li>
+<li>kubectl + permission to edit the numaflow controller Deployment (<code>numaflow-system</code>).</li>
+<li>docker/buildx to build &amp; push the numaflow image.</li>
+</ul>
+<h3 id="step-1-get-libbytehoundso">Step 1 - Get <code>libbytehound.so</code><a class="headerlink" href="#step-1-get-libbytehoundso" title="Permanent link">&para;</a></h3>
+<p>Download <code>bytehound-x86_64-unknown-linux-gnu.tgz</code> from <a href="https://github.com/koute/bytehound/releases">link</a> and extract. 
+We get <code>libbytehound.so</code> (goes into the image) and <code>bytehound</code> (the CLI/server, run locally to analyze).</p>
+<h3 id="step-2-build-a-profilable-numaflow-image">Step 2 - Build a <em>profilable</em> numaflow image<a class="headerlink" href="#step-2-build-a-profilable-numaflow-image" title="Permanent link">&para;</a></h3>
+<p>Edit <code>numaflow/Dockerfile</code>:</p>
+<ul>
+<li>Remove <code>-C target-feature=+crt-static</code> from <strong>both</strong> <code>RUSTFLAGS='...'</code> lines (the <code>cargo chef cook</code>
+  line and the <code>cargo build</code> line) -&gt; dynamic glibc binary.</li>
+<li>Add <code>COPY libbytehound.so /usr/share/libbytehound.so</code> into the final <code>numaflow</code> stage (drop
+  <code>libbytehound.so</code> at the build context root first). Use the same path for <code>LD_PRELOAD</code> in Step 4.</li>
+</ul>
+<p>Edit <code>numaflow/Makefile</code>:</p>
+<ul>
+<li>Builder is <code>lukemathwalker/cargo-chef:latest-rust-1.95</code> = Debian <strong>trixie</strong> (glibc 2.41). 
+  Make the final <code>numaflow</code> stage base glibc <strong>and &gt;= the builder's glibc</strong>. </li>
+<li>If using <code>make image</code> update <code>DEV_BASE_IMAGE</code> to <code>debian:trixie-slim</code></li>
+<li>Otherwise, if using <code>make image-multi</code> update <code>RELEASE_BASE_IMAGE</code> to <code>debian:trixie-slim</code></li>
+</ul>
+<p>Verify it's dynamic (in the rust-builder stage or a throwaway container):</p>
+<div class="highlight"><pre><span></span><code>ldd<span class="w"> </span>/bin/numaflow-rs<span class="w">      </span><span class="c1"># must list libc.so.6, NOT &quot;not a dynamic executable&quot;</span>
 </code></pre></div>
-<p>Map supports three modes: <a href="#unary-mode">Unary</a>, <a href="#streaming-mode">Streaming</a>, and <a href="#batch-mode">Batch</a>.</p>
-<h2 id="unary-mode">Unary Mode<a class="headerlink" href="#unary-mode" title="Permanent link">&para;</a></h2>
-<p>Unary Map is the default mode where each input message is processed individually and returns 0, 1, or more outputs.</p>
-<p>Check the links below to see the UDF examples for different languages.</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/map/">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/">Java</a></li>
-</ul>
-<h2 id="streaming-mode">Streaming Mode<a class="headerlink" href="#streaming-mode" title="Permanent link">&para;</a></h2>
-<p>In cases the map function generates more than one output (e.g., flat map), the UDF can be
-configured to run in a streaming mode where the messages will be pushed to the downstream vertices as 
-soon as the output is generated instead of collecting all the responses and then sending them 
-together at the end when the function returns.</p>
-<p>Check the links below to see the UDF examples in streaming mode for different languages.</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/mapstream/flatmap_stream/">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/">Java</a></li>
-</ul>
-<h2 id="batch-mode">Batch Mode<a class="headerlink" href="#batch-mode" title="Permanent link">&para;</a></h2>
-<p>BatchMap is an interface that allows developers to process multiple data items in a UDF single call,
-rather than each item in separate calls.</p>
-<p>The BatchMap interface can be helpful in scenarios where performing operations on a group of data can be more efficient.</p>
-<h3 id="important-considerations">Important Considerations<a class="headerlink" href="#important-considerations" title="Permanent link">&para;</a></h3>
-<p>When using BatchMap, there are a few important considerations to keep in mind:</p>
-<ul>
-<li>Ensure that the BatchResponses object is tagged with the correct request ID.
-Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.</li>
-<li>Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for
-every input data item, there should be a corresponding response in the BatchResponses list.</li>
-<li>The total batch size can be up to <code>readBatchSize</code> long.</li>
-</ul>
-<p>Check the links below to see the UDF examples in batch mode for different languages.</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/batchmap/">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/batchmapper/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/">Java</a></li>
-<li><a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/">Rust</a></li>
-</ul>
-<h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
-<p>Some environment variables are available in the user-defined function container, they might be useful in your own UDF implementation.</p>
-<ul>
-<li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
-<li><code>NUMAFLOW_POD</code> - Pod name.</li>
-<li><code>NUMAFLOW_REPLICA</code> - Replica index.</li>
-<li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
-<li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
-</ul>
-<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>To achieve ordering, please set <code>readBatchSize</code> to 1.</p>
-<p>Configuration data can be provided to the UDF container at runtime multiple ways.</p>
-<ul>
-<li><a href="../../../reference/configuration/environment-variables/"><code>environment variables</code></a></li>
-<li><code>args</code></li>
-<li><code>command</code></li>
-<li><a href="../../../reference/configuration/volumes/"><code>volumes</code></a></li>
-<li><a href="../../../reference/configuration/init-containers/"><code>init containers</code></a></li>
-</ul>
+<h3 id="step-3-point-the-controller-at-the-profiling-image">Step 3 - Point the controller at the profiling image<a class="headerlink" href="#step-3-point-the-controller-at-the-profiling-image" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;numaflow-ns&gt;<span class="w"> </span><span class="nb">set</span><span class="w"> </span>env<span class="w"> </span>deploy/&lt;controller&gt;<span class="w"> </span><span class="nv">NUMAFLOW_IMAGE</span><span class="o">=</span>&lt;your-registry&gt;/&lt;img&gt;:&lt;tag&gt;
+kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;numaflow-ns&gt;<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/&lt;controller&gt;
+</code></pre></div>
+<h3 id="step-4-pipeline-spec-profiling-env-on-the-reduce-vertex">Step 4 - Pipeline spec: profiling env on the reduce vertex<a class="headerlink" href="#step-4-pipeline-spec-profiling-env-on-the-reduce-vertex" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;vertex-name&gt;</span>
+<span class="w">    </span><span class="nt">containerTemplate</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">LD_PRELOAD</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">/usr/share/libbytehound.so</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">            </span><span class="c1"># match Step 2 path</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_TRACK_CHILD_PROCESSES</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">        </span><span class="c1"># REQUIRED (see note)</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_OUTPUT</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">/var/numaflow/pbq/memory-profiling_%e_%t_%p.dat</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_LOG</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">info</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_CULL_TEMPORARY_ALLOCATIONS</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># drop &lt;10s allocs, shrink .dat</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_GRAB_BACKTRACES_ON_FREE</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">      </span><span class="c1"># cut overhead</span>
+</code></pre></div>
+<p>Then <code>kubectl apply -f &lt;pipeline&gt;.yaml &amp;&amp; kubectl delete pod &lt;accum-pod&gt;</code>.</p>
+<p><strong>Critical: <code>MEMORY_PROFILER_TRACK_CHILD_PROCESSES=1</code>.</strong> The image ENTRYPOINT is <code>/bin/entrypoint</code>
+(a Rust dispatcher) which <code>execve</code>s <code>/bin/numaflow-rs</code>. With the default (<code>0</code>), bytehound <em>unsets</em>
+<code>LD_PRELOAD</code> during its own init in <code>entrypoint</code> (to avoid following children), so the exec'd
+<code>numaflow-rs</code> starts <strong>unprofiled</strong>. Setting <code>1</code> keeps <code>LD_PRELOAD</code> across the exec.</p>
+<h3 id="step-5-verify-bytehound-is-attached">Step 5 - Verify bytehound is attached<a class="headerlink" href="#step-5-verify-bytehound-is-attached" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;accum-pod&gt;<span class="w"> </span>-c<span class="w"> </span>numa<span class="w"> </span>--<span class="w"> </span>env<span class="w"> </span><span class="nv">LD_PRELOAD</span><span class="o">=</span><span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;</span>
+<span class="s1">  echo &quot;mapped: $(grep -c bytehound /proc/1/maps)&quot;;  # expect: &gt;=1</span>
+<span class="s1">  ldd /bin/numaflow-rs | grep libc;                  # expect: libc.so.6 (dynamic)</span>
+<span class="s1">  ls -la /var/numaflow/pbq/memory-profiling_numaflow-rs_*&#39;</span><span class="w">   </span><span class="c1"># a growing .dat (MBs, binary embedded)</span>
+</code></pre></div>
+<p><code>env LD_PRELOAD=</code> clears the var for <em>your</em> shell/commands only.</p>
+<h3 id="step-6-collect-the-dat-do-not-use-kubectl-cp">Step 6 - Collect the <code>.dat</code> (do NOT use <code>kubectl cp</code>)<a class="headerlink" href="#step-6-collect-the-dat-do-not-use-kubectl-cp" title="Permanent link">&para;</a></h3>
+<p><code>kubectl cp</code> runs <code>tar</code> <em>inside</em> the pod; under <code>TRACK_CHILD_PROCESSES=1</code> bytehound injects into that
+<code>tar</code> and it <strong>SIGSEGVs</strong>. Stream it out with <code>LD_PRELOAD</code> cleared:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;accum-pod&gt;<span class="w"> </span>-c<span class="w"> </span>numa<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>env<span class="w"> </span><span class="nv">LD_PRELOAD</span><span class="o">=</span><span class="w"> </span>tar<span class="w"> </span>cf<span class="w"> </span>-<span class="w"> </span>-C<span class="w"> </span>/var/numaflow/pbq<span class="w"> </span>memory-profiling_numaflow-rs_&lt;t&gt;_1.dat<span class="w"> </span><span class="p">|</span><span class="w"> </span>tar<span class="w"> </span>xf<span class="w"> </span>-
+<span class="c1"># optional clean/flushed snapshot: kill -USR1 1 before (flush+pause) and again after (resume)</span>
+kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;accum-pod&gt;<span class="w"> </span>-c<span class="w"> </span>numa<span class="w"> </span>--<span class="w"> </span>env<span class="w"> </span><span class="nv">LD_PRELOAD</span><span class="o">=</span><span class="w"> </span><span class="nb">kill</span><span class="w"> </span>-USR1<span class="w"> </span><span class="m">1</span>
+</code></pre></div>
+<h3 id="step-7-analyze">Step 7 - Analyze<a class="headerlink" href="#step-7-analyze" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>./bytehound<span class="w"> </span>server<span class="w"> </span>memory-profiling_numaflow-rs_&lt;t&gt;_1.dat<span class="w">   </span><span class="c1"># -&gt; http://localhost:8080</span>
+./bytehound<span class="w"> </span>strip<span class="w"> </span>--threshold<span class="w"> </span><span class="m">60</span><span class="w"> </span>-o<span class="w"> </span>stripped.dat<span class="w"> </span>&lt;file&gt;.dat<span class="w"> </span><span class="c1"># if the file is huge / server strains</span>
+</code></pre></div>
+<h2 id="ud-container-memory-profiling">UD container memory profiling<a class="headerlink" href="#ud-container-memory-profiling" title="Permanent link">&para;</a></h2>
+<h3 id="rust-sdk">Rust SDK<a class="headerlink" href="#rust-sdk" title="Permanent link">&para;</a></h3>
+<p>We again use bytehound for memory profiling Rust SDK images.</p>
+<h4 id="image">Image<a class="headerlink" href="#image" title="Permanent link">&para;</a></h4>
+<p>(a source/sink example - adapt to your UDF).</p>
+<p>Drop <code>bytehound-x86_64-unknown-linux-gnu.tgz</code> (from <a href="https://github.com/koute/bytehound/releases">link</a>) and <code>start.sh</code> into the build context:</p>
+<div class="highlight"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="s">rust:1.76-bookworm</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">build</span>
+<span class="k">RUN</span><span class="w"> </span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>protobuf-compiler
+<span class="k">WORKDIR</span><span class="w"> </span><span class="s">/source-sink</span>
+<span class="k">COPY</span><span class="w"> </span>./<span class="w"> </span>./
+<span class="k">RUN</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w">                       </span>#<span class="w"> </span>dynamic<span class="w"> </span>glibc<span class="w"> </span>binary<span class="w"> </span>-<span class="w"> </span>LD_PRELOAD-able
+
+<span class="k">FROM</span><span class="w"> </span><span class="s">debian:bookworm</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">simple-source</span>
+<span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>build<span class="w"> </span>/source-sink/target/release/sourcer-sinker<span class="w"> </span>.
+<span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>build<span class="w"> </span>/source-sink/bytehound-x86_64-unknown-linux-gnu.tgz<span class="w"> </span>.
+<span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>build<span class="w"> </span>/source-sink/start.sh<span class="w"> </span>.
+<span class="k">RUN</span><span class="w"> </span>chmod<span class="w"> </span>+x<span class="w"> </span>start.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>tar<span class="w"> </span>-xvzf<span class="w"> </span>bytehound-x86_64-unknown-linux-gnu.tgz
+<span class="k">ENV</span><span class="w"> </span><span class="nv">MEMORY_PROFILER_LOG</span><span class="o">=</span>info
+<span class="k">CMD</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;./start.sh&quot;</span><span class="p">]</span>
+</code></pre></div>
+<p><strong><code>start.sh</code></strong> - set <code>LD_PRELOAD</code> <strong>scoped to the app only</strong>:</p>
+<div class="highlight"><pre><span></span><code><span class="ch">#!/bin/bash</span>
+<span class="nv">LD_PRELOAD</span><span class="o">=</span>./libbytehound.so<span class="w"> </span>./sourcer-sinker
+</code></pre></div>
+<h4 id="build-push">Build &amp; push<a class="headerlink" href="#build-push" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>buildx<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>multiarch<span class="w"> </span>--driver<span class="w"> </span>docker-container<span class="w"> </span>--use<span class="w">          </span><span class="c1"># once</span>
+<span class="nv">IMAGE_NAMESPACE</span><span class="o">=</span>quay.io/<span class="k">$(</span>whoami<span class="k">)</span><span class="w"> </span><span class="nv">DOCKER_PUSH</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>&lt;tag&gt;<span class="w"> </span>make<span class="w"> </span>image-multi<span class="w">  </span><span class="c1"># or plain buildx build of your SDK image</span>
+docker<span class="w"> </span>buildx<span class="w"> </span>rm<span class="w"> </span>multiarch<span class="w">                                                       </span><span class="c1"># cleanup</span>
+</code></pre></div>
+<p>(bytehound prebuilt is <strong>x86_64-only</strong>; for arm64 nodes build <code>libbytehound.so</code> from source and COPY the
+arch-matching <code>.so</code>.)</p>
+<h4 id="collect">Collect<a class="headerlink" href="#collect" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>cp<span class="w"> </span>--retries<span class="w"> </span><span class="m">999</span><span class="w"> </span>&lt;pod&gt;:/memory-profiling_&lt;exe&gt;_&lt;t&gt;_&lt;pid&gt;.dat<span class="w"> </span>/tmp/prof.dat
+</code></pre></div>
 
 
 
@@ -5406,10 +5642,10 @@ every input data item, there should be a corresponding response in the BatchResp
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
