@@ -6049,6 +6049,12 @@
 <td>Total number of messages acknowledged by a vertex</td>
 </tr>
 <tr>
+<td><code>forwarder_nack_total</code></td>
+<td>Counter</td>
+<td><code>partition_name</code></td>
+<td>Total number of messages negatively acknowledged by a vertex</td>
+</tr>
+<tr>
 <td><code>forwarder_drop_total</code></td>
 <td>Counter</td>
 <td><code>partition_name</code>, <code>reason</code></td>
@@ -6095,6 +6101,12 @@
 <td>Histogram</td>
 <td><code>partition_name</code></td>
 <td>Processing times of ack operations, in microseconds</td>
+</tr>
+<tr>
+<td><code>forwarder_nack_processing_time</code></td>
+<td>Histogram</td>
+<td><code>partition_name</code></td>
+<td>Processing times of nack operations, in microseconds</td>
 </tr>
 <tr>
 <td><code>forwarder_processing_time</code></td>
@@ -6366,6 +6378,12 @@
 <td>Total number of messages acknowledged by the sink</td>
 </tr>
 <tr>
+<td><code>monovtx_nack_total</code></td>
+<td>Counter</td>
+<td></td>
+<td>Total number of messages negatively acknowledged by the sink</td>
+</tr>
+<tr>
 <td><code>monovtx_dropped_total</code></td>
 <td>Counter</td>
 <td></td>
@@ -6406,6 +6424,12 @@
 <td>Histogram</td>
 <td></td>
 <td>Total time taken to ack to the source, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_nack_time</code></td>
+<td>Histogram</td>
+<td></td>
+<td>Total time taken to nack to the source, in microseconds</td>
 </tr>
 </tbody>
 </table>
@@ -6617,6 +6641,12 @@
 <td>Histogram</td>
 <td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Processing times of JetStream ack operations, in microseconds</td>
+</tr>
+<tr>
+<td><code>isb_jetstream_nack_time_total</code></td>
+<td>Histogram</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
+<td>Processing times of JetStream nack operations, in microseconds</td>
 </tr>
 </tbody>
 </table>
