@@ -5,8 +5,10 @@ use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::writer::ISBWriterOrchestrator;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::window_state::SlidingWindowStateStore;
 use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
+    gc_event_from_window, window_messages_for_assign, window_messages_for_close,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::typ::NumaflowTypeConfig;
@@ -164,15 +166,14 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             let gc_event: GcEvent = if let AlignedWindowManager::Sliding(_) = self.window_manager {
                 // for sliding window a message can be part of multiple windows, we can only delete the
                 // messages that are less than the oldest window's start time.
-                Window {
-                    start_time: oldest_window.start_time,
-                    end_time: oldest_window.start_time,
-                }
-                .into()
+                gc_event_from_window(&Window::new(
+                    oldest_window.start_time,
+                    oldest_window.start_time,
+                ))
             } else {
                 // messages of fixed window are not part of multiple windows, so we can delete all the
                 // messages that are less than the window's end time.
-                self.window.into()
+                gc_event_from_window(&self.window)
             };
 
             debug!(?gc_event, "Sending GC event to WAL");
@@ -416,6 +417,8 @@ pub(crate) struct AlignedReducer<C: NumaflowTypeConfig> {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
+    /// Persists sliding window manager state on shutdown when WAL is configured.
+    sliding_state_store: Option<SlidingWindowStateStore>,
 }
 
 impl<C: NumaflowTypeConfig> AlignedReducer<C> {
@@ -428,6 +431,7 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
         allowed_lateness: Duration,
         graceful_timeout: Duration,
         keyed: bool,
+        sliding_state_store: Option<SlidingWindowStateStore>,
     ) -> Self {
         Self {
             client,
@@ -440,6 +444,7 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             graceful_timeout,
             shutting_down_on_err: false,
             final_result: Ok(()),
+            sliding_state_store,
         }
     }
 
@@ -559,8 +564,9 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
 
             // For sliding: we need to make sure to store the window manager state before exiting
             // from the reducer component
-            if let AlignedWindowManager::Sliding(manager) = self.window_manager
-                && let Err(e) = manager.save_state()
+            if let (Some(store), AlignedWindowManager::Sliding(manager)) =
+                (&self.sliding_state_store, &self.window_manager)
+                && let Err(e) = store.save(&manager.snapshot_for_restart())
             {
                 error!("Failed to save window state: {:?}", e);
             }
@@ -605,9 +611,10 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
         watermark: DateTime<Utc>,
         actor_tx: &mpsc::Sender<AlignedWindowMessage>,
     ) {
-        let window_messages = self
-            .window_manager
-            .close_windows(watermark.sub(self.allowed_lateness));
+        let window_messages = window_messages_for_close(
+            self.window_manager
+                .close_windows(watermark.sub(self.allowed_lateness)),
+        );
 
         for window_msg in window_messages {
             actor_tx.send(window_msg).await.expect("Receiver dropped");
@@ -677,7 +684,7 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             .await;
 
         // Assign windows to the message
-        let window_messages = self.window_manager.assign_windows(msg);
+        let window_messages = window_messages_for_assign(&self.window_manager, msg);
 
         // Send each window message to the actor for processing
         for window_msg in window_messages {
@@ -711,8 +718,9 @@ mod tests {
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
     use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
-    use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
-    use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+    use crate::reduce::reducer::aligned::windower::{
+        AlignedWindowManager, FixedWindowManager, SlidingWindowManager,
+    };
     use crate::shared::grpc::create_rpc_channel;
     use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream::consumer::PullConsumer;
@@ -872,6 +880,7 @@ mod tests {
             Duration::from_secs(0),
             Duration::from_millis(50),
             true,
+            None,
         )
         .await;
 
@@ -1052,8 +1061,7 @@ mod tests {
                 .await;
 
         // Create a sliding window manager with 60s window length and 20s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20), None);
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
 
         // Set up JetStream
         let js_url = "localhost:4222";
@@ -1132,6 +1140,7 @@ mod tests {
             Duration::from_secs(0),
             Duration::from_millis(50),
             true,
+            None,
         )
         .await;
 
@@ -1396,6 +1405,7 @@ mod tests {
             Duration::from_secs(0),
             Duration::from_millis(50),
             true,
+            None,
         )
         .await;
 

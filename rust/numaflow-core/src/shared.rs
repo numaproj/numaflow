@@ -11,6 +11,9 @@ pub(crate) mod create_components;
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
 
+/// Message to shared UDF datum conversion.
+pub(crate) mod udf;
+
 /// OpenTelemetry propagation helpers for distributed tracing.
 /// Functions in this module are consumed by span creation code in source, mapper, and sinker.
 #[allow(dead_code)]

@@ -1,5 +1,5 @@
 //! In [Fixed Window] each event belongs to exactly one window, and we can assign the message to the window
-//! directly using the event time after rounding it to the nearest window [boundary](windower::truncate_to_duration).
+//! directly using the event time after rounding it to the nearest window [boundary](super::truncate_to_duration).
 //! The window is defined by the length of the window. The window is aligned to the epoch. For example,
 //! if the window length is 30s, and the event time is 100, then the window this event belongs to will
 //! be `[90, 120)`. We only have a single [WAL] for all the windows (we do not have per window WALs).
@@ -12,28 +12,25 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use crate::message::Message;
-use crate::reduce::reducer::aligned::windower;
-use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, AlignedWindowOperation, Window, window_to_pnf_slot,
-};
+use super::{AlignedWindowAction, truncate_to_duration};
+use crate::model::Window;
 use chrono::{DateTime, TimeZone, Utc};
 
 #[derive(Debug, Clone)]
-pub(crate) struct FixedWindowManager {
+pub struct FixedWindowManager {
     /// Duration of each window
     window_length: Duration,
     /// Active windows sorted by end time.
-    active_windows: Arc<RwLock<BTreeSet<Window>>>,
+    pub(crate) active_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
     /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
     /// closed window end time. The oldest window in the active_window will be greater than the latest
     /// closed window.
-    closed_windows: Arc<RwLock<BTreeSet<Window>>>,
+    pub(crate) closed_windows: Arc<RwLock<BTreeSet<Window>>>,
 }
 
 impl FixedWindowManager {
-    pub(crate) fn new(window_length: Duration) -> Self {
+    pub fn new(window_length: Duration) -> Self {
         Self {
             window_length,
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
@@ -41,13 +38,12 @@ impl FixedWindowManager {
         }
     }
 
-    /// Creates a new window for the given message.
-    fn create_window(&self, msg: &Message) -> Window {
+    /// Creates a new window for the given event time.
+    fn create_window(&self, event_time: DateTime<Utc>) -> Window {
         // Truncate event time to window length
         let window_length_millis = self.window_length.as_millis() as i64;
-        let event_time_millis = msg.event_time.timestamp_millis();
-        let start_time_millis =
-            windower::truncate_to_duration(event_time_millis, window_length_millis);
+        let event_time_millis = event_time.timestamp_millis();
+        let start_time_millis = truncate_to_duration(event_time_millis, window_length_millis);
         let end_time_millis = start_time_millis + window_length_millis;
 
         let start_time = Utc.timestamp_millis_opt(start_time_millis).unwrap();
@@ -56,41 +52,26 @@ impl FixedWindowManager {
         Window::new(start_time, end_time)
     }
 
-    /// Assigns windows to a message
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        let window = self.create_window(&msg);
-        let pnf_slot = window_to_pnf_slot(&window);
+    /// Assigns windows to an event time.
+    pub fn assign_windows(&self, event_time: DateTime<Utc>) -> Vec<AlignedWindowAction> {
+        let window = self.create_window(event_time);
 
         // Check if window already exists
         let mut active_windows = self
             .active_windows
             .write()
             .expect("Poisoned lock for active_windows");
-        let operation = if active_windows.contains(&window) {
-            // Window exists, append message
-            AlignedWindowOperation::Append {
-                message: msg,
-                window,
-            }
+        if active_windows.contains(&window) {
+            vec![AlignedWindowAction::Append { window }]
         } else {
-            // New window, insert it
             active_windows.insert(window.clone());
-            AlignedWindowOperation::Open {
-                message: msg,
-                window,
-            }
-        };
-
-        // Create window message
-        vec![AlignedWindowMessage {
-            operation,
-            pnf_slot,
-        }]
+            vec![AlignedWindowAction::Open { window }]
+        }
     }
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     /// end time.
-    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
+    pub fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowAction> {
         let windows_to_close: Vec<Window> = {
             let mut active_windows = self
                 .active_windows
@@ -113,15 +94,25 @@ impl FixedWindowManager {
 
         windows_to_close
             .into_iter()
-            .map(|window| AlignedWindowMessage {
-                pnf_slot: window_to_pnf_slot(&window),
-                operation: AlignedWindowOperation::Close { window },
-            })
+            .map(|window| AlignedWindowAction::Close { window })
             .collect()
     }
 
+    /// Closes all active windows (same end-time order as [`Self::close_windows`] with a terminal watermark).
+    pub fn close_all(&self) -> Vec<AlignedWindowAction> {
+        let watermark = self
+            .active_windows
+            .read()
+            .expect("Poisoned lock for active_windows")
+            .iter()
+            .last()
+            .map(|window| window.end_time)
+            .unwrap_or_else(|| Utc.timestamp_millis_opt(0).unwrap());
+        self.close_windows(watermark)
+    }
+
     /// Deletes a window after it is closed and GC is done.
-    pub(crate) fn gc_window(&self, window: Window) {
+    pub fn gc_window(&self, window: Window) {
         let mut closed_windows = self
             .closed_windows
             .write()
@@ -130,7 +121,7 @@ impl FixedWindowManager {
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    pub(crate) fn oldest_window(&self) -> Option<Window> {
+    pub fn oldest_window(&self) -> Option<Window> {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
@@ -153,7 +144,7 @@ impl FixedWindowManager {
     }
 
     /// Returns the number of currently active windows.
-    pub(crate) fn active_window_count(&self) -> usize {
+    pub fn active_window_count(&self) -> usize {
         self.active_windows
             .read()
             .expect("Poisoned lock for active_windows")
@@ -161,7 +152,7 @@ impl FixedWindowManager {
     }
 
     /// Returns the number of closed windows awaiting GC.
-    pub(crate) fn closed_window_count(&self) -> usize {
+    pub fn closed_window_count(&self) -> usize {
         self.closed_windows
             .read()
             .expect("Poisoned lock for closed_windows")
@@ -173,31 +164,24 @@ impl FixedWindowManager {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_assign_windows() {
+    #[test]
+    fn test_assign_windows() {
         // Create a fixed windower with 60s window length
         let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
-        // Create a test message with event time at base_time
-        let msg = Message {
-            event_time: base_time,
-            ..Default::default()
-        };
-
         // Assign windows
-        let window_msgs = windower.assign_windows(msg.clone());
+        let window_actions = windower.assign_windows(base_time);
 
         // Verify results - first message should create a new window with Open operation
-        assert_eq!(window_msgs.len(), 1);
+        assert_eq!(window_actions.len(), 1);
 
         // Check operation type and extract window
-        let window = match &window_msgs
+        let window = match window_actions
             .first()
-            .expect("Expected at least one window message")
-            .operation
+            .expect("Expected at least one window action")
         {
-            AlignedWindowOperation::Open { window, .. } => window,
+            AlignedWindowAction::Open { window } => window,
             _ => panic!("Expected Open operation"),
         };
 
@@ -205,30 +189,73 @@ mod tests {
         assert_eq!(window.start_time, base_time);
         assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
 
-        // Assign another message to the same window (base_time + 1s)
-        let msg2 = Message {
-            event_time: base_time + chrono::Duration::seconds(1),
-            ..Default::default()
-        };
+        // Assign another event to the same window (base_time + 1s)
+        let event_time2 = base_time + chrono::Duration::seconds(1);
+        let window_actions2 = windower.assign_windows(event_time2);
 
-        let window_msgs2 = windower.assign_windows(msg2.clone());
-
-        // Check operation type and extract window and message
-        match &window_msgs2
+        match window_actions2
             .first()
-            .expect("Expected at least one window message")
-            .operation
+            .expect("Expected at least one window action")
         {
-            AlignedWindowOperation::Append {
-                message: append_msg,
-                window,
-            } => {
-                assert_eq!(append_msg.event_time, msg2.event_time);
+            AlignedWindowAction::Append { window } => {
                 assert_eq!(window.start_time, base_time);
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
             }
             _ => panic!("Expected Append operation"),
         }
+    }
+
+    #[test]
+    fn exact_boundary_opens_the_next_half_open_window() {
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        windower.assign_windows(Utc.timestamp_millis_opt(60_001).unwrap());
+        let actions = windower.assign_windows(Utc.timestamp_millis_opt(120_000).unwrap());
+
+        assert_eq!(
+            actions,
+            vec![AlignedWindowAction::Open {
+                window: Window::new(
+                    Utc.timestamp_millis_opt(120_000).unwrap(),
+                    Utc.timestamp_millis_opt(180_000).unwrap(),
+                ),
+            }]
+        );
+    }
+
+    #[test]
+    fn negative_timestamp_uses_production_truncation() {
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        let actions = windower.assign_windows(Utc.timestamp_millis_opt(-1).unwrap());
+
+        assert_eq!(
+            actions,
+            vec![AlignedWindowAction::Open {
+                window: Window::new(
+                    Utc.timestamp_millis_opt(-60_000).unwrap(),
+                    Utc.timestamp_millis_opt(0).unwrap(),
+                ),
+            }]
+        );
+    }
+
+    #[test]
+    fn close_all_matches_a_terminal_watermark() {
+        let close_all_manager = FixedWindowManager::new(Duration::from_secs(60));
+        let watermark_manager = FixedWindowManager::new(Duration::from_secs(60));
+        for event_ms in [1_000, 61_000, 121_000] {
+            let event_time = Utc.timestamp_millis_opt(event_ms).unwrap();
+            close_all_manager.assign_windows(event_time);
+            watermark_manager.assign_windows(event_time);
+        }
+
+        let close_all = close_all_manager.close_all();
+        let terminal = watermark_manager.close_windows(Utc.timestamp_millis_opt(180_000).unwrap());
+
+        assert_eq!(close_all, terminal);
+        assert_eq!(close_all_manager.active_window_count(), 0);
+        assert_eq!(close_all_manager.closed_window_count(), 3);
     }
 
     #[test]
@@ -311,29 +338,27 @@ mod tests {
         }
 
         // Close windows with watermark at base_time + 120s
-        let closed_msgs = windower.close_windows(base_time + chrono::Duration::seconds(120));
+        let closed_actions = windower.close_windows(base_time + chrono::Duration::seconds(120));
 
         // Should close 2 windows (window1 and window2)
-        assert_eq!(closed_msgs.len(), 2);
+        assert_eq!(closed_actions.len(), 2);
 
-        match &closed_msgs
+        match closed_actions
             .first()
-            .expect("Expected at least one closed message")
-            .operation
+            .expect("Expected at least one closed action")
         {
-            AlignedWindowOperation::Close { window } => {
+            AlignedWindowAction::Close { window } => {
                 assert_eq!(window.start_time, base_time);
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
             }
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed_msgs
+        match closed_actions
             .get(1)
-            .expect("Expected at least two closed messages")
-            .operation
+            .expect("Expected at least two closed actions")
         {
-            AlignedWindowOperation::Close { window } => {
+            AlignedWindowAction::Close { window } => {
                 assert_eq!(window.start_time, base_time + chrono::Duration::seconds(60));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(120));
             }

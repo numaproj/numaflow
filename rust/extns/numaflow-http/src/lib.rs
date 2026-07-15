@@ -16,7 +16,6 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_server::Handle as AxumHandle;
 use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -34,6 +33,8 @@ use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 use tokio_util::sync::CancellationToken;
+
+type AxumHandle = axum_server::Handle<SocketAddr>;
 
 /// Header name for the message ID (lowercase for header lookup)
 const NUMAFLOW_ID_HEADER: &str = "x-numaflow-id";

@@ -1,149 +1,16 @@
 //! Windower is responsible for managing the windows and exposes functions for assigning windows to
 //! messages and closing windows when the watermark has advanced beyond the window end time.
-//! Windows managed by the Windower are purely based on the event-time and is oblivious of the
-//! keys. The multiplexing of windows to keyed windows is done at the Reduce server (SDK).
+//! Window managers live in `numaflow_udf_client`; this module adds core-specific envelopes and
+//! adapters (PNF slots, WAL/GC protobuf mapping).
 
 use crate::message::Message;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
-use chrono::{DateTime, DurationRound, TimeZone, Utc};
-use fixed::FixedWindowManager;
 use numaflow_pb::objects::wal::GcEvent;
-use sliding::SlidingWindowManager;
-use std::cmp::Ordering;
 
-/// Fixed Window Operations.
-pub(crate) mod fixed;
-/// Sliding Window Operations.
-pub(crate) mod sliding;
-
-// Technically we can have a trait for AlignedWindowManager and implement it for Fixed and Sliding, but
-// the generics are getting in all the way from the bootup code. Also, we do not expect any other
-// window types in the future.
-/// AlignedWindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
-#[derive(Debug, Clone)]
-pub(crate) enum AlignedWindowManager {
-    /// Fixed window manager.
-    Fixed(FixedWindowManager),
-    /// Sliding window manager.
-    Sliding(SlidingWindowManager),
-}
-
-impl AlignedWindowManager {
-    /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.assign_windows(msg),
-            AlignedWindowManager::Sliding(manager) => manager.assign_windows(msg),
-        }
-    }
-
-    /// Closes any windows that can be closed because the Watermark has advanced beyond the window
-    /// end time.
-    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.close_windows(watermark),
-            AlignedWindowManager::Sliding(manager) => manager.close_windows(watermark),
-        }
-    }
-
-    /// Deletes a window is called after the window is closed and GC is done.
-    pub(crate) fn gc_window(&self, window: Window) {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.gc_window(window),
-            AlignedWindowManager::Sliding(manager) => manager.gc_window(window),
-        }
-    }
-
-    /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    pub(crate) fn oldest_window(&self) -> Option<Window> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.oldest_window(),
-            AlignedWindowManager::Sliding(manager) => manager.oldest_window(),
-        }
-    }
-
-    /// Returns the number of currently active windows.
-    pub(crate) fn active_window_count(&self) -> usize {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.active_window_count(),
-            AlignedWindowManager::Sliding(manager) => manager.active_window_count(),
-        }
-    }
-
-    /// Returns the number of closed windows awaiting GC.
-    pub(crate) fn closed_window_count(&self) -> usize {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.closed_window_count(),
-            AlignedWindowManager::Sliding(manager) => manager.closed_window_count(),
-        }
-    }
-}
-
-/// A Window is represented by its start and end time. All the data which event time falls within
-/// this window will be reduced by the Reduce function associated with it. The Windows when sorted
-/// are sorted by the end time.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Window {
-    /// Start time of the window.
-    pub(crate) start_time: DateTime<Utc>,
-    /// End time of the window.
-    pub(crate) end_time: DateTime<Utc>,
-}
-
-impl Ord for Window {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Compare based on end time
-        self.end_time.cmp(&other.end_time)
-    }
-}
-
-impl PartialOrd for Window {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl From<Window> for GcEvent {
-    fn from(value: Window) -> Self {
-        Self {
-            start_time: Some(prost_timestamp_from_utc(value.start_time)),
-            end_time: Some(prost_timestamp_from_utc(value.end_time)),
-            keys: vec![],
-        }
-    }
-}
-
-impl From<&Window> for numaflow_pb::objects::wal::Window {
-    fn from(window: &Window) -> Self {
-        Self {
-            start_time: Some(prost_timestamp_from_utc(window.start_time)),
-            end_time: Some(prost_timestamp_from_utc(window.end_time)),
-        }
-    }
-}
-
-impl From<&numaflow_pb::objects::wal::Window> for Window {
-    fn from(proto: &numaflow_pb::objects::wal::Window) -> Self {
-        let start_time = proto.start_time.as_ref().map(|ts| utc_from_timestamp(*ts));
-        let end_time = proto.end_time.as_ref().map(|ts| utc_from_timestamp(*ts));
-
-        Self::new(
-            start_time.expect("start time should be present"),
-            end_time.expect("end time should be present"),
-        )
-    }
-}
-
-impl Window {
-    /// Creates a new Window.
-    pub(crate) fn new(start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> Self {
-        Self {
-            start_time,
-            end_time,
-        }
-    }
-}
+pub(crate) use numaflow_udf_client::{
+    AlignedWindowAction, AlignedWindowManager, FixedWindowManager, SlidingWindowManager, Window,
+};
 
 /// Window operations that can be performed on a [Window]. It is derived from the [Message] and the
 /// window kind.
@@ -152,8 +19,12 @@ pub(crate) enum AlignedWindowOperation {
     /// Open is create a new Window (Open the Book).
     Open { message: Message, window: Window },
     /// Close operation for the [Window] (Close of Book). Only the window on the SDK side will be closed,
-    /// other windows for the same partition can be open.
-    Close { window: Window },
+    /// other windows for the same partition can be open. The window is retained for diagnostics;
+    /// routing uses [`AlignedWindowMessage::pnf_slot`].
+    Close {
+        #[allow(dead_code)]
+        window: Window,
+    },
     /// Append inserts more data into the opened Window.
     Append { message: Message, window: Window },
 }
@@ -178,42 +49,84 @@ pub(crate) fn window_to_pnf_slot(window: &Window) -> Bytes {
     .into()
 }
 
-/// Truncates a timestamp to the nearest multiple of the given duration.
-pub(crate) fn truncate_to_duration(timestamp_millis: i64, duration_millis: i64) -> i64 {
-    // Convert timestamp to DateTime
-    let dt = Utc.timestamp_millis_opt(timestamp_millis).unwrap();
-    // Convert duration_millis to TimeDelta
-    let duration = chrono::TimeDelta::try_milliseconds(duration_millis)
-        .expect("Failed to convert duration to TimeDelta");
-    // Use DurationRound to truncate
-    let truncated = dt
-        .duration_trunc(duration)
-        .expect("Failed to truncate timestamp");
-
-    // Return as milliseconds
-    truncated.timestamp_millis()
+pub(crate) fn gc_event_from_window(window: &Window) -> GcEvent {
+    GcEvent {
+        start_time: Some(prost_timestamp_from_utc(window.start_time)),
+        end_time: Some(prost_timestamp_from_utc(window.end_time)),
+        keys: vec![],
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_truncate_to_duration() {
-        // Test with timestamp 100 and duration 30
-        let result = truncate_to_duration(100, 30);
-        // Expected result: 90
-        // Explanation: 100 milliseconds truncated to the nearest multiple of 30 milliseconds
-        // should be 90 (3 * 30 = 90)
-        assert_eq!(result, 90);
-
-        // Additional test cases for verification
-        assert_eq!(truncate_to_duration(59, 30), 30);
-        assert_eq!(truncate_to_duration(60, 30), 60);
-        assert_eq!(truncate_to_duration(61, 30), 60);
-        assert_eq!(truncate_to_duration(89, 30), 60);
-        assert_eq!(truncate_to_duration(90, 30), 90);
-
-        assert_eq!(truncate_to_duration(810, 70), 770);
+pub(crate) fn wal_window_from_window(window: &Window) -> numaflow_pb::objects::wal::Window {
+    numaflow_pb::objects::wal::Window {
+        start_time: Some(prost_timestamp_from_utc(window.start_time)),
+        end_time: Some(prost_timestamp_from_utc(window.end_time)),
     }
+}
+
+pub(crate) fn window_from_wal_window(proto: &numaflow_pb::objects::wal::Window) -> Window {
+    let start_time = proto
+        .start_time
+        .as_ref()
+        .map(|ts| utc_from_timestamp(*ts))
+        .expect("start time should be present");
+    let end_time = proto
+        .end_time
+        .as_ref()
+        .map(|ts| utc_from_timestamp(*ts))
+        .expect("end time should be present");
+
+    Window::new(start_time, end_time)
+}
+
+/// Converts close actions from the shared window manager into core window envelopes.
+pub(crate) fn window_messages_for_close(
+    actions: Vec<AlignedWindowAction>,
+) -> Vec<AlignedWindowMessage> {
+    actions
+        .into_iter()
+        .filter_map(|action| match action {
+            AlignedWindowAction::Close { window } => Some(AlignedWindowMessage {
+                operation: AlignedWindowOperation::Close {
+                    window: window.clone(),
+                },
+                pnf_slot: window_to_pnf_slot(&window),
+            }),
+            AlignedWindowAction::Open { .. } | AlignedWindowAction::Append { .. } => None,
+        })
+        .collect()
+}
+
+/// Assigns windows for the message event time and attaches the message to Open/Append actions.
+pub(crate) fn window_messages_for_assign(
+    manager: &AlignedWindowManager,
+    msg: Message,
+) -> Vec<AlignedWindowMessage> {
+    let actions = manager.assign_windows(msg.event_time);
+    actions
+        .into_iter()
+        .filter_map(|action| {
+            let (operation, window) = match action {
+                AlignedWindowAction::Open { window } => (
+                    AlignedWindowOperation::Open {
+                        message: msg.clone(),
+                        window: window.clone(),
+                    },
+                    window,
+                ),
+                AlignedWindowAction::Append { window } => (
+                    AlignedWindowOperation::Append {
+                        message: msg.clone(),
+                        window: window.clone(),
+                    },
+                    window,
+                ),
+                AlignedWindowAction::Close { .. } => return None,
+            };
+            Some(AlignedWindowMessage {
+                operation,
+                pnf_slot: window_to_pnf_slot(&window),
+            })
+        })
+        .collect()
 }

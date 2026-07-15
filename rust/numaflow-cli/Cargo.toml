@@ -1,0 +1,37 @@
+[package]
+name = "numaflow-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "nfcli"
+path = "src/main.rs"
+
+[dependencies]
+numaflow-pb.workspace = true
+numaflow-udf-client.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+tokio = { workspace = true, features = ["net", "signal", "io-util"] }
+tokio-stream.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+base64.workspace = true
+tower = { workspace = true, features = ["util"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http2", "tokio"] }
+clap = { version = "4.5", features = ["derive"] }
+humantime = "2.1"
+anyhow = "1.0"
+clap_complete = "4.6.7"
+serde_yaml_ng = "0.10.0"
+futures.workspace = true
+
+[dev-dependencies]
+numaflow.workspace = true
+tempfile = "3"
+
+[lints]
+workspace = true

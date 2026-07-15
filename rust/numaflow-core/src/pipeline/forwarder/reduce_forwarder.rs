@@ -13,9 +13,10 @@ use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
-use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
-use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
-use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+use crate::reduce::reducer::aligned::window_state::SlidingWindowStateStore;
+use crate::reduce::reducer::aligned::windower::{
+    AlignedWindowManager, FixedWindowManager, SlidingWindowManager,
+};
 use crate::reduce::reducer::unaligned::reducer::UnalignedReducer;
 use crate::reduce::reducer::unaligned::windower::UnalignedWindowManager;
 use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
@@ -103,10 +104,11 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     let tracker = Tracker::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
-    let window_manager = match &aligned_config.window_config.window_type {
-        AlignedWindowType::Fixed(fixed_config) => {
-            AlignedWindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
-        }
+    let (window_manager, sliding_state_store) = match &aligned_config.window_config.window_type {
+        AlignedWindowType::Fixed(fixed_config) => (
+            AlignedWindowManager::Fixed(FixedWindowManager::new(fixed_config.length)),
+            None,
+        ),
         AlignedWindowType::Sliding(sliding_config) => {
             // sliding window needs to save state if WAL is configured to avoid duplicate processing
             // since a message can be part of multiple windows.
@@ -119,11 +121,28 @@ pub(crate) async fn start_aligned_reduce_forwarder(
                     None
                 };
 
-            AlignedWindowManager::Sliding(SlidingWindowManager::new(
-                sliding_config.length,
-                sliding_config.slide,
-                state_file_path,
-            ))
+            let store = state_file_path.map(SlidingWindowStateStore::new);
+            let snapshot = match &store {
+                Some(s) => match s.load() {
+                    Ok(snap) => snap,
+                    Err(e) => {
+                        error!(?e, "Failed to load sliding window state");
+                        None
+                    }
+                },
+                None => None,
+            };
+
+            let manager = match snapshot {
+                Some(snap) => SlidingWindowManager::from_snapshot(
+                    sliding_config.length,
+                    sliding_config.slide,
+                    snap,
+                ),
+                None => SlidingWindowManager::new(sliding_config.length, sliding_config.slide),
+            };
+
+            (AlignedWindowManager::Sliding(manager), store)
         }
     };
 
@@ -230,6 +249,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
             reduce_vtx_config.keyed,
+            sliding_state_store,
         )
         .await,
     );
