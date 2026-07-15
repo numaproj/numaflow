@@ -13,6 +13,12 @@
   height: 100%;
 }
 
+.vertex-details-tab-panel-metrics {
+  box-sizing: border-box;
+  padding: 1.6rem;
+  overflow: auto;
+}
+
 .vertex-details-tab.MuiTab-root {
   font-size: 1.4rem !important;
   font-style: normal !important;
