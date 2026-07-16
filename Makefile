@@ -51,7 +51,9 @@ VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
 
-DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+# Cargo profile for the Rust image build. Use "image-dev" for faster local rebuilds (see make image-dev).
+CARGO_PROFILE?=release
+DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)" --build-arg "CARGO_PROFILE=$(CARGO_PROFILE)"
 DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
 
 # Check Python
@@ -176,8 +178,22 @@ ui-build:
 ui-test: ui-build
 	./hack/test-ui.sh
 
+# Optional knobs for `image` / `image-dev` (defaults preserve CI / release behavior).
+SKIP_CLEAN ?= false
+SKIP_UI_BUILD ?= false
+# Force a UI rebuild on image-dev: make image-dev UI_BUILD=true
+UI_BUILD ?= false
+
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
+image:
+ifneq ($(SKIP_CLEAN),true)
+	$(MAKE) clean
+endif
+ifneq ($(SKIP_UI_BUILD),true)
+	$(MAKE) ui-build
+endif
+	# Always rebuild the host Go binary (pattern rule has no source deps; -B forces it).
+	$(MAKE) -B dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
 ifdef GITHUB_ACTIONS
 	# The binary will be built in a separate Github Actions job
 	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
@@ -191,11 +207,28 @@ ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
+# Faster local image build using the slim `image-dev` Cargo profile (still statically linked).
+# Skips `clean` and skips UI when ui/node_modules (and ui/build) already exist.
+# Force UI rebuild: make image-dev UI_BUILD=true
+.PHONY: image-dev
+image-dev:
+	@skip_ui=false; \
+	if [[ "$(UI_BUILD)" != "true" && "$(UI_BUILD)" != "1" && -d ui/node_modules && -d ui/build ]]; then \
+		skip_ui=true; \
+		echo "Skipping ui-build (ui/node_modules present). Force with: make image-dev UI_BUILD=true"; \
+	fi; \
+	$(MAKE) image CARGO_PROFILE=image-dev SKIP_CLEAN=true SKIP_UI_BUILD=$$skip_ui
+
 .PHONY: build-rust-in-docker
 build-rust-in-docker:
 	mkdir -p dist
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target rust-builder -f $(DOCKERFILE) . --load
-	export CTR=$$($(DOCKER) create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) cp $$CTR:/root/entrypoint dist/entrypoint-linux-$(HOST_ARCH)
+	# Export only the thin rust-artifacts stage (two binaries). Do not --load rust-builder
+	# (toolchain + sources + fat binary) or --output the full builder rootfs.
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) \
+		--target rust-artifacts -f $(DOCKERFILE) \
+		--output type=local,dest=dist/rust-out .
+	cp -pv dist/rust-out/numaflow-rs dist/numaflow-rs-linux-$(HOST_ARCH)
+	cp -pv dist/rust-out/entrypoint dist/entrypoint-linux-$(HOST_ARCH)
 
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:

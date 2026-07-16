@@ -1,1 +1,25 @@
+# Rust build artifacts (compiled on host or via BuildKit cache mounts)
 rust/target
+
+# Not used by Dockerfile COPY (only ui/build is needed)
+ui/node_modules
+
+# VCS / docs
+.git
+docs
+
+# Go sources and tooling (Go binary is host-built into dist/)
+pkg
+cmd
+config
+hack
+test
+examples
+vendor
+
+# Markdown and other non-build inputs
+*.md
+
+# Intermediate extract / cargo cache under dist/
+dist/rust-out
+dist/cargo

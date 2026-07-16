@@ -22,10 +22,15 @@ RUN chmod +x /bin/entrypoint
 ####################################################################################################
 # Rust binary
 ####################################################################################################
-FROM lukemathwalker/cargo-chef:latest-rust-1.95 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.97 AS chef
 ARG TARGETPLATFORM
 WORKDIR /numaflow
 RUN apt-get update && apt-get install -y protobuf-compiler cmake clang
+
+# Install the pinned toolchain once; inherited by planner and rust-builder.
+# Kept in chef so source-only changes do not re-download the toolchain.
+COPY rust/rust-toolchain.toml ./rust-toolchain.toml
+RUN rustup show
 
 FROM chef AS planner
 COPY ./rust/ .
@@ -35,15 +40,19 @@ FROM chef AS rust-builder
 
 COPY --from=planner /numaflow/recipe.json recipe.json
 
+# Cargo profile: "release" (default, fat LTO) or "image-dev" (faster local builds).
+ARG CARGO_PROFILE=release
+
 # Build to cache dependencies
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/numaflow/target \
     case ${TARGETPLATFORM} in \
         "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook -p numaflow --profile ${CARGO_PROFILE} --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
@@ -64,18 +73,32 @@ ARG GIT_TREE_STATE
 ENV GIT_TREE_STATE=$GIT_TREE_STATE
 ARG GIT_TAG
 ENV GIT_TAG=$GIT_TAG
+# Re-declare so the value is available after COPY (Docker ARG scope)
+ARG CARGO_PROFILE=release
 
 # Build the real binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/numaflow/target \
     case ${TARGETPLATFORM} in \
         "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
-    cp -pv target/${TARGET}/release/numaflow /root/numaflow && \
-    cp -pv target/${TARGET}/release/entrypoint /root/entrypoint
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build -p numaflow --profile ${CARGO_PROFILE} --target ${TARGET} && \
+    case ${CARGO_PROFILE} in \
+        "dev") OUT_DIR="debug" ;; \
+        *) OUT_DIR="${CARGO_PROFILE}" ;; \
+    esac && \
+    cp -pv target/${TARGET}/${OUT_DIR}/numaflow /root/numaflow && \
+    cp -pv target/${TARGET}/${OUT_DIR}/entrypoint /root/entrypoint
+
+####################################################################################################
+# Thin export of Rust binaries (avoids --load of the full rust-builder image)
+####################################################################################################
+FROM scratch AS rust-artifacts
+COPY --from=rust-builder /root/numaflow /numaflow-rs
+COPY --from=rust-builder /root/entrypoint /entrypoint
 
 ####################################################################################################
 # numaflow

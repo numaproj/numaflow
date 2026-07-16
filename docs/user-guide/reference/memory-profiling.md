@@ -2,22 +2,22 @@
 
 ## Numa container memory profiling
 
-This section explores attaching [bytehound](https://github.com/koute/bytehound) (heap profiler via `LD_PRELOAD`) 
+This section explores attaching [bytehound](https://github.com/koute/bytehound) (heap profiler via `LD_PRELOAD`)
 mem profiler to the numaflow-core process in the **`numa` main container** and captures a `.dat` for analysis offline
 
-The stock numaflow image **cannot** be profiled as-is since the rust binary is built with `-C target-feature=+crt-static` 
-(fully static -> no dynamic loader) and the release image is `FROM scratch` (no `ld.so`/libc). 
+The stock numaflow image **cannot** be profiled as-is since the rust binary is built with `-C target-feature=+crt-static`
+(fully static -> no dynamic loader) and the release image is `FROM scratch` (no `ld.so`/libc).
 Both make `LD_PRELOAD` silently do nothing. We need a *dynamic glibc* binary on a *glibc* base.
 
 ### Prerequisites
 
-- bytehound prebuilt is **x86_64 only** (v0.11.0). Cluster nodes must be x86_64, or build bytehound from source for arm64. 
+- bytehound prebuilt is **x86_64 only** (v0.11.0). Cluster nodes must be x86_64, or build bytehound from source for arm64.
 - kubectl + permission to edit the numaflow controller Deployment (`numaflow-system`).
 - docker/buildx to build & push the numaflow image.
 
 ### Step 1 - Get `libbytehound.so`
 
-Download `bytehound-x86_64-unknown-linux-gnu.tgz` from [link](https://github.com/koute/bytehound/releases) and extract. 
+Download `bytehound-x86_64-unknown-linux-gnu.tgz` from [link](https://github.com/koute/bytehound/releases) and extract.
 We get `libbytehound.so` (goes into the image) and `bytehound` (the CLI/server, run locally to analyze).
 
 ### Step 2 - Build a *profilable* numaflow image
@@ -31,8 +31,8 @@ Edit `numaflow/Dockerfile`:
 
 Edit `numaflow/Makefile`:
 
-- Builder is `lukemathwalker/cargo-chef:latest-rust-1.95` = Debian **trixie** (glibc 2.41). 
-  Make the final `numaflow` stage base glibc **and >= the builder's glibc**. 
+- Builder is `lukemathwalker/cargo-chef:latest-rust-1.97` = Debian **trixie** (glibc 2.41).
+  Make the final `numaflow` stage base glibc **and >= the builder's glibc**.
 - If using `make image` update `DEV_BASE_IMAGE` to `debian:trixie-slim`
 - Otherwise, if using `make image-multi` update `RELEASE_BASE_IMAGE` to `debian:trixie-slim`
 
