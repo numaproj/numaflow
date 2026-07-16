@@ -1672,7 +1672,7 @@ mod tests {
 
         let compactor = Compactor::new(path.clone(), WindowKind::Unaligned, 100, 1000, 300).await?;
 
-        // Cycle 1: `newest_data_micros` (= T0) < S ⇒ the gate must not fire; `g` is retained.
+        // Cycle 1: `newest_data_micros` (= T0) < S => the gate must not fire; `g` is retained.
         compactor.compact(None, true).await?;
         assert_eq!(
             count_segment_files(&path, "gc", "frozen"),
@@ -1689,7 +1689,7 @@ mod tests {
         .await?;
         write_raw_segment_file(&path.join(format!("data_1_{T1}.wal")), &[]);
 
-        // Cycle 2: `newest_data_micros` (= T1) > S ⇒ the tail (now frozen) is scanned and
+        // Cycle 2: `newest_data_micros` (= T1) > S => the tail (now frozen) is scanned and
         // correctly dropped (matched via `g`, still present in `oldest_time_map`), and only then
         // is `g` finally safe to delete.
         compactor.compact(None, true).await?;
