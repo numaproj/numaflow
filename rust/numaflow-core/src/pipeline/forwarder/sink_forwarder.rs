@@ -709,17 +709,14 @@ mod simple_buffer_tests {
 
         // Create a blackhole sink writer
         use crate::sinker::sink::SinkClientType;
-        let SinkTestHandle {
-            sink_writer,
-            ud_sink_server_handle: _,
-            ..
-        } = SinkTestHandle::create_sink::<crate::sinker::test_utils::NoOpSink>(
-            TestSinkType::BuiltIn(SinkClientType::Blackhole),
-            None,
-            None,
-            batch_size,
-        )
-        .await;
+        let SinkTestHandle { sink_writer, .. } =
+            SinkTestHandle::create_sink::<crate::sinker::test_utils::NoOpSink>(
+                TestSinkType::BuiltIn(SinkClientType::Blackhole),
+                None,
+                None,
+                batch_size,
+            )
+            .await;
 
         // ISB Reader Orchestrator
         let input_stream = Stream::new("bh-sink-input-buffer", "test-in", 0);

@@ -142,7 +142,7 @@ impl BufferState {
                 // FIXME: this does not look very efficient since we will be calling reclaim_acked
                 //   very often.
                 // Update indices for remaining slots
-                for (_, idx) in self.offset_to_index.iter_mut() {
+                for idx in self.offset_to_index.values_mut() {
                     if *idx > 0 {
                         *idx -= 1;
                     }

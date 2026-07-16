@@ -313,12 +313,20 @@ lint: $(GOPATH)/bin/golangci-lint
 	$(GOPATH)/bin/golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 	cd rust && cargo fmt -- --check || (echo "Run 'cd rust && cargo fmt' to fix formatting issues" && exit 1)
 
+# Image target used by `start`. Default `image` preserves CI/release behavior.
+# Local fast path: make start IMAGE_TARGET=image-dev  (or: make start-dev)
+IMAGE_TARGET ?= image
+
 .PHONY: start
-start: image
+start: $(IMAGE_TARGET)
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl -n numaflow-system delete cm numaflow-cmd-params-config --ignore-not-found=true
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait deployment -lapp.kubernetes.io/part-of=numaflow --for=condition=Available --timeout 60s
+
+.PHONY: start-dev
+start-dev:
+	$(MAKE) start IMAGE_TARGET=image-dev
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
