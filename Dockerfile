@@ -85,7 +85,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp -pv target/release/libbytehound.so /libbytehound.so
 
 ####################################################################################################
-# numaflow
+# numaflow (local / image-dev — Rust from rust-builder)
 ####################################################################################################
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS numaflow
@@ -99,6 +99,29 @@ COPY ui/build /ui/build
 
 # TODO: remove this when we are ported everything to Rust
 COPY --from=rust-builder /root/entrypoint /bin/entrypoint
+ENTRYPOINT ["/bin/entrypoint"]
+
+####################################################################################################
+# numaflow-ci (GitHub Actions — host-built Rust binaries from dist/, skips rust-builder)
+####################################################################################################
+FROM base AS base-ci
+ARG ARCH
+COPY dist/numaflow-rs-linux-${ARCH} /bin/numaflow-rs
+COPY dist/entrypoint-linux-${ARCH} /bin/entrypoint
+RUN chmod +x /bin/numaflow-rs /bin/entrypoint
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS numaflow-ci
+ARG ARCH
+
+COPY --from=base-ci /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=base-ci /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=base-ci /bin/numaflow /bin/numaflow
+COPY --from=base-ci /bin/numaflow-rs /bin/numaflow-rs
+COPY ui/build /ui/build
+
+# TODO: remove this when we are ported everything to Rust
+COPY --from=base-ci /bin/entrypoint /bin/entrypoint
 ENTRYPOINT ["/bin/entrypoint"]
 
 ####################################################################################################

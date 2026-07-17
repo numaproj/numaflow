@@ -196,9 +196,17 @@ ifneq ($(SKIP_UI_BUILD),true)
 	$(MAKE) ui-build
 endif
 	# Always rebuild the host Go binary (pattern rule has no source deps; -B forces it).
-	# Rust is built inside the Dockerfile rust-builder stage (single docker build).
 	$(MAKE) -B dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
+ifdef GITHUB_ACTIONS
+	# Rust is built in a separate job (build-rust-amd64); package only — skip rust-builder.
+	mkdir -p dist
+	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
+	cp -pv entrypoint-linux-amd64 dist/entrypoint-linux-amd64
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME)-ci -f $(DOCKERFILE) .
+else
+	# Local: Rust is built inside the Dockerfile rust-builder stage (single docker build).
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+endif
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
@@ -249,9 +257,13 @@ build-rust-docker-ghactions:
 	mkdir -p dist
 	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
 
-# Rust is built per-platform in the Dockerfile rust-builder stage.
+# CI: prebuilt Rust binaries are already in dist/ (download-artifact). Local: rust-builder in Docker.
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+ifdef GITHUB_ACTIONS
+	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME)-ci --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+else
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+endif
 
 set-qemu:
 	$(DOCKER) pull tonistiigi/binfmt:latest
