@@ -15,7 +15,7 @@ endif
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=debian:bookworm
+DEV_BASE_IMAGE:=debian:trixie-slim
 RELEASE_BASE_IMAGE:=scratch
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')

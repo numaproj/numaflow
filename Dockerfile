@@ -22,42 +22,20 @@ RUN chmod +x /bin/entrypoint
 ####################################################################################################
 # Rust binary
 ####################################################################################################
-FROM lukemathwalker/cargo-chef:latest-rust-1.97 AS chef
+# Dependency reuse relies on BuildKit cache mounts below (not cargo-chef layer caching).
+FROM rust:1.97.1-trixie AS rust-builder
 ARG TARGETPLATFORM
 WORKDIR /numaflow
-RUN apt-get update && apt-get install -y protobuf-compiler cmake clang
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler cmake clang \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install the pinned toolchain once; inherited by planner and rust-builder.
-# Kept in chef so source-only changes do not re-download the toolchain.
+# Install the pinned toolchain so source-only changes do not re-download it.
 COPY rust/rust-toolchain.toml ./rust-toolchain.toml
 RUN rustup show
 
-FROM chef AS planner
-COPY ./rust/ .
-RUN cargo chef prepare --recipe-path recipe.json
-
-FROM chef AS rust-builder
-
-COPY --from=planner /numaflow/recipe.json recipe.json
-
-# Cargo profile: "release" (default, fat LTO) or "image-dev" (faster local builds).
-ARG CARGO_PROFILE=release
-
-# Build to cache dependencies
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/numaflow/target \
-    case ${TARGETPLATFORM} in \
-        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
-        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
-    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
-    esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook -p numaflow --profile ${CARGO_PROFILE} --target ${TARGET} --recipe-path recipe.json
-
-# Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
 
-ARG TARGETPLATFORM
 ARG ARCH
 ARG VERSION=latest
 ENV VERSION=$VERSION
@@ -71,12 +49,9 @@ ARG GIT_TAG
 ENV GIT_TAG=$GIT_TAG
 ARG GIT_TREE_STATE
 ENV GIT_TREE_STATE=$GIT_TREE_STATE
-ARG GIT_TAG
-ENV GIT_TAG=$GIT_TAG
-# Re-declare so the value is available after COPY (Docker ARG scope)
+# Cargo profile: "release" (default, fat LTO) or "image-dev" (faster local builds).
 ARG CARGO_PROFILE=release
 
-# Build the real binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/numaflow/target \

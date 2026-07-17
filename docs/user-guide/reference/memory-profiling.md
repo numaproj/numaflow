@@ -24,17 +24,19 @@ We get `libbytehound.so` (goes into the image) and `bytehound` (the CLI/server, 
 
 Edit `numaflow/Dockerfile`:
 
-- Remove `-C target-feature=+crt-static` from **both** `RUSTFLAGS='...'` lines (the `cargo chef cook`
-  line and the `cargo build` line) -> dynamic glibc binary.
+- Remove `-C target-feature=+crt-static` from the `RUSTFLAGS='...'` line on the `cargo build`
+  in the `rust-builder` stage -> dynamic glibc binary.
 - Add `COPY libbytehound.so /usr/share/libbytehound.so` into the final `numaflow` stage (drop
   `libbytehound.so` at the build context root first). Use the same path for `LD_PRELOAD` in Step 4.
 
 Edit `numaflow/Makefile`:
 
-- Builder is `lukemathwalker/cargo-chef:latest-rust-1.97` = Debian **trixie** (glibc 2.41).
+- Builder is `rust:1.97.1-trixie` = Debian **trixie** (glibc 2.41).
+
   Make the final `numaflow` stage base glibc **and >= the builder's glibc**.
 - If using `make image` update `DEV_BASE_IMAGE` to `debian:trixie-slim`
 - Otherwise, if using `make image-multi` update `RELEASE_BASE_IMAGE` to `debian:trixie-slim`
+
 
 
 Verify it's dynamic (in the rust-builder stage or a throwaway container):
