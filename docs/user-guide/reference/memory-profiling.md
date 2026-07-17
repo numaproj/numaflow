@@ -3,62 +3,63 @@
 ## Numa container memory profiling
 
 This section explores attaching [bytehound](https://github.com/koute/bytehound) (heap profiler via `LD_PRELOAD`)
-mem profiler to the numaflow-core process in the **`numa` main container** and captures a `.dat` for analysis offline
+mem profiler to the numaflow-core process in the **`numa` main container** and captures a `.dat` for analysis offline.
 
-The stock numaflow image **cannot** be profiled as-is since the rust binary is built with `-C target-feature=+crt-static`
+The stock numaflow image **cannot** be profiled as-is since the Rust binary is built with `-C target-feature=+crt-static`
 (fully static -> no dynamic loader) and the release image is `FROM scratch` (no `ld.so`/libc).
 Both make `LD_PRELOAD` silently do nothing. We need a *dynamic glibc* binary on a *glibc* base.
 
+Use `make image-memprofile` for that: it builds a dynamically linked `numaflow-rs`, compiles
+`libbytehound.so` from source (amd64 and arm64), and packages them on `debian:trixie-slim`.
+
 ### Prerequisites
 
-- bytehound prebuilt is **x86_64 only** (v0.11.0). Cluster nodes must be x86_64, or build bytehound from source for arm64.
 - kubectl + permission to edit the numaflow controller Deployment (`numaflow-system`).
-- docker/buildx to build & push the numaflow image.
+- Docker (BuildKit) to build & push a single-arch image locally, **or** use the
+  [`memprofile-image`](https://github.com/numaproj/numaflow/actions/workflows/memprofile-image.yml)
+  GitHub Actions workflow for a multi-arch image.
 
-### Step 1 - Get `libbytehound.so`
+### Step 1 - Build a *profilable* numaflow image
 
-Download `bytehound-x86_64-unknown-linux-gnu.tgz` from [link](https://github.com/koute/bytehound/releases) and extract.
-We get `libbytehound.so` (goes into the image) and `bytehound` (the CLI/server, run locally to analyze).
-
-### Step 2 - Build a *profilable* numaflow image
-
-Edit `numaflow/Dockerfile`:
-
-- Remove `-C target-feature=+crt-static` from the `RUSTFLAGS='...'` line on the `cargo build`
-  in the `rust-builder` stage -> dynamic glibc binary.
-- Add `COPY libbytehound.so /usr/share/libbytehound.so` into the final `numaflow` stage (drop
-  `libbytehound.so` at the build context root first). Use the same path for `LD_PRELOAD` in Step 4.
-
-Edit `numaflow/Makefile`:
-
-- Builder is `rust:1.97.1-trixie` = Debian **trixie** (glibc 2.41).
-
-  Make the final `numaflow` stage base glibc **and >= the builder's glibc**.
-- If using `make image` update `DEV_BASE_IMAGE` to `debian:trixie-slim`
-- Otherwise, if using `make image-multi` update `RELEASE_BASE_IMAGE` to `debian:trixie-slim`
-
-
-
-Verify it's dynamic (in the rust-builder stage or a throwaway container):
+**Local:**
 
 ```bash
-ldd /bin/numaflow-rs      # must list libc.so.6, NOT "not a dynamic executable"
+# Default tag: <IMAGE_NAMESPACE>/numaflow:<VERSION>-memprofile
+make image-memprofile
+
+# Faster local rebuilds (image-dev Cargo profile) + skip clean/UI when already built:
+make image-memprofile CARGO_PROFILE=image-dev SKIP_CLEAN=true SKIP_UI_BUILD=true
+
+# Custom tag / push:
+make image-memprofile MEMPROFILE_IMAGE_TAG=my-tag DOCKER_PUSH=true IMAGE_NAMESPACE=<your-registry>
 ```
 
-### Step 3 - Point the controller at the profiling image
+**CI (multi-arch):** run the `memprofile-image` workflow (`workflow_dispatch`) with the branch to build.
+It publishes `quay.io/<org>/numaflow:<branch>-<sha7>-memprofile` (amd64 + arm64 manifest).
+
+Verify the image is dynamic and includes bytehound:
+
+```bash
+docker run --rm --entrypoint /bin/sh <IMAGE_NAMESPACE>/numaflow:<tag> -c '
+  ldd /bin/numaflow-rs | grep libc   # must list libc.so.6, NOT "not a dynamic executable"
+  test -f /usr/share/libbytehound.so
+'
+```
+
+### Step 2 - Point the controller at the profiling image
 
 ```bash
 kubectl -n <numaflow-ns> set env deploy/<controller> NUMAFLOW_IMAGE=<your-registry>/<img>:<tag>
 kubectl -n <numaflow-ns> rollout restart deploy/<controller>
 ```
 
-### Step 4 - Pipeline spec: profiling env on the reduce vertex
+### Step 3 - Pipeline spec: profiling env on the reduce vertex
 
 ```yaml
   - name: <vertex-name>
     containerTemplate:
       env:
-        - { name: LD_PRELOAD, value: /usr/share/libbytehound.so }            # match Step 2 path
+        - { name: LD_PRELOAD, value: /usr/share/libbytehound.so }
         - { name: MEMORY_PROFILER_TRACK_CHILD_PROCESSES, value: "1" }        # REQUIRED (see note)
         - { name: MEMORY_PROFILER_OUTPUT, value: /var/numaflow/pbq/memory-profiling_%e_%t_%p.dat }
         - { name: MEMORY_PROFILER_LOG, value: info }
@@ -73,7 +74,7 @@ Then `kubectl apply -f <pipeline>.yaml && kubectl delete pod <accum-pod>`.
 `LD_PRELOAD` during its own init in `entrypoint` (to avoid following children), so the exec'd
 `numaflow-rs` starts **unprofiled**. Setting `1` keeps `LD_PRELOAD` across the exec.
 
-### Step 5 - Verify bytehound is attached
+### Step 4 - Verify bytehound is attached
 
 ```bash
 kubectl exec <accum-pod> -c numa -- env LD_PRELOAD= sh -c '
@@ -84,7 +85,7 @@ kubectl exec <accum-pod> -c numa -- env LD_PRELOAD= sh -c '
 
 `env LD_PRELOAD=` clears the var for *your* shell/commands only.
 
-### Step 6 - Collect the `.dat` (do NOT use `kubectl cp`)
+### Step 5 - Collect the `.dat` (do NOT use `kubectl cp`)
 
 `kubectl cp` runs `tar` *inside* the pod; under `TRACK_CHILD_PROCESSES=1` bytehound injects into that
 `tar` and it **SIGSEGVs**. Stream it out with `LD_PRELOAD` cleared:
@@ -96,7 +97,10 @@ kubectl exec <accum-pod> -c numa -- \
 kubectl exec <accum-pod> -c numa -- env LD_PRELOAD= kill -USR1 1
 ```
 
-### Step 7 - Analyze
+### Step 6 - Analyze
+
+Download the `bytehound` CLI from the [bytehound releases](https://github.com/koute/bytehound/releases)
+(prebuilt is x86_64; the image itself already embeds an arch-matched `libbytehound.so` built from source).
 
 ```bash
 ./bytehound server memory-profiling_numaflow-rs_<t>_1.dat   # -> http://localhost:8080
