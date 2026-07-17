@@ -66,7 +66,7 @@ where
 
     // Start the metrics server, which serves the prometheus metrics.
     let metrics_addr: SocketAddr =
-        format!("0.0.0.0:{}", &app.settings.metrics_server_listen_port).parse()?;
+        format!("0.0.0.0:{}", app.settings.metrics_server_listen_port).parse()?;
 
     let metrics_server_handle = tokio::spawn(start_https_metrics_server(
         metrics_addr,

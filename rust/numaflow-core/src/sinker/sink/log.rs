@@ -14,7 +14,7 @@ impl Sink for LogSink {
 
             let log_line = format!(
                 "Payload - {} Keys - {} EventTime - {} Headers - {} ID - {}",
-                &String::from_utf8_lossy(&msg.value),
+                String::from_utf8_lossy(&msg.value),
                 msg.keys.join(","),
                 msg.event_time.timestamp_millis(),
                 headers,

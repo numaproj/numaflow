@@ -54,13 +54,12 @@ verbose_file_reads = "warn"
 [profile.release]
 lto = "fat"
 
-# This profile optimizes for short build times at the expense of larger binary size and slower runtime performance.
-# If you have to rebuild image often, in Dockerfile you may replace `--release` passed to cargo command with `--profile quick-release`
-[profile.quick-release]
-inherits = "release"
-codegen-units = 16
-lto = false
-incremental = true
+# Fast local image builds (`make image-dev`): keep quick compiles from `dev`, but shrink the
+# binary so Docker export/copy is not dominated by a ~682 MB unstripped debug artifact.
+[profile.image-dev]
+inherits = "dev"
+debug = 0
+strip = "symbols"
 
 [workspace.dependencies]
 serving = { path = "serving" }

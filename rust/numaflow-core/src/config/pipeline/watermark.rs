@@ -53,7 +53,7 @@ impl WatermarkConfig {
             ot_bucket: Box::leak(
                 format!(
                     "{}-{}-{}-{}_OT",
-                    namespace, pipeline_name, vertex_name, &to.name
+                    namespace, pipeline_name, vertex_name, to.name
                 )
                 .into_boxed_str(),
             ),
@@ -68,7 +68,7 @@ impl WatermarkConfig {
                 ot_bucket: Box::leak(
                     format!(
                         "{}-{}-{}-{}_OT",
-                        namespace, pipeline_name, &from.name, vertex_name
+                        namespace, pipeline_name, from.name, vertex_name
                     )
                     .into_boxed_str(),
                 ),
