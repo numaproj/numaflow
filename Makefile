@@ -15,7 +15,7 @@ endif
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=debian:bookworm
+DEV_BASE_IMAGE:=debian:trixie-slim
 RELEASE_BASE_IMAGE:=scratch
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -51,8 +51,13 @@ VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
 
-DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+# Cargo profile for the Rust image build. Use "image-dev" for faster local rebuilds (see make image-dev).
+CARGO_PROFILE?=release
+DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)" --build-arg "CARGO_PROFILE=$(CARGO_PROFILE)"
 DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+# Tag for memory-profiling image builds (single-arch; see make image-memprofile).
+MEMPROFILE_IMAGE_TAG?=$(VERSION)-memprofile
+BYTEHOUND_REF?=0.11.0
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)
@@ -176,53 +181,89 @@ ui-build:
 ui-test: ui-build
 	./hack/test-ui.sh
 
+# Optional knobs for `image` / `image-dev` (defaults preserve CI / release behavior).
+SKIP_CLEAN ?= false
+SKIP_UI_BUILD ?= false
+# Force a UI rebuild on image-dev: make image-dev UI_BUILD=true
+UI_BUILD ?= false
+
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
+image:
+ifneq ($(SKIP_CLEAN),true)
+	$(MAKE) clean
+endif
+ifneq ($(SKIP_UI_BUILD),true)
+	$(MAKE) ui-build
+endif
+	# Always rebuild the host Go binary (pattern rule has no source deps; -B forces it).
+	$(MAKE) -B dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
 ifdef GITHUB_ACTIONS
-	# The binary will be built in a separate Github Actions job
+	# Rust is built in a separate job (build-rust-amd64); package only — skip rust-builder.
+	mkdir -p dist
 	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
 	cp -pv entrypoint-linux-amd64 dist/entrypoint-linux-amd64
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME)-ci -f $(DOCKERFILE) .
 else
-	$(MAKE) build-rust-in-docker
-endif
+	# Local: Rust is built inside the Dockerfile rust-builder stage (single docker build).
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+endif
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
-.PHONY: build-rust-in-docker
-build-rust-in-docker:
-	mkdir -p dist
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target rust-builder -f $(DOCKERFILE) . --load
-	export CTR=$$($(DOCKER) create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) cp $$CTR:/root/entrypoint dist/entrypoint-linux-$(HOST_ARCH)
+# Faster local image build using the slim `image-dev` Cargo profile (still statically linked).
+# Skips `clean` and skips UI when ui/node_modules (and ui/build) already exist.
+# Force UI rebuild: make image-dev UI_BUILD=true
+.PHONY: image-dev
+image-dev:
+	@skip_ui=false; \
+	if [[ "$(UI_BUILD)" != "true" && "$(UI_BUILD)" != "1" && -d ui/node_modules && -d ui/build ]]; then \
+		skip_ui=true; \
+		echo "Skipping ui-build (ui/node_modules present). Force with: make image-dev UI_BUILD=true"; \
+	fi; \
+	$(MAKE) image CARGO_PROFILE=image-dev SKIP_CLEAN=true SKIP_UI_BUILD=$$skip_ui
 
-.PHONY: build-rust-in-docker-multi
-build-rust-in-docker-multi:
-	mkdir -p dist
-	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
-	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
-	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
-	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
-	cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-amd64
-
-# Set Rust target triplet based on host architecture
-RUST_TARGET_TRIPLET := x86_64-unknown-linux-gnu
-ifeq ($(HOST_ARCH),arm64)
-	RUST_TARGET_TRIPLET := aarch64-unknown-linux-gnu
+# Single-arch memory-profiling image (dynamic glibc + libbytehound.so).
+# Native only — do not use buildx/QEMU (rdkafka). For multi-arch, build per-arch on
+# native runners and join with docker buildx imagetools (see memprofile-image workflow).
+# Override tag: make image-memprofile MEMPROFILE_IMAGE_TAG=my-tag
+# CI: pass SKIP_CLEAN=true and pre-populate dist/numaflow-linux-$(HOST_ARCH).
+.PHONY: image-memprofile
+image-memprofile:
+ifneq ($(SKIP_CLEAN),true)
+	$(MAKE) clean
 endif
-
+ifneq ($(SKIP_UI_BUILD),true)
+	$(MAKE) ui-build
+endif
+	@if [[ ! -f dist/$(BINARY_NAME)-linux-$(HOST_ARCH) ]]; then \
+		$(MAKE) dist/$(BINARY_NAME)-linux-$(HOST_ARCH); \
+	fi
+	DOCKER_BUILDKIT=1 $(DOCKER) build \
+		--build-arg "ENABLE_MEMORY_PROFILING=true" \
+		--build-arg "BYTEHOUND_REF=$(BYTEHOUND_REF)" \
+		$(DOCKER_BUILD_ARGS) \
+		-t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG) \
+		--target $(BINARY_NAME)-memprofile \
+		-f $(DOCKERFILE) .
+	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG); fi
+ifdef IMAGE_IMPORT_CMD
+	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG)
+endif
 
 .PHONY: build-rust-docker-ghactions
 build-rust-docker-ghactions:
 	mkdir -p dist
 	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
 
+# CI: prebuilt Rust binaries are already in dist/ (download-artifact). Local: rust-builder in Docker.
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
-ifndef GITHUB_ACTIONS
-	$(MAKE) build-rust-in-docker-multi
-endif
+ifdef GITHUB_ACTIONS
+	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME)-ci --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+else
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+endif
 
 set-qemu:
 	$(DOCKER) pull tonistiigi/binfmt:latest
@@ -280,12 +321,20 @@ lint: $(GOPATH)/bin/golangci-lint
 	$(GOPATH)/bin/golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 	cd rust && cargo fmt -- --check || (echo "Run 'cd rust && cargo fmt' to fix formatting issues" && exit 1)
 
+# Image target used by `start`. Default `image` preserves CI/release behavior.
+# Local fast path: make start IMAGE_TARGET=image-dev  (or: make start-dev)
+IMAGE_TARGET ?= image
+
 .PHONY: start
-start: image
+start: $(IMAGE_TARGET)
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl -n numaflow-system delete cm numaflow-cmd-params-config --ignore-not-found=true
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait deployment -lapp.kubernetes.io/part-of=numaflow --for=condition=Available --timeout 60s
+
+.PHONY: start-dev
+start-dev:
+	$(MAKE) start IMAGE_TARGET=image-dev
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
