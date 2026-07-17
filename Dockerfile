@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=scratch
 ARG ARCH=$TARGETARCH
 ####################################################################################################
-# base
+# base (host-built Go binary + CA/tz data)
 ####################################################################################################
 FROM alpine:3.17 AS base
 ARG ARCH
@@ -10,14 +10,7 @@ RUN apk update && apk upgrade && \
     apk --no-cache add tzdata
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
-COPY dist/numaflow-rs-linux-${ARCH} /bin/numaflow-rs
-
 RUN chmod +x /bin/numaflow
-RUN chmod +x /bin/numaflow-rs
-
-# TODO: remove this when we are ported everything to Rust
-COPY dist/entrypoint-linux-${ARCH} /bin/entrypoint
-RUN chmod +x /bin/entrypoint
 
 ####################################################################################################
 # Rust binary
@@ -69,13 +62,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp -pv target/${TARGET}/${OUT_DIR}/entrypoint /root/entrypoint
 
 ####################################################################################################
-# Thin export of Rust binaries (avoids --load of the full rust-builder image)
-####################################################################################################
-FROM scratch AS rust-artifacts
-COPY --from=rust-builder /root/numaflow /numaflow-rs
-COPY --from=rust-builder /root/entrypoint /entrypoint
-
-####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
@@ -85,11 +71,11 @@ ARG ARCH
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
-COPY --from=base /bin/numaflow-rs /bin/numaflow-rs
+COPY --from=rust-builder /root/numaflow /bin/numaflow-rs
 COPY ui/build /ui/build
 
 # TODO: remove this when we are ported everything to Rust
-COPY --from=base /bin/entrypoint /bin/entrypoint
+COPY --from=rust-builder /root/entrypoint /bin/entrypoint
 ENTRYPOINT ["/bin/entrypoint"]
 
 ####################################################################################################

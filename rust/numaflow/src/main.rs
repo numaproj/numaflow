@@ -22,6 +22,8 @@ fn main() -> std::process::ExitCode {
         .install_default()
         .expect("Installing default CryptoProvider");
 
+    println!("Some changes");
+
     // Tokio runtime automatically spins up N number of worker threads based on the available cpu cores.
     // In a k8s environment, this value is calculated based on the `resources.limits.cpu` value. If it is not set,
     // the worker thread count will be equivalent to the logical cores available on the host node.

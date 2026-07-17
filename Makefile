@@ -193,14 +193,8 @@ ifneq ($(SKIP_UI_BUILD),true)
 	$(MAKE) ui-build
 endif
 	# Always rebuild the host Go binary (pattern rule has no source deps; -B forces it).
+	# Rust is built inside the Dockerfile rust-builder stage (single docker build).
 	$(MAKE) -B dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
-ifdef GITHUB_ACTIONS
-	# The binary will be built in a separate Github Actions job
-	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
-	cp -pv entrypoint-linux-amd64 dist/entrypoint-linux-amd64
-else
-	$(MAKE) build-rust-in-docker
-endif
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
@@ -219,42 +213,13 @@ image-dev:
 	fi; \
 	$(MAKE) image CARGO_PROFILE=image-dev SKIP_CLEAN=true SKIP_UI_BUILD=$$skip_ui
 
-.PHONY: build-rust-in-docker
-build-rust-in-docker:
-	mkdir -p dist
-	# Export only the thin rust-artifacts stage (two binaries). Do not --load rust-builder
-	# (toolchain + sources + fat binary) or --output the full builder rootfs.
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) \
-		--target rust-artifacts -f $(DOCKERFILE) \
-		--output type=local,dest=dist/rust-out .
-	cp -pv dist/rust-out/numaflow-rs dist/numaflow-rs-linux-$(HOST_ARCH)
-	cp -pv dist/rust-out/entrypoint dist/entrypoint-linux-$(HOST_ARCH)
-
-.PHONY: build-rust-in-docker-multi
-build-rust-in-docker-multi:
-	mkdir -p dist
-	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
-	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
-	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
-	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
-	cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-amd64
-
-# Set Rust target triplet based on host architecture
-RUST_TARGET_TRIPLET := x86_64-unknown-linux-gnu
-ifeq ($(HOST_ARCH),arm64)
-	RUST_TARGET_TRIPLET := aarch64-unknown-linux-gnu
-endif
-
-
 .PHONY: build-rust-docker-ghactions
 build-rust-docker-ghactions:
 	mkdir -p dist
 	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
 
+# Rust is built per-platform in the Dockerfile rust-builder stage.
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
-ifndef GITHUB_ACTIONS
-	$(MAKE) build-rust-in-docker-multi
-endif
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
 
 set-qemu:

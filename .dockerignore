@@ -19,7 +19,3 @@ vendor
 
 # Markdown and other non-build inputs
 *.md
-
-# Intermediate extract / cargo cache under dist/
-dist/rust-out
-dist/cargo
