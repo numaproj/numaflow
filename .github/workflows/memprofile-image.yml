@@ -10,6 +10,7 @@ on:
         description: "Git branch to build"
         required: true
         default: "main"
+  pull_request:
 
 permissions:
   contents: read
@@ -30,13 +31,15 @@ jobs:
       - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.branch || github.head_ref || github.ref_name }}
 
       - name: Compute short tag from branch + commit
         id: tag
+        env:
+          BRANCH_NAME: ${{ inputs.branch || github.head_ref || github.ref_name }}
         run: |
           # Sanitize branch for Docker tags: lowercase, / -> -, drop other invalid chars, cap length.
-          BRANCH=$(echo "${{ inputs.branch }}" \
+          BRANCH=$(echo "${BRANCH_NAME}" \
             | tr '[:upper:]' '[:lower:]' \
             | sed 's|/|-|g; s/[^a-z0-9._-]/-/g; s/--*/-/g; s/^-//; s/-$//' \
             | cut -c1-50)
@@ -44,7 +47,7 @@ jobs:
           TAG="${BRANCH}-${SHA}-memprofile"
           echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Building branch=${{ inputs.branch }} sha=${SHA} tag=${TAG}"
+          echo "Building branch=${BRANCH_NAME} sha=${SHA} tag=${TAG}"
 
   build-go-binaries:
     name: Build Go binaries
@@ -55,7 +58,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.branch || github.head_ref || github.ref_name }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -91,7 +94,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.branch || github.head_ref || github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
