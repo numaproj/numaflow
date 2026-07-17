@@ -16,8 +16,10 @@ RUN chmod +x /bin/numaflow
 # Rust binary
 ####################################################################################################
 # Dependency reuse relies on BuildKit cache mounts below (not cargo-chef layer caching).
+# ENABLE_MEMORY_PROFILING=true builds a dynamically linked glibc binary (required for LD_PRELOAD).
 FROM rust:1.97.1-trixie AS rust-builder
 ARG TARGETPLATFORM
+ARG ENABLE_MEMORY_PROFILING=false
 WORKDIR /numaflow
 RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler cmake clang \
@@ -53,13 +55,34 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build -p numaflow --profile ${CARGO_PROFILE} --target ${TARGET} && \
+    if [ "${ENABLE_MEMORY_PROFILING}" = "true" ]; then \
+        RUSTFLAGS_VAL=""; \
+    else \
+        RUSTFLAGS_VAL="-C target-feature=+crt-static"; \
+    fi && \
+    RUSTFLAGS="${RUSTFLAGS_VAL}" cargo build -p numaflow --profile ${CARGO_PROFILE} --target ${TARGET} && \
     case ${CARGO_PROFILE} in \
         "dev") OUT_DIR="debug" ;; \
         *) OUT_DIR="${CARGO_PROFILE}" ;; \
     esac && \
     cp -pv target/${TARGET}/${OUT_DIR}/numaflow /root/numaflow && \
     cp -pv target/${TARGET}/${OUT_DIR}/entrypoint /root/entrypoint
+
+####################################################################################################
+# bytehound (libbytehound.so) — built from source for amd64 and arm64
+####################################################################################################
+FROM rust:1.97.1-trixie AS bytehound-builder
+ARG BYTEHOUND_REF=0.11.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates build-essential pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+# Clone first so cargo picks up bytehound's rust-toolchain (pinned nightly).
+RUN git clone --depth 1 --branch "${BYTEHOUND_REF}" https://github.com/koute/bytehound.git .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo build --release -p bytehound-preload \
+    && cp -pv target/release/libbytehound.so /libbytehound.so
 
 ####################################################################################################
 # numaflow
@@ -76,6 +99,23 @@ COPY ui/build /ui/build
 
 # TODO: remove this when we are ported everything to Rust
 COPY --from=rust-builder /root/entrypoint /bin/entrypoint
+ENTRYPOINT ["/bin/entrypoint"]
+
+####################################################################################################
+# numaflow-memprofile (dynamic glibc + libbytehound.so for LD_PRELOAD profiling)
+# Build with: --target numaflow-memprofile --build-arg ENABLE_MEMORY_PROFILING=true
+####################################################################################################
+FROM debian:trixie-slim AS numaflow-memprofile
+ARG ARCH
+
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=base /bin/numaflow /bin/numaflow
+COPY --from=rust-builder /root/numaflow /bin/numaflow-rs
+COPY --from=rust-builder /root/entrypoint /bin/entrypoint
+COPY --from=bytehound-builder /libbytehound.so /usr/share/libbytehound.so
+COPY ui/build /ui/build
+
 ENTRYPOINT ["/bin/entrypoint"]
 
 ####################################################################################################

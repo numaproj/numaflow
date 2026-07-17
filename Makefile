@@ -55,6 +55,9 @@ endif
 CARGO_PROFILE?=release
 DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)" --build-arg "CARGO_PROFILE=$(CARGO_PROFILE)"
 DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+# Tag for memory-profiling image builds (single-arch; see make image-memprofile).
+MEMPROFILE_IMAGE_TAG?=$(VERSION)-memprofile
+BYTEHOUND_REF?=0.11.0
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)
@@ -212,6 +215,34 @@ image-dev:
 		echo "Skipping ui-build (ui/node_modules present). Force with: make image-dev UI_BUILD=true"; \
 	fi; \
 	$(MAKE) image CARGO_PROFILE=image-dev SKIP_CLEAN=true SKIP_UI_BUILD=$$skip_ui
+
+# Single-arch memory-profiling image (dynamic glibc + libbytehound.so).
+# Native only — do not use buildx/QEMU (rdkafka). For multi-arch, build per-arch on
+# native runners and join with docker buildx imagetools (see memprofile-image workflow).
+# Override tag: make image-memprofile MEMPROFILE_IMAGE_TAG=my-tag
+# CI: pass SKIP_CLEAN=true and pre-populate dist/numaflow-linux-$(HOST_ARCH).
+.PHONY: image-memprofile
+image-memprofile:
+ifneq ($(SKIP_CLEAN),true)
+	$(MAKE) clean
+endif
+ifneq ($(SKIP_UI_BUILD),true)
+	$(MAKE) ui-build
+endif
+	@if [[ ! -f dist/$(BINARY_NAME)-linux-$(HOST_ARCH) ]]; then \
+		$(MAKE) dist/$(BINARY_NAME)-linux-$(HOST_ARCH); \
+	fi
+	DOCKER_BUILDKIT=1 $(DOCKER) build \
+		--build-arg "ENABLE_MEMORY_PROFILING=true" \
+		--build-arg "BYTEHOUND_REF=$(BYTEHOUND_REF)" \
+		$(DOCKER_BUILD_ARGS) \
+		-t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG) \
+		--target $(BINARY_NAME)-memprofile \
+		-f $(DOCKERFILE) .
+	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG); fi
+ifdef IMAGE_IMPORT_CMD
+	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(MEMPROFILE_IMAGE_TAG)
+endif
 
 .PHONY: build-rust-docker-ghactions
 build-rust-docker-ghactions:
