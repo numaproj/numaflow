@@ -608,3 +608,77 @@ func TestAuthMiddleware_BothAuthTypesWork(t *testing.T) {
 	router.ServeHTTP(w2, req2)
 	assert.Equal(t, http.StatusOK, w2.Code)
 }
+
+func TestAuthMiddleware_V2MissingLoginCookie_UsesV2ErrorEnvelope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctx := context.Background()
+	routeMap := authz.RouteMap{
+		"GET:/api/v2/sysinfo": authz.NewRouteInfo("pipeline", false),
+	}
+
+	router := gin.New()
+	v2Group := router.Group("/api/v2")
+	v2Group.Use(authMiddleware(ctx, &mockAuthorizer{}, &mockAuthenticator{}, &mockAuthenticator{}, routeMap))
+	v2Group.GET("/sysinfo", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"data": "ok"})
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v2/sysinfo", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.NotContains(t, response, "errMsg")
+	errObj, ok := response["error"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "UNAUTHORIZED", errObj["code"])
+	assert.Contains(t, errObj["message"], "Failed to get login type")
+}
+
+func TestAuthMiddleware_V2Forbidden_UsesV2ErrorEnvelope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctx := context.Background()
+	user := createTestUserInfo("user@example.com", []string{"viewer"})
+	authorizer := &mockAuthorizer{
+		authorizeFunc: func(c *gin.Context, userInfo *authn.UserInfo) bool {
+			return false
+		},
+	}
+	localAuth := &mockAuthenticator{
+		authenticateFunc: func(c *gin.Context) (*authn.UserInfo, error) {
+			return user, nil
+		},
+	}
+	routeMap := authz.RouteMap{
+		"GET:/api/v2/secure": authz.NewRouteInfo("pipeline", true),
+	}
+
+	router := gin.New()
+	v2Group := router.Group("/api/v2")
+	v2Group.Use(authMiddleware(ctx, authorizer, &mockAuthenticator{}, localAuth, routeMap))
+	v2Group.GET("/secure", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"data": "ok"})
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v2/secure", nil)
+	req.AddCookie(&http.Cookie{Name: common.LoginCookieName, Value: "local"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.NotContains(t, response, "errMsg")
+	errObj, ok := response["error"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "FORBIDDEN", errObj["code"])
+	assert.Equal(t, "user is not authorized to execute the requested action", errObj["message"])
+}

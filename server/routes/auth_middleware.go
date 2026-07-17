@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	v2 "github.com/numaproj/numaflow/server/apis/v2"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
 	"github.com/numaproj/numaflow/server/common"
@@ -41,9 +43,7 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 
 		loginType, err := c.Cookie(common.LoginCookieName)
 		if err != nil {
-			errMsg := fmt.Sprintf("Failed to get login type: %v", err)
-			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
+			writeAuthError(c, http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Failed to get login type: %v", err))
 			return
 		}
 
@@ -54,15 +54,11 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 		case "local":
 			userInfo, err = localUsersAuthenticator.Authenticate(c)
 		default:
-			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
-			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
+			writeAuthError(c, http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("unidentified login type received: %v", loginType))
 			return
 		}
 		if err != nil {
-			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
-			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
+			writeAuthError(c, http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Failed to authenticate user: %v", err))
 			return
 		}
 		// Check if the route requires authorization.
@@ -73,10 +69,7 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 				// If the user is authorized, continue the request.
 				c.Next()
 			} else {
-				// If the user is not authorized, return an error.
-				errMsg := "user is not authorized to execute the requested action"
-				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
-				c.Abort()
+				writeAuthError(c, http.StatusForbidden, "FORBIDDEN", "user is not authorized to execute the requested action")
 			}
 		} else if authRouteMap.GetRouteFromContext(c) != nil && !authRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
@@ -84,9 +77,27 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 		} else {
 			// If the route is not present in the route map, return an error.
 			log.Errorw("route not present in routeMap", "route", authz.GetRouteMapKey(c))
-			errMsg := "Invalid route"
-			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
+			writeAuthError(c, http.StatusForbidden, "INVALID_ROUTE", "Invalid route")
 		}
 	}
+}
+
+// writeAuthError writes an auth failure using the v2 envelope for /api/v2 paths
+// and the legacy v1 envelope otherwise, then aborts the request.
+func writeAuthError(c *gin.Context, status int, code, message string) {
+	if isAPIV2Request(c) {
+		v2.WriteError(c, status, code, message)
+	} else {
+		msg := message
+		c.JSON(status, v1.NewNumaflowAPIResponse(&msg, nil))
+	}
+	c.Abort()
+}
+
+func isAPIV2Request(c *gin.Context) bool {
+	// Prefer FullPath when available (includes baseHref + /api/v2/...).
+	if path := c.FullPath(); path != "" && strings.Contains(path, "/api/v2") {
+		return true
+	}
+	return strings.Contains(c.Request.URL.Path, "/api/v2")
 }
