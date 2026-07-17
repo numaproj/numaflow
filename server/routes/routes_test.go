@@ -66,3 +66,28 @@ func TestRoutes(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
+
+func TestV2SysInfoRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	sysInfo := SystemInfo{
+		ManagedNamespace:     "numaflow-system",
+		Namespaced:           false,
+		IsReadOnly:           true,
+		DisableMetricsCharts: true,
+		Version:              "v-test",
+		DaemonClientProtocol: "grpc",
+	}
+	v2Routes(router.Group("/api/v2"), sysInfo)
+
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, "/api/v2/sysinfo", nil)
+	require.NoError(t, err)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"managedNamespace":"numaflow-system"`)
+	assert.Contains(t, w.Body.String(), `"version":"v-test"`)
+	assert.Contains(t, w.Body.String(), `"data"`)
+	assert.NotContains(t, w.Body.String(), `"errMsg"`)
+}

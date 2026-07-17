@@ -25,7 +25,9 @@ import (
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 40, len(got))
+		assert.Equal(t, 41, len(got))
+		assert.Contains(t, got, "GET:api/v1/sysinfo")
+		assert.Contains(t, got, "GET:api/v2/sysinfo")
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/isb-services/:isb-service/jetstream")
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/pipelines/:pipeline/isb/streams")
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/pipelines/:pipeline/isb/consumers")
@@ -34,7 +36,8 @@ func TestCreateAuthRouteMap(t *testing.T) {
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 40, len(got))
+		assert.Equal(t, 41, len(got))
+		assert.Contains(t, got, "GET:abcdefgapi/v2/sysinfo")
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}

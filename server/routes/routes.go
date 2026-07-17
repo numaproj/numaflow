@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	v2 "github.com/numaproj/numaflow/server/apis/v2"
 	"github.com/numaproj/numaflow/server/authz"
 )
 
@@ -72,6 +73,11 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group(baseHref + "api/v1")
 	r1Group.Use(cleanResponseMiddleware())
+
+	// r2Group mounts the v2 API beside v1. Same middleware chain; handlers use v2 envelopes.
+	r2Group := r.Group(baseHref + "api/v2")
+	r2Group.Use(cleanResponseMiddleware())
+
 	if !authInfo.DisableAuth {
 		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
 		if err != nil {
@@ -79,6 +85,7 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
+		r2Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
 		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	} else {
 		v1Routes(ctx, r1Group, nil, nil, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
@@ -86,6 +93,14 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
+	v2Routes(r2Group, sysInfo)
+}
+
+// v2Routes defines the routes for the v2 API. For adding a new route, add a new handler
+// function along with an entry in CreateAuthRouteMap.
+func v2Routes(r gin.IRouter, sysInfo SystemInfo) {
+	handler := v2.NewHandler(sysInfo)
+	r.GET("/sysinfo", handler.SysInfo)
 }
 
 func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
