@@ -35,7 +35,7 @@ describe("PodDetail screen", () => {
   afterEach(() => {
     (global as any).fetch = originFetch;
   });
-  it("loads screen", async () => {
+  it("loads Logs without a nested Metrics tab", async () => {
     const mRes = {
       body: new ReadableStream({
         start(controller) {
@@ -62,6 +62,8 @@ describe("PodDetail screen", () => {
       );
     });
     expect(screen.getByText("Container Logs")).toBeInTheDocument();
+    expect(screen.getByTestId("logs-tab")).toBeInTheDocument();
+    expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
     expect(mockedFetch).toBeCalledTimes(1);
   });
   it("returns null when pod search is null", () => {
