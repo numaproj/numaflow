@@ -5368,14 +5368,16 @@
 <blockquote>
 <p><strong>What it is.</strong> Per-message nack lets your user-defined function (UDF) explicitly tell Numaflow
 "I could not process this message — redeliver it later," optionally with a redelivery <strong>delay</strong>, a
-<strong>max-deliveries</strong> hint, and a human-readable <strong>reason</strong>. It is available in the source, source
-transformer, map, and sink. It is opt-in: a message is nacked only when your code asks for it.</p>
+<strong>max-deliveries</strong> hint, a human-readable <strong>reason</strong>, or a key-value map <strong>nack_map</strong> for other 
+requirements. It is available in the source, source transformer, map, and sink. It is opt-in: a 
+message is nacked only when your code asks for it.</p>
 </blockquote>
 <h2 id="what-is-per-message-nack">What is per-message nack<a class="headerlink" href="#what-is-per-message-nack" title="Permanent link">&para;</a></h2>
 <p>A <strong>nack</strong> ("negative acknowledgement") is the opposite of an ack. When Numaflow acks a message, the
 message is considered processed and is removed from the source / inter-step buffer. When a message is
-<strong>nacked</strong>, it is <em>not</em> removed — it is <strong>redelivered</strong> so it can be processed again.</p>
-<p>Per-message nack exposes this at the UDF level. Instead of only succeeding (ack) or hard-failing
+<strong>nacked</strong>, it is generally <em>not</em> removed — it is <strong>redelivered</strong> so it can be processed again 
+(although nack implementations can vary vastly based upon different sources).</p>
+<p>Per-message nack exposes this at the user level. Instead of only succeeding (ack) or hard-failing
 (crash), your code can return a <em>third</em> outcome for an individual message: "nack this one, and here is
 how I'd like it redelivered." The redelivery is governed by an optional <code>NackOptions</code>:</p>
 <table>
@@ -5401,6 +5403,11 @@ how I'd like it redelivered." The redelivery is governed by an optional <code>Na
 <td><code>reason</code></td>
 <td>string</td>
 <td>Human-readable reason for the nack; logged for observability.</td>
+</tr>
+<tr>
+<td><code>nackMap</code></td>
+<td>map<string, string></td>
+<td>A map for other property names and values to be used by UD implementations</td>
 </tr>
 </tbody>
 </table>
@@ -5433,6 +5440,7 @@ per-message control over <em>when</em> (delay) and <em>how often</em> (max-deliv
 <span class="w">    </span><span class="nx">Delay</span><span class="p">:</span><span class="w">         </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="mi">5000</span><span class="p">)),</span><span class="w"> </span><span class="c1">// 5s, *uint64</span>
 <span class="w">    </span><span class="nx">MaxDeliveries</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nb">uint32</span><span class="p">(</span><span class="mi">3</span><span class="p">)),</span><span class="w">    </span><span class="c1">// *uint32</span>
 <span class="w">    </span><span class="nx">Reason</span><span class="p">:</span><span class="w">        </span><span class="nx">ptr</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">),</span><span class="w"> </span><span class="c1">// *string</span>
+<span class="w">    </span><span class="nx">NackMap</span><span class="p">:</span><span class="w">       </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;retry&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="p">}</span><span class="w"> </span><span class="c1">// map[string]string</span>
 <span class="p">}</span>
 </code></pre></div>
 </div>
@@ -5443,6 +5451,7 @@ per-message control over <em>when</em> (delay) and <em>how often</em> (max-deliv
 <span class="w">        </span><span class="p">.</span><span class="na">delay</span><span class="p">(</span><span class="mi">5000L</span><span class="p">)</span><span class="w">                                  </span><span class="c1">// ms</span>
 <span class="w">        </span><span class="p">.</span><span class="na">maxDeliveries</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <span class="w">        </span><span class="p">.</span><span class="na">reason</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="na">nackMap</span><span class="p">(</span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="s">&quot;retry&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="p">))</span>
 <span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
 </code></pre></div>
 </div>
@@ -5453,6 +5462,7 @@ per-message control over <em>when</em> (delay) and <em>how often</em> (max-deliv
 <span class="w">    </span><span class="n">delay</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span><span class="w">          </span><span class="c1">// ms</span>
 <span class="w">    </span><span class="n">max_deliveries</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
 <span class="w">    </span><span class="n">reason</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">&quot;downstream temporarily unavailable&quot;</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span>
+<span class="w">    </span><span class="n">nack_map</span><span class="p">:</span><span class="w"> </span><span class="nc">HashMap</span><span class="p">::</span><span class="n">from</span><span class="p">([(</span><span class="s">&quot;retry&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="p">)]),</span>
 <span class="p">};</span>
 </code></pre></div>
 </div>
@@ -5460,7 +5470,7 @@ per-message control over <em>when</em> (delay) and <em>how often</em> (max-deliv
 </div>
 <blockquote>
 <p><strong>SDK availability.</strong> Per-message nack is available in the <strong>Rust</strong>, <strong>Go</strong>, and <strong>Java</strong> SDKs.
-All fields are optional — pass "no options" (<code>nil</code> / <code>null</code> / <code>None</code>) for a plain redelivery.</p>
+All fields are optional — pass "no options" (<code>nil</code> / <code>null</code> / <code>None</code>) for a plain nack.</p>
 </blockquote>
 <h2 id="how-to-use-it">How to use it<a class="headerlink" href="#how-to-use-it" title="Permanent link">&para;</a></h2>
 <p>The mechanism differs slightly by component: the <strong>sink</strong>, <strong>map</strong>, and <strong>source transformer</strong>
