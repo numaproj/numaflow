@@ -2,24 +2,27 @@
 
 > **What it is.** Per-message nack lets your user-defined function (UDF) explicitly tell Numaflow
 > "I could not process this message — redeliver it later," optionally with a redelivery **delay**, a
-> **max-deliveries** hint, and a human-readable **reason**. It is available in the source, source
-> transformer, map, and sink. It is opt-in: a message is nacked only when your code asks for it.
+> **max-deliveries** hint, a human-readable **reason**, or a key-value map **nack_map** for other 
+> requirements. It is available in the source, source transformer, map, and sink. It is opt-in: a 
+> message is nacked only when your code asks for it.
 
 ## What is per-message nack
 
 A **nack** ("negative acknowledgement") is the opposite of an ack. When Numaflow acks a message, the
 message is considered processed and is removed from the source / inter-step buffer. When a message is
-**nacked**, it is *not* removed — it is **redelivered** so it can be processed again.
+**nacked**, it is generally *not* removed — it is **redelivered** so it can be processed again 
+(although nack implementations can vary vastly based upon different sources).
 
-Per-message nack exposes this at the UDF level. Instead of only succeeding (ack) or hard-failing
+Per-message nack exposes this at the user level. Instead of only succeeding (ack) or hard-failing
 (crash), your code can return a *third* outcome for an individual message: "nack this one, and here is
 how I'd like it redelivered." The redelivery is governed by an optional `NackOptions`:
 
-| Field            | Type     | Meaning                                                                 |
-| ---------------- | -------- | ----------------------------------------------------------------------- |
-| `delay`          | duration (ms) | Wait this long before redelivering the message.                    |
-| `maxDeliveries`  | uint32   | Hint for the maximum number of redelivery attempts (see [Caveats](#caveats)). |
-| `reason`         | string   | Human-readable reason for the nack; logged for observability.           |
+| Field           | Type                | Meaning                                                                       |
+|-----------------|---------------------|-------------------------------------------------------------------------------|
+| `delay`         | duration (ms)       | Wait this long before redelivering the message.                               |
+| `maxDeliveries` | uint32              | Hint for the maximum number of redelivery attempts (see [Caveats](#caveats)). |
+| `reason`        | string              | Human-readable reason for the nack; logged for observability.                 |
+| `nackMap`       | map<string, string> | A map for other property names and values to be used by UD implementations    | 
 
 All three fields are **optional**. A nack with no options simply asks for the message to be
 redelivered with the backend's default behavior.
@@ -56,6 +59,7 @@ per-message control over *when* (delay) and *how often* (max-deliveries) a messa
         Delay:         ptr(uint64(5000)), // 5s, *uint64
         MaxDeliveries: ptr(uint32(3)),    // *uint32
         Reason:        ptr("downstream temporarily unavailable"), // *string
+        NackMap:       map[string]string{"retry": "false"} // map[string]string
     }
     ```
 
@@ -68,6 +72,7 @@ per-message control over *when* (delay) and *how often* (max-deliveries) a messa
             .delay(5000L)                                  // ms
             .maxDeliveries(3)
             .reason("downstream temporarily unavailable")
+            .nackMap(Map.of("retry", "false"))
             .build();
     ```
 
@@ -80,11 +85,12 @@ per-message control over *when* (delay) and *how often* (max-deliveries) a messa
         delay: Some(5000),          // ms
         max_deliveries: Some(3),
         reason: Some("downstream temporarily unavailable".into()),
+        nack_map: HashMap::from([("retry", "false")]),
     };
     ```
 
 > **SDK availability.** Per-message nack is available in the **Rust**, **Go**, and **Java** SDKs.
-> All fields are optional — pass "no options" (`nil` / `null` / `None`) for a plain redelivery.
+> All fields are optional — pass "no options" (`nil` / `null` / `None`) for a plain nack.
 
 ## How to use it
 

@@ -522,7 +522,7 @@ impl fmt::Display for StringOffset {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NackOptions {
     // Delay in milliseconds
     pub(crate) delay: Option<u64>,
@@ -530,6 +530,8 @@ pub(crate) struct NackOptions {
     pub(crate) max_deliveries: Option<u32>,
     // Human-readable reason for nacking this message
     pub(crate) reason: Option<String>,
+    // Generic values passed as nack options
+    pub(crate) nack_map: HashMap<String, String>,
 }
 
 impl From<NackOptions> for numaflow_pb::common::nack_options::NackOptions {
@@ -538,6 +540,7 @@ impl From<NackOptions> for numaflow_pb::common::nack_options::NackOptions {
             reason: value.reason,
             max_deliveries: value.max_deliveries,
             delay: value.delay,
+            nack_map: value.nack_map,
         }
     }
 }
@@ -548,6 +551,7 @@ impl From<numaflow_pb::common::nack_options::NackOptions> for NackOptions {
             reason: value.reason,
             max_deliveries: value.max_deliveries,
             delay: value.delay,
+            nack_map: value.nack_map,
         }
     }
 }
@@ -853,6 +857,7 @@ mod tests {
             delay: Some(5000),
             max_deliveries: Some(3),
             reason: Some("downstream unavailable".to_string()),
+            nack_map: HashMap::new(),
         };
         read_message.mark_failed("nacked by udf", Some(opts.clone()));
 
@@ -882,6 +887,7 @@ mod tests {
             delay: Some(1000),
             max_deliveries: None,
             reason: Some("retry later".to_string()),
+            nack_map: HashMap::new(),
         };
         read_message.mark_failed("no opts", None);
         cloned.mark_failed("with opts", Some(opts.clone()));
@@ -904,6 +910,7 @@ mod tests {
             delay: Some(2000),
             max_deliveries: Some(3),
             reason: Some("downstream nack".to_string()),
+            nack_map: HashMap::new(),
         };
 
         parent.mark_success();
@@ -932,6 +939,7 @@ mod tests {
             delay: Some(7500),
             max_deliveries: Some(4),
             reason: Some("rate limited".to_string()),
+            nack_map: HashMap::new(),
         };
         let pb: numaflow_pb::common::nack_options::NackOptions = opts.clone().into();
         assert_eq!(NackOptions::from(pb), opts);
@@ -942,6 +950,7 @@ mod tests {
             delay: Some(2000),
             max_deliveries: None,
             reason: None,
+            nack_map: HashMap::new(),
         };
         let pb: numaflow_pb::common::nack_options::NackOptions = partial.clone().into();
         assert_eq!(NackOptions::from(pb), partial);

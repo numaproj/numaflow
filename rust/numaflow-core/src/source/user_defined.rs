@@ -847,6 +847,7 @@ mod tests {
             delay: Some(7000),
             max_deliveries: Some(2),
             reason: Some("retry".to_string()),
+            ..Default::default()
         };
         // nack() awaits the server's response, so `recorded` is populated when it returns.
         src_ack
