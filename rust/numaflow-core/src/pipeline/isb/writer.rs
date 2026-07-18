@@ -2192,6 +2192,7 @@ mod simple_buffer_tests {
             delay: Some(1500),
             max_deliveries: None,
             reason: Some("udf nack".to_string()),
+            ..Default::default()
         };
         let (mut msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__NACK__"]));
         msg.message.nack_options = Some(opts.clone());

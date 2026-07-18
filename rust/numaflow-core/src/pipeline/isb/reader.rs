@@ -700,6 +700,7 @@ impl ISBReaderComponents {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::io::Write;
     use std::sync::Arc;
 
@@ -1297,6 +1298,7 @@ mod tests {
             delay: Some(3000),
             max_deliveries: None,
             reason: Some("retry later".to_string()),
+            nack_map: HashMap::new(),
         };
         js_reader.nack(&offset, Some(opts)).await.unwrap();
 
@@ -2140,6 +2142,7 @@ mod duplicate_inflight_tests {
             delay: Some(3000),
             max_deliveries: Some(2),
             reason: Some("transient".to_string()),
+            ..Default::default()
         };
         let cancel = CancellationToken::new();
 

@@ -411,6 +411,7 @@ mod tests {
                 delay: Some(5000),
                 max_deliveries: Some(3),
                 reason: Some("udf nack".to_string()),
+                ..Default::default()
             })
         );
 
@@ -449,6 +450,7 @@ mod tests {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(2),
                 delay: Some(1000),
+                ..Default::default()
             }),
         };
         let msg: Message = UserDefinedTransformerMessage(result, &parent_info, 0).into();
@@ -459,6 +461,7 @@ mod tests {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(2),
                 delay: Some(1000),
+                ..Default::default()
             })
         );
 
