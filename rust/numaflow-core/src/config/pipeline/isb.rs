@@ -13,34 +13,17 @@ const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 /// always overrides this with `Limits.Concurrency` from the vertex spec.
 const DEFAULT_BUFFER_READER_INFLIGHT_CAP: usize = 500;
 
+/// ISB backend client configuration selected at startup via `NUMAFLOW_ISBSVC_TYPE`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ISBClientConfig {
+    Jetstream(jetstream::ClientConfig),
+    // Pulsar(...), Kafka(...) — future
+}
+
 pub(crate) mod jetstream {
-    const DEFAULT_URL: &str = "localhost:4222";
-    #[derive(Clone, PartialEq)]
-    pub(crate) struct ClientConfig {
-        pub url: String,
-        pub user: Option<String>,
-        pub password: Option<String>,
-    }
-
-    impl std::fmt::Debug for ClientConfig {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("ClientConfig")
-                .field("url", &self.url)
-                .field("user", &self.user)
-                .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
-                .finish()
-        }
-    }
-
-    impl Default for ClientConfig {
-        fn default() -> Self {
-            ClientConfig {
-                url: DEFAULT_URL.to_string(),
-                user: None,
-                password: None,
-            }
-        }
-    }
+    /// Re-export the shared JetStream client config as the single source of truth
+    /// (also used by `numaflow-sideinput`).
+    pub(crate) use numaflow_shared::isb::jetstream::config::ClientConfig;
 }
 
 /// Stream is a one of the partition of the ISB between two vertices.
@@ -138,22 +121,6 @@ impl Default for BufferReaderConfig {
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
             max_ack_pending: DEFAULT_BUFFER_READER_INFLIGHT_CAP,
         }
-    }
-}
-
-#[cfg(test)]
-mod jetstream_client_config {
-    use super::jetstream::*;
-
-    #[test]
-    fn test_default_client_config() {
-        let expected_config = ClientConfig {
-            url: "localhost:4222".to_string(),
-            user: None,
-            password: None,
-        };
-        let config = ClientConfig::default();
-        assert_eq!(config, expected_config);
     }
 }
 

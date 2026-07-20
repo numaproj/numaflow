@@ -8,7 +8,7 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
+use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
@@ -32,6 +32,7 @@ use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
 use async_nats::jetstream::Context;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::{interval, timeout};
@@ -42,11 +43,11 @@ use tracing::{error, info, warn};
 /// and manages the lifecycle of these components.
 pub(crate) struct ReduceForwarder<C: NumaflowTypeConfig> {
     pbq: PBQ<C>,
-    reducer: Reducer<C>,
+    reducer: Reducer,
 }
 
 impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
-    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer<C>) -> Self {
+    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer) -> Self {
         Self { pbq, reducer }
     }
 
@@ -94,7 +95,8 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
 
 pub(crate) async fn start_aligned_reduce_forwarder(
     cln_token: CancellationToken,
-    js_context: Context,
+    isb_factory: Arc<dyn ISBFactory>,
+    js_context: Option<Context>,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
@@ -130,7 +132,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     // create watermark handle, if watermark is enabled
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
-        &js_context,
+        js_context.as_ref().expect("JetStream context required for watermark until Phase 3"),
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker.clone(),
@@ -153,25 +155,21 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             crate::error::Error::Config("No stream found for reduce vertex".to_string())
         })?;
 
-    // Create the ISB factory from the JetStream context
-    use crate::pipeline::isb::jetstream::JetStreamFactory;
-    let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let context = PipelineContext::<WithoutRateLimiter, _>::new(
+    let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
-        &isb_factory,
+        isb_factory.as_ref(),
         &config,
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter, _>(
+    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter>(
         stream,
         reader_config.clone(),
         watermark_handle.clone(),
         &context,
     );
 
-    use crate::pipeline::isb::ISBFactory;
     let writers = isb_factory
         .create_writers(
             &config.to_vertex_config,
@@ -180,7 +178,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         )
         .await?;
 
-    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+    let writer_components: ISBWriterOrchestratorComponents =
         ISBWriterOrchestratorComponents {
             config: config.to_vertex_config.clone(),
             writers,
@@ -189,7 +187,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             vertex_type: config.vertex_type,
         };
 
-    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -234,15 +232,15 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext::<WithoutRateLimiter, _>::new(
+    let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
-        &isb_factory,
+        isb_factory.as_ref(),
         &config,
         tracker,
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter, _>(&context, reader_components, reducer, wal, None)
+    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
         .await?;
 
     info!("Aligned reduce forwarder has stopped successfully");
@@ -251,7 +249,8 @@ pub(crate) async fn start_aligned_reduce_forwarder(
 
 pub(crate) async fn start_unaligned_reduce_forwarder(
     cln_token: CancellationToken,
-    js_context: Context,
+    isb_factory: Arc<dyn ISBFactory>,
+    js_context: Option<Context>,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
@@ -274,7 +273,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     // create watermark handle, if watermark is enabled
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
-        &js_context,
+        js_context.as_ref().expect("JetStream context required for watermark until Phase 3"),
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker.clone(),
@@ -297,25 +296,21 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             crate::error::Error::Config("No stream found for reduce vertex".to_string())
         })?;
 
-    // Create the ISB factory from the JetStream context
-    use crate::pipeline::isb::jetstream::JetStreamFactory;
-    let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let context = PipelineContext::<WithoutRateLimiter, _>::new(
+    let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
-        &isb_factory,
+        isb_factory.as_ref(),
         &config,
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter, _>(
+    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter>(
         stream,
         reader_config.clone(),
         watermark_handle.clone(),
         &context,
     );
 
-    use crate::pipeline::isb::ISBFactory;
     let writers = isb_factory
         .create_writers(
             &config.to_vertex_config,
@@ -324,7 +319,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         )
         .await?;
 
-    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+    let writer_components: ISBWriterOrchestratorComponents =
         ISBWriterOrchestratorComponents {
             config: config.to_vertex_config.clone(),
             writers,
@@ -333,7 +328,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             vertex_type: config.vertex_type,
         };
 
-    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(
@@ -376,15 +371,15 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext::<WithoutRateLimiter, _>::new(
+    let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
-        &isb_factory,
+        isb_factory.as_ref(),
         &config,
         tracker,
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter, _>(&context, reader_components, reducer, wal, None)
+    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
         .await?;
 
     info!("Unaligned reduce forwarder has stopped successfully");
@@ -392,16 +387,15 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 }
 
 /// Starts reduce forwarder.
-async fn run_reduce_forwarder<C, F>(
-    context: &PipelineContext<'_, C, F>,
+async fn run_reduce_forwarder<C>(
+    context: &PipelineContext<'_, C>,
     reader_components: ISBReaderComponents,
-    reducer: Reducer<C>,
+    reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()>
 where
-    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
-    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+    C: NumaflowTypeConfig,
 {
     let isb_reader_impl = context
         .factory()
@@ -500,7 +494,8 @@ pub async fn wait_for_fence_availability(
 
 pub(crate) async fn start_reduce_forwarder(
     cln_token: CancellationToken,
-    js_context: Context,
+    isb_factory: Arc<dyn ISBFactory>,
+    js_context: Option<Context>,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> crate::error::Result<()> {
@@ -526,6 +521,7 @@ pub(crate) async fn start_reduce_forwarder(
         ReducerConfig::Aligned(aligned_config) => {
             start_aligned_reduce_forwarder(
                 cln_token,
+                isb_factory,
                 js_context,
                 config,
                 reduce_vtx_config.clone(),
@@ -536,6 +532,7 @@ pub(crate) async fn start_reduce_forwarder(
         ReducerConfig::Unaligned(unaligned_config) => {
             start_unaligned_reduce_forwarder(
                 cln_token,
+                isb_factory,
                 js_context,
                 config,
                 reduce_vtx_config.clone(),
@@ -854,7 +851,8 @@ mod tests {
             async move {
                 start_aligned_reduce_forwarder(
                     cancellation_token,
-                    js_context,
+                    Arc::new(crate::pipeline::isb::jetstream::JetStreamFactory::new(js_context.clone())),
+                    Some(js_context),
                     pipeline_config,
                     reduce_vtx_config,
                     aligned_config,
@@ -1181,7 +1179,8 @@ mod tests {
             async move {
                 if let Err(e) = start_unaligned_reduce_forwarder(
                     cancellation_token,
-                    js_context,
+                    Arc::new(crate::pipeline::isb::jetstream::JetStreamFactory::new(js_context.clone())),
+                    Some(js_context),
                     pipeline_config,
                     reduce_vtx_config,
                     unaligned_config,

@@ -274,8 +274,6 @@ pub(crate) struct WithSimpleBuffer;
 #[cfg(test)]
 impl NumaflowTypeConfig for WithSimpleBuffer {
     type RateLimiter = NoOpRateLimiter;
-    type ISBReader = SimpleReaderAdapter;
-    type ISBWriter = SimpleWriterAdapter;
 }
 
 #[cfg(test)]

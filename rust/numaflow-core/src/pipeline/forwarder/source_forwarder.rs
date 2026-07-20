@@ -6,7 +6,7 @@ use crate::metrics::{
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-
+use crate::pipeline::isb::ISBFactory;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
@@ -24,6 +24,7 @@ use crate::watermark::source::SourceWatermarkHandle;
 use crate::{error, shared};
 use async_nats::jetstream::Context;
 use serving::callback::CallbackHandler;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -31,11 +32,11 @@ use tracing::info;
 /// and manages the lifecycle of these components.
 pub(crate) struct SourceForwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
-    writer: ISBWriterOrchestrator<C>,
+    writer: ISBWriterOrchestrator,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
-    pub(crate) fn new(source: Source<C>, writer: ISBWriterOrchestrator<C>) -> Self {
+    pub(crate) fn new(source: Source<C>, writer: ISBWriterOrchestrator) -> Self {
         Self { source, writer }
     }
 
@@ -71,10 +72,13 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 
 pub(crate) async fn start_source_forwarder(
     cln_token: CancellationToken,
-    js_context: Context,
+    isb_factory: Arc<dyn ISBFactory>,
+    js_context: Option<Context>,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> error::Result<()> {
+    let js_context = js_context.expect("JetStream context required until Phases 3-4");
+
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -107,11 +111,6 @@ pub(crate) async fn start_source_forwarder(
         _ => None,
     };
 
-    // Create the ISB factory from the JetStream context
-    use crate::pipeline::isb::ISBFactory;
-    use crate::pipeline::isb::jetstream::JetStreamFactory;
-    let isb_factory = JetStreamFactory::new(js_context.clone());
-
     let writers = isb_factory
         .create_writers(
             &config.to_vertex_config,
@@ -120,20 +119,13 @@ pub(crate) async fn start_source_forwarder(
         )
         .await?;
 
-    // Helper macro to create writer components with specific type
-    macro_rules! create_writer {
-        ($type:ty) => {{
-            let writer_components: ISBWriterOrchestratorComponents<$type> =
-                ISBWriterOrchestratorComponents {
-                    config: config.to_vertex_config.clone(),
-                    writers,
-                    paf_concurrency: config.writer_concurrency,
-                    watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-                    vertex_type: config.vertex_type,
-                };
-            ISBWriterOrchestrator::<$type>::new(writer_components)
-        }};
-    }
+    let buffer_writer = ISBWriterOrchestrator::new(ISBWriterOrchestratorComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+        vertex_type: config.vertex_type,
+    });
 
     let transformer = create_components::create_transformer(
         config.batch_size,
@@ -149,16 +141,15 @@ pub(crate) async fn start_source_forwarder(
         if should_use_redis_rate_limiter(rate_limit_config) {
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-            let buffer_writer = create_writer!(WithRedisRateLimiter);
 
-            let context = PipelineContext::<WithRedisRateLimiter, _>::new(
+            let context = PipelineContext::<WithRedisRateLimiter>::new(
                 cln_token.clone(),
-                &isb_factory,
+                isb_factory.as_ref(),
                 &config,
                 tracker.clone(),
             );
 
-            run_source_forwarder::<WithRedisRateLimiter, _>(
+            run_source_forwarder::<WithRedisRateLimiter>(
                 &context,
                 &source_config,
                 transformer,
@@ -170,16 +161,15 @@ pub(crate) async fn start_source_forwarder(
         } else {
             let in_mem_config =
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-            let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
-            let context = PipelineContext::<WithInMemoryRateLimiter, _>::new(
+            let context = PipelineContext::<WithInMemoryRateLimiter>::new(
                 cln_token.clone(),
-                &isb_factory,
+                isb_factory.as_ref(),
                 &config,
                 tracker.clone(),
             );
 
-            run_source_forwarder::<WithInMemoryRateLimiter, _>(
+            run_source_forwarder::<WithInMemoryRateLimiter>(
                 &context,
                 &source_config,
                 transformer,
@@ -190,16 +180,14 @@ pub(crate) async fn start_source_forwarder(
             .await?
         }
     } else {
-        let buffer_writer = create_writer!(WithoutRateLimiter);
-
-        let context = PipelineContext::<WithoutRateLimiter, _>::new(
+        let context = PipelineContext::<WithoutRateLimiter>::new(
             cln_token.clone(),
-            &isb_factory,
+            isb_factory.as_ref(),
             &config,
             tracker.clone(),
         );
 
-        run_source_forwarder::<WithoutRateLimiter, _>(
+        run_source_forwarder::<WithoutRateLimiter>(
             &context,
             &source_config,
             transformer,
@@ -214,17 +202,16 @@ pub(crate) async fn start_source_forwarder(
 }
 
 /// Starts source forwarder.
-async fn run_source_forwarder<C, F>(
-    context: &PipelineContext<'_, C, F>,
+async fn run_source_forwarder<C>(
+    context: &PipelineContext<'_, C>,
     source_config: &SourceVtxConfig,
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,
-    buffer_writer: ISBWriterOrchestrator<C>,
+    buffer_writer: ISBWriterOrchestrator,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()>
 where
     C: crate::typ::NumaflowTypeConfig,
-    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
 {
     // Pipeline source vertices do not support streaming mode (MonoVertex-only feature).
     let source = create_components::create_source::<C>(
@@ -278,6 +265,7 @@ mod simple_buffer_tests {
     use super::*;
     use std::collections::HashMap;
     use std::collections::HashSet;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
@@ -378,10 +366,10 @@ mod simple_buffer_tests {
     fn create_writer_orchestrator(
         output_adapters: &[(&'static str, &SimpleBufferAdapter)],
         streams: &[Stream],
-    ) -> ISBWriterOrchestrator<WithSimpleBuffer> {
+    ) -> ISBWriterOrchestrator {
         let mut writers = HashMap::new();
         for (name, adapter) in output_adapters {
-            writers.insert(*name, adapter.writer());
+            writers.insert(*name, Arc::new(adapter.writer()) as crate::pipeline::isb::dyn_adapter::ISBWriterRef);
         }
 
         let writer_config = BufferWriterConfig {
@@ -1000,15 +988,17 @@ mod tests {
         let mut writers = std::collections::HashMap::new();
         writers.insert(
             stream.name,
-            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await
-            .unwrap(),
+            Arc::new(
+                crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await
+                .unwrap(),
+            ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
         let writer_components = ISBWriterOrchestratorComponents {
@@ -1118,11 +1108,12 @@ mod tests {
             batch_size: 1000,
             writer_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out",
@@ -1177,9 +1168,11 @@ mod tests {
             let cancellation_token = cancellation_token.clone();
             let context = context.clone();
             async move {
+                use crate::pipeline::isb::jetstream::JetStreamFactory;
                 start_source_forwarder(
                     cancellation_token,
-                    context,
+                    Arc::new(JetStreamFactory::new(context.clone())),
+                    Some(context),
                     pipeline_config,
                     source_vtx_config,
                 )

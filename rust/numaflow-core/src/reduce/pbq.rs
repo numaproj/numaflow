@@ -319,7 +319,7 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
+            ISBReaderOrchestrator::new(reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
                 .await
                 .unwrap();
 
@@ -451,7 +451,7 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
+            ISBReaderOrchestrator::new(reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
                 .await
                 .unwrap();
 
@@ -686,7 +686,7 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
+            ISBReaderOrchestrator::new(reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
                 .await
                 .unwrap();
 
