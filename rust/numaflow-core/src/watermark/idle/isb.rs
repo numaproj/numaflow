@@ -18,11 +18,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use bytes::BytesMut;
 use chrono::{DateTime, Utc};
 
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;
+use crate::message::{IntOffset, Message, MessageType, Offset};
+use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
@@ -53,7 +54,9 @@ impl Default for IdleState {
 pub(crate) struct ISBIdleDetector {
     /// last published wm state per [Stream].
     last_published_wm_state: Arc<RwLock<HashMap<&'static str, Vec<IdleState>>>>,
-    js_context: async_nats::jetstream::Context,
+    /// Writers used to publish idle WMB control messages. Shared with the forwarder's
+    /// writer map — do not create duplicate producers.
+    writers: HashMap<&'static str, ISBWriterRef>,
     /// X duration we wait before we start publishing idle WM.
     idle_timeout: Duration,
 }
@@ -63,7 +66,7 @@ impl ISBIdleDetector {
     pub(crate) async fn new(
         idle_timeout: Duration,
         to_vertex_configs: &[ToVertexConfig],
-        js_context: async_nats::jetstream::Context,
+        writers: HashMap<&'static str, ISBWriterRef>,
     ) -> Self {
         let mut last_published_wm = HashMap::new();
 
@@ -88,7 +91,7 @@ impl ISBIdleDetector {
         ISBIdleDetector {
             idle_timeout,
             last_published_wm_state: Arc::new(RwLock::new(last_published_wm)),
-            js_context,
+            writers,
         }
     }
 
@@ -135,22 +138,30 @@ impl ISBIdleDetector {
             return Ok(offset);
         }
 
-        let ctrl_msg_bytes: BytesMut = crate::message::Message {
-            typ: crate::message::MessageType::WMB,
+        let writer = self.writers.get(idle_state.stream.name).ok_or_else(|| {
+            crate::error::Error::Watermark(format!(
+                "No ISB writer for stream '{}' when publishing idle WMB",
+                idle_state.stream.name
+            ))
+        })?;
+
+        let ctrl_msg = Message {
+            typ: MessageType::WMB,
             ..Default::default()
+        };
+
+        let result = writer
+            .write(ctrl_msg)
+            .await
+            .map_err(|e| crate::error::Error::Watermark(e.to_string()))?;
+
+        match result.offset {
+            Offset::Int(IntOffset { offset, .. }) => Ok(offset),
+            Offset::String(_) => Err(crate::error::Error::Watermark(
+                "idle WMB requires an Int offset; String offsets are not supported for watermarks"
+                    .to_string(),
+            )),
         }
-        .try_into()?;
-
-        let offset = self
-            .js_context
-            .publish(idle_state.stream.name, ctrl_msg_bytes.freeze())
-            .await
-            .map_err(|e| crate::error::Error::Watermark(e.to_string()))?
-            .await
-            .map_err(|e| crate::error::Error::Watermark(e.to_string()))?
-            .sequence;
-
-        Ok(offset as i64)
     }
 
     /// Updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
@@ -200,23 +211,56 @@ impl ISBIdleDetector {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use tokio::time::sleep;
+    use tokio_util::sync::CancellationToken;
 
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::{ToVertexConfig, VertexType};
+    use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
+
+    async fn test_writer(
+        js_context: jetstream::Context,
+        stream: &Stream,
+    ) -> HashMap<&'static str, ISBWriterRef> {
+        // Ensure a consumer exists so JetStreamWriter's background monitor can start.
+        let _ = js_context
+            .create_consumer_on_stream(
+                async_nats::jetstream::consumer::pull::Config {
+                    name: Some(stream.name.to_string()),
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await;
+
+        let writer = JetStreamWriter::new(
+            stream.clone(),
+            js_context,
+            BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let mut writers = HashMap::new();
+        writers.insert(stream.name, Arc::new(writer) as ISBWriterRef);
+        writers
+    }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_mark_active() {
-        let client = async_nats::connect("localhost:4222").await.unwrap();
-        let js_context = jetstream::new(client);
-
         let stream = Stream::new("test_stream", "test_vertex", 0);
         let to_vertex_config = ToVertexConfig {
             name: "test_vertex",
@@ -230,8 +274,12 @@ mod tests {
             ordered_processing_enabled: false,
         };
 
-        let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
+        let mut manager = ISBIdleDetector::new(
+            Duration::from_millis(200),
+            &[to_vertex_config],
+            HashMap::new(),
+        )
+        .await;
 
         manager.reset_idle(&stream).await;
 
@@ -253,7 +301,7 @@ mod tests {
     async fn test_fetch_idle_offset() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_idle_fetch_stream", "test_vertex", 0);
 
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
@@ -278,8 +326,9 @@ mod tests {
             ordered_processing_enabled: false,
         };
 
+        let writers = test_writer(js_context, &stream).await;
         let manager =
-            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], writers).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -288,13 +337,66 @@ mod tests {
         assert!(offset > 0);
     }
 
+    /// Two consecutive idle-WMB writes must both land with distinct sequences
+    /// (JetStream must not dedup default-constructed WMB message ids).
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_consecutive_idle_wmb_writes_get_distinct_sequences() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+        let stream = Stream::new("test_idle_wmb_dedup_stream", "test_vertex", 0);
+
+        let _ = js_context.delete_stream(stream.name).await;
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let to_vertex_config = ToVertexConfig {
+            name: "test_vertex",
+            partitions: 1,
+            writer_config: BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            conditions: None,
+            to_vertex_type: VertexType::Sink,
+            ordered_processing_enabled: false,
+        };
+
+        let writers = test_writer(js_context, &stream).await;
+        let mut manager =
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], writers).await;
+
+        let offset1 = manager
+            .fetch_idle_offset(&stream)
+            .await
+            .expect("first idle WMB write");
+        // Reset so the next fetch publishes a new WMB instead of reusing offset1.
+        manager.reset_idle(&stream).await;
+        let offset2 = manager
+            .fetch_idle_offset(&stream)
+            .await
+            .expect("second idle WMB write");
+
+        assert_ne!(
+            offset1, offset2,
+            "consecutive idle WMBs must not be JetStream-deduped"
+        );
+        assert!(offset2 > offset1);
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_mark_idle() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_idle_mark_stream", "test_vertex", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
         let _stream = js_context
@@ -318,8 +420,9 @@ mod tests {
             ordered_processing_enabled: false,
         };
 
+        let writers = test_writer(js_context, &stream).await;
         let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], writers).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -342,9 +445,6 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_streams_needing_publish() {
-        let client = async_nats::connect("localhost:4222").await.unwrap();
-        let js_context = jetstream::new(client);
-
         let stream = Stream::new("test_stream", "test_vertex", 0);
         let to_vertex_config = ToVertexConfig {
             name: "test_vertex",
@@ -358,8 +458,12 @@ mod tests {
             ordered_processing_enabled: false,
         };
 
-        let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(10), &[to_vertex_config], js_context).await;
+        let mut manager = ISBIdleDetector::new(
+            Duration::from_millis(10),
+            &[to_vertex_config],
+            HashMap::new(),
+        )
+        .await;
 
         // Mark the stream as active first
         manager.reset_idle(&stream).await;

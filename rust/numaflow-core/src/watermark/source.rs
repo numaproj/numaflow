@@ -21,14 +21,13 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
-
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
 use crate::message::{IntOffset, MessageHandle, Offset};
+use crate::pipeline::isb::ISBFactory;
+use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
 use crate::tracker::Tracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
@@ -274,7 +273,8 @@ impl SourceWatermarkHandle {
     /// Uses `idle_config.step_interval` (default 100ms) as the WMB delay for all
     /// watermark publishing - both source and ISB idle detection.
     pub(crate) async fn new(
-        js_context: async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
+        writers: HashMap<&'static str, ISBWriterRef>,
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
@@ -284,14 +284,9 @@ impl SourceWatermarkHandle {
         let wmb_delay = config.idle_config.step_interval;
 
         // Create KV store for ProcessorManager
-        let ot_bucket = js_context
-            .get_key_value(config.source_bucket_config.ot_bucket)
-            .await
-            .expect("Failed to get OT bucket");
-        let ot_store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(
-            ot_bucket,
-            config.source_bucket_config.ot_bucket,
-        ));
+        let ot_store = isb_factory
+            .create_kv_store(config.source_bucket_config.ot_bucket.to_string())
+            .await?;
 
         let processor_manager = ProcessorManager::new(
             ot_store,
@@ -303,7 +298,7 @@ impl SourceWatermarkHandle {
 
         let fetcher = SourceWatermarkFetcher::new(processor_manager);
         let publisher = SourceWatermarkPublisher::new(
-            js_context.clone(),
+            isb_factory,
             config.max_delay,
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
@@ -314,8 +309,7 @@ impl SourceWatermarkHandle {
         let source_idle_manager = SourceIdleDetector::new(config.idle_config.clone());
 
         // Use the same WMB delay for ISB idle detection
-        let isb_idle_manager =
-            ISBIdleDetector::new(wmb_delay, to_vertex_configs, js_context.clone()).await;
+        let isb_idle_manager = ISBIdleDetector::new(wmb_delay, to_vertex_configs, writers).await;
 
         let state = SourceWatermarkState::new(
             publisher,
@@ -465,11 +459,16 @@ mod tests {
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::message::IntOffset;
+    use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
     use crate::watermark::wmb::WMB;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::stream;
     use bytes::BytesMut;
+    use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -506,7 +505,8 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let handle = SourceWatermarkHandle::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             Default::default(),
             &source_config,
             cln_token.clone(),
@@ -622,7 +622,8 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let handle = SourceWatermarkHandle::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             &[ToVertexConfig {
                 name: "edge_vertex",
                 writer_config: BufferWriterConfig {
@@ -739,6 +740,41 @@ mod tests {
             })
             .await
             .unwrap();
+        let _ = js_context
+            .create_consumer_on_stream(
+                async_nats::jetstream::consumer::pull::Config {
+                    name: Some("edge_stream".to_string()),
+                    ..Default::default()
+                },
+                "edge_stream",
+            )
+            .await;
+        let mut writers: HashMap<&'static str, ISBWriterRef> = HashMap::new();
+        writers.insert(
+            "edge_stream",
+            Arc::new(
+                JetStreamWriter::new(
+                    Stream {
+                        name: "edge_stream",
+                        vertex: "edge_vertex",
+                        partition: 0,
+                    },
+                    js_context.clone(),
+                    BufferWriterConfig {
+                        streams: vec![Stream {
+                            name: "edge_stream",
+                            vertex: "edge_vertex",
+                            partition: 0,
+                        }],
+                        ..Default::default()
+                    },
+                    None,
+                    CancellationToken::new(),
+                )
+                .await
+                .unwrap(),
+            ) as ISBWriterRef,
+        );
 
         let source_bucket_config = BucketConfig {
             vertex: "v1",
@@ -790,7 +826,8 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let handle = SourceWatermarkHandle::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            writers,
             &to_vertex_configs,
             &SourceWatermarkConfig {
                 max_delay: Default::default(),
@@ -896,6 +933,41 @@ mod tests {
             })
             .await
             .unwrap();
+        let _ = js_context
+            .create_consumer_on_stream(
+                async_nats::jetstream::consumer::pull::Config {
+                    name: Some("edge_stream".to_string()),
+                    ..Default::default()
+                },
+                "edge_stream",
+            )
+            .await;
+        let mut writers: HashMap<&'static str, ISBWriterRef> = HashMap::new();
+        writers.insert(
+            "edge_stream",
+            Arc::new(
+                JetStreamWriter::new(
+                    Stream {
+                        name: "edge_stream",
+                        vertex: "edge_vertex",
+                        partition: 0,
+                    },
+                    js_context.clone(),
+                    BufferWriterConfig {
+                        streams: vec![Stream {
+                            name: "edge_stream",
+                            vertex: "edge_vertex",
+                            partition: 0,
+                        }],
+                        ..Default::default()
+                    },
+                    None,
+                    CancellationToken::new(),
+                )
+                .await
+                .unwrap(),
+            ) as ISBWriterRef,
+        );
 
         let source_bucket_config = BucketConfig {
             vertex: "v1",
@@ -946,7 +1018,8 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let handle = SourceWatermarkHandle::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            writers,
             &to_vertex_configs,
             &SourceWatermarkConfig {
                 max_delay: Default::default(),
@@ -1086,7 +1159,8 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let handle = SourceWatermarkHandle::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             Default::default(),
             &source_config,
             cln_token.clone(),

@@ -694,21 +694,20 @@ mod tests {
             ) as ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
         let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
@@ -818,21 +817,20 @@ mod tests {
         .await
         .expect("timed out waiting for buffer to become available");
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
         let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
@@ -963,49 +961,48 @@ mod tests {
             );
         }
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![
-                    ToVertexConfig {
-                        name: "vertex1",
-                        partitions: 2,
-                        writer_config: vertex1_writer_config,
-                        conditions: Some(Box::new(ForwardConditions {
-                            tags: Box::new(TagConditions {
-                                operator: Some("or".to_string()),
-                                values: vec!["tag1".to_string()],
-                            }),
-                        })),
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                    ToVertexConfig {
-                        name: "vertex2",
-                        partitions: 1,
-                        writer_config: vertex2_writer_config,
-                        conditions: Some(Box::new(ForwardConditions {
-                            tags: Box::new(TagConditions {
-                                operator: Some("or".to_string()),
-                                values: vec!["tag2".to_string()],
-                            }),
-                        })),
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                    ToVertexConfig {
-                        name: "vertex3",
-                        partitions: 1,
-                        writer_config: vertex3_writer_config,
-                        conditions: None, // No conditions, always forward
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                ],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![
+                ToVertexConfig {
+                    name: "vertex1",
+                    partitions: 2,
+                    writer_config: vertex1_writer_config,
+                    conditions: Some(Box::new(ForwardConditions {
+                        tags: Box::new(TagConditions {
+                            operator: Some("or".to_string()),
+                            values: vec!["tag1".to_string()],
+                        }),
+                    })),
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+                ToVertexConfig {
+                    name: "vertex2",
+                    partitions: 1,
+                    writer_config: vertex2_writer_config,
+                    conditions: Some(Box::new(ForwardConditions {
+                        tags: Box::new(TagConditions {
+                            operator: Some("or".to_string()),
+                            values: vec!["tag2".to_string()],
+                        }),
+                    })),
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+                ToVertexConfig {
+                    name: "vertex3",
+                    partitions: 1,
+                    writer_config: vertex3_writer_config,
+                    conditions: None, // No conditions, always forward
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+            ],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
         let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
@@ -1108,9 +1105,9 @@ mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::message::{IntOffset, MessageHandle, MessageID, ReadAck};
+    use crate::pipeline::isb::ISBWriter;
     use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
     use crate::pipeline::isb::simplebuffer::SimpleBufferAdapter;
-    use crate::pipeline::isb::ISBWriter;
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::{ForwardConditions, TagConditions};
@@ -2002,10 +1999,8 @@ mod simple_buffer_tests {
         let msg1 = create_message_with_keys_and_offset(vec!["user-42"], "offset-1");
         let msg2 = create_message_with_keys_and_offset(vec!["user-42"], "offset-999");
 
-        let stream1 =
-            ISBWriterOrchestrator::determine_target_stream(&msg1, &vertex);
-        let stream2 =
-            ISBWriterOrchestrator::determine_target_stream(&msg2, &vertex);
+        let stream1 = ISBWriterOrchestrator::determine_target_stream(&msg1, &vertex);
+        let stream2 = ISBWriterOrchestrator::determine_target_stream(&msg2, &vertex);
 
         assert_eq!(
             stream1, stream2,
@@ -2014,10 +2009,8 @@ mod simple_buffer_tests {
 
         // Also verify for Sink vertex type
         let sink_vertex = create_vertex_config(VertexType::Sink, true, 3);
-        let s1 =
-            ISBWriterOrchestrator::determine_target_stream(&msg1, &sink_vertex);
-        let s2 =
-            ISBWriterOrchestrator::determine_target_stream(&msg2, &sink_vertex);
+        let s1 = ISBWriterOrchestrator::determine_target_stream(&msg1, &sink_vertex);
+        let s2 = ISBWriterOrchestrator::determine_target_stream(&msg2, &sink_vertex);
         assert_eq!(
             s1, s2,
             "Same keys must route to the same stream in ordered mode for Sink"
@@ -2033,12 +2026,8 @@ mod simple_buffer_tests {
         let msg_multi = create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-1");
         let msg_single = create_message_with_keys_and_offset(vec!["region:us-east"], "offset-1");
 
-        let stream_multi =
-            ISBWriterOrchestrator::determine_target_stream(&msg_multi, &vertex);
-        let stream_single = ISBWriterOrchestrator::determine_target_stream(
-            &msg_single,
-            &vertex,
-        );
+        let stream_multi = ISBWriterOrchestrator::determine_target_stream(&msg_multi, &vertex);
+        let stream_single = ISBWriterOrchestrator::determine_target_stream(&msg_single, &vertex);
 
         // The join of ["region", "us-east"] is "region:us-east", which equals the single key
         // "region:us-east". So they should hash to the same partition.
@@ -2051,18 +2040,14 @@ mod simple_buffer_tests {
         // (with enough partitions, this should differ for most key combinations)
         let msg_different =
             create_message_with_keys_and_offset(vec!["region", "eu-west"], "offset-1");
-        let stream_different = ISBWriterOrchestrator::determine_target_stream(
-            &msg_different,
-            &vertex,
-        );
+        let stream_different =
+            ISBWriterOrchestrator::determine_target_stream(&msg_different, &vertex);
 
         // Two messages with the same multi-key should always match
         let msg_multi_again =
             create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-2");
-        let stream_multi_again = ISBWriterOrchestrator::determine_target_stream(
-            &msg_multi_again,
-            &vertex,
-        );
+        let stream_multi_again =
+            ISBWriterOrchestrator::determine_target_stream(&msg_multi_again, &vertex);
         assert_eq!(
             stream_multi, stream_multi_again,
             "Same multi-key must always route to the same stream"
@@ -2083,15 +2068,10 @@ mod simple_buffer_tests {
         for key in ["a", "b", "c", "user-123", "xyz"] {
             let msg = create_message_with_keys_and_offset(vec![key], &format!("offset-{}", key));
 
-            let stream_ordered = ISBWriterOrchestrator::determine_target_stream(
-                &msg,
-                &ordered_vertex,
-            );
+            let stream_ordered =
+                ISBWriterOrchestrator::determine_target_stream(&msg, &ordered_vertex);
             let stream_unordered =
-                ISBWriterOrchestrator::determine_target_stream(
-                    &msg,
-                    &unordered_vertex,
-                );
+                ISBWriterOrchestrator::determine_target_stream(&msg, &unordered_vertex);
 
             assert_eq!(
                 stream_ordered.partition, 0,

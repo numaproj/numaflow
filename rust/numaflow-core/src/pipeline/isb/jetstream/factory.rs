@@ -11,13 +11,16 @@ use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
-use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
 use crate::config::pipeline::isb::jetstream::ClientConfig;
+use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
 use crate::error;
+use crate::error::Error;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
+use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// Creates a jetstream context based on the provided configuration.
 pub(crate) async fn create_js_context(config: ClientConfig) -> Result<Context> {
@@ -97,6 +100,15 @@ impl ISBFactory for JetStreamFactory {
             )
             .await?,
         ))
+    }
+
+    async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>> {
+        let store =
+            self.context.get_key_value(&bucket).await.map_err(|e| {
+                Error::Watermark(format!("Failed to get KV bucket '{bucket}': {e}"))
+            })?;
+        let name: &'static str = Box::leak(bucket.into_boxed_str());
+        Ok(Arc::new(JetstreamKVStore::new(store, name)))
     }
 }
 

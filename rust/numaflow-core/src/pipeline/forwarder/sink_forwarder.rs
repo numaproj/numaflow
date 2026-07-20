@@ -25,8 +25,8 @@ use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
 use async_nats::jetstream::Context;
 use futures::future::try_join_all;
-use std::sync::Arc;
 use serving::callback::CallbackHandler;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -88,7 +88,8 @@ pub async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    let js_context = js_context.expect("JetStream context required until Phases 3-4");
+    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
+    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
 
     // 1. One-time setup
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
@@ -118,9 +119,11 @@ pub async fn start_sink_forwarder(
     let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
+    // Sink is terminal — no ISB writers; idle detector gets an empty map.
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
-        &js_context,
+        isb_factory.as_ref(),
+        std::collections::HashMap::new(),
         &cln_token,
         None,
         tracker.clone(),
@@ -483,10 +486,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -611,7 +617,8 @@ mod simple_buffer_tests {
 
             let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
                 reader_components,
-                Arc::new(input_adapters.get(i).unwrap().reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                Arc::new(input_adapters.get(i).unwrap().reader())
+                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
                 None,
             )
             .await
@@ -736,10 +743,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -836,10 +846,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -874,7 +887,9 @@ mod tests {
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
     use crate::config::pipeline::isb::BufferReaderConfig;
     use crate::config::pipeline::isb::Stream;
-    use crate::config::pipeline::{FromVertexConfig, PipelineConfig, SinkVtxConfig, VertexConfig, VertexType, isb};
+    use crate::config::pipeline::{
+        FromVertexConfig, PipelineConfig, SinkVtxConfig, VertexConfig, VertexType, isb,
+    };
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
 

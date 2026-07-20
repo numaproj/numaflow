@@ -62,7 +62,7 @@ pub(crate) async fn start_forwarder(
     config: PipelineConfig,
 ) -> error::Result<()> {
     let isb_factory = create_isb_factory(&config.isb_client_config, cln_token.clone()).await?;
-    // Transitional until Phases 3-4: watermark + serving still need the raw context.
+    // Transitional until Phase 4: serving/callback still need the raw context.
     let js_context = match &config.isb_client_config {
         ISBClientConfig::Jetstream(cfg) => Some(create_js_context(cfg.clone()).await?),
     };
@@ -107,7 +107,6 @@ pub(crate) async fn start_forwarder(
             reduce_forwarder::start_reduce_forwarder(
                 cln_token,
                 isb_factory,
-                js_context,
                 config.clone(),
                 reduce.clone(),
             )

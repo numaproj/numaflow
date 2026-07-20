@@ -829,9 +829,13 @@ mod tests {
         };
 
         let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(isb_reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                isb_reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = isb_reader
@@ -943,9 +947,13 @@ mod tests {
         };
 
         let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(isb_reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                isb_reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = isb_reader
@@ -1077,9 +1085,13 @@ mod tests {
         };
 
         let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(isb_reader_components, Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                isb_reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = isb_reader
@@ -1610,10 +1622,13 @@ mod simplebuffer_tests {
             cln_token: cancel.clone(),
         };
 
-        let orchestrator: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(components, Arc::new(adapter.reader()) as ISBReaderRef, None)
-                .await
-                .unwrap();
+        let orchestrator: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            components,
+            Arc::new(adapter.reader()) as ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         (orchestrator, tracker, cancel)
     }
@@ -2065,8 +2080,8 @@ mod simplebuffer_tests {
 mod duplicate_inflight_tests {
     use super::*;
     use crate::message::{IntOffset, Message, MessageID};
-    use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
     use crate::pipeline::isb::ISBReader;
+    use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
     use crate::typ::WithoutRateLimiter;
     use bytes::Bytes;
     use chrono::Utc;

@@ -1078,31 +1078,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer
@@ -1317,31 +1316,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer
@@ -1619,31 +1617,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer
@@ -1839,31 +1836,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer
@@ -2113,31 +2109,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer with the GC WAL configured.
@@ -2365,31 +2360,30 @@ mod tests {
             stream.name,
             Arc::new(
                 crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
-                stream.clone(),
-                js_context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await?,
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::ReduceUDF,
-            };
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
         let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the UnalignedReducer

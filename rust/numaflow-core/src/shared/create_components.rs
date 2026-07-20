@@ -39,7 +39,6 @@ use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
-use async_nats::jetstream::Context;
 use numaflow_models::models::{NatsAuth, Tls};
 use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
@@ -852,7 +851,8 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
 /// Creates an ISBWatermarkHandle if watermark is enabled in the configuration.
 pub async fn create_edge_watermark_handle(
     config: &PipelineConfig,
-    js_context: &Context,
+    isb_factory: &dyn crate::pipeline::isb::ISBFactory,
+    writers: std::collections::HashMap<&'static str, crate::pipeline::isb::ISBWriterRef>,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
     tracker: Tracker,
@@ -864,7 +864,8 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                js_context.clone(),
+                isb_factory,
+                writers,
                 edge_config,
                 &config.to_vertex_config,
                 cln_token.clone(),

@@ -16,6 +16,7 @@ use crate::config::pipeline::isb::{BufferWriterConfig, ISBClientConfig, ISBConfi
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::jetstream::JetStreamFactory;
 use crate::pipeline::isb::jetstream::factory::create_js_context;
+use numaflow_shared::kv::KVStore;
 
 /// Trait for creating ISB readers and writers.
 ///
@@ -81,6 +82,12 @@ pub(crate) trait ISBFactory: Send + Sync {
         }
         Ok(writers)
     }
+
+    /// Creates a key-value store for the given bucket.
+    ///
+    /// Used by watermark (offset timeline) and other features that need
+    /// backend-neutral KV access.
+    async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>>;
 }
 
 /// Creates an ISB factory for the configured backend.

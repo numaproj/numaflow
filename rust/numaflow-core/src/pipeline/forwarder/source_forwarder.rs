@@ -1,4 +1,5 @@
 use crate::config::is_mono_vertex;
+use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, SourceVtxConfig};
 use crate::error::Error;
 use crate::metrics::{
@@ -7,7 +8,6 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::ISBFactory;
-use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -77,7 +77,8 @@ pub(crate) async fn start_source_forwarder(
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> error::Result<()> {
-    let js_context = js_context.expect("JetStream context required until Phases 3-4");
+    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
+    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
 
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
@@ -95,22 +96,6 @@ pub(crate) async fn start_source_forwarder(
 
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
 
-    // create watermark handle, if watermark is enabled
-    // Uses idle_config.step_interval (default 100ms) as the unified heartbeat interval
-    let source_watermark_handle = match &config.watermark_config {
-        Some(WatermarkConfig::Source(source_config)) => Some(
-            SourceWatermarkHandle::new(
-                js_context.clone(),
-                &config.to_vertex_config,
-                source_config,
-                cln_token.clone(),
-                tracker.clone(),
-            )
-            .await?,
-        ),
-        _ => None,
-    };
-
     let writers = isb_factory
         .create_writers(
             &config.to_vertex_config,
@@ -118,6 +103,23 @@ pub(crate) async fn start_source_forwarder(
             cln_token.clone(),
         )
         .await?;
+
+    // create watermark handle, if watermark is enabled
+    // Uses idle_config.step_interval (default 100ms) as the unified heartbeat interval
+    let source_watermark_handle = match &config.watermark_config {
+        Some(WatermarkConfig::Source(wm_config)) => Some(
+            SourceWatermarkHandle::new(
+                isb_factory.as_ref(),
+                writers.clone(),
+                &config.to_vertex_config,
+                wm_config,
+                cln_token.clone(),
+                tracker.clone(),
+            )
+            .await?,
+        ),
+        _ => None,
+    };
 
     let buffer_writer = ISBWriterOrchestrator::new(ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
@@ -369,7 +371,10 @@ mod simple_buffer_tests {
     ) -> ISBWriterOrchestrator {
         let mut writers = HashMap::new();
         for (name, adapter) in output_adapters {
-            writers.insert(*name, Arc::new(adapter.writer()) as crate::pipeline::isb::dyn_adapter::ISBWriterRef);
+            writers.insert(
+                *name,
+                Arc::new(adapter.writer()) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
+            );
         }
 
         let writer_config = BufferWriterConfig {

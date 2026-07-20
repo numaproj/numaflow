@@ -24,8 +24,8 @@ use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
 use async_nats::jetstream::Context;
 use futures::future::try_join_all;
-use std::sync::Arc;
 use serving::callback::CallbackHandler;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -104,7 +104,8 @@ pub async fn start_map_forwarder(
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    let js_context = js_context.expect("JetStream context required until Phases 3-4");
+    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
+    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
 
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
@@ -133,15 +134,6 @@ pub async fn start_map_forwarder(
     let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
-    let watermark_handle = create_components::create_edge_watermark_handle(
-        &config,
-        &js_context,
-        &cln_token,
-        None,
-        tracker.clone(),
-        from_partitions.clone(),
-    )
-    .await?;
 
     let writers = isb_factory
         .create_writers(
@@ -150,6 +142,17 @@ pub async fn start_map_forwarder(
             cln_token.clone(),
         )
         .await?;
+
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        isb_factory.as_ref(),
+        writers.clone(),
+        &cln_token,
+        None,
+        tracker.clone(),
+        from_partitions.clone(),
+    )
+    .await?;
 
     let buffer_writer = ISBWriterOrchestrator::new(ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),

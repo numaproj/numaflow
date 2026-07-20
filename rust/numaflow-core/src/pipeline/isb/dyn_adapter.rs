@@ -23,11 +23,7 @@ pub(crate) type ISBWriterRef = std::sync::Arc<dyn DynISBWriter>;
 /// Dyn-compatible twin of [`ISBReader`]. Do not implement this directly —
 /// implement [`LocalISBReader`]/[`ISBReader`] and rely on the blanket impl.
 pub(crate) trait DynISBReader: Send + Sync {
-    fn fetch<'a>(
-        &'a self,
-        max: usize,
-        timeout: Duration,
-    ) -> BoxFuture<'a, Result<Vec<Message>>>;
+    fn fetch<'a>(&'a self, max: usize, timeout: Duration) -> BoxFuture<'a, Result<Vec<Message>>>;
     fn ack<'a>(&'a self, offset: &'a Offset) -> BoxFuture<'a, Result<()>>;
     fn nack<'a>(
         &'a self,
@@ -41,11 +37,7 @@ pub(crate) trait DynISBReader: Send + Sync {
 }
 
 impl<T: ISBReader> DynISBReader for T {
-    fn fetch<'a>(
-        &'a self,
-        max: usize,
-        timeout: Duration,
-    ) -> BoxFuture<'a, Result<Vec<Message>>> {
+    fn fetch<'a>(&'a self, max: usize, timeout: Duration) -> BoxFuture<'a, Result<Vec<Message>>> {
         Box::pin(ISBReader::fetch(self, max, timeout))
     }
     fn ack<'a>(&'a self, offset: &'a Offset) -> BoxFuture<'a, Result<()>> {
