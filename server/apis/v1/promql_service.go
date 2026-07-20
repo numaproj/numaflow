@@ -228,7 +228,7 @@ func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, star
 		End:   end,
 		Step:  time.Minute,
 	}
-	result, _, err := b.PrometheusClient.Api.QueryRange(ctx, promql, r, v1.WithTimeout(5*time.Second))
+	result, _, err := b.PrometheusClient.Api.QueryRange(ctx, promql, r, v1.WithTimeout(1*time.Minute))
 	return result, err
 }
 
