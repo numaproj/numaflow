@@ -537,20 +537,29 @@ pub(crate) async fn start_reduce_forwarder(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::reduce::{
         AlignedReducerConfig, AlignedWindowConfig, AlignedWindowType, FixedWindowConfig,
         UserDefinedConfig,
     };
-    use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
+    use crate::config::pipeline::isb::{
+        BufferReaderConfig, BufferWriterConfig, ISBClientConfig, Stream,
+    };
     use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig, WatermarkConfig};
     use crate::config::pipeline::{
         FromVertexConfig, PipelineConfig, ReduceVtxConfig, ToVertexConfig, VertexConfig, VertexType,
     };
-    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, StringOffset};
     use crate::pipeline::forwarder::reduce_forwarder::{
-        FenceGuard, start_aligned_reduce_forwarder, start_unaligned_reduce_forwarder,
-        wait_for_fence_availability,
+        FenceGuard, start_aligned_reduce_forwarder, start_reduce_forwarder,
+        start_unaligned_reduce_forwarder, wait_for_fence_availability,
     };
+    use crate::pipeline::isb::ISBFactory;
+    use crate::pipeline::isb::inmemory::InMemoryFactory;
+    use crate::shared::test_utils::server::start_server;
+    use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::{self, consumer, stream};
@@ -599,6 +608,253 @@ mod tests {
             }
             vec![reduce::Message::new(counter.to_string().into_bytes()).with_keys(keys.clone())]
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_reduce_over_inmemory_isb() -> crate::Result<()> {
+        const TERMINAL_WATERMARK_MS: i64 = 253_402_300_799_000;
+        const INPUT_VERTEX: &str = "inmemory-reduce-input-vertex";
+        const OUTPUT_VERTEX: &str = "inmemory-reduce-output-vertex";
+        const INPUT_OT_BUCKET: &str = "inmemory-reduce-input-ot";
+        const OUTPUT_OT_BUCKET: &str = "inmemory-reduce-output-ot";
+
+        let reduce_server = start_server(
+            "reducer",
+            |socket_path, server_info_path, shutdown_rx| async move {
+                reduce::Server::new(CounterCreator {})
+                    .with_socket_file(socket_path)
+                    .with_server_info_file(server_info_path)
+                    .start_with_shutdown(shutdown_rx)
+                    .await
+                    .expect("reduce server failed");
+            },
+        );
+
+        let input_stream = Stream::new("test_reduce_over_inmemory_isb_input", INPUT_VERTEX, 0);
+        let output_stream = Stream::new("test_reduce_over_inmemory_isb_output", OUTPUT_VERTEX, 0);
+        let input_bucket_config = BucketConfig {
+            vertex: INPUT_VERTEX,
+            partitions: vec![0],
+            ot_bucket: INPUT_OT_BUCKET,
+            delay: None,
+        };
+        let output_bucket_config = BucketConfig {
+            vertex: OUTPUT_VERTEX,
+            partitions: vec![0],
+            ot_bucket: OUTPUT_OT_BUCKET,
+            delay: None,
+        };
+
+        let reduce_vtx_config = ReduceVtxConfig {
+            keyed: true,
+            wal_storage_config: None,
+            reducer_config: crate::config::components::reduce::ReducerConfig::Aligned(
+                AlignedReducerConfig {
+                    window_config: AlignedWindowConfig {
+                        window_type: AlignedWindowType::Fixed(FixedWindowConfig {
+                            length: Duration::from_secs(60),
+                            streaming: false,
+                        }),
+                        allowed_lateness: Duration::ZERO,
+                        is_keyed: true,
+                    },
+                    user_defined_config: UserDefinedConfig {
+                        grpc_max_message_size: 5 * 1024 * 1024,
+                        socket_path: Box::leak(
+                            reduce_server
+                                .socket_path()
+                                .to_string_lossy()
+                                .into_owned()
+                                .into_boxed_str(),
+                        ),
+                        server_info_path: Box::leak(
+                            reduce_server
+                                .server_info_path()
+                                .to_string_lossy()
+                                .into_owned()
+                                .into_boxed_str(),
+                        ),
+                    },
+                },
+            ),
+        };
+        let pipeline_config = PipelineConfig {
+            pipeline_name: "test-inmemory-reduce-pipeline",
+            vertex_name: "test-inmemory-reduce-vertex",
+            replica: 0,
+            batch_size: 10,
+            concurrency: 20,
+            read_timeout: Duration::from_millis(20),
+            graceful_shutdown_time: Duration::from_millis(100),
+            isb_client_config: ISBClientConfig::InMemory,
+            from_vertex_config: vec![FromVertexConfig {
+                name: INPUT_VERTEX,
+                reader_config: BufferReaderConfig {
+                    streams: vec![input_stream.clone()],
+                    wip_ack_interval: Duration::from_millis(5),
+                    max_ack_pending: 20,
+                },
+                partitions: 1,
+            }],
+            to_vertex_config: vec![ToVertexConfig {
+                name: OUTPUT_VERTEX,
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![output_stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            vertex_config: VertexConfig::Reduce(reduce_vtx_config.clone()),
+            vertex_type: VertexType::ReduceUDF,
+            metrics_config: MetricsConfig {
+                metrics_server_listen_port: 0,
+                ..Default::default()
+            },
+            watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                from_vertex_config: vec![input_bucket_config.clone()],
+                to_vertex_config: vec![output_bucket_config],
+            })),
+            ..Default::default()
+        };
+
+        let cancellation_token = CancellationToken::new();
+        let factory = Arc::new(InMemoryFactory::new());
+        let input_writer = factory
+            .create_writer(
+                input_stream.clone(),
+                BufferWriterConfig {
+                    streams: vec![input_stream.clone()],
+                    ..Default::default()
+                },
+                None,
+                cancellation_token.clone(),
+            )
+            .await?;
+        let input_ot_store = factory.create_kv_store(INPUT_OT_BUCKET.to_string()).await?;
+        let mut upstream_watermark_publisher = ISBWatermarkPublisher::new(
+            "inmemory-reduce-input-0".to_string(),
+            HashMap::from([(INPUT_VERTEX, input_ot_store)]),
+            std::slice::from_ref(&input_bucket_config),
+            false,
+        );
+
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+        upstream_watermark_publisher
+            .publish_watermark(&input_stream, 0, base_time.timestamp_millis() - 1, false)
+            .await;
+
+        let forwarder_factory: Arc<dyn ISBFactory> = Arc::<InMemoryFactory>::clone(&factory);
+        let forwarder_task = tokio::spawn(start_reduce_forwarder(
+            cancellation_token.clone(),
+            forwarder_factory,
+            pipeline_config,
+            reduce_vtx_config,
+        ));
+
+        let test_messages = [
+            ("key1", 10_i64),
+            ("key2", 20),
+            ("key1", 30),
+            ("key2", 40),
+            ("key1", 50),
+        ];
+        let mut last_offset = 0;
+        for (index, (key, event_time_seconds)) in test_messages.into_iter().enumerate() {
+            let event_time = base_time + chrono::Duration::seconds(event_time_seconds);
+            let write_result = input_writer
+                .write(Message {
+                    keys: Arc::from(vec![key.to_string()]),
+                    value: format!("value-{index}").into(),
+                    offset: Offset::Int(IntOffset::new(0, 0)),
+                    event_time,
+                    id: MessageID {
+                        vertex_name: INPUT_VERTEX.into(),
+                        offset: index.to_string().into(),
+                        index: index as i32,
+                    },
+                    ..Default::default()
+                })
+                .await
+                .expect("write input message");
+            let Offset::Int(offset) = write_result.offset else {
+                panic!("in-memory writer must return an integer offset");
+            };
+            last_offset = offset.offset;
+            upstream_watermark_publisher
+                .publish_watermark(
+                    &input_stream,
+                    offset.offset,
+                    event_time.timestamp_millis(),
+                    false,
+                )
+                .await;
+        }
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if factory
+                    .buffer_stats(input_stream.name)
+                    .is_some_and(|(pending, _)| pending == 0)
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("input messages were not fetched");
+
+        let output_reader = factory.create_reader(output_stream.clone(), None).await?;
+        let terminal_offset = last_offset + 1;
+        let mut results = HashMap::new();
+        let output_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while results.len() < 2 && tokio::time::Instant::now() < output_deadline {
+            // Re-publishing also keeps the synthetic upstream processor active while the
+            // forwarder observes and processes the terminal idle watermark.
+            upstream_watermark_publisher
+                .publish_watermark(&input_stream, terminal_offset, TERMINAL_WATERMARK_MS, true)
+                .await;
+
+            for message in output_reader.fetch(10, Duration::from_millis(100)).await? {
+                let key = message
+                    .keys
+                    .first()
+                    .expect("reduced result must contain its key")
+                    .clone();
+                assert!(
+                    results.insert(key, message.value.to_vec()).is_none(),
+                    "received duplicate result for a key"
+                );
+                output_reader.ack(&message.offset).await?;
+            }
+        }
+
+        assert_eq!(
+            results,
+            HashMap::from([
+                ("key1".to_string(), b"3".to_vec()),
+                ("key2".to_string(), b"2".to_vec()),
+            ])
+        );
+        assert!(
+            output_reader
+                .fetch(10, Duration::from_millis(100))
+                .await?
+                .is_empty(),
+            "expected exactly one reduced result per key/window"
+        );
+
+        cancellation_token.cancel();
+        tokio::time::timeout(Duration::from_secs(5), forwarder_task)
+            .await
+            .expect("reduce forwarder did not stop")
+            .expect("reduce forwarder task panicked")?;
+        reduce_server.shutdown();
+
+        Ok(())
     }
 
     #[cfg(feature = "nats-tests")]
