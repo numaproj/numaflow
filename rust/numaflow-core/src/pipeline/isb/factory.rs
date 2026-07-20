@@ -14,6 +14,7 @@ use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferWriterConfig, ISBClientConfig, ISBConfig, Stream};
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
+use crate::pipeline::isb::inmemory::InMemoryFactory;
 use crate::pipeline::isb::jetstream::JetStreamFactory;
 use crate::pipeline::isb::jetstream::factory::create_js_context;
 use numaflow_shared::kv::KVStore;
@@ -99,6 +100,10 @@ pub(crate) async fn create_isb_factory(
         ISBClientConfig::Jetstream(cfg) => {
             let js_context = create_js_context(cfg.clone()).await?;
             Ok(Arc::new(JetStreamFactory::new(js_context)))
+        }
+        ISBClientConfig::InMemory => {
+            tracing::warn!("in-memory ISB backend selected — for local testing only");
+            Ok(Arc::new(InMemoryFactory::new()))
         }
     }
 }

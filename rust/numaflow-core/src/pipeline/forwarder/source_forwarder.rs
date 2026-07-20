@@ -269,13 +269,12 @@ mod simple_buffer_tests {
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::sourcetransform;
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter, WithSimpleBuffer};
     use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
     use crate::source::test_utils;
     use crate::tracker::Tracker;

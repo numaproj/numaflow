@@ -1,4 +1,4 @@
-use crate::pipeline::isb::simplebuffer::WithSimpleBuffer;
+use crate::pipeline::isb::inmemory::WithSimpleBuffer;
 use crate::shared::grpc;
 use crate::shared::test_utils::server;
 use crate::shared::test_utils::server::{TestServerHandle, start_server};

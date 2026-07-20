@@ -20,12 +20,10 @@ pub(crate) mod compression;
 pub(crate) mod dyn_adapter;
 pub(crate) mod error;
 pub(crate) mod factory;
+pub(crate) mod inmemory;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
-// SimpleBuffer for integration tests
-#[cfg(test)]
-pub(crate) mod simplebuffer;
 
 // Re-exported for callers elsewhere in the crate.
 #[allow(unused_imports)]

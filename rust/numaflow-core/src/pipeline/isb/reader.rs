@@ -1581,10 +1581,9 @@ mod simplebuffer_tests {
     use super::*;
     use crate::message::MessageID;
     use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use std::collections::HashMap;
     use tokio::time::sleep;
     use tokio_stream::StreamExt;

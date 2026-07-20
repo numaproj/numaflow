@@ -1,4 +1,5 @@
-//! Simple buffer implementation for testing.
+//! In-memory ISB backend — first-class but for local testing only: single-process,
+//! non-durable, no replay.
 //!
 //! This module provides a simple in-memory buffer that mimics the behavior of an ISB
 //! but allows for testing of error paths, retry logic, buffer full scenarios, etc.
@@ -11,30 +12,46 @@
 //!
 //! # Example
 //! ```ignore
-//! use numaflow_testing::simplebuffer::{SimpleBuffer, SimpleReader, SimpleWriter};
+//! use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleReader, SimpleWriter};
 //!
 //! let buffer = SimpleBuffer::new(100, 0, "test-buffer");
 //! let writer = buffer.writer();
 //! let reader = buffer.reader();
 //! ```
 
+#![allow(dead_code)] // helpers / error-injection APIs used from tests and future embedders
+
+/// ISBReader/ISBWriter adapters with full proto round-trip fidelity.
+mod adapter;
 /// Buffer state, slot definitions, and core types.
 mod buffer;
 /// Error types.
 mod error;
 /// Error injector for testing.
 mod error_injector;
+/// Factory that registers in-memory buffers and KV stores by name.
+mod factory;
 /// Reader implementation.
 mod reader;
 /// Writer implementation.
 mod writer;
 
-// Re-exports
-pub use buffer::{Offset, ReadMessage};
-pub use error::{Result, SimpleBufferError};
-pub use error_injector::ErrorInjector;
-pub use reader::SimpleReader;
-pub use writer::{PendingWrite, SimpleWriter, WriteError, WriteResult};
+// Re-exports — buffer types
+#[allow(unused_imports)] // public API surface for tests / factory; not all used in every cfg
+pub(crate) use buffer::{Offset, ReadMessage};
+#[allow(unused_imports)]
+pub(crate) use error::{Result, SimpleBufferError};
+pub(crate) use error_injector::ErrorInjector;
+pub(crate) use reader::SimpleReader;
+#[allow(unused_imports)]
+pub(crate) use writer::{PendingWrite, SimpleWriter, WriteError, WriteResult};
+
+// Re-exports — adapters / factory (Phases 3–4)
+#[cfg(test)]
+pub(crate) use adapter::WithSimpleBuffer;
+#[allow(unused_imports)]
+pub(crate) use adapter::{SimpleBufferAdapter, SimpleReaderAdapter, SimpleWriterAdapter};
+pub(crate) use factory::InMemoryFactory;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,7 +66,7 @@ use buffer::BufferState;
 /// It supports all the features of a real ISB including ack, nack, pending tracking,
 /// and work-in-progress markers.
 #[derive(Debug, Clone)]
-pub struct SimpleBuffer {
+pub(crate) struct SimpleBuffer {
     /// Shared buffer state.
     state: Arc<RwLock<BufferState>>,
     /// Buffer name.

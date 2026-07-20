@@ -400,8 +400,8 @@ mod tests {
     use async_nats::jetstream::kv::Store;
     use bytes::{Bytes, BytesMut};
 
+    use numaflow_shared::kv::inmemory::SimpleKVStore;
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
-    use numaflow_testing::simplekvstore::SimpleKVStore;
 
     use super::*;
 

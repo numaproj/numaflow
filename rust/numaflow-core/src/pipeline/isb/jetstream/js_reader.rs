@@ -6,15 +6,14 @@ use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{CompressionType, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, NackOptions, Offset};
-use crate::metadata::Metadata;
+use crate::message::{
+    IntOffset, Message, MessageID, MessageType, NackOptions, Offset, message_from_isb_proto,
+};
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
-use crate::shared::grpc::utc_from_timestamp;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer, consumer::PullConsumer,
 };
-use bytes::Bytes;
 use prost::Message as ProtoMessage;
 use serde_json::json;
 use tokio_stream::StreamExt;
@@ -32,12 +31,13 @@ struct JSWrappedMessage {
 
 impl JSWrappedMessage {
     async fn into_message(self) -> Result<Message> {
-        let proto_message =
+        let mut proto_message =
             numaflow_pb::objects::isb::Message::decode(self.message.payload.clone())
                 .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
             .header
+            .as_ref()
             .ok_or(Error::Proto("Missing header".to_string()))?;
         let kind: MessageType = header.kind.into();
         if kind == MessageType::WMB {
@@ -46,13 +46,6 @@ impl JSWrappedMessage {
                 ..Default::default()
             });
         }
-
-        let body = proto_message
-            .body
-            .ok_or(Error::Proto("Missing body".to_string()))?;
-        let message_info = header
-            .message_info
-            .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
         let msg_info = self.message.info().map_err(|e| {
             Error::ISB(ISBError::Decode(format!(
@@ -65,32 +58,21 @@ impl JSWrappedMessage {
             self.partition_idx,
         ));
 
-        Ok(Message {
-            typ: header.kind.into(),
-            keys: Arc::from(header.keys.into_boxed_slice()),
-            tags: None,
-            value: match self.compression_type {
-                None => body.payload.into(),
-                Some(compression_type) => {
-                    Bytes::from(compression::decompress(compression_type, &body.payload)?)
-                }
-            },
-            offset: offset.clone(),
-            event_time: message_info
-                .event_time
-                .map(utc_from_timestamp)
-                .expect("event time should be present"),
-            id: MessageID {
-                vertex_name: self.vertex_name.into(),
-                offset: offset.to_string().into(),
-                index: 0,
-            },
-            headers: Arc::new(header.headers),
-            watermark: None,
-            metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
-            is_late: message_info.is_late,
-            nack_options: None,
-        })
+        // Decompress payload in-place before shared proto→Message mapping.
+        if let Some(compression_type) = self.compression_type {
+            if let Some(ref mut body) = proto_message.body {
+                body.payload = compression::decompress(compression_type, &body.payload)?;
+            }
+        }
+
+        let mut message = message_from_isb_proto(proto_message, offset.clone())?;
+        // JetStream overwrites MessageID with vertex name and stream offset.
+        message.id = MessageID {
+            vertex_name: self.vertex_name.into(),
+            offset: offset.to_string().into(),
+            index: 0,
+        };
+        Ok(message)
     }
 }
 

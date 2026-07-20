@@ -523,7 +523,7 @@ mod simple_kv_tests {
     use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
     use crate::watermark::wmb::WMB;
     use numaflow_shared::kv::KVStore;
-    use numaflow_testing::simplekvstore::SimpleKVStore;
+    use numaflow_shared::kv::inmemory::SimpleKVStore;
 
     /// A single publish step: stream, offset, watermark, idle flag, and optional processor count.
     struct PublishStep {

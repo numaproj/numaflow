@@ -353,14 +353,13 @@ mod simple_buffer_tests {
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow::sink;
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc::Receiver;
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter, WithSimpleBuffer};
     use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use crate::sinker::test_utils::{SinkTestHandle, SinkType as TestSinkType};
     use crate::tracker::Tracker;
 

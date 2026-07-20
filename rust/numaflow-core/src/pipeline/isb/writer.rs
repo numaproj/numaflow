@@ -1107,11 +1107,10 @@ mod simple_buffer_tests {
     use crate::message::{IntOffset, MessageHandle, MessageID, ReadAck};
     use crate::pipeline::isb::ISBWriter;
     use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
-    use crate::pipeline::isb::simplebuffer::SimpleBufferAdapter;
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::{ForwardConditions, TagConditions};
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc;
 
     /// Helper to create a test message with an ack handle

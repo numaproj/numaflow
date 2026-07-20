@@ -11,8 +11,10 @@ use bytes::Bytes;
 use futures::Stream;
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
-use numaflow_shared::kv::{KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
+use crate::kv::{KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
 
 use super::error::SimpleKVStoreError;
 use super::error_injector::KVErrorInjector;
@@ -302,8 +304,8 @@ impl KVStore for SimpleKVStore {
 
         let stream = SimpleKVWatchStream::new(
             history,
-            receiver,
-            close_receiver,
+            BroadcastStream::new(receiver),
+            BroadcastStream::new(close_receiver),
             close_after,
             error_injector,
         );
@@ -318,10 +320,10 @@ struct SimpleKVWatchStream {
     history: Vec<KVHistoryEntry>,
     /// Index into history for replay.
     history_index: usize,
-    /// Receiver for live updates.
-    receiver: broadcast::Receiver<KVHistoryEntry>,
-    /// Receiver for close signals.
-    close_receiver: broadcast::Receiver<()>,
+    /// Stream for live updates (properly registers waker via BroadcastStream).
+    stream: BroadcastStream<KVHistoryEntry>,
+    /// Stream for close signals (polled first so close_all_watch_streams wakes waiters).
+    close_stream: BroadcastStream<()>,
     /// Number of items after which to close (0 = disabled).
     close_after: usize,
     /// Number of items emitted.
@@ -332,22 +334,19 @@ struct SimpleKVWatchStream {
     closed: bool,
 }
 
-/// Result type for receive operation.
-type RecvResult = Result<KVHistoryEntry, broadcast::error::RecvError>;
-
 impl SimpleKVWatchStream {
     fn new(
         history: Vec<KVHistoryEntry>,
-        receiver: broadcast::Receiver<KVHistoryEntry>,
-        close_receiver: broadcast::Receiver<()>,
+        stream: BroadcastStream<KVHistoryEntry>,
+        close_stream: BroadcastStream<()>,
         close_after: usize,
         error_injector: Arc<KVErrorInjector>,
     ) -> Self {
         Self {
             history,
             history_index: 0,
-            receiver,
-            close_receiver,
+            stream,
+            close_stream,
             close_after,
             items_emitted: 0,
             error_injector,
@@ -370,20 +369,22 @@ impl Stream for SimpleKVWatchStream {
             return Poll::Ready(None);
         }
 
-        // Check close_receiver for close signal (non-blocking)
-        match self.close_receiver.try_recv() {
-            Ok(()) => {
-                self.closed = true;
-                return Poll::Ready(None);
-            }
-            Err(broadcast::error::TryRecvError::Closed) => {
-                self.closed = true;
-                return Poll::Ready(None);
-            }
-            Err(
-                broadcast::error::TryRecvError::Empty | broadcast::error::TryRecvError::Lagged(_),
-            ) => {
-                // No close signal, continue
+        // Poll close stream first so close_all_watch_streams() wakes and terminates.
+        loop {
+            match Pin::new(&mut self.close_stream).poll_next(cx) {
+                Poll::Ready(Some(Ok(()))) => {
+                    self.closed = true;
+                    return Poll::Ready(None);
+                }
+                Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(_)))) => {
+                    // Missed a close signal but keep polling for a fresh one.
+                    continue;
+                }
+                Poll::Ready(None) => {
+                    self.closed = true;
+                    return Poll::Ready(None);
+                }
+                Poll::Pending => break,
             }
         }
 
@@ -401,29 +402,22 @@ impl Stream for SimpleKVWatchStream {
             return Poll::Ready(Some(entry));
         }
 
-        // Then, receive live updates using try_recv
-        // We use try_recv because broadcast::Receiver doesn't have poll_recv
-        match self.receiver.try_recv() {
-            Ok(history_entry) => {
-                self.items_emitted += 1;
-                Poll::Ready(Some((&history_entry).into()))
-            }
-            Err(broadcast::error::TryRecvError::Closed) => {
-                self.closed = true;
-                Poll::Ready(None)
-            }
-            Err(broadcast::error::TryRecvError::Empty) => {
-                // No message available, we need to wait
-                // Register waker and return pending
-                // Since we can't directly poll the receiver, we'll use a simple
-                // polling strategy - wake immediately to poll again
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
-            Err(broadcast::error::TryRecvError::Lagged(_)) => {
-                // Missed some messages, but continue receiving
-                cx.waker().wake_by_ref();
-                Poll::Pending
+        // Then, receive live updates via BroadcastStream (registers waker properly).
+        loop {
+            match Pin::new(&mut self.stream).poll_next(cx) {
+                Poll::Ready(Some(Ok(history_entry))) => {
+                    self.items_emitted += 1;
+                    return Poll::Ready(Some((&history_entry).into()));
+                }
+                Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(_)))) => {
+                    // Missed some messages, skip and poll again.
+                    continue;
+                }
+                Poll::Ready(None) => {
+                    self.closed = true;
+                    return Poll::Ready(None);
+                }
+                Poll::Pending => return Poll::Pending,
             }
         }
     }
@@ -476,6 +470,30 @@ mod tests {
 
         // Should receive the update
         let entry = watch.next().await.unwrap();
+        assert_eq!(entry.key, "key1");
+        assert_eq!(entry.value, Bytes::from("value1"));
+        assert_eq!(entry.operation, KVWatchOp::Put);
+    }
+
+    /// Guards the BroadcastStream waker fix: a task awaiting watch(None) must wake
+    /// when a subsequent put arrives (the old busy-poll-free-but-wake-less variants fail this).
+    #[tokio::test]
+    async fn test_watch_wakeup_on_put() {
+        use std::time::Duration;
+
+        let store = SimpleKVStore::new("test-store");
+        let mut watch = store.watch(None).await.unwrap();
+
+        let store2 = store.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            store2.put("key1", Bytes::from("value1")).await.unwrap();
+        });
+
+        let entry = tokio::time::timeout(Duration::from_secs(2), watch.next())
+            .await
+            .expect("watch should wake within timeout")
+            .expect("should receive an entry");
         assert_eq!(entry.key, "key1");
         assert_eq!(entry.value, Bytes::from("value1"));
         assert_eq!(entry.operation, KVWatchOp::Put);

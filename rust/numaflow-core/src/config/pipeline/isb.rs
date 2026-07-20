@@ -4,8 +4,8 @@ use std::fmt::Display;
 use std::time::Duration;
 
 const DEFAULT_PARTITION_IDX: u16 = 0;
-const DEFAULT_MAX_LENGTH: usize = 30000;
-const DEFAULT_USAGE_LIMIT: f64 = 0.8;
+pub(crate) const DEFAULT_MAX_LENGTH: usize = 30000;
+pub(crate) const DEFAULT_USAGE_LIMIT: f64 = 0.8;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 /// Default cap on in-flight (read-but-not-acked) messages used only when constructing a
@@ -17,7 +17,10 @@ const DEFAULT_BUFFER_READER_INFLIGHT_CAP: usize = 500;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ISBClientConfig {
     Jetstream(jetstream::ClientConfig),
-    // Pulsar(...), Kafka(...) — future
+    /// In-memory backend for local testing only. Intentionally NOT constructible from the
+    /// env/k8s loader (config/pipeline.rs only accepts "jetstream") — programmatic use only.
+    #[allow(dead_code)] // selected via create_isb_factory; not reached from k8s env loader
+    InMemory,
 }
 
 pub(crate) mod jetstream {
