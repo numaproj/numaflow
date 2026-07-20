@@ -800,7 +800,7 @@ func Test_copyEdges(t *testing.T) {
 
 func Test_buildISBBatchJob(t *testing.T) {
 	t.Run("test build ISB batch job", func(t *testing.T) {
-		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test", *metav1.NewControllerRef(testPipeline.GetObjectMeta(), dfv1.PipelineGroupVersionKind))
 		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
 		assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
 		assert.Contains(t, j.Name, testPipeline.Name+"-test-")
@@ -856,7 +856,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 				},
 			},
 		}
-		j := buildISBBatchJob(pl, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		j := buildISBBatchJob(pl, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test", *metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind))
 		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
 		assert.Equal(t, j.Spec.Template.Spec.Containers[0].Resources, resources)
 		assert.Greater(t, len(j.Spec.Template.Spec.Containers[0].Env), 1)

@@ -329,7 +329,7 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre", *metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind))
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCreationFailed", "Failed to create a Job: %w", err.Error())
 			return fmt.Errorf("failed to create ISB creating job, err: %w", err)
@@ -348,7 +348,7 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			bks = append(bks, k)
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del", *metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind))
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBDeletionFailed", "Failed to create a Job: %w", err.Error())
 			return fmt.Errorf("failed to create ISB deleting job, err: %w", err)
@@ -630,15 +630,13 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
-		batchJob.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: dfv1.SchemeGroupVersion.String(),
-				Kind:       dfv1.ISBGroupVersionKind.Kind,
-				Name:       isbSvc.Name,
-				UID:        isbSvc.UID,
-			},
+		isbSvcOwner := metav1.OwnerReference{
+			APIVersion: dfv1.SchemeGroupVersion.String(),
+			Kind:       dfv1.ISBGroupVersionKind.Kind,
+			Name:       isbSvc.Name,
+			UID:        isbSvc.UID,
 		}
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln", isbSvcOwner)
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create buffer clean up job, err: %w", err)
 		}
@@ -869,7 +867,7 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 	return result
 }
 
-func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferServiceConfig, subCommand string, args []string, jobType string) *batchv1.Job {
+func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferServiceConfig, subCommand string, args []string, jobType string, owner metav1.OwnerReference) *batchv1.Job {
 	isbsType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
 	c := corev1.Container{
@@ -921,11 +919,9 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
 			// The name won't be over length limit, because we have validated "{pipeline}-{vertex}-headless" is no longer than 63.
-			Name:   fmt.Sprintf("%s-%s-%v", pl.Name, jobType, randomStr),
-			Labels: l,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),
-			},
+			Name:            fmt.Sprintf("%s-%s-%v", pl.Name, jobType, randomStr),
+			Labels:          l,
+			OwnerReferences: []metav1.OwnerReference{owner},
 		},
 		Spec: spec,
 	}
