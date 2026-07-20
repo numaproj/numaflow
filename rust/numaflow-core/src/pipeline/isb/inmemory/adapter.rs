@@ -494,4 +494,181 @@ mod tests {
             .await
             .expect("second mark_wip should succeed");
     }
+
+    /// Full proto round-trip: every field survives write→fetch except broker-assigned
+    /// `offset` and `watermark` (always `None` on read, matching JetStream).
+    /// `previous_vertex` is rewritten to the current vertex name on encode (same as JetStream).
+    #[tokio::test]
+    async fn test_full_fidelity_round_trip() {
+        use crate::message::MessageType;
+        use crate::metadata::{KeyValueGroup, Metadata};
+        use chrono::TimeZone;
+
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "fidelity-buffer"));
+        let event_time = Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
+
+        let mut headers = HashMap::new();
+        headers.insert("h1".to_string(), "v1".to_string());
+        headers.insert("h2".to_string(), "v2".to_string());
+
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert(
+            "user-group".to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([("uk".to_string(), Bytes::from("uv"))]),
+            },
+        );
+
+        let original = Message {
+            typ: MessageType::Data,
+            keys: Arc::from(vec!["key-a".to_string(), "key-b".to_string()]),
+            tags: Some(Arc::from(vec!["tag-ignored".to_string()])),
+            value: Bytes::from("payload-bytes"),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time,
+            watermark: Some(Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap()),
+            id: MessageID {
+                vertex_name: "in-vertex".into(),
+                index: 7,
+                offset: "msg-fid-1".into(),
+            },
+            headers: Arc::new(headers.clone()),
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: "will-be-overwritten".to_string(),
+                sys_metadata: HashMap::new(),
+                user_metadata,
+            })),
+            is_late: true,
+            nack_options: None,
+        };
+
+        let writer = adapter.writer();
+        writer
+            .write(original.clone())
+            .await
+            .expect("write should succeed");
+
+        let reader = adapter.reader();
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch should succeed");
+        assert_eq!(messages.len(), 1);
+        let got = &messages[0];
+
+        assert_eq!(got.typ, MessageType::Data);
+        assert_eq!(
+            got.keys.as_ref(),
+            &["key-a".to_string(), "key-b".to_string()]
+        );
+        assert!(got.tags.is_none(), "tags are not persisted on ISB read");
+        assert_eq!(got.value, Bytes::from("payload-bytes"));
+        assert_eq!(got.event_time, event_time);
+        assert!(got.watermark.is_none(), "watermark is always None on read");
+        assert_eq!(got.id.vertex_name, Bytes::from("in-vertex"));
+        assert_eq!(got.id.offset, Bytes::from("msg-fid-1"));
+        assert_eq!(got.id.index, 7);
+        assert_eq!(got.headers.as_ref(), &headers);
+        assert!(got.is_late);
+        assert!(got.nack_options.is_none());
+
+        // Broker-assigned offset from the buffer sequence
+        assert!(matches!(
+            &got.offset,
+            Offset::Int(IntOffset {
+                offset: 1,
+                partition_idx: 0
+            })
+        ));
+
+        let md = got.metadata.as_ref().expect("metadata should round-trip");
+        assert_eq!(
+            md.previous_vertex,
+            crate::config::get_vertex_name(),
+            "encode rewrites previous_vertex to current vertex (JetStream parity)"
+        );
+        assert_eq!(
+            md.user_metadata
+                .get("user-group")
+                .unwrap()
+                .key_value
+                .get("uk")
+                .unwrap(),
+            &Bytes::from("uv")
+        );
+    }
+
+    /// WMB messages keep a real broker offset so orchestrator ack succeeds.
+    #[tokio::test]
+    async fn test_wmb_round_trip_with_real_offset() {
+        use crate::message::MessageType;
+
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "wmb-buffer"));
+        let wmb = Message {
+            typ: MessageType::WMB,
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::new(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "wm-vertex".into(),
+                index: 0,
+                offset: "wmb-1".into(),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            nack_options: None,
+        };
+
+        adapter
+            .writer()
+            .write(wmb)
+            .await
+            .expect("wmb write should succeed");
+
+        let reader = adapter.reader();
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch should succeed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].typ, MessageType::WMB);
+        assert!(
+            matches!(
+                &messages[0].offset,
+                Offset::Int(IntOffset {
+                    offset: 1,
+                    partition_idx: 0
+                })
+            ),
+            "WMB must retain a real broker offset, got {:?}",
+            messages[0].offset
+        );
+
+        reader
+            .ack(&messages[0].offset)
+            .await
+            .expect("ack of WMB by real offset should succeed");
+    }
+
+    /// Two writes with the same MessageID → second is duplicate with the first offset.
+    #[tokio::test]
+    async fn test_dedup_parity() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "dedup-buffer"));
+        let writer = adapter.writer();
+        let msg = create_test_message("same-id", "first");
+
+        let r1 = writer.write(msg.clone()).await.expect("first write");
+        assert!(!r1.is_duplicate);
+
+        let r2 = writer
+            .write(create_test_message("same-id", "second-payload"))
+            .await
+            .expect("duplicate write");
+        assert!(r2.is_duplicate);
+        assert_eq!(r1.offset, r2.offset);
+    }
 }

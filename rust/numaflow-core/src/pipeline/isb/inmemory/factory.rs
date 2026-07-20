@@ -123,3 +123,132 @@ impl ISBFactory for InMemoryFactory {
         Ok(store as Arc<dyn KVStore>)
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::indexing_slicing)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use crate::config::pipeline::isb::{BufferWriterConfig, ISBClientConfig, Stream};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::pipeline::isb::create_isb_factory;
+
+    fn test_message(id: &str, payload: &str) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::from(payload.to_string()),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: 0,
+                offset: id.to_string().into(),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            nack_options: None,
+        }
+    }
+
+    /// Writer then reader for the same stream name share the buffer (type-erased path).
+    #[tokio::test]
+    async fn test_factory_writer_reader_share_buffer() {
+        let factory = InMemoryFactory::new();
+        let stream = Stream::new("shared-stream", "v", 0);
+        let cln = CancellationToken::new();
+
+        let writer = factory
+            .create_writer(stream.clone(), BufferWriterConfig::default(), None, cln)
+            .await
+            .expect("create_writer");
+        let reader = factory
+            .create_reader(stream, None)
+            .await
+            .expect("create_reader");
+
+        writer
+            .write(test_message("m1", "hello"))
+            .await
+            .expect("write");
+
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].value, Bytes::from("hello"));
+
+        let stats = factory.buffer_stats("shared-stream");
+        assert_eq!(stats, Some((0, 1))); // pending=0 (in-flight after fetch), in_flight=1
+    }
+
+    /// Same bucket name → shared KV instance; different names → independent.
+    #[tokio::test]
+    async fn test_factory_kv_store_registry() {
+        let factory = InMemoryFactory::new();
+
+        let a1 = factory
+            .create_kv_store("b".to_string())
+            .await
+            .expect("create a1");
+        let a2 = factory
+            .create_kv_store("b".to_string())
+            .await
+            .expect("create a2");
+        let other = factory
+            .create_kv_store("other".to_string())
+            .await
+            .expect("create other");
+
+        a1.put("k", Bytes::from("v")).await.expect("put");
+        assert_eq!(
+            a2.get("k").await.expect("get via peer"),
+            Some(Bytes::from("v")),
+            "same bucket name must share state"
+        );
+        assert_eq!(
+            other.get("k").await.expect("get other"),
+            None,
+            "different bucket names must be independent"
+        );
+    }
+
+    /// `create_isb_factory(InMemory)` returns a working factory.
+    #[tokio::test]
+    async fn test_create_isb_factory_inmemory() {
+        let cln = CancellationToken::new();
+        let factory = create_isb_factory(&ISBClientConfig::InMemory, cln.clone())
+            .await
+            .expect("create_isb_factory");
+
+        let stream = Stream::new("factory-stream", "v", 0);
+        let writer = factory
+            .create_writer(stream.clone(), BufferWriterConfig::default(), None, cln)
+            .await
+            .expect("create_writer");
+        let reader = factory
+            .create_reader(stream, None)
+            .await
+            .expect("create_reader");
+
+        writer
+            .write(test_message("m1", "via-factory"))
+            .await
+            .expect("write");
+
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].value, Bytes::from("via-factory"));
+    }
+}

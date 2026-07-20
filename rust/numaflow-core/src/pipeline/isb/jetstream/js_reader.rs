@@ -59,10 +59,10 @@ impl JSWrappedMessage {
         ));
 
         // Decompress payload in-place before shared proto→Message mapping.
-        if let Some(compression_type) = self.compression_type {
-            if let Some(ref mut body) = proto_message.body {
-                body.payload = compression::decompress(compression_type, &body.payload)?;
-            }
+        if let Some(compression_type) = self.compression_type
+            && let Some(ref mut body) = proto_message.body
+        {
+            body.payload = compression::decompress(compression_type, &body.payload)?;
         }
 
         let mut message = message_from_isb_proto(proto_message, offset.clone())?;

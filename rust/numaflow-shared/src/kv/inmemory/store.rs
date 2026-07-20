@@ -377,8 +377,7 @@ impl Stream for SimpleKVWatchStream {
                     return Poll::Ready(None);
                 }
                 Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(_)))) => {
-                    // Missed a close signal but keep polling for a fresh one.
-                    continue;
+                    // Missed a close signal; loop to poll again.
                 }
                 Poll::Ready(None) => {
                     self.closed = true;
@@ -410,8 +409,7 @@ impl Stream for SimpleKVWatchStream {
                     return Poll::Ready(Some((&history_entry).into()));
                 }
                 Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(_)))) => {
-                    // Missed some messages, skip and poll again.
-                    continue;
+                    // Missed some messages; loop to poll again.
                 }
                 Poll::Ready(None) => {
                     self.closed = true;
