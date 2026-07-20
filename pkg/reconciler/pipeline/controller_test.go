@@ -916,7 +916,10 @@ func Test_cleanupBuffers(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(jobs.Items))
 		assert.Contains(t, jobs.Items[0].Name, "cln")
-		assert.Equal(t, 0, len(jobs.Items[0].OwnerReferences))
+		assert.Equal(t, 1, len(jobs.Items[0].OwnerReferences))
+		assert.Equal(t, dfv1.ISBGroupVersionKind.Kind, jobs.Items[0].OwnerReferences[0].Kind)
+		assert.Equal(t, testIsbSvc.Name, jobs.Items[0].OwnerReferences[0].Name)
+		assert.Equal(t, testIsbSvc.UID, jobs.Items[0].OwnerReferences[0].UID)
 	})
 }
 

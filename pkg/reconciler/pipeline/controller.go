@@ -631,7 +631,14 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
-		batchJob.OwnerReferences = []metav1.OwnerReference{}
+		batchJob.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: dfv1.SchemeGroupVersion.String(),
+				Kind:       dfv1.ISBGroupVersionKind.Kind,
+				Name:       isbSvc.Name,
+				UID:        isbSvc.UID,
+			},
+		}
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create buffer clean up job, err: %w", err)
 		}
