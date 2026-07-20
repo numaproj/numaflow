@@ -23,7 +23,6 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use async_nats::jetstream::Context;
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
 use std::sync::Arc;
@@ -84,24 +83,19 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
 pub async fn start_sink_forwarder(
     cln_token: CancellationToken,
     isb_factory: Arc<dyn ISBFactory>,
-    js_context: Option<Context>,
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
-    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
-
     // 1. One-time setup
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
-        Some(
-            CallbackHandler::new(
-                config.vertex_name,
-                js_context.clone(),
-                cb_cfg.callback_store,
-                cb_cfg.callback_concurrency,
-            )
-            .await,
-        )
+        let store = isb_factory
+            .create_kv_store(cb_cfg.callback_store.to_string())
+            .await?;
+        Some(CallbackHandler::new(
+            config.vertex_name,
+            store,
+            cb_cfg.callback_concurrency,
+        ))
     } else {
         None
     };
@@ -138,8 +132,10 @@ pub async fn start_sink_forwarder(
                 Some(ServingStore::UserDefined(serving_store))
             }
             ServingStoreType::Nats(config) => {
-                let serving_store =
-                    NatsServingStore::new(js_context.clone(), config.clone()).await?;
+                let store = isb_factory
+                    .create_kv_store(config.rs_store_name.clone())
+                    .await?;
+                let serving_store = NatsServingStore::new(store);
                 Some(ServingStore::Nats(Box::new(serving_store)))
             }
         },
@@ -1030,7 +1026,6 @@ mod tests {
                 start_sink_forwarder(
                     cancellation_token,
                     Arc::new(JetStreamFactory::new(context.clone())),
-                    Some(context),
                     pipeline_config,
                     sink_vtx_config,
                 )

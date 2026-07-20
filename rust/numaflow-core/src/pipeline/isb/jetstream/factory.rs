@@ -105,7 +105,7 @@ impl ISBFactory for JetStreamFactory {
     async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>> {
         let store =
             self.context.get_key_value(&bucket).await.map_err(|e| {
-                Error::Watermark(format!("Failed to get KV bucket '{bucket}': {e}"))
+                Error::Connection(format!("Failed to get KV bucket '{bucket}': {e}"))
             })?;
         let name: &'static str = Box::leak(bucket.into_boxed_str());
         Ok(Arc::new(JetstreamKVStore::new(store, name)))

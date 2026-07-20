@@ -22,7 +22,6 @@ use crate::typ::{
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{error, shared};
-use async_nats::jetstream::Context;
 use serving::callback::CallbackHandler;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -73,23 +72,18 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 pub(crate) async fn start_source_forwarder(
     cln_token: CancellationToken,
     isb_factory: Arc<dyn ISBFactory>,
-    js_context: Option<Context>,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> error::Result<()> {
-    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
-    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
-        Some(
-            CallbackHandler::new(
-                config.vertex_name,
-                js_context.clone(),
-                cb_cfg.callback_store,
-                cb_cfg.callback_concurrency,
-            )
-            .await,
-        )
+        let store = isb_factory
+            .create_kv_store(cb_cfg.callback_store.to_string())
+            .await?;
+        Some(CallbackHandler::new(
+            config.vertex_name,
+            store,
+            cb_cfg.callback_concurrency,
+        ))
     } else {
         None
     };
@@ -1177,7 +1171,6 @@ mod tests {
                 start_source_forwarder(
                     cancellation_token,
                     Arc::new(JetStreamFactory::new(context.clone())),
-                    Some(context),
                     pipeline_config,
                     source_vtx_config,
                 )

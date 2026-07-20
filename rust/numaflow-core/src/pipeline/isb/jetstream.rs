@@ -11,4 +11,4 @@ pub(crate) mod js_reader;
 /// JetStream ISB Factory for creating readers and writers.
 pub(crate) mod factory;
 
-pub(crate) use factory::{JetStreamFactory, create_js_context};
+pub(crate) use factory::JetStreamFactory;

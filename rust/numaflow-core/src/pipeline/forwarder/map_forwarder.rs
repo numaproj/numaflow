@@ -22,7 +22,6 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use async_nats::jetstream::Context;
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
 use std::sync::Arc;
@@ -100,23 +99,18 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
 pub async fn start_map_forwarder(
     cln_token: CancellationToken,
     isb_factory: Arc<dyn ISBFactory>,
-    js_context: Option<Context>,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    // Transitional until Phase 4: serving/callback still needs the raw JetStream context.
-    let js_context = js_context.expect("JetStream context required for serving until Phase 4");
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
-        Some(
-            CallbackHandler::new(
-                config.vertex_name,
-                js_context.clone(),
-                cb_cfg.callback_store,
-                cb_cfg.callback_concurrency,
-            )
-            .await,
-        )
+        let store = isb_factory
+            .create_kv_store(cb_cfg.callback_store.to_string())
+            .await?;
+        Some(CallbackHandler::new(
+            config.vertex_name,
+            store,
+            cb_cfg.callback_concurrency,
+        ))
     } else {
         None
     };
@@ -595,7 +589,6 @@ mod tests {
                 start_map_forwarder(
                     cancellation_token,
                     Arc::new(JetStreamFactory::new(context.clone())),
-                    Some(context),
                     pipeline_config,
                     map_vtx_config,
                 )

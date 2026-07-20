@@ -85,8 +85,8 @@ pub(crate) trait ISBFactory: Send + Sync {
 
     /// Creates a key-value store for the given bucket.
     ///
-    /// Used by watermark (offset timeline) and other features that need
-    /// backend-neutral KV access.
+    /// Used by watermark (offset timeline), serving callbacks/response store,
+    /// and other features that need backend-neutral KV access.
     async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>>;
 }
 

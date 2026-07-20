@@ -31,7 +31,6 @@ pub(crate) mod simplebuffer;
 #[allow(unused_imports)]
 pub(crate) use dyn_adapter::{DynISBReader, DynISBWriter, ISBReaderRef, ISBWriterRef};
 pub(crate) use factory::{ISBFactory, create_isb_factory};
-pub(crate) use jetstream::create_js_context;
 
 /// Trait for reading messages from an Inter Step Buffer (ISB).
 ///

@@ -37,8 +37,7 @@
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
 use crate::config::pipeline::PipelineConfig;
-use crate::config::pipeline::isb::ISBClientConfig;
-use crate::pipeline::isb::{create_isb_factory, create_js_context};
+use crate::pipeline::isb::create_isb_factory;
 use crate::{config, error};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -62,10 +61,6 @@ pub(crate) async fn start_forwarder(
     config: PipelineConfig,
 ) -> error::Result<()> {
     let isb_factory = create_isb_factory(&config.isb_client_config, cln_token.clone()).await?;
-    // Transitional until Phase 4: serving/callback still need the raw context.
-    let js_context = match &config.isb_client_config {
-        ISBClientConfig::Jetstream(cfg) => Some(create_js_context(cfg.clone()).await?),
-    };
 
     match &config.vertex_config {
         config::pipeline::VertexConfig::Source(source) => {
@@ -74,7 +69,6 @@ pub(crate) async fn start_forwarder(
             source_forwarder::start_source_forwarder(
                 cln_token,
                 isb_factory,
-                js_context,
                 config.clone(),
                 source.clone(),
             )
@@ -85,7 +79,6 @@ pub(crate) async fn start_forwarder(
             sink_forwarder::start_sink_forwarder(
                 cln_token,
                 isb_factory,
-                js_context,
                 config.clone(),
                 (**sink).clone(),
             )
@@ -93,14 +86,8 @@ pub(crate) async fn start_forwarder(
         }
         config::pipeline::VertexConfig::Map(map) => {
             info!("Starting map forwarder");
-            map_forwarder::start_map_forwarder(
-                cln_token,
-                isb_factory,
-                js_context,
-                config.clone(),
-                map.clone(),
-            )
-            .await?;
+            map_forwarder::start_map_forwarder(cln_token, isb_factory, config.clone(), map.clone())
+                .await?;
         }
         config::pipeline::VertexConfig::Reduce(reduce) => {
             info!("Starting reduce forwarder");

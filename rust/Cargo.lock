@@ -4261,6 +4261,7 @@ dependencies = [
  "numaflow 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "numaflow-models",
  "numaflow-pb",
+ "numaflow-shared",
  "parking_lot",
  "prometheus-client",
  "rcgen",
