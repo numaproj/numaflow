@@ -96,7 +96,7 @@ export function VersionDetails(props: VersionDetailsProps) {
       <h2 className="version-header-text">Version details</h2>
 
       {/* Server version from /api/v1/sysinfo */}
-      <Section title="Server" hero={props.Version}>
+      <Section title="UI Server" hero={props.Version}>
         <InfoRow label="Build date" value={props.BuildDate} />
         <InfoRow label="Git commit" value={props.GitCommit} mono />
         <InfoRow label="Git tag" value={props.GitTag} />
