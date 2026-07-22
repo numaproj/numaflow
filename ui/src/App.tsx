@@ -94,8 +94,8 @@ function App(props: AppProps) {
   const history = useHistory();
   const currentNamespace =
     new URLSearchParams(location.search).get("namespace") ||
-    systemInfo?.managedNamespace ||
     namespace ||
+    systemInfo?.managedNamespace ||
     undefined;
 
   // Discovers the numaflow-controller Deployment; falls back to managedNamespace

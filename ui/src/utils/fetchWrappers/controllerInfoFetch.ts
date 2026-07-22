@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ControllerInfo } from "../models/controllerInfo";
 import { getBaseHref } from "../index";
@@ -38,8 +38,14 @@ export const useControllerInfoFetch = (props: ControllerInfoFetchProps) => {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Boolean skip so navigating between non-login routes does not re-fetch.
+  const skip = useMemo(
+    () => location.pathname === "/login",
+    [location.pathname]
+  );
+
   useEffect(() => {
-    if (location.pathname === "/login") {
+    if (skip) {
       setLoading(false);
       return;
     }
@@ -89,7 +95,7 @@ export const useControllerInfoFetch = (props: ControllerInfoFetchProps) => {
     return () => {
       cancelled = true;
     };
-  }, [host, namespace, managedNamespace, namespaced, location.pathname]);
+  }, [host, namespace, managedNamespace, namespaced, skip]);
 
   return { controllerInfo, error, loading };
 };

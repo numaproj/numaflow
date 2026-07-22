@@ -34,6 +34,8 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
+const cmdParamsConfigMapName = "numaflow-cmd-params-config"
+
 func TestParseImageVersion(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -68,7 +70,7 @@ func TestControllerScopeFromPodSpec(t *testing.T) {
 				},
 			}},
 		}
-		namespaced, managed := controllerScopeFromPodSpec(spec)
+		namespaced, managed := controllerScopeFromPodSpec(spec, nil)
 		assert.True(t, namespaced)
 		assert.Equal(t, "from-args", managed)
 	})
@@ -84,7 +86,7 @@ func TestControllerScopeFromPodSpec(t *testing.T) {
 				},
 			}},
 		}
-		namespaced, managed := controllerScopeFromPodSpec(spec)
+		namespaced, managed := controllerScopeFromPodSpec(spec, nil)
 		assert.True(t, namespaced)
 		assert.Equal(t, "managed-ns", managed)
 	})
@@ -96,7 +98,7 @@ func TestControllerScopeFromPodSpec(t *testing.T) {
 				Args: []string{"controller", "--namespaced=true", "--managed-namespace=eq-ns"},
 			}},
 		}
-		namespaced, managed := controllerScopeFromPodSpec(spec)
+		namespaced, managed := controllerScopeFromPodSpec(spec, nil)
 		assert.True(t, namespaced)
 		assert.Equal(t, "eq-ns", managed)
 	})
@@ -118,7 +120,7 @@ func TestExtractControllerInfo(t *testing.T) {
 			},
 		},
 	}
-	info := extractControllerInfo("app-ns", dep)
+	info := extractControllerInfo("app-ns", dep, nil)
 	assert.True(t, info.Found)
 	assert.Equal(t, "app-ns", info.Namespace)
 	assert.Equal(t, controllerDeploymentName, info.Name)
@@ -148,7 +150,7 @@ func TestGetControllerInfo_FoundByName(t *testing.T) {
 
 func TestGetControllerInfo_FoundByTemplateLabel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	// Renamed Deployment still identifiable via pod-template component label.
+	// Renamed Deployment still identifiable via pod-template component label (no metadata labels).
 	dep := fakeControllerDeployment("app-ns", "custom-controller", "quay.io/numaproj/numaflow:v1.7.5",
 		[]string{"controller", "--namespaced", "--managed-namespace", "app-ns"}, nil)
 	h := &handler{kubeClient: fake.NewSimpleClientset(dep)}
@@ -164,6 +166,21 @@ func TestGetControllerInfo_FoundByTemplateLabel(t *testing.T) {
 	assert.Equal(t, "app-ns", got.Data.ManagedNamespace)
 }
 
+func TestGetControllerInfo_FoundByMetadataLabel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dep := fakeControllerDeployment("app-ns", "custom-controller", "quay.io/numaproj/numaflow:v1.7.5", nil, nil)
+	dep.Labels = map[string]string{dfv1.KeyComponent: dfv1.ComponentControllerManager}
+	h := &handler{kubeClient: fake.NewSimpleClientset(dep)}
+
+	c, w := newControllerInfoContext("app-ns")
+	h.GetControllerInfo(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeControllerInfo(t, w)
+	assert.True(t, got.Data.Found)
+	assert.Equal(t, "custom-controller", got.Data.Name)
+}
+
 func TestGetControllerInfo_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := &handler{kubeClient: fake.NewSimpleClientset()}
@@ -176,6 +193,131 @@ func TestGetControllerInfo_NotFound(t *testing.T) {
 	assert.Nil(t, got.ErrMsg)
 	assert.False(t, got.Data.Found)
 	assert.Equal(t, "empty-ns", got.Data.Namespace)
+}
+
+func TestGetControllerInfo_ScopeFromConfigMapKeyRef(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	optional := true
+	dep := fakeControllerDeployment("app-ns", controllerDeploymentName, "quay.io/numaproj/numaflow:v1.8.1",
+		[]string{"controller"},
+		[]corev1.EnvVar{
+			{
+				Name: envControllerNamespaced,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmdParamsConfigMapName},
+						Key:                  "namespaced",
+						Optional:             &optional,
+					},
+				},
+			},
+			{
+				Name: envControllerManagedNamespace,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmdParamsConfigMapName},
+						Key:                  "managed.namespace",
+						Optional:             &optional,
+					},
+				},
+			},
+		},
+	)
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: cmdParamsConfigMapName, Namespace: "app-ns"},
+		Data: map[string]string{
+			"namespaced":        "true",
+			"managed.namespace": "app-ns",
+		},
+	}
+	h := &handler{kubeClient: fake.NewSimpleClientset(dep, cm)}
+
+	c, w := newControllerInfoContext("app-ns")
+	h.GetControllerInfo(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeControllerInfo(t, w)
+	assert.True(t, got.Data.Found)
+	assert.True(t, got.Data.Namespaced)
+	assert.Equal(t, "app-ns", got.Data.ManagedNamespace)
+	assert.Equal(t, "v1.8.1", got.Data.Version)
+}
+
+func TestGetControllerInfo_OptionalConfigMapMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	optional := true
+	dep := fakeControllerDeployment("numaflow-system", controllerDeploymentName, "quay.io/numaproj/numaflow:v1.8.1",
+		[]string{"controller"},
+		[]corev1.EnvVar{
+			{
+				Name: envControllerNamespaced,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmdParamsConfigMapName},
+						Key:                  "namespaced",
+						Optional:             &optional,
+					},
+				},
+			},
+		},
+	)
+	// ConfigMap absent (optional) → cluster-scoped defaults.
+	h := &handler{kubeClient: fake.NewSimpleClientset(dep)}
+
+	c, w := newControllerInfoContext("numaflow-system")
+	h.GetControllerInfo(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeControllerInfo(t, w)
+	assert.True(t, got.Data.Found)
+	assert.False(t, got.Data.Namespaced)
+	assert.Empty(t, got.Data.ManagedNamespace)
+}
+
+func TestGetControllerInfo_ArgsOverrideConfigMapKeyRef(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	optional := true
+	dep := fakeControllerDeployment("app-ns", controllerDeploymentName, "quay.io/numaproj/numaflow:v1.8.1",
+		[]string{"controller", "--namespaced", "--managed-namespace", "from-args"},
+		[]corev1.EnvVar{
+			{
+				Name: envControllerNamespaced,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmdParamsConfigMapName},
+						Key:                  "namespaced",
+						Optional:             &optional,
+					},
+				},
+			},
+			{
+				Name: envControllerManagedNamespace,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmdParamsConfigMapName},
+						Key:                  "managed.namespace",
+						Optional:             &optional,
+					},
+				},
+			},
+		},
+	)
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: cmdParamsConfigMapName, Namespace: "app-ns"},
+		Data: map[string]string{
+			"namespaced":        "false",
+			"managed.namespace": "from-cm",
+		},
+	}
+	h := &handler{kubeClient: fake.NewSimpleClientset(dep, cm)}
+
+	c, w := newControllerInfoContext("app-ns")
+	h.GetControllerInfo(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeControllerInfo(t, w)
+	assert.True(t, got.Data.Namespaced)
+	assert.Equal(t, "from-args", got.Data.ManagedNamespace)
 }
 
 func fakeControllerDeployment(namespace, name, image string, args []string, env []corev1.EnvVar) *appsv1.Deployment {

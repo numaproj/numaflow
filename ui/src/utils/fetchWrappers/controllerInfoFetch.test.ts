@@ -1,15 +1,19 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor, act } from "@testing-library/react";
 import { useControllerInfoFetch } from "./controllerInfoFetch";
+
+const mockLocation = { pathname: "/" };
 
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
-  useLocation: () => ({
-    pathname: "/",
-  }),
+  useLocation: () => mockLocation,
 }));
 
 describe("controllerInfoFetch", () => {
   const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    mockLocation.pathname = "/";
+  });
 
   afterEach(() => {
     global.fetch = originalFetch;
@@ -100,6 +104,62 @@ describe("controllerInfoFetch", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toContain("Response code: 500");
+    expect(result.current.controllerInfo).toBeUndefined();
+  });
+
+  it("does not re-fetch when navigating between non-login routes", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          found: true,
+          namespace: "app-ns",
+          name: "numaflow-controller",
+          version: "v1.7.5",
+          namespaced: true,
+          managedNamespace: "app-ns",
+        },
+      }),
+    }) as any;
+
+    const { result, rerender } = renderHook(() =>
+      useControllerInfoFetch({
+        host: "",
+        namespace: "app-ns",
+        managedNamespace: "app-ns",
+        namespaced: true,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      mockLocation.pathname = "/pipelines";
+    });
+    rerender();
+
+    act(() => {
+      mockLocation.pathname = "/monovertices";
+    });
+    rerender();
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips fetch on the login page", async () => {
+    mockLocation.pathname = "/login";
+    global.fetch = jest.fn() as any;
+
+    const { result } = renderHook(() =>
+      useControllerInfoFetch({
+        host: "",
+        namespace: "app-ns",
+      })
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(global.fetch).not.toHaveBeenCalled();
     expect(result.current.controllerInfo).toBeUndefined();
   });
 });

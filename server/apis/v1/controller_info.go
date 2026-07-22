@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -32,7 +33,9 @@ import (
 //
 // Discovery policy:
 //  1. Get Deployment by the canonical name "numaflow-controller" (standard install manifests).
-//  2. If missing, list by label app.kubernetes.io/component=controller-manager (renamed installs).
+//  2. If missing, list with label app.kubernetes.io/component=controller-manager.
+//  3. If that yields nothing, list all Deployments and match template/selector labels
+//     (standard manifests put component labels on the pod template, not always on metadata).
 //
 // A missing controller returns HTTP 200 with found:false so the UI can retry another namespace
 // without treating "not installed here" as an API failure.
@@ -46,21 +49,38 @@ func (h *handler) GetControllerInfo(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to get controller deployment in namespace %q, %s", ns, err.Error()))
 			return
 		}
-		// Name miss: install manifests put component labels on the pod template, not always on
-		// Deployment.metadata, so list the namespace and match template/selector labels.
-		list, listErr := h.kubeClient.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
-		if listErr != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to list controller deployments in namespace %q, %s", ns, listErr.Error()))
+		dep, err = h.findControllerDeploymentInNamespace(ctx, ns)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to list controller deployments in namespace %q, %s", ns, err.Error()))
 			return
 		}
-		dep = findControllerDeployment(list.Items)
 		if dep == nil {
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, NewMissingControllerInfo(ns)))
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, extractControllerInfo(ns, dep)))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, extractControllerInfo(ns, dep, resolveEnvLookup(ctx, h.kubeClient, ns))))
+}
+
+// findControllerDeploymentInNamespace locates a renamed controller Deployment.
+// Prefer a server-side label selector; fall back to scanning template/selector labels
+// when Deployments lack metadata labels (standard Numaflow install manifests).
+func (h *handler) findControllerDeploymentInNamespace(ctx context.Context, ns string) (*appsv1.Deployment, error) {
+	selector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentControllerManager)
+	list, err := h.kubeClient.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return nil, err
+	}
+	if dep := findControllerDeployment(list.Items); dep != nil {
+		return dep, nil
+	}
+
+	list, err = h.kubeClient.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return findControllerDeployment(list.Items), nil
 }
 
 // findControllerDeployment picks a Deployment whose pod template or selector identifies

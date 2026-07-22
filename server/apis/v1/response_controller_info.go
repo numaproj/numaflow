@@ -17,11 +17,15 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -34,6 +38,10 @@ const (
 	envControllerNamespaced      = "NUMAFLOW_CONTROLLER_NAMESPACED"
 	envControllerManagedNamespace = "NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE"
 )
+
+// envLookup resolves a named env var from a container env list.
+// Production uses resolveEnvLookup to honor ConfigMapKeyRef; tests may pass envValue.
+type envLookup func(env []corev1.EnvVar, name string) string
 
 // ControllerInfo is the response payload for GET .../controller-info.
 // It describes the live numaflow-controller Deployment in a namespace (not the UX server).
@@ -59,7 +67,11 @@ func NewMissingControllerInfo(namespace string) ControllerInfo {
 }
 
 // extractControllerInfo builds ControllerInfo from a discovered controller Deployment.
-func extractControllerInfo(namespace string, dep *appsv1.Deployment) ControllerInfo {
+// lookup resolves env vars (plain Value and/or ConfigMapKeyRef). Nil uses plain Value only.
+func extractControllerInfo(namespace string, dep *appsv1.Deployment, lookup envLookup) ControllerInfo {
+	if lookup == nil {
+		lookup = envValue
+	}
 	info := ControllerInfo{
 		Found:     true,
 		Namespace: namespace,
@@ -79,13 +91,13 @@ func extractControllerInfo(namespace string, dep *appsv1.Deployment) ControllerI
 	info.Version = parseImageVersion(container.Image)
 	// Prefer NUMAFLOW_IMAGE when the image ref has no usable tag (e.g. digest-only).
 	if info.Version == "" {
-		if img := envValue(container.Env, dfv1.EnvImage); img != "" {
+		if img := lookup(container.Env, dfv1.EnvImage); img != "" {
 			info.Image = img
 			info.Version = parseImageVersion(img)
 		}
 	}
 
-	namespaced, managedNS := controllerScopeFromPodSpec(dep.Spec.Template.Spec)
+	namespaced, managedNS := controllerScopeFromPodSpec(dep.Spec.Template.Spec, lookup)
 	info.Namespaced = namespaced
 	if managedNS != "" {
 		info.ManagedNamespace = managedNS
@@ -131,7 +143,11 @@ func parseImageVersion(image string) string {
 
 // controllerScopeFromPodSpec derives namespaced mode and managed namespace.
 // Args override env because the controller binary gives CLI flags precedence over ConfigMap-backed env.
-func controllerScopeFromPodSpec(spec corev1.PodSpec) (namespaced bool, managedNamespace string) {
+// lookup resolves env Values and ConfigMapKeyRefs; nil uses plain Value only.
+func controllerScopeFromPodSpec(spec corev1.PodSpec, lookup envLookup) (namespaced bool, managedNamespace string) {
+	if lookup == nil {
+		lookup = envValue
+	}
 	var container *corev1.Container
 	if c := findControllerContainer(spec.Containers); c != nil {
 		container = c
@@ -147,10 +163,10 @@ func controllerScopeFromPodSpec(spec corev1.PodSpec) (namespaced bool, managedNa
 		return namespacedFromArgs, managedFromArgs
 	}
 
-	if v := envValue(container.Env, envControllerNamespaced); v != "" {
+	if v := lookup(container.Env, envControllerNamespaced); v != "" {
 		namespaced, _ = strconv.ParseBool(v)
 	}
-	managedNamespace = envValue(container.Env, envControllerManagedNamespace)
+	managedNamespace = lookup(container.Env, envControllerManagedNamespace)
 	return namespaced, managedNamespace
 }
 
@@ -178,11 +194,49 @@ func scopeFromArgs(args []string) (namespaced bool, managedNamespace string, arg
 	return namespaced, managedNamespace, argsSet
 }
 
+// envValue returns a plain EnvVar.Value (does not resolve ValueFrom).
 func envValue(env []corev1.EnvVar, name string) string {
 	for _, e := range env {
 		if e.Name == name {
 			return e.Value
 		}
+	}
+	return ""
+}
+
+// resolveEnvLookup returns an envLookup that resolves plain Values and ConfigMapKeyRefs
+// from the given namespace (matching standard Numaflow install manifests).
+func resolveEnvLookup(ctx context.Context, kubeClient kubernetes.Interface, namespace string) envLookup {
+	return func(env []corev1.EnvVar, name string) string {
+		return resolveEnvValue(ctx, kubeClient, namespace, env, name)
+	}
+}
+
+// resolveEnvValue reads a named env var: prefer Value, else ConfigMapKeyRef (honoring Optional).
+func resolveEnvValue(ctx context.Context, kubeClient kubernetes.Interface, namespace string, env []corev1.EnvVar, name string) string {
+	for _, e := range env {
+		if e.Name != name {
+			continue
+		}
+		if e.Value != "" {
+			return e.Value
+		}
+		if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil {
+			return ""
+		}
+		ref := e.ValueFrom.ConfigMapKeyRef
+		cm, err := kubeClient.CoreV1().ConfigMaps(namespace).Get(ctx, ref.Name, metav1.GetOptions{})
+		if err != nil {
+			// Optional refs (standard install) treat missing ConfigMap as unset.
+			if apierrors.IsNotFound(err) && ref.Optional != nil && *ref.Optional {
+				return ""
+			}
+			return ""
+		}
+		if val, ok := cm.Data[ref.Key]; ok {
+			return val
+		}
+		return ""
 	}
 	return ""
 }
