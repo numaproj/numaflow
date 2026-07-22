@@ -1906,11 +1906,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                SinkClient::new(
-                    create_rpc_channel(sock_file.clone()).await.unwrap(),
-                )
-            ),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file.clone()).await.unwrap(),
+            )),
         )
         .build()
         .await

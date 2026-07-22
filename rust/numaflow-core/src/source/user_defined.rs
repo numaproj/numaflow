@@ -659,8 +659,6 @@ mod tests {
         server_handle.await.expect("failed to join server task");
     }
 
-
-
     #[test]
     fn test_read_response_result_to_message() {
         let result = read_response::Result {
