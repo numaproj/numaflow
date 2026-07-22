@@ -87,8 +87,10 @@ export function VersionDetails(props: VersionDetailsProps) {
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
-        overflow: "auto",
+        // Let SlidingSidebar own scrolling; nested height/overflow caused a short
+        // scrollport and clipped the section headers.
+        flex: "0 0 auto",
+        minHeight: 0,
       }}
     >
       <h2 className="version-header-text">Version details</h2>
