@@ -55,7 +55,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
-  [SidebarType.VERSION_DETAILS]: 350,
+  [SidebarType.VERSION_DETAILS]: 420,
 };
 
 export interface SpecEditorModalProps {

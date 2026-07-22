@@ -1,5 +1,108 @@
+.version-details {
+  padding-right: 0.4rem;
+}
+
 .version-header-text {
-    font-size: 2rem;
-    font-style: normal;
-    font-weight: 500;
+  margin: 0 0 1.6rem;
+  font-size: 2rem;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.version-section {
+  margin-bottom: 2.4rem;
+}
+
+.version-section:last-child {
+  margin-bottom: 0.8rem;
+}
+
+.version-section-title {
+  margin: 0 0 0.8rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.version-hero {
+  margin: 0 0 1.2rem;
+  font-size: 1.9rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.version-info-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.version-info-row {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 1.3rem;
+  line-height: 1.4;
+}
+
+.version-info-row:last-child {
+  border-bottom: none;
+}
+
+.version-info-label {
+  color: rgba(0, 0, 0, 0.55);
+  font-weight: 500;
+}
+
+.version-info-value {
+  min-width: 0;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.version-value-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.version-empty-state {
+  margin: 0;
+  padding: 0.9rem 0;
+  font-size: 1.3rem;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+/* Dark theme (MUI CssBaseline / data-mui-color-scheme if present) */
+[data-mui-color-scheme="dark"] .version-section-title,
+.MuiCssBaseline-root[data-color-scheme="dark"] .version-section-title,
+body[data-theme="dark"] .version-section-title {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+[data-mui-color-scheme="dark"] .version-info-label,
+body[data-theme="dark"] .version-info-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+[data-mui-color-scheme="dark"] .version-info-value,
+body[data-theme="dark"] .version-info-value {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-mui-color-scheme="dark"] .version-info-row,
+body[data-theme="dark"] .version-info-row {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-mui-color-scheme="dark"] .version-empty-state,
+body[data-theme="dark"] .version-empty-state {
+  color: rgba(255, 255, 255, 0.6);
 }
