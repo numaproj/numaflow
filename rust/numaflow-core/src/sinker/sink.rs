@@ -1902,10 +1902,9 @@ mod tests {
             10,
             Duration::from_millis(100),
             SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
+                SinkClient::new(
                     create_rpc_channel(sock_file.clone()).await.unwrap(),
-                )),
-                None,
+                )
             ),
         )
         .build()

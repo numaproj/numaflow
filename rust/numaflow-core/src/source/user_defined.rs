@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
@@ -374,9 +374,7 @@ impl SourceAcker for UserDefinedSourceAck {
         let response = self
             .client
             .nack_fn(NackRequest {
-                request: Some(source::nack_request::Request {
-                    offsets: nack_offsets?,
-                }),
+                request: nack_offsets?,
             })
             .await
             .map_err(|e| {
@@ -460,7 +458,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::message::{IntOffset, NackOptions};
+    use crate::message::IntOffset;
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
 
     #[test]
