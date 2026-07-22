@@ -14,6 +14,7 @@ import { isEqual } from "lodash";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
+import { useControllerInfoFetch } from "../../../utils/fetchWrappers/controllerInfoFetch";
 import { notifyError } from "../../../utils/error";
 import {
   SidebarType,
@@ -54,6 +55,19 @@ function App(props: AppProps) {
 
   const location = useLocation();
   const history = useHistory();
+  const currentNamespace =
+    new URLSearchParams(location.search).get("namespace") ||
+    namespace ||
+    systemInfo?.managedNamespace ||
+    undefined;
+
+  // Plugin apps are usually namespaced; still apply managedNamespace fallback for cluster installs.
+  const { controllerInfo } = useControllerInfoFetch({
+    host: hostUrl,
+    namespace: currentNamespace,
+    managedNamespace: systemInfo?.managedNamespace,
+    namespaced: systemInfo?.namespaced,
+  });
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -141,9 +155,10 @@ function App(props: AppProps) {
         GoVersion: versionDetails?.GoVersion,
         Compiler: versionDetails?.Compiler,
         Platform: versionDetails?.Platform,
+        controllerInfo,
       },
     });
-  }, [versionDetails, pageWidth]);
+  }, [versionDetails, pageWidth, controllerInfo]);
 
   const routes = useMemo(() => {
     if (loading) {

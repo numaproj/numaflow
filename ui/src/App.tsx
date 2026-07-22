@@ -17,6 +17,7 @@ import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
+import { useControllerInfoFetch } from "./utils/fetchWrappers/controllerInfoFetch";
 import { notifyError } from "./utils/error";
 import {
   SidebarType,
@@ -91,6 +92,20 @@ function App(props: AppProps) {
 
   const location = useLocation();
   const history = useHistory();
+  const currentNamespace =
+    new URLSearchParams(location.search).get("namespace") ||
+    systemInfo?.managedNamespace ||
+    namespace ||
+    undefined;
+
+  // Discovers the numaflow-controller Deployment; falls back to managedNamespace
+  // when the current ns has no controller (typical cluster-scoped install).
+  const { controllerInfo } = useControllerInfoFetch({
+    host: hostUrl,
+    namespace: currentNamespace,
+    managedNamespace: systemInfo?.managedNamespace,
+    namespaced: systemInfo?.namespaced,
+  });
 
   useEffect(() => {
     if (systemInfo?.namespaced && systemInfo?.managedNamespace) {
@@ -202,9 +217,10 @@ function App(props: AppProps) {
         GoVersion: versionDetails?.GoVersion,
         Compiler: versionDetails?.Compiler,
         Platform: versionDetails?.Platform,
+        controllerInfo,
       },
     });
-  }, [versionDetails, pageWidth]);
+  }, [versionDetails, pageWidth, controllerInfo]);
 
   const routes = useMemo(() => {
     if (loading) {
