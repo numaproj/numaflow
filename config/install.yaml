@@ -46232,6 +46232,7 @@ rules:
   - delete
 - apiGroups:
   - ""
+  - events.k8s.io
   resources:
   - events
   verbs:
@@ -46331,13 +46332,21 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
   - pods
   - pods/log
   - configmaps
   - services
   - persistentvolumeclaims
   - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  - events.k8s.io
+  resources:
+  - events
   verbs:
   - get
   - list
