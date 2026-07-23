@@ -5,7 +5,7 @@ use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset};
+use crate::message::{IntOffset, Message, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source;
 
@@ -32,6 +32,7 @@ impl TryFrom<PulsarMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
+            nack_options: None,
         })
     }
 }
@@ -102,12 +103,13 @@ impl source::SourceAcker for PulsarSource {
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
 
-    async fn nack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Int(int_offset) = offset else {
+            let Offset::Int(int_offset) = offset.offset else {
                 return Err(Error::Source(format!(
-                    "Expected Offset::Int type for Pulsar. offset={offset:?}"
+                    "Expected Offset::Int type for Pulsar. offset={:?}",
+                    offset.offset
                 )));
             };
             pulsar_offsets.push(int_offset.offset as u64);
@@ -140,6 +142,7 @@ mod tests {
             consumer_name: "test".into(),
             subscription: "test".into(),
             max_unack: 100,
+            dead_letter_policy: None,
             auth: None,
         };
         let mut pulsar = new_pulsar_source(

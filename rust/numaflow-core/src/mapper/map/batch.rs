@@ -166,7 +166,7 @@ impl MapBatchTask {
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
-                    mark_failed!(msg_handle, &e);
+                    mark_failed!(msg_handle, &e, None);
                     return Err(e);
                 }
             }
@@ -444,6 +444,7 @@ mod tests {
                     keys: Option::from(datum.keys),
                     value: datum.value,
                     tags: None,
+                    nack_options: None,
                 });
                 responses.push(response);
             }
@@ -619,6 +620,91 @@ mod tests {
             let err = received.expect_err("expected Err variant");
             assert!(matches!(err, MapError::Grpc(_)));
         }
+    }
+
+    #[tokio::test]
+    async fn test_map_batch_emits_nack() {
+        use numaflow::batchmap;
+
+        struct NackBatchMap;
+        #[tonic::async_trait]
+        impl batchmap::BatchMapper for NackBatchMap {
+            async fn batchmap(
+                &self,
+                mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+            ) -> Vec<batchmap::BatchResponse> {
+                let mut responses = vec![];
+                while let Some(datum) = input.recv().await {
+                    let mut response = batchmap::BatchResponse::from_id(datum.id);
+                    response.append(batchmap::Message::message_to_nack(Some(
+                        numaflow::shared::NackOptions {
+                            delay: Some(5000),
+                            max_deliveries: Some(3),
+                            reason: Some("udf nack".to_string()),
+                        },
+                    )));
+                    responses.push(response);
+                }
+                responses
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            batchmap::Server::new(NackBatchMap)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = UserDefinedBatchMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+        )
+        .await
+        .unwrap();
+
+        let request = numaflow_pb::clients::map::MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: "hello".into(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "0".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let results = client
+            .batch(vec![request], tokio_util::sync::CancellationToken::new())
+            .await;
+        let inner = results.first().expect("one response").as_ref().expect("ok");
+        let result = inner.first().expect("one result");
+        assert!(result.tags.contains(&"U+005C__NACK__".to_string()));
+        assert_eq!(
+            result.nack_options,
+            Some(numaflow_pb::common::nack_options::NackOptions {
+                reason: Some("udf nack".to_string()),
+                max_deliveries: Some(3),
+                delay: Some(5000),
+                ..Default::default()
+            })
+        );
+
+        drop(client);
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.abort();
     }
 
     #[tokio::test]

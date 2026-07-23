@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.mapstream.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "common/nack_options.proto";
 import "metadata.proto";
 
 
@@ -57,6 +58,8 @@ message MapStreamResponse {
     repeated string tags = 3;
     // Metadata is the metadata of the message
     metadata.Metadata metadata = 4;
+    // Nack options specified while nacking a message
+    optional nack_options.NackOptions nack_options = 5;
   }
   Result result = 1;
 }

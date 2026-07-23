@@ -4,7 +4,7 @@ use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs::OpenOptions;
 use tokio::task::JoinHandle;
 use tokio::{
@@ -117,37 +117,54 @@ impl ReplayWal {
     }
 }
 
-/// Sort the filenames based on the file name. It is first sorted based on the timestamp and on
-/// conflict sorted on the file-index.
-fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
-    files.sort_by(|a, b| {
-        let parse = |s: &str| {
-            let parts: Vec<&str> = s.split('_').collect();
-            let index = parts
-                .get(1)
-                .and_then(|s| s.parse::<u32>().ok())
-                .unwrap_or(0);
-            let ts_part = parts.get(2).unwrap_or(&"0");
-            let timestamp = ts_part
-                .split('.')
-                .next()
-                .unwrap_or("0")
-                .parse::<u64>()
-                .unwrap_or(0);
-            (timestamp, index)
-        };
+/// Parses the `{createMicros}` component out of a segment filename of the form
+/// `{prefix}_{index}_{createMicros}.wal` or `{prefix}_{index}_{createMicros}.frozen`.
+/// Returns `0` if the filename does not conform to the expected format.
+pub(in crate::reduce) fn parse_segment_create_micros(file_name: &str) -> u64 {
+    let parts: Vec<&str> = file_name.split('_').collect();
+    let ts_part = parts.get(2).unwrap_or(&"0");
+    ts_part
+        .split('.')
+        .next()
+        .unwrap_or("0")
+        .parse::<u64>()
+        .unwrap_or(0)
+}
 
-        let (ts_a, idx_a) = parse(
-            a.file_name()
-                .expect("valid unix file")
-                .to_str()
-                .expect("filename is valid"),
+/// Parses the `{index}` component out of a segment filename of the form
+/// `{prefix}_{index}_{createMicros}.wal` (or `.frozen`). Returns `0` if the filename does not
+/// conform to the expected format.
+fn parse_segment_file_index(file_name: &str) -> u32 {
+    file_name
+        .split('_')
+        .nth(1)
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
+/// Extracts the file name (as a `&str`) out of a segment path.
+fn file_name_of(p: &Path) -> &str {
+    p.file_name()
+        .expect("valid unix file")
+        .to_str()
+        .expect("filename is valid")
+}
+
+/// Sort the filenames based on the file name. It is first sorted based on the timestamp and on
+/// conflict sorted on the file-index. Exposed to the compactor so it can build the same-ordered
+/// GC-segment successor snapshot used to gate GC-segment deletion
+pub(in crate::reduce) fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
+    files.sort_by(|a, b| {
+        let a_name = file_name_of(a);
+        let b_name = file_name_of(b);
+
+        let (ts_a, idx_a) = (
+            parse_segment_create_micros(a_name),
+            parse_segment_file_index(a_name),
         );
-        let (ts_b, idx_b) = parse(
-            b.file_name()
-                .expect("valid unix file")
-                .to_str()
-                .expect("filename is valid"),
+        let (ts_b, idx_b) = (
+            parse_segment_create_micros(b_name),
+            parse_segment_file_index(b_name),
         );
 
         // first sort on timestamp, if it matches, then sort on index
@@ -160,8 +177,12 @@ fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
     files
 }
 
-/// List all the files for the given [WalType].
-fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
+/// Lists all files for the given [WalType] whose extension matches `is_segment_ext`.
+fn list_files_filtered(
+    wal_type: &WalType,
+    base_path: PathBuf,
+    is_segment_ext: fn(&std::ffi::OsStr) -> bool,
+) -> Vec<PathBuf> {
     fs::read_dir(&base_path)
         .unwrap_or_else(|_| panic!("directory {} to be present", base_path.display()))
         .map(|entry| entry.expect("expect dirEntry to be good").path())
@@ -173,8 +194,24 @@ fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
                 .expect("conversion should work")
                 .starts_with(wal_type.segment_prefix())
         })
-        .filter(|path| path.extension().is_some_and(|ext| ext == "frozen"))
+        .filter(|path| path.extension().is_some_and(is_segment_ext))
         .collect::<Vec<_>>()
+}
+
+/// List all the frozen files for the given [WalType].
+fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
+    list_files_filtered(wal_type, base_path, |ext| ext == "frozen")
+}
+
+/// List all segment files for the given [WalType], including the currently-active `.wal`
+/// segment (i.e. extension `.wal` OR `.frozen`). Unlike [list_files], which is used for
+/// replay/compaction reads and must stay frozen-only, this is used to snapshot the newest
+/// data-segment creation time at compaction-cycle start.
+pub(in crate::reduce) fn list_files_with_active(
+    wal_type: &WalType,
+    base_path: PathBuf,
+) -> Vec<PathBuf> {
+    list_files_filtered(wal_type, base_path, |ext| ext == "frozen" || ext == "wal")
 }
 
 #[cfg(test)]

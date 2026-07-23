@@ -162,6 +162,7 @@ mod unit_tests {
             headers: Arc::new(headers.clone()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -220,6 +221,7 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
+            nack_options: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -283,6 +285,7 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
+            nack_options: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -385,7 +388,12 @@ pub mod tests {
             }
         }
 
-        async fn nack(&self, _offsets: Vec<Offset>) {}
+        async fn nack(
+            &self,
+            _offsets: Vec<Offset>,
+            _nack_options: Option<numaflow::shared::NackOptions>,
+        ) {
+        }
 
         async fn pending(&self) -> Option<usize> {
             Some(

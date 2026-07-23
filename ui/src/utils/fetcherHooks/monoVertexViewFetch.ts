@@ -6,166 +6,25 @@ import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 import {
   MonoVertex,
-  MonoVertexBypass,
   MonoVertexSpec,
   MonoVertexMetrics,
 } from "../../types/declarations/pipeline";
+import {
+  MONO_VERTEX_BYPASS_TARGETS,
+  getMonoVertexBypassSourceStages,
+  getMonoVertexContainerDimensions,
+  getMonoVertexDirectInternalEdges,
+  getMonoVertexInternalEdgeKey,
+  getMonoVertexInternalStages,
+  getMonoVertexMainStages,
+  getMonoVertexStageNodeName,
+  shouldFanOutMonoVertexSinkTargets,
+} from "../monoVertexGraphLayout";
 
-type MonoVertexBypassTarget = keyof MonoVertexBypass;
-const MONO_VERTEX_BYPASS_TARGETS: MonoVertexBypassTarget[] = [
-  "sink",
-  "onSuccess",
-  "fallback",
-];
-
-const MONO_VERTEX_CONTAINER_WIDTH = 420;
-const MONO_VERTEX_INTERNAL_NODE_WIDTH = 32;
-const MONO_VERTEX_MAX_STAGE_STEP_X = 80;
-const MONO_VERTEX_MIN_SIDE_PADDING = 24;
-const MONO_VERTEX_STAGE_Y = 76;
-const MONO_VERTEX_ONSUCCESS_FAN_OUT_Y = 44;
-const MONO_VERTEX_FALLBACK_FAN_OUT_Y = 106;
-
-const getMonoVertexStageNodeName = (name: string, stage: string) =>
-  `${name}-${stage}`;
-
-const getMonoVertexInternalEdgeKey = (source: string, target: string) =>
-  `${source}->${target}`;
-
-const getMonoVertexMainStages = (spec: MonoVertexSpec) => [
-  "source",
-  ...(spec?.source?.transformer ? ["transformer"] : []),
-  ...(spec?.udf ? ["udf"] : []),
-  "sink",
-];
-
-const getMonoVertexBypassSourceStages = (spec: MonoVertexSpec) => {
-  const bypassSourceStages = [
-    ...(spec?.source?.transformer ? ["transformer"] : []),
-    ...(spec?.udf ? ["udf"] : []),
-  ];
-  if (bypassSourceStages.length === 0) {
-    bypassSourceStages.push("source");
-  }
-  return bypassSourceStages;
-};
-
-const getMonoVertexDirectInternalEdges = (
-  spec: MonoVertexSpec,
-  name: string
-) => {
-  const directInternalEdges = new Set<string>();
-  const addDirectInternalEdge = (sourceStage: string, targetStage: string) => {
-    directInternalEdges.add(
-      getMonoVertexInternalEdgeKey(
-        getMonoVertexStageNodeName(name, sourceStage),
-        getMonoVertexStageNodeName(name, targetStage)
-      )
-    );
-  };
-  const mainStages = getMonoVertexMainStages(spec);
-  mainStages.forEach((stage, idx) => {
-    const targetStage = mainStages[idx + 1];
-    if (!targetStage) return;
-    addDirectInternalEdge(stage, targetStage);
-  });
-  if (spec?.sink?.onSuccess) {
-    addDirectInternalEdge("sink", "onSuccess");
-  }
-  if (spec?.sink?.fallback) {
-    addDirectInternalEdge("sink", "fallback");
-  }
-  return directInternalEdges;
-};
-
-const shouldFanOutMonoVertexSinkTargets = (spec: MonoVertexSpec) =>
-  !!spec?.sink?.onSuccess && !!spec?.sink?.fallback;
-
-export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
-  const hasOnSuccess = !!spec?.sink?.onSuccess;
-  const hasFallback = !!spec?.sink?.fallback;
-  const hasOptionalSinkOutput = hasOnSuccess || hasFallback;
-  const shouldFanOutSinkTargets = shouldFanOutMonoVertexSinkTargets(spec);
-  const columns = [
-    {
-      key: "source",
-      spec: spec.source,
-    },
-    ...(spec?.source?.transformer
-      ? [
-          {
-            key: "transformer",
-            spec: spec.source.transformer,
-          },
-        ]
-      : []),
-    ...(spec?.udf
-      ? [
-          {
-            key: "udf",
-            spec: spec.udf,
-          },
-        ]
-      : []),
-    {
-      key: "sink",
-      spec: spec.sink,
-    },
-    ...(hasOptionalSinkOutput
-      ? [
-          {
-            key: "optionalOutputs",
-            spec: undefined,
-          },
-        ]
-      : []),
-  ];
-  const usableWidth =
-    MONO_VERTEX_CONTAINER_WIDTH -
-    2 * MONO_VERTEX_MIN_SIDE_PADDING -
-    MONO_VERTEX_INTERNAL_NODE_WIDTH;
-  const idealStep =
-    columns.length > 1 ? usableWidth / (columns.length - 1) : 0;
-  const stepX = Math.min(idealStep, MONO_VERTEX_MAX_STAGE_STEP_X);
-  const totalSpan = (columns.length - 1) * stepX;
-  const startX =
-    (MONO_VERTEX_CONTAINER_WIDTH -
-      totalSpan -
-      MONO_VERTEX_INTERNAL_NODE_WIDTH) /
-    2;
-  const stageXByKey = columns.reduce((positions, column, index) => {
-    positions[column.key] = startX + index * stepX;
-    return positions;
-  }, {} as Record<string, number>);
-  const internalStages = columns
-    .filter((column) => column.key !== "optionalOutputs")
-    .map((column) => ({
-      ...column,
-      x: stageXByKey[column.key],
-      y: MONO_VERTEX_STAGE_Y,
-    }));
-  if (hasOnSuccess) {
-    internalStages.push({
-      key: "onSuccess",
-      spec: spec.sink.onSuccess,
-      x: stageXByKey.optionalOutputs,
-      y: shouldFanOutSinkTargets
-        ? MONO_VERTEX_ONSUCCESS_FAN_OUT_Y
-        : MONO_VERTEX_STAGE_Y,
-    });
-  }
-  if (hasFallback) {
-    internalStages.push({
-      key: "fallback",
-      spec: spec.sink.fallback,
-      x: stageXByKey.optionalOutputs,
-      y: shouldFanOutSinkTargets
-        ? MONO_VERTEX_FALLBACK_FAN_OUT_Y
-        : MONO_VERTEX_STAGE_Y,
-    });
-  }
-  return internalStages;
-};
+export {
+  getMonoVertexContainerDimensions,
+  getMonoVertexInternalStages,
+} from "../monoVertexGraphLayout";
 
 export const useMonoVertexViewFetch = (
   namespaceId: string | undefined,
@@ -404,6 +263,7 @@ export const useMonoVertexViewFetch = (
     const newVertices: Node[] = [];
     if (spec?.source && spec?.sink && monoVertexMetrics) {
       const name = pipelineId ?? "";
+      const { width, height } = getMonoVertexContainerDimensions(spec);
       const newNode = {} as Node;
       newNode.id = name;
       newNode.data = { name: name };
@@ -413,6 +273,8 @@ export const useMonoVertexViewFetch = (
       newNode.type = "custom";
       newNode.data.nodeInfo = spec;
       newNode.data.type = "monoVertex";
+      newNode.data.containerWidth = width;
+      newNode.data.containerHeight = height;
       newNode.data.vertexMetrics = monoVertexMetrics.has(name)
         ? monoVertexMetrics.get(name)
         : null;
@@ -491,14 +353,14 @@ export const useMonoVertexViewFetch = (
       const name = pipelineId ?? "";
       const internalMarkerEnd = {
         type: MarkerType.Arrow,
-        width: 8,
-        height: 8,
+        width: 10,
+        height: 10,
         color: "#8D9096",
       };
       const bypassMarkerEnd = {
         type: MarkerType.Arrow,
-        width: 6,
-        height: 6,
+        width: 8,
+        height: 8,
         color: "var(--mono-vertex-bypass-color)",
       };
       const mainStages = getMonoVertexMainStages(spec);

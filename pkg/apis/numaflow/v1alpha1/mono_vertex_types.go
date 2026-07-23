@@ -464,6 +464,18 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	}
 
+	// TODO(deprecate): remove this when we remove monitor_container.
+	// Only SecurityContext is propagated to the monitor sidecar (not the full
+	// ContainerTemplate) to avoid overriding its fixed resource footprint or
+	// leaking the main container's env into it.
+	if mv.Spec.ContainerTemplate != nil && mv.Spec.ContainerTemplate.SecurityContext != nil {
+		for i := range sidecarContainers {
+			if sidecarContainers[i].Name == CtrMonitor {
+				sidecarContainers[i].SecurityContext = mv.Spec.ContainerTemplate.SecurityContext
+			}
+		}
+	}
+
 	initContainers := []corev1.Container{}
 	initContainers = append(initContainers, mv.Spec.InitContainers...)
 	// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
