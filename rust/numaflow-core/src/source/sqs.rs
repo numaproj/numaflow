@@ -265,7 +265,7 @@ pub mod tests {
         let receive_message_output = get_receive_message_output();
 
         let delete_message_output = get_delete_message_output();
-
+        let change_visibility_output = get_change_message_visibility_output();
         let queue_attributes_output = get_queue_attributes_output();
 
         let sqs_operation_mocks = MockResponseInterceptor::new()
@@ -273,6 +273,7 @@ pub mod tests {
             .with_rule(&queue_url_output)
             .with_rule(&receive_message_output)
             .with_rule(&delete_message_output)
+            .with_rule(&change_visibility_output)
             .with_rule(&queue_attributes_output);
 
         let sqs_client =
@@ -409,6 +410,17 @@ pub mod tests {
                     .build()
                     .unwrap()
             })
+    }
+    fn get_change_message_visibility_output() -> Rule {
+        mock!(aws_sdk_sqs::Client::change_message_visibility)
+        .match_requests(|inp| {
+            inp.queue_url().unwrap()
+                == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+        })
+        .then_output(|| {
+            aws_sdk_sqs::operation::change_message_visibility::ChangeMessageVisibilityOutput::builder()
+                .build()
+        })
     }
 
     fn get_receive_message_output() -> Rule {
