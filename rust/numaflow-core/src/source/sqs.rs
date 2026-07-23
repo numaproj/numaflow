@@ -142,7 +142,7 @@ impl source::SourceAcker for SqsSource {
                 .map(|delay_ms| (delay_ms / 1000) as i32);
 
             sqs_offsets.push(SqsNack {
-                receipt_handle: string_offset.offset.into(),
+                receipt_handle: string_offset.offset,
                 visibility_timeout,
             });
         }
