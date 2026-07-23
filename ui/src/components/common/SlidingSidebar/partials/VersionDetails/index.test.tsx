@@ -20,7 +20,7 @@ describe("VersionDetails", () => {
     );
 
     expect(screen.getByText("Version details")).toBeInTheDocument();
-    expect(screen.getByText("Server")).toBeInTheDocument();
+    expect(screen.getByText("UI Server")).toBeInTheDocument();
     expect(screen.getByText("latest+52c8b3f.dirty")).toBeInTheDocument();
     expect(screen.getByText("Build date")).toBeInTheDocument();
     expect(screen.getByText("2026-07-22T05:18:24Z")).toBeInTheDocument();

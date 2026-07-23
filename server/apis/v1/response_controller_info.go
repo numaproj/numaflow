@@ -34,8 +34,8 @@ const (
 	// controllerDeploymentName is the canonical Deployment name from Numaflow install manifests.
 	controllerDeploymentName = "numaflow-controller"
 	// controllerContainerName is the container that runs the "controller" subcommand.
-	controllerContainerName = "controller-manager"
-	envControllerNamespaced      = "NUMAFLOW_CONTROLLER_NAMESPACED"
+	controllerContainerName       = "controller-manager"
+	envControllerNamespaced       = "NUMAFLOW_CONTROLLER_NAMESPACED"
 	envControllerManagedNamespace = "NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE"
 )
 
