@@ -17,6 +17,8 @@ export interface VersionDetailsProps {
   Platform?: string;
   // Controller fields come from GET /api/v1/namespaces/:ns/controller-info.
   controllerInfo?: ControllerInfo;
+  controllerInfoError?: string;
+  controllerInfoLoading?: boolean;
 }
 
 function displayValue(value?: string): string {
@@ -119,7 +121,13 @@ export function VersionDetails(props: VersionDetailsProps) {
         title="Controller"
         hero={controllerInfo?.found ? controllerInfo.version : undefined}
       >
-        {controllerInfo?.found ? (
+        {props.controllerInfoLoading ? (
+          <p className="version-empty-state">Loading controller details...</p>
+        ) : props.controllerInfoError ? (
+          <p className="version-empty-state">
+            Unable to load controller details: {props.controllerInfoError}
+          </p>
+        ) : controllerInfo?.found ? (
           <>
             <InfoRow label="Image" value={controllerInfo.image} mono />
             <InfoRow label="Scope" value={controllerScope}>

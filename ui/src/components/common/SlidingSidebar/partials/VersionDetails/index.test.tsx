@@ -84,6 +84,25 @@ describe("VersionDetails", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders controller loading state", () => {
+    render(<VersionDetails Version="v1.7.5" controllerInfoLoading />);
+    expect(screen.getByText("Loading controller details...")).toBeInTheDocument();
+  });
+
+  it("renders controller fetch error", () => {
+    render(
+      <VersionDetails
+        Version="v1.7.5"
+        controllerInfoError="Response code: 403"
+      />
+    );
+    expect(
+      screen.getByText(
+        "Unable to load controller details: Response code: 403"
+      )
+    ).toBeInTheDocument();
+  });
+
   it("shows Cluster scope for non-namespaced controller", () => {
     render(
       <VersionDetails

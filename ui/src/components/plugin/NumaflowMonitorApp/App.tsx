@@ -62,7 +62,11 @@ function App(props: AppProps) {
     undefined;
 
   // Plugin apps are usually namespaced; still apply managedNamespace fallback for cluster installs.
-  const { controllerInfo } = useControllerInfoFetch({
+  const {
+    controllerInfo,
+    error: controllerInfoError,
+    loading: controllerInfoLoading,
+  } = useControllerInfoFetch({
     host: hostUrl,
     namespace: currentNamespace,
     managedNamespace: systemInfo?.managedNamespace,
@@ -141,24 +145,43 @@ function App(props: AppProps) {
     setErrors([]);
   }, []);
 
+  const getVersionDetailsProps = useCallback(
+    (): VersionDetailsProps => ({
+      Version: versionDetails?.Version,
+      BuildDate: versionDetails?.BuildDate,
+      GitCommit: versionDetails?.GitCommit,
+      GitTag: versionDetails?.GitTag,
+      GitTreeState: versionDetails?.GitTreeState,
+      GoVersion: versionDetails?.GoVersion,
+      Compiler: versionDetails?.Compiler,
+      Platform: versionDetails?.Platform,
+      controllerInfo,
+      controllerInfoError,
+      controllerInfoLoading,
+    }),
+    [versionDetails, controllerInfo, controllerInfoError, controllerInfoLoading]
+  );
+
+  useEffect(() => {
+    setSidebarProps((current) => {
+      if (current?.type !== SidebarType.VERSION_DETAILS) {
+        return current;
+      }
+      return {
+        ...current,
+        versionDetailsProps: getVersionDetailsProps(),
+      };
+    });
+  }, [getVersionDetailsProps]);
+
   const handleVersionDetails = useCallback(() => {
     setSidebarProps({
       type: SidebarType.VERSION_DETAILS,
       slide: false,
       pageWidth,
-      versionDetailsProps: {
-        Version: versionDetails?.Version,
-        BuildDate: versionDetails?.BuildDate,
-        GitCommit: versionDetails?.GitCommit,
-        GitTag: versionDetails?.GitTag,
-        GitTreeState: versionDetails?.GitTreeState,
-        GoVersion: versionDetails?.GoVersion,
-        Compiler: versionDetails?.Compiler,
-        Platform: versionDetails?.Platform,
-        controllerInfo,
-      },
+      versionDetailsProps: getVersionDetailsProps(),
     });
-  }, [versionDetails, pageWidth, controllerInfo]);
+  }, [pageWidth, getVersionDetailsProps]);
 
   const routes = useMemo(() => {
     if (loading) {
