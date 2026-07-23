@@ -1241,7 +1241,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
-        let js_reader: crate::pipeline::isb::dyn_adapter::ISBReaderRef = Arc::new(js_reader) as _;
+        let js_reader: ISBReaderRef = Arc::new(js_reader);
 
         // Test nack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
@@ -1398,7 +1398,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
-        let js_reader: crate::pipeline::isb::dyn_adapter::ISBReaderRef = Arc::new(js_reader) as _;
+        let js_reader: ISBReaderRef = Arc::new(js_reader);
 
         // Try to nack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1494,7 +1494,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
-        let js_reader: crate::pipeline::isb::dyn_adapter::ISBReaderRef = Arc::new(js_reader) as _;
+        let js_reader: ISBReaderRef = Arc::new(js_reader);
 
         // Test ack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
@@ -1546,7 +1546,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
-        let js_reader: crate::pipeline::isb::dyn_adapter::ISBReaderRef = Arc::new(js_reader) as _;
+        let js_reader: ISBReaderRef = Arc::new(js_reader);
 
         // Try to ack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));

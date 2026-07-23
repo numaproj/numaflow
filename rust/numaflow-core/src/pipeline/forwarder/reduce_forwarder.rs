@@ -610,9 +610,13 @@ mod tests {
         }
     }
 
+    /// Exercises end-to-end keyed reduction over the in-memory ISB. The test writes records for
+    /// two keys in one 60-second fixed window, publishes source watermarks, and then sends an
+    /// idle terminal watermark to close the window. It verifies that each key produces exactly
+    /// one result containing the count of all its records.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_reduce_over_inmemory_isb() -> crate::Result<()> {
-        const TERMINAL_WATERMARK_MS: i64 = 253_402_300_799_000;
+        const TERMINAL_WATERMARK_MS: i64 = 253_402_300_799_000; // 9999-12-31T23:59:59Z in Unix milliseconds; advances the watermark past every window.
         const INPUT_VERTEX: &str = "inmemory-reduce-input-vertex";
         const OUTPUT_VERTEX: &str = "inmemory-reduce-output-vertex";
         const INPUT_OT_BUCKET: &str = "inmemory-reduce-input-ot";

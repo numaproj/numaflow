@@ -31,31 +31,29 @@ use tracing::{error, info};
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: ISBReaderOrchestrator<C>,
+    isb_reader: ISBReaderOrchestrator<C>,
     mapper: MapHandle,
-    jetstream_writer: ISBWriterOrchestrator,
+    isb_writer: ISBWriterOrchestrator,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
-        jetstream_reader: ISBReaderOrchestrator<C>,
+        isb_reader: ISBReaderOrchestrator<C>,
         mapper: MapHandle,
-        jetstream_writer: ISBWriterOrchestrator,
+        isb_writer: ISBWriterOrchestrator,
     ) -> Self {
         Self {
-            jetstream_reader,
+            isb_reader,
             mapper,
-            jetstream_writer,
+            isb_writer,
         }
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
-        let (read_messages_stream, reader_handle) = self
-            .jetstream_reader
-            .streaming_read(cln_token.clone())
-            .await?;
+        let (read_messages_stream, reader_handle) =
+            self.isb_reader.streaming_read(cln_token.clone()).await?;
 
         let (mapped_messages_stream, mapper_handle) = self
             .mapper
@@ -63,7 +61,7 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
             .await?;
 
         let writer_handle = self
-            .jetstream_writer
+            .isb_writer
             .streaming_write(mapped_messages_stream, cln_token.clone())
             .await?;
 
