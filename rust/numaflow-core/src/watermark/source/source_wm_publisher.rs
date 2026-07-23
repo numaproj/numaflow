@@ -15,9 +15,9 @@ use tracing::info;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
+use crate::pipeline::isb::ISBFactory;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -38,15 +38,15 @@ pub(crate) struct SourceWatermarkPublisher {
 impl SourceWatermarkPublisher {
     /// Creates a new [SourceWatermarkPublisher].
     pub(crate) async fn new(
-        js_context: async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
         max_delay: Duration,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
     ) -> error::Result<Self> {
         // Create OT stores once during initialization
         let source_ot_stores =
-            Self::create_ot_stores(&js_context, std::slice::from_ref(&source_config)).await;
-        let isb_ot_stores = Self::create_ot_stores(&js_context, &to_vertex_configs).await;
+            Self::create_ot_stores(isb_factory, std::slice::from_ref(&source_config)).await?;
+        let isb_ot_stores = Self::create_ot_stores(isb_factory, &to_vertex_configs).await?;
 
         Ok(SourceWatermarkPublisher {
             max_delay,
@@ -65,26 +65,22 @@ impl SourceWatermarkPublisher {
         self.processor_count = Some(count);
     }
 
-    /// Helper to create OT KV stores from bucket configs using the JetStream context.
+    /// Helper to create OT KV stores from bucket configs via the ISB factory.
     /// Heartbeat is now embedded in WMB, so no separate store needed to track heartbeats.
     async fn create_ot_stores(
-        js_context: &async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
         bucket_configs: &[BucketConfig],
-    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
+    ) -> error::Result<HashMap<&'static str, Arc<dyn KVStore>>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
 
         for config in bucket_configs {
-            let ot_bucket = js_context
-                .get_key_value(config.ot_bucket)
-                .await
-                .expect("Failed to get OT bucket");
-            ot_stores.insert(
-                config.vertex,
-                Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
-            );
+            let ot_store = isb_factory
+                .create_kv_store(config.ot_bucket.to_string())
+                .await?;
+            ot_stores.insert(config.vertex, ot_store);
         }
 
-        ot_stores
+        Ok(ot_stores)
     }
 
     /// Publishes the source watermark for the input partition. It internally uses edge publisher
@@ -241,6 +237,7 @@ mod tests {
     use async_nats::jetstream::kv::Config;
 
     use crate::config::pipeline::isb::Stream;
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
     use crate::watermark::source::source_wm_publisher::{BucketConfig, SourceWatermarkPublisher};
     use crate::watermark::wmb::WMB;
 
@@ -270,7 +267,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher = SourceWatermarkPublisher::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
             Duration::from_secs(0),
             source_config.clone(),
             vec![],
@@ -348,7 +345,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher = SourceWatermarkPublisher::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
@@ -419,7 +416,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher = SourceWatermarkPublisher::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
             Duration::from_secs(0),
             source_config.clone(),
             vec![],
@@ -498,7 +495,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher = SourceWatermarkPublisher::new(
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],

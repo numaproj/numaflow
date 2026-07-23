@@ -4,8 +4,8 @@ use std::fmt::Display;
 use std::time::Duration;
 
 const DEFAULT_PARTITION_IDX: u16 = 0;
-const DEFAULT_MAX_LENGTH: usize = 30000;
-const DEFAULT_USAGE_LIMIT: f64 = 0.8;
+pub(crate) const DEFAULT_MAX_LENGTH: usize = 30000;
+pub(crate) const DEFAULT_USAGE_LIMIT: f64 = 0.8;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 /// Default cap on in-flight (read-but-not-acked) messages used only when constructing a
@@ -13,34 +13,20 @@ const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 /// always overrides this with `Limits.Concurrency` from the vertex spec.
 const DEFAULT_BUFFER_READER_INFLIGHT_CAP: usize = 500;
 
+/// ISB backend client configuration selected at startup via `NUMAFLOW_ISBSVC_TYPE`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ISBClientConfig {
+    Jetstream(jetstream::ClientConfig),
+    /// In-memory backend for local testing only. Intentionally NOT constructible from the
+    /// env/k8s loader (config/pipeline.rs only accepts "jetstream") — programmatic use only.
+    #[allow(dead_code)] // selected via create_isb_factory; not reached from k8s env loader
+    InMemory,
+}
+
 pub(crate) mod jetstream {
-    const DEFAULT_URL: &str = "localhost:4222";
-    #[derive(Clone, PartialEq)]
-    pub(crate) struct ClientConfig {
-        pub url: String,
-        pub user: Option<String>,
-        pub password: Option<String>,
-    }
-
-    impl std::fmt::Debug for ClientConfig {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("ClientConfig")
-                .field("url", &self.url)
-                .field("user", &self.user)
-                .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
-                .finish()
-        }
-    }
-
-    impl Default for ClientConfig {
-        fn default() -> Self {
-            ClientConfig {
-                url: DEFAULT_URL.to_string(),
-                user: None,
-                password: None,
-            }
-        }
-    }
+    /// Re-export the shared JetStream client config as the single source of truth
+    /// (also used by `numaflow-sideinput`).
+    pub(crate) use numaflow_shared::isb::jetstream::config::ClientConfig;
 }
 
 /// Stream is a one of the partition of the ISB between two vertices.
@@ -138,22 +124,6 @@ impl Default for BufferReaderConfig {
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
             max_ack_pending: DEFAULT_BUFFER_READER_INFLIGHT_CAP,
         }
-    }
-}
-
-#[cfg(test)]
-mod jetstream_client_config {
-    use super::jetstream::*;
-
-    #[test]
-    fn test_default_client_config() {
-        let expected_config = ClientConfig {
-            url: "localhost:4222".to_string(),
-            user: None,
-            password: None,
-        };
-        let config = ClientConfig::default();
-        assert_eq!(config, expected_config);
     }
 }
 

@@ -18,10 +18,10 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
+use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
+use crate::pipeline::isb::{PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
-use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
 use crate::{Result, mark_failed};
 
@@ -52,8 +52,8 @@ enum WriteOutcome {
 
 /// ISBWriteTask encapsulates all the context needed to execute a write operation per message.
 /// Similar to MapUnaryTask, it spawns as a tokio task and calls mark_success() at the end.
-struct ISBWriteTask<C: NumaflowTypeConfig> {
-    orchestrator: ISBWriterOrchestrator<C>,
+struct ISBWriteTask {
+    orchestrator: ISBWriterOrchestrator,
     /// Permit to achieve structured concurrency by ensuring we do not exceed the concurrency limit
     /// and all the tasks are cleaned up when the component is shutting down.
     permit: OwnedSemaphorePermit,
@@ -61,7 +61,7 @@ struct ISBWriteTask<C: NumaflowTypeConfig> {
     cln_token: CancellationToken,
 }
 
-impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
+impl ISBWriteTask {
     /// Spawns the ISB write task as a tokio task.
     /// The task will write the message to ISB, resolve PAFs, publish watermarks, and mark success.
     fn spawn(self) {
@@ -170,9 +170,9 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
 }
 
 /// Components needed to create an ISBWriterOrchestrator.
-pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
+pub(crate) struct ISBWriterOrchestratorComponents {
     pub config: Vec<ToVertexConfig>,
-    pub writers: HashMap<&'static str, C::ISBWriter>,
+    pub writers: HashMap<&'static str, ISBWriterRef>,
     pub paf_concurrency: usize,
     pub watermark_handle: Option<WatermarkHandle>,
     pub vertex_type: VertexType,
@@ -181,10 +181,11 @@ pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
 /// ISBWriterOrchestrator orchestrates writing to multiple ISB streams.
 /// It manages multiple ISBWriters (one per stream), handles message routing,
 /// watermark publishing, and tracker operations.
-pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
+#[derive(Clone)]
+pub(crate) struct ISBWriterOrchestrator {
     config: Arc<Vec<ToVertexConfig>>,
     /// HashMap: stream_name -> ISBWriter
-    writers: Arc<HashMap<&'static str, C::ISBWriter>>,
+    writers: Arc<HashMap<&'static str, ISBWriterRef>>,
     watermark_handle: Option<WatermarkHandle>,
     sem: Arc<Semaphore>,
     paf_concurrency: usize,
@@ -194,27 +195,11 @@ pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     stream_metric_labels: StreamMetricLabelsMap,
 }
 
-/// Manual Clone implementation for ISBWriterOrchestrator.
-/// Since all fields are either Arc-wrapped or Clone types, cloning is cheap.
-impl<C: NumaflowTypeConfig> Clone for ISBWriterOrchestrator<C> {
-    fn clone(&self) -> Self {
-        Self {
-            config: Arc::clone(&self.config),
-            writers: Arc::clone(&self.writers),
-            watermark_handle: self.watermark_handle.clone(),
-            sem: Arc::clone(&self.sem),
-            paf_concurrency: self.paf_concurrency,
-            vertex_type: self.vertex_type,
-            stream_metric_labels: Arc::clone(&self.stream_metric_labels),
-        }
-    }
-}
-
-impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
+impl ISBWriterOrchestrator {
     /// Creates a new ISBWriterOrchestrator from pre-created ISBWriters.
     /// The ISBWriters are created upstream and passed in, making this more testable
     /// and decoupled from ISB implementation details.
-    pub(crate) fn new(components: ISBWriterOrchestratorComponents<C>) -> Self {
+    pub(crate) fn new(components: ISBWriterOrchestratorComponents) -> Self {
         // Build metric labels for each stream once during initialization
         let mut stream_metric_labels = HashMap::new();
         for stream_name in components.writers.keys() {
@@ -537,7 +522,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Retries until success or cancellation.
     async fn write_with_retry(
         &self,
-        writer: &C::ISBWriter,
+        writer: &ISBWriterRef,
         message: Message,
         cln_token: CancellationToken,
     ) -> std::result::Result<WriteResult, WriteError> {
@@ -645,8 +630,8 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
+    use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
     use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
-    use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{self, Config, Consumer};
     use async_nats::jetstream::stream;
@@ -696,33 +681,34 @@ mod tests {
         let mut writers = HashMap::new();
         writers.insert(
             stream.name,
-            JetStreamWriter::new(
-                stream.clone(),
-                context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await
-            .unwrap(),
+            Arc::new(
+                JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await
+                .unwrap(),
+            ) as ISBWriterRef,
         );
 
-        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
-        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -807,15 +793,17 @@ mod tests {
         let mut writers = HashMap::new();
         writers.insert(
             stream.name,
-            JetStreamWriter::new(
-                stream.clone(),
-                context.clone(),
-                writer_config.clone(),
-                None,
-                cln_token.clone(),
-            )
-            .await
-            .unwrap(),
+            Arc::new(
+                JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await
+                .unwrap(),
+            ) as ISBWriterRef,
         );
 
         // Wait until is_full flips to false — it is initialized to true and the
@@ -829,22 +817,21 @@ mod tests {
         .await
         .expect("timed out waiting for buffer to become available");
 
-        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
-            ISBWriterOrchestratorComponents {
-                config: vec![ToVertexConfig {
-                    name: "test-vertex",
-                    partitions: 1,
-                    writer_config,
-                    conditions: None,
-                    to_vertex_type: VertexType::Sink,
-                    ordered_processing_enabled: false,
-                }],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
-        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -928,90 +915,95 @@ mod tests {
         for stream in &vertex1_streams {
             writers.insert(
                 stream.name,
-                JetStreamWriter::new(
-                    stream.clone(),
-                    context.clone(),
-                    vertex1_writer_config.clone(),
-                    None,
-                    cln_token.clone(),
-                )
-                .await
-                .unwrap(),
+                Arc::new(
+                    JetStreamWriter::new(
+                        stream.clone(),
+                        context.clone(),
+                        vertex1_writer_config.clone(),
+                        None,
+                        cln_token.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
             );
         }
         for stream in &vertex2_streams {
             writers.insert(
                 stream.name,
-                JetStreamWriter::new(
-                    stream.clone(),
-                    context.clone(),
-                    vertex2_writer_config.clone(),
-                    None,
-                    cln_token.clone(),
-                )
-                .await
-                .unwrap(),
+                Arc::new(
+                    JetStreamWriter::new(
+                        stream.clone(),
+                        context.clone(),
+                        vertex2_writer_config.clone(),
+                        None,
+                        cln_token.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
             );
         }
         for stream in &vertex3_streams {
             writers.insert(
                 stream.name,
-                JetStreamWriter::new(
-                    stream.clone(),
-                    context.clone(),
-                    vertex3_writer_config.clone(),
-                    None,
-                    cln_token.clone(),
-                )
-                .await
-                .unwrap(),
+                Arc::new(
+                    JetStreamWriter::new(
+                        stream.clone(),
+                        context.clone(),
+                        vertex3_writer_config.clone(),
+                        None,
+                        cln_token.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
             );
         }
 
-        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
-            ISBWriterOrchestratorComponents {
-                config: vec![
-                    ToVertexConfig {
-                        name: "vertex1",
-                        partitions: 2,
-                        writer_config: vertex1_writer_config,
-                        conditions: Some(Box::new(ForwardConditions {
-                            tags: Box::new(TagConditions {
-                                operator: Some("or".to_string()),
-                                values: vec!["tag1".to_string()],
-                            }),
-                        })),
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                    ToVertexConfig {
-                        name: "vertex2",
-                        partitions: 1,
-                        writer_config: vertex2_writer_config,
-                        conditions: Some(Box::new(ForwardConditions {
-                            tags: Box::new(TagConditions {
-                                operator: Some("or".to_string()),
-                                values: vec!["tag2".to_string()],
-                            }),
-                        })),
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                    ToVertexConfig {
-                        name: "vertex3",
-                        partitions: 1,
-                        writer_config: vertex3_writer_config,
-                        conditions: None, // No conditions, always forward
-                        to_vertex_type: VertexType::Sink,
-                        ordered_processing_enabled: false,
-                    },
-                ],
-                writers,
-                paf_concurrency: 100,
-                watermark_handle: None,
-                vertex_type: VertexType::Source,
-            };
-        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![
+                ToVertexConfig {
+                    name: "vertex1",
+                    partitions: 2,
+                    writer_config: vertex1_writer_config,
+                    conditions: Some(Box::new(ForwardConditions {
+                        tags: Box::new(TagConditions {
+                            operator: Some("or".to_string()),
+                            values: vec!["tag1".to_string()],
+                        }),
+                    })),
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+                ToVertexConfig {
+                    name: "vertex2",
+                    partitions: 1,
+                    writer_config: vertex2_writer_config,
+                    conditions: Some(Box::new(ForwardConditions {
+                        tags: Box::new(TagConditions {
+                            operator: Some("or".to_string()),
+                            values: vec!["tag2".to_string()],
+                        }),
+                    })),
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+                ToVertexConfig {
+                    name: "vertex3",
+                    partitions: 1,
+                    writer_config: vertex3_writer_config,
+                    conditions: None, // No conditions, always forward
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                },
+            ],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -1112,12 +1104,13 @@ mod tests {
 mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{IntOffset, MessageHandle, MessageID, NackOptions, ReadAck};
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use crate::message::{IntOffset, MessageHandle, MessageID, ReadAck};
+    use crate::pipeline::isb::ISBWriter;
+    use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::{ForwardConditions, TagConditions};
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc;
 
     /// Helper to create a test message with an ack handle
@@ -1154,7 +1147,7 @@ mod simple_buffer_tests {
         stream_name: &'static str,
         buffer_full_strategy: BufferFullStrategy,
         paf_concurrency: usize,
-    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+    ) -> (ISBWriterOrchestrator, CancellationToken) {
         let stream = Stream::new(stream_name, "test-vertex", 0);
         let cancel = CancellationToken::new();
 
@@ -1165,7 +1158,7 @@ mod simple_buffer_tests {
         };
 
         let mut writers = HashMap::new();
-        writers.insert(stream_name, adapter.writer());
+        writers.insert(stream_name, Arc::new(adapter.writer()) as ISBWriterRef);
 
         let components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
@@ -1182,7 +1175,7 @@ mod simple_buffer_tests {
             vertex_type: VertexType::Source,
         };
 
-        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        let orchestrator = ISBWriterOrchestrator::new(components);
         (orchestrator, cancel)
     }
 
@@ -1710,7 +1703,7 @@ mod simple_buffer_tests {
         )>,
         buffer_full_strategy: BufferFullStrategy,
         paf_concurrency: usize,
-    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+    ) -> (ISBWriterOrchestrator, CancellationToken) {
         let cancel = CancellationToken::new();
 
         let mut writers = HashMap::new();
@@ -1719,7 +1712,7 @@ mod simple_buffer_tests {
         for (idx, (stream_name, adapter, condition)) in adapters.iter().enumerate() {
             let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
             let stream = Stream::new(stream_name, vertex_name, 0);
-            writers.insert(*stream_name, adapter.writer());
+            writers.insert(*stream_name, Arc::new(adapter.writer()) as ISBWriterRef);
 
             let writer_config = BufferWriterConfig {
                 streams: vec![stream],
@@ -1745,7 +1738,7 @@ mod simple_buffer_tests {
             vertex_type: VertexType::Source,
         };
 
-        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        let orchestrator = ISBWriterOrchestrator::new(components);
         (orchestrator, cancel)
     }
 
@@ -2005,10 +1998,8 @@ mod simple_buffer_tests {
         let msg1 = create_message_with_keys_and_offset(vec!["user-42"], "offset-1");
         let msg2 = create_message_with_keys_and_offset(vec!["user-42"], "offset-999");
 
-        let stream1 =
-            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &vertex);
-        let stream2 =
-            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &vertex);
+        let stream1 = ISBWriterOrchestrator::determine_target_stream(&msg1, &vertex);
+        let stream2 = ISBWriterOrchestrator::determine_target_stream(&msg2, &vertex);
 
         assert_eq!(
             stream1, stream2,
@@ -2017,10 +2008,8 @@ mod simple_buffer_tests {
 
         // Also verify for Sink vertex type
         let sink_vertex = create_vertex_config(VertexType::Sink, true, 3);
-        let s1 =
-            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &sink_vertex);
-        let s2 =
-            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &sink_vertex);
+        let s1 = ISBWriterOrchestrator::determine_target_stream(&msg1, &sink_vertex);
+        let s2 = ISBWriterOrchestrator::determine_target_stream(&msg2, &sink_vertex);
         assert_eq!(
             s1, s2,
             "Same keys must route to the same stream in ordered mode for Sink"
@@ -2036,12 +2025,8 @@ mod simple_buffer_tests {
         let msg_multi = create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-1");
         let msg_single = create_message_with_keys_and_offset(vec!["region:us-east"], "offset-1");
 
-        let stream_multi =
-            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg_multi, &vertex);
-        let stream_single = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
-            &msg_single,
-            &vertex,
-        );
+        let stream_multi = ISBWriterOrchestrator::determine_target_stream(&msg_multi, &vertex);
+        let stream_single = ISBWriterOrchestrator::determine_target_stream(&msg_single, &vertex);
 
         // The join of ["region", "us-east"] is "region:us-east", which equals the single key
         // "region:us-east". So they should hash to the same partition.
@@ -2054,18 +2039,14 @@ mod simple_buffer_tests {
         // (with enough partitions, this should differ for most key combinations)
         let msg_different =
             create_message_with_keys_and_offset(vec!["region", "eu-west"], "offset-1");
-        let stream_different = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
-            &msg_different,
-            &vertex,
-        );
+        let stream_different =
+            ISBWriterOrchestrator::determine_target_stream(&msg_different, &vertex);
 
         // Two messages with the same multi-key should always match
         let msg_multi_again =
             create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-2");
-        let stream_multi_again = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
-            &msg_multi_again,
-            &vertex,
-        );
+        let stream_multi_again =
+            ISBWriterOrchestrator::determine_target_stream(&msg_multi_again, &vertex);
         assert_eq!(
             stream_multi, stream_multi_again,
             "Same multi-key must always route to the same stream"
@@ -2086,15 +2067,10 @@ mod simple_buffer_tests {
         for key in ["a", "b", "c", "user-123", "xyz"] {
             let msg = create_message_with_keys_and_offset(vec![key], &format!("offset-{}", key));
 
-            let stream_ordered = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
-                &msg,
-                &ordered_vertex,
-            );
+            let stream_ordered =
+                ISBWriterOrchestrator::determine_target_stream(&msg, &ordered_vertex);
             let stream_unordered =
-                ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
-                    &msg,
-                    &unordered_vertex,
-                );
+                ISBWriterOrchestrator::determine_target_stream(&msg, &unordered_vertex);
 
             assert_eq!(
                 stream_ordered.partition, 0,
@@ -2130,41 +2106,6 @@ mod simple_buffer_tests {
         fn name(&self) -> &'static str {
             "always-fail"
         }
-    }
-
-    /// Stub reader that satisfies `NumaflowTypeConfig::ISBReader`. Never instantiated
-    /// at runtime — `ISBWriterOrchestrator` only uses the writer associated type.
-    #[derive(Clone, Debug)]
-    struct UnusedReader;
-
-    impl crate::pipeline::isb::ISBReader for UnusedReader {
-        async fn fetch(&self, _max: usize, _timeout: Duration) -> Result<Vec<Message>> {
-            Ok(vec![])
-        }
-        async fn ack(&self, _offset: &Offset) -> Result<()> {
-            Ok(())
-        }
-        async fn nack(&self, _offset: &Offset, _nack_options: Option<NackOptions>) -> Result<()> {
-            Ok(())
-        }
-        async fn pending(&self) -> Result<Option<usize>> {
-            Ok(None)
-        }
-        fn name(&self) -> &'static str {
-            "unused"
-        }
-        async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[derive(Clone)]
-    struct WithAlwaysFailWriter;
-
-    impl NumaflowTypeConfig for WithAlwaysFailWriter {
-        type RateLimiter = numaflow_throttling::NoOpRateLimiter;
-        type ISBReader = UnusedReader;
-        type ISBWriter = AlwaysFailWriter;
     }
 
     // ==================== Nack Interception Tests ====================
@@ -2226,7 +2167,7 @@ mod simple_buffer_tests {
         };
 
         let mut writers = HashMap::new();
-        writers.insert(stream.name, AlwaysFailWriter);
+        writers.insert(stream.name, Arc::new(AlwaysFailWriter) as ISBWriterRef);
 
         let components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
@@ -2243,7 +2184,7 @@ mod simple_buffer_tests {
             vertex_type: VertexType::Source,
         };
 
-        let orchestrator = ISBWriterOrchestrator::<WithAlwaysFailWriter>::new(components);
+        let orchestrator = ISBWriterOrchestrator::new(components);
 
         let (tx, rx) = mpsc::channel(1);
         let messages_stream = ReceiverStream::new(rx);

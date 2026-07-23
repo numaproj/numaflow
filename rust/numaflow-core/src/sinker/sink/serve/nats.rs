@@ -1,28 +1,22 @@
-use crate::config::pipeline::NatsStoreConfig;
-use crate::sinker::sink::serve::StoreEntry;
-use async_nats::jetstream::Context;
-use async_nats::jetstream::kv::Store;
+use std::sync::Arc;
+
 use chrono::Utc;
+use numaflow_shared::kv::KVStore;
 use tokio::task::JoinSet;
 use tracing::trace;
 
-/// Nats serving store to store the serving responses.
+use crate::sinker::sink::serve::StoreEntry;
+
+/// Serving store backed by an ISB-neutral KV store (historically NATS JetStream KV).
 #[derive(Clone)]
 pub(crate) struct NatsServingStore {
-    store: Store,
+    store: Arc<dyn KVStore>,
 }
 
 impl NatsServingStore {
-    /// Create a new Nats serving store.
-    pub(crate) async fn new(
-        js_context: Context,
-        nats_store_config: NatsStoreConfig,
-    ) -> crate::Result<Self> {
-        let store = js_context
-            .get_key_value(nats_store_config.rs_store_name.as_str())
-            .await
-            .map_err(|e| crate::Error::Connection(format!("Failed to get kv store: {e:?}")))?;
-        Ok(Self { store })
+    /// Create a new serving store from a pre-built KV store handle.
+    pub(crate) fn new(store: Arc<dyn KVStore>) -> Self {
+        Self { store }
     }
 
     /// Puts multiple data items into the serving store concurrently.
@@ -46,10 +40,10 @@ impl NatsServingStore {
 
             trace!(?id, length = ?payload.value.len(), "Putting datum");
 
-            let store = self.store.clone();
+            let store = Arc::clone(&self.store);
             jhset.spawn(async move {
                 store
-                    .put(id, payload.value)
+                    .put(&id, payload.value)
                     .await
                     .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))
             });

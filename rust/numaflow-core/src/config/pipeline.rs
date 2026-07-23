@@ -35,9 +35,11 @@ const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
-const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_ISBSVC_TYPE: &str = "NUMAFLOW_ISBSVC_TYPE";
+const ENV_NUMAFLOW_ISBSVC_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
+const ENV_NUMAFLOW_ISBSVC_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
+const ENV_NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED: &str = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED";
 const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
@@ -67,7 +69,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) writer_concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) graceful_shutdown_time: Duration,
-    pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
+    pub(crate) isb_client_config: isb::ISBClientConfig,
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexConfig,
@@ -97,7 +99,9 @@ impl Default for PipelineConfig {
             writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig::default(),
+            isb_client_config: isb::ISBClientConfig::Jetstream(
+                isb::jetstream::ClientConfig::default(),
+            ),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
@@ -294,9 +298,11 @@ impl PipelineConfig {
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
                 [
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
+                    ENV_NUMAFLOW_ISBSVC_TYPE,
+                    ENV_NUMAFLOW_ISBSVC_JETSTREAM_URL,
+                    ENV_NUMAFLOW_ISBSVC_JETSTREAM_USER,
+                    ENV_NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD,
+                    ENV_NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED,
                     ENV_WRITE_CONCURRENCY_SIZE,
                     ENV_CALLBACK_ENABLED,
                     ENV_CALLBACK_CONCURRENCY,
@@ -515,10 +521,22 @@ impl PipelineConfig {
                 })
         };
 
-        let js_client_config = isb::jetstream::ClientConfig {
-            url: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL)?,
-            user: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER).ok(),
-            password: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
+        let isb_type = env_vars
+            .get(ENV_NUMAFLOW_ISBSVC_TYPE)
+            .map(|s| s.as_str())
+            .unwrap_or("jetstream");
+        let isb_client_config = match isb_type {
+            "jetstream" => {
+                // Single source of truth for JetStream env parsing (shared with sideinput).
+                let js_cfg = isb::jetstream::ClientConfig::load(env_vars.clone())
+                    .map_err(|e| Error::Config(e.to_string()))?;
+                isb::ISBClientConfig::Jetstream(js_cfg)
+            }
+            other => {
+                return Err(Error::Config(format!(
+                    "Unsupported ISB service type '{other}'. Supported: jetstream"
+                )));
+            }
         };
 
         // Determine if ordered processing is enabled for this vertex
@@ -727,7 +745,7 @@ impl PipelineConfig {
             pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
             vertex_name: Box::leak(vertex_name.into_boxed_str()),
             replica: *replica,
-            js_client_config,
+            isb_client_config,
             from_vertex_config,
             to_vertex_config,
             vertex_type,
@@ -767,7 +785,9 @@ mod tests {
             writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig::default(),
+            isb_client_config: isb::ISBClientConfig::Jetstream(
+                isb::jetstream::ClientConfig::default(),
+            ),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
             vertex_type: VertexType::Source,
@@ -852,11 +872,12 @@ mod tests {
             writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
@@ -1024,11 +1045,12 @@ mod tests {
             writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out",
@@ -1083,11 +1105,12 @@ mod tests {
             writer_concurrency: 50,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out",
@@ -1192,11 +1215,12 @@ mod tests {
             writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
@@ -1607,5 +1631,46 @@ mod tests {
             .map(|s| s.partition)
             .collect();
         assert_eq!(partitions, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_isb_client_config_defaults_to_jetstream() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
+
+        // No NUMAFLOW_ISBSVC_TYPE — defaults to jetstream
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "nats://localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.clone(), env_vars).unwrap();
+        assert_eq!(
+            config.isb_client_config,
+            isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
+                url: "nats://localhost:4222".to_string(),
+                user: None,
+                password: None,
+                tls_enabled: false,
+            })
+        );
+
+        // Explicit jetstream
+        let env_vars = [
+            ("NUMAFLOW_ISBSVC_TYPE", "jetstream"),
+            ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "nats://localhost:4222"),
+        ];
+        let config = PipelineConfig::load(pipeline_cfg_base64.clone(), env_vars).unwrap();
+        assert!(matches!(
+            config.isb_client_config,
+            isb::ISBClientConfig::Jetstream(_)
+        ));
+
+        // Unsupported type
+        let env_vars = [
+            ("NUMAFLOW_ISBSVC_TYPE", "pulsar"),
+            ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "nats://localhost:4222"),
+        ];
+        let err = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Unsupported ISB service type 'pulsar'"),
+            "unexpected error: {err}"
+        );
     }
 }

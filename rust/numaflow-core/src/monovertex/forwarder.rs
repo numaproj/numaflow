@@ -152,7 +152,7 @@ mod tests {
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
-    use crate::pipeline::isb::simplebuffer::WithSimpleBuffer;
+    use crate::pipeline::isb::inmemory::WithSimpleBuffer;
     use crate::sinker::sink::SinkClientType;
     use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
     use crate::source::test_utils::SourceTestHandle;
