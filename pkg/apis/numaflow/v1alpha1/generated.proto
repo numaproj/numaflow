@@ -442,6 +442,28 @@ message ContainerTemplate {
   optional Probe livenessProbe = 7;
 }
 
+message CronSchedule {
+  // Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+  optional string start = 1;
+
+  // End of the cron window. Same format as Start. Must differ from Start.
+  optional string end = 2;
+
+  // Minimum replicas during this window. Overrides scale.min.
+  optional int32 min = 3;
+
+  // Maximum replicas during this window. Overrides scale.max.
+  optional int32 max = 4;
+}
+
+// CronScheduling defines cron-based autoscaling overrides.
+message CronScheduling {
+  // Timezone for interpreting cron expressions. IANA Time Zone Database format.
+  optional string timezone = 1;
+
+  repeated CronSchedule schedules = 2;
+}
+
 message DaemonTemplate {
   // +optional
   optional AbstractPodTemplate abstractPodTemplate = 1;
@@ -1878,6 +1900,11 @@ message Scale {
   // The is use to prevent from too aggressive scaling down operations
   // +optional
   optional uint32 replicasPerScaleDown = 12;
+
+  // Cron defines time-based autoscaling overrides. During active cron windows, the window's
+  // min/max replace the base min/max for scaling decisions.
+  // +optional
+  optional CronScheduling cron = 13;
 }
 
 message ServeSink {

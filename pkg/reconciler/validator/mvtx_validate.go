@@ -18,7 +18,9 @@ package validator
 
 import (
 	"fmt"
+	"time"
 
+	cron "github.com/robfig/cron/v3"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
@@ -77,6 +79,90 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	_, err := intstr.GetScaledValueFromIntOrPercent(&maxUvail, 1, true) // maxUnavailable should be an interger or a percentage in string
 	if err != nil {
 		return fmt.Errorf("invalid maxUnavailable: %w", err)
+	}
+
+	if err := validateCronScaling(mvtx.Spec.Scale); err != nil {
+		return fmt.Errorf("invalid scale.cron: %w", err)
+	}
+
+	return nil
+}
+
+func validateCronScaling(scale dfv1.Scale) error {
+	if scale.Cron == nil {
+		return nil
+	}
+	if scale.Disabled {
+		return fmt.Errorf("cron must not be configured when autoscaling is disabled")
+	}
+	if scale.Min != nil && *scale.Min < 0 {
+		return fmt.Errorf("scale.min must not be negative")
+	}
+	if scale.Max != nil && *scale.Max < 0 {
+		return fmt.Errorf("scale.max must not be negative")
+	}
+	parentMin := scale.GetMinReplicas()
+	parentMax := scale.GetMaxReplicas()
+	if parentMin > parentMax {
+		return fmt.Errorf("scale.min must not be greater than scale.max")
+	}
+	if scale.Cron.Timezone == "" {
+		return fmt.Errorf("timezone is required")
+	}
+	if _, err := time.LoadLocation(scale.Cron.Timezone); err != nil {
+		return fmt.Errorf("invalid timezone %q: %w", scale.Cron.Timezone, err)
+	}
+	if len(scale.Cron.Schedules) == 0 {
+		return fmt.Errorf("at least one schedule is required")
+	}
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	for i, sched := range scale.Cron.Schedules {
+		startSchedule, err := parser.Parse(sched.Start)
+		if err != nil {
+			return fmt.Errorf("schedules[%d].start %q is not a valid cron expression: %w", i, sched.Start, err)
+		}
+		endSchedule, err := parser.Parse(sched.End)
+		if err != nil {
+			return fmt.Errorf("schedules[%d].end %q is not a valid cron expression: %w", i, sched.End, err)
+		}
+		startSpec, startOK := startSchedule.(*cron.SpecSchedule)
+		endSpec, endOK := endSchedule.(*cron.SpecSchedule)
+		if !startOK || !endOK {
+			return fmt.Errorf("schedules[%d]: unsupported cron schedule", i)
+		}
+		sameSchedule := startSpec.Second == endSpec.Second &&
+			startSpec.Minute == endSpec.Minute &&
+			startSpec.Hour == endSpec.Hour &&
+			startSpec.Dom == endSpec.Dom &&
+			startSpec.Month == endSpec.Month &&
+			startSpec.Dow == endSpec.Dow
+		if sameSchedule {
+			return fmt.Errorf("schedules[%d]: start and end must not be identical", i)
+		}
+		if startSpec.Dom != endSpec.Dom || startSpec.Month != endSpec.Month || startSpec.Dow != endSpec.Dow {
+			return fmt.Errorf("schedules[%d]: start and end day-of-month, month, and day-of-week must match", i)
+		}
+		if sched.Min == nil {
+			return fmt.Errorf("schedules[%d]: min is required", i)
+		}
+		if sched.Max == nil {
+			return fmt.Errorf("schedules[%d]: max is required", i)
+		}
+		if *sched.Min < 0 {
+			return fmt.Errorf("schedules[%d]: min must not be negative", i)
+		}
+		if *sched.Max < 0 {
+			return fmt.Errorf("schedules[%d]: max must not be negative", i)
+		}
+		if *sched.Min > *sched.Max {
+			return fmt.Errorf("schedules[%d]: min (%d) must not be greater than max (%d)", i, *sched.Min, *sched.Max)
+		}
+		if *sched.Min < parentMin {
+			return fmt.Errorf("schedules[%d]: min must not be less than scale.min", i)
+		}
+		if *sched.Max > parentMax {
+			return fmt.Errorf("schedules[%d]: max must not be greater than scale.max", i)
+		}
 	}
 	return nil
 }

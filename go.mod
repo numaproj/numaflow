@@ -30,6 +30,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.65.0
 	github.com/redis/go-redis/v9 v9.0.3
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.18.2

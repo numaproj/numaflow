@@ -42,6 +42,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression":                      schema_pkg_apis_numaflow_v1alpha1_Compression(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronSchedule":                     schema_pkg_apis_numaflow_v1alpha1_CronSchedule(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronScheduling":                   schema_pkg_apis_numaflow_v1alpha1_CronScheduling(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                   schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                             schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                      schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
@@ -1174,6 +1176,86 @@ func schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref common.ReferenceCal
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_CronSchedule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"start": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"end": {
+						SchemaProps: spec.SchemaProps{
+							Description: "End of the cron window. Same format as Start. Must differ from Start.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"min": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Minimum replicas during this window. Overrides scale.min.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"max": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Maximum replicas during this window. Overrides scale.max.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"start", "end", "min", "max"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_CronScheduling(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CronScheduling defines cron-based autoscaling overrides.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"timezone": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Timezone for interpreting cron expressions. IANA Time Zone Database format.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"schedules": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronSchedule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"timezone", "schedules"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronSchedule"},
 	}
 }
 
@@ -5097,9 +5179,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 							Format:      "int64",
 						},
 					},
+					"cron": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Cron defines time-based autoscaling overrides. During active cron windows, the window's min/max replace the base min/max for scaling decisions.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronScheduling"),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CronScheduling"},
 	}
 }
 
