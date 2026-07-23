@@ -1,4 +1,4 @@
-use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
+use numaflow_sqs::source::{SqsMessage, SqsNack, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -125,12 +125,31 @@ impl source::SourceAcker for SqsSource {
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
 
-    async fn nack(&mut self, _offsets: Vec<NackOffset>) -> crate::error::Result<()> {
-        // SQS doesn't support nack - no-op
-        Ok(())
+    async fn nack(&mut self, offsets: Vec<NackOffset>) -> crate::error::Result<()> {
+        let mut sqs_offsets = Vec::with_capacity(offsets.len());
+
+        for nack in offsets {
+            let Offset::String(string_offset) = nack.offset else {
+                return Err(Error::Source(format!(
+                    "Expected Offset::String type for SQS. offset={:?}",
+                    nack.offset
+                )));
+            };
+
+            let visibility_timeout = nack
+                .option
+                .and_then(|opts| opts.delay)
+                .map(|delay_ms| (delay_ms / 1000) as i32);
+
+            sqs_offsets.push(SqsNack {
+                receipt_handle: string_offset.offset.into(),
+                visibility_timeout,
+            });
+        }
+
+        self.nack_offsets(sqs_offsets).await.map_err(Into::into)
     }
 }
-
 impl source::LagReader for SqsSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
