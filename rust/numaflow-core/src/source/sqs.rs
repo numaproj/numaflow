@@ -137,9 +137,21 @@ impl source::SourceAcker for SqsSource {
             };
 
             let visibility_timeout = nack
-                .option
-                .and_then(|opts| opts.delay)
-                .map(|delay_ms| (delay_ms / 1000) as i32);
+            .option
+            .and_then(|opts| opts.delay)
+            .map(|delay_ms| {
+                let visibility_timeout = delay_ms.div_ceil(1000) as i32;
+
+                if delay_ms % 1000 != 0 {
+                    tracing::warn!(
+                        requested_delay_ms = delay_ms,
+                        visibility_timeout_secs = visibility_timeout,
+                        "SQS visibility timeout only supports whole seconds; rounding requested delay up"
+                    );
+                }
+
+                visibility_timeout
+            });
 
             sqs_offsets.push(SqsNack {
                 receipt_handle: string_offset.offset,
