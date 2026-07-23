@@ -167,7 +167,6 @@ impl source::LagReader for SqsSource {
         Ok(self.pending_count().await)
     }
 }
-
 #[cfg(feature = "sqs-tests")]
 #[cfg(test)]
 pub mod tests {
@@ -187,7 +186,13 @@ pub mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::*;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::{Source, SourceType};
+    use numaflow::shared::ServerExtras;
+    use numaflow::sink;
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use tokio::sync::oneshot;
 
     #[tokio::test]
     async fn test_sqs_message_conversion() {
@@ -269,7 +274,33 @@ pub mod tests {
             Some(b"xyz789".as_slice())
         );
     }
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
 
+    struct NackOneSink {
+        first: Arc<AtomicBool>,
+    }
+
+    #[tonic::async_trait]
+    impl sink::Sinker for NackOneSink {
+        async fn sink(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
+        ) -> Vec<sink::Response> {
+            let mut responses = Vec::new();
+            while let Some(datum) = input.recv().await {
+                if self.first.swap(false, Ordering::SeqCst) {
+                    responses.push(sink::Response::nack(datum.id, None));
+                } else {
+                    responses.push(sink::Response::ok(datum.id));
+                }
+            }
+
+            responses
+        }
+    }
     #[tokio::test]
     async fn test_sqs_source_e2e() {
         let queue_url_output = get_queue_url_output();
@@ -314,7 +345,28 @@ pub mod tests {
         use crate::tracker::Tracker;
         let tracker = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
+        // Start User Defined Sink server
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
 
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_socket = sock_file.clone();
+        let server_info = server_info_file.clone();
+
+        tokio::spawn(async move {
+            sink::Server::new(NackOneSink {
+                first: Arc::new(AtomicBool::new(true)),
+            })
+            .with_socket_file(server_socket)
+            .with_server_info_file(server_info)
+            .start_with_shutdown(shutdown_rx)
+            .await
+            .expect("failed to start sink server");
+        });
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             1,
@@ -330,12 +382,19 @@ pub mod tests {
         .await;
 
         // create sink writer
-        use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
-        let sink_writer =
-            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
-                .build()
-                .await
-                .unwrap();
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file).await.unwrap(),
+                )),
+                None,
+            ),
+        )
+        .build()
+        .await
+        .unwrap();
 
         // create the forwarder with the source and sink writer
         let forwarder =
@@ -380,6 +439,8 @@ pub mod tests {
             "queue attributes output calls: {}",
             queue_attributes_output.num_calls()
         );
+        assert_eq!(change_visibility_output.num_calls(), 1);
+        assert!(delete_message_output.num_calls() >= 1);
     }
 
     fn get_queue_attributes_output() -> Rule {
@@ -436,21 +497,35 @@ pub mod tests {
     }
 
     fn get_receive_message_output() -> Rule {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = Arc::clone(&calls);
+
         mock!(aws_sdk_sqs::Client::receive_message)
             .match_requests(|inp| {
-                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
             })
-            .then_output(|| {
-                aws_sdk_sqs::operation::receive_message::ReceiveMessageOutput::builder()
-                    .messages(
-                        aws_sdk_sqs::types::Message::builder()
-                            .message_id("219f8380-5770-4cc2-8c3e-5c715e145f5e")
-                            .body("This is a test message")
-                            .receipt_handle("AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q")
-                            .attributes(MessageSystemAttributeName::SentTimestamp, "1677112427387")
-                            .build()
-                    )
-                    .build()
+            .then_output(move || {
+                let count = calls_clone.fetch_add(1, Ordering::SeqCst);
+
+                if count < 2 {
+                    aws_sdk_sqs::operation::receive_message::ReceiveMessageOutput::builder()
+                        .messages(
+                            aws_sdk_sqs::types::Message::builder()
+                                .message_id("219f8380-5770-4cc2-8c3e-5c715e145f5e")
+                                .body("This is a test message")
+                                .receipt_handle("AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q")
+                                .attributes(
+                                    MessageSystemAttributeName::SentTimestamp,
+                                    "1677112427387",
+                                )
+                                .build(),
+                        )
+                        .build()
+                } else {
+                    aws_sdk_sqs::operation::receive_message::ReceiveMessageOutput::builder()
+                        .build()
+                }
             })
     }
 
