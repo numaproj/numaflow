@@ -18,10 +18,17 @@ package scaling
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -139,6 +146,94 @@ func TestDesiredReplicas(t *testing.T) {
 			if tc.expected != 0 {
 				assert.True(t, got > 0, "desiredReplicas must not return a non-positive value for non-zero expected")
 			}
+		})
+	}
+}
+
+func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
+	tests := []struct {
+		name                 string
+		current              int32
+		cronMin              int32
+		cronMax              int32
+		replicasPerScaleUp   uint32
+		replicasPerScaleDown uint32
+		expected             int32
+	}{
+		{
+			name:                 "scale up from zero for nightly DLQ drain",
+			current:              0,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			expected:             1,
+		},
+		{
+			name:                 "scale down toward cron max",
+			current:              10,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			expected:             8,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			location, err := time.LoadLocation("America/Los_Angeles")
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().In(location)
+			start := now.Add(-time.Minute)
+			end := now.Add(time.Minute)
+			cronExpression := func(t time.Time) string {
+				return fmt.Sprintf("%d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
+			}
+			mv := &dfv1.MonoVertex{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mvtx",
+					Namespace: "default",
+				},
+				Spec: dfv1.MonoVertexSpec{
+					Replicas: ptr.To(tc.current),
+					Scale: dfv1.Scale{
+						Min:                  ptr.To[int32](0),
+						Max:                  ptr.To[int32](50),
+						ReplicasPerScaleUp:   ptr.To(tc.replicasPerScaleUp),
+						ReplicasPerScaleDown: ptr.To(tc.replicasPerScaleDown),
+						Cron: &dfv1.CronScheduling{
+							Timezone: "America/Los_Angeles",
+							Schedules: []dfv1.CronSchedule{
+								{
+									Start: cronExpression(start),
+									End:   cronExpression(end),
+									Min:   ptr.To(tc.cronMin),
+									Max:   ptr.To(tc.cronMax),
+								},
+							},
+						},
+					},
+				},
+				Status: dfv1.MonoVertexStatus{
+					Phase:        dfv1.MonoVertexPhaseRunning,
+					Replicas:     uint32(tc.current),
+					LastScaledAt: metav1.NewTime(time.Now().Add(-10 * time.Minute)),
+				},
+			}
+			scheme := runtime.NewScheme()
+			assert.NoError(t, dfv1.AddToScheme(scheme))
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mv).Build()
+			scaler := NewScaler(cl)
+
+			err = scaler.scaleOneMonoVertex(context.Background(), "default/test-mvtx", 1)
+			assert.NoError(t, err)
+
+			updated := &dfv1.MonoVertex{}
+			assert.NoError(t, cl.Get(context.Background(), client.ObjectKeyFromObject(mv), updated))
+			assert.Equal(t, tc.expected, *updated.Spec.Replicas)
 		})
 	}
 }
