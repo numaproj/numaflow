@@ -86,6 +86,7 @@ const UDF_WRITE_TOTAL: &str = "udf_write";
 const WRITE_BYTES_TOTAL: &str = "write_bytes";
 const WRITE_ERROR_TOTAL: &str = "write_error";
 const ACK_TOTAL: &str = "ack";
+const NACK_TOTAL: &str = "nack";
 const UDF_ERROR_TOTAL: &str = "udf_error";
 const CRITICAL_ERROR_TOTAL: &str = "critical_error";
 const MONOVTX_UDF_ERROR_TOTAL: &str = "error";
@@ -148,6 +149,7 @@ const READ_TIME: &str = "read_time";
 const READ_PROCESSING_TIME: &str = "read_processing_time";
 const WRITE_PROCESSING_TIME: &str = "write_processing_time";
 const ACK_PROCESSING_TIME: &str = "ack_processing_time";
+const NACK_PROCESSING_TIME: &str = "nack_processing_time";
 const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
@@ -155,6 +157,7 @@ const ON_SUCCESS_SINK_WRITE_PROCESSING_TIME: &str = "onsuccess_sink_write_proces
 const TRANSFORM_TIME: &str = "time";
 const UDF_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
+const NACK_TIME: &str = "nack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 const ON_SUCCESS_SINK_TIME: &str = "time";
@@ -171,6 +174,7 @@ const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
 const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
 const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
 const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
+const JETSTREAM_ISB_NACK_TIME_TOTAL: &str = "nack_time_total";
 
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
@@ -296,6 +300,7 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) nack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) critical_error_total: Family<Vec<(String, String)>, Counter>,
 
@@ -307,6 +312,7 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) nack_time: Family<Vec<(String, String)>, Histogram>,
 
     pub(crate) transformer: TransformerMetrics,
     pub(crate) udf: UDFMetrics,
@@ -415,8 +421,9 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) drop_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) drop_bytes_total: Family<Vec<(String, String)>, Counter>,
 
-    // ack counters
+    // ack/nack counters
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) nack_total: Family<Vec<(String, String)>, Counter>,
 
     // udf specific counters
     pub(crate) udf_read_total: Family<Vec<(String, String)>, Counter>,
@@ -433,6 +440,9 @@ pub(crate) struct PipelineForwarderMetrics {
 
     // ack histograms
     pub(crate) ack_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // nack histograms
+    pub(crate) nack_processing_time: Family<Vec<(String, String)>, Histogram>,
 
     // forwarder histograms
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -458,6 +468,7 @@ impl PipelineForwarderMetrics {
             drop_total: Family::<Vec<(String, String)>, Counter>::default(),
             drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            nack_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
@@ -471,6 +482,9 @@ impl PipelineForwarderMetrics {
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10)),
             ),
             ack_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
+            ),
+            nack_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
             ),
             udf_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
@@ -563,6 +577,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) nack_time_total: Family<Vec<(String, String)>, Histogram>,
 }
 
 impl JetStreamISBMetrics {
@@ -586,6 +601,9 @@ impl JetStreamISBMetrics {
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
             ),
             ack_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            nack_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
             ),
         }
@@ -620,6 +638,7 @@ impl MonoVtxMetrics {
             read_total: Family::<Vec<(String, String)>, Counter>::default(),
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            nack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             critical_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
@@ -634,6 +653,9 @@ impl MonoVtxMetrics {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
             ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+            }),
+            nack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
 
@@ -690,6 +712,11 @@ impl MonoVtxMetrics {
             metrics.ack_total.clone(),
         );
         registry.register(
+            NACK_TOTAL,
+            "A Counter to keep track of the total number of messages negatively acknowledged by the sink",
+            metrics.nack_total.clone(),
+        );
+        registry.register(
             READ_BYTES_TOTAL,
             "A Counter to keep track of the total number of bytes read from the source",
             metrics.read_bytes_total.clone(),
@@ -733,6 +760,11 @@ impl MonoVtxMetrics {
             ACK_TIME,
             "A Histogram to keep track of the total time taken to Ack to the Source, in microseconds",
             metrics.ack_time.clone(),
+        );
+        registry.register(
+            NACK_TIME,
+            "A Histogram to keep track of the total time taken to Nack to the Source, in microseconds",
+            metrics.nack_time.clone(),
         );
 
         // Transformer metrics
@@ -904,9 +936,19 @@ impl PipelineMetrics {
             metrics.forwarder.ack_total.clone(),
         );
         forwarder_registry.register(
+            NACK_TOTAL,
+            "Total number of Messages Negatively Acknowledged",
+            metrics.forwarder.nack_total.clone(),
+        );
+        forwarder_registry.register(
             ACK_PROCESSING_TIME,
             "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
             metrics.forwarder.ack_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            NACK_PROCESSING_TIME,
+            "Processing times of negative acknowledgment operations (100 microseconds to 10 minutes)",
+            metrics.forwarder.nack_processing_time.clone(),
         );
         forwarder_registry.register(
             UDF_ERROR_TOTAL,
@@ -1098,6 +1140,11 @@ impl PipelineMetrics {
             JETSTREAM_ISB_ACK_TIME_TOTAL,
             "Processing times of Acks for jetstream",
             metrics.jetstream_isb.ack_time_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_NACK_TIME_TOTAL,
+            "Processing times of Nacks for jetstream",
+            metrics.jetstream_isb.nack_time_total.clone(),
         );
     }
 
@@ -1988,6 +2035,7 @@ mod tests {
         metrics.read_total.get_or_create(&common_labels).inc();
         metrics.read_bytes_total.get_or_create(&common_labels).inc();
         metrics.ack_total.get_or_create(&common_labels).inc();
+        metrics.nack_total.get_or_create(&common_labels).inc();
         metrics.dropped_total.get_or_create(&common_labels).inc();
         metrics
             .critical_error_total
@@ -1996,6 +2044,7 @@ mod tests {
         metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
         metrics.read_time.get_or_create(&common_labels).observe(3.0);
         metrics.ack_time.get_or_create(&common_labels).observe(2.0);
+        metrics.nack_time.get_or_create(&common_labels).observe(2.0);
 
         metrics
             .transformer
@@ -2062,6 +2111,12 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .observe(5.0);
 
+        pipeline_metrics
+            .forwarder
+            .nack_processing_time
+            .get_or_create(&common_pipeline_labels)
+            .observe(5.0);
+
         // populate jetstream isb metrics
         pipeline_metrics
             .jetstream_isb
@@ -2106,6 +2161,7 @@ mod tests {
             r#"sdk_info{component="component",component_name="component_name",language="language",version="version",type="container_type"} 1"#,
             r#"monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_nack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_critical_error_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
@@ -2118,6 +2174,9 @@ mod tests {
             r#"monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0"#,
             r#"monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_nack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0"#,
+            r#"monovtx_nack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_nack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
@@ -2139,6 +2198,9 @@ mod tests {
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"forwarder_nack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
+            r#"forwarder_nack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"forwarder_nack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"isb_jetstream_write_error_total{buffer="test_jetstream_isb",reason="test_error"} 1"#,
             r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
             r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,

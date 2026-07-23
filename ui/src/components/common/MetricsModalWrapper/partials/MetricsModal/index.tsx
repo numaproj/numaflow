@@ -50,31 +50,26 @@ export function MetricsModal({
   presets,
   pod,
 }: MetricsModalProps) {
-  const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
+  const { openMetrics } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
   const [metricsFound, setMetricsFound] = useState<boolean>(false);
 
   const handleRedirect = useCallback(() => {
     handleCloseModal();
-    if (presets) setPresets(presets);
-    setVertexTab(0);
-    setPodsViewTab(1);
     // expand the respective metrics accordion
     const discoveredMetric = discoveredMetrics?.data?.find(
       (m: any) => m?.display_name === metricDisplayName
     );
     const panelId = `${discoveredMetric?.metric_name}-panel`;
-    setExpanded((prevExpanded) => new Set(prevExpanded).add(panelId));
+    openMetrics({ panelId, presets, pod });
   }, [
     handleCloseModal,
     presets,
-    setPresets,
-    setVertexTab,
-    setPodsViewTab,
+    pod,
     discoveredMetrics,
     metricDisplayName,
-    setExpanded,
+    openMetrics,
   ]);
 
   return (

@@ -1782,6 +1782,7 @@ mod tests {
             delay: Some(1000),
             max_deliveries: None,
             reason: Some("upstream nack".to_string()),
+            ..Default::default()
         };
         let (h_ok, rx_ok) = sink_handle(0, None, None);
         let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
@@ -1820,6 +1821,7 @@ mod tests {
             delay: Some(2500),
             max_deliveries: Some(4),
             reason: Some("all-dropped batch".to_string()),
+            ..Default::default()
         };
         let (h_drop, rx_drop) = sink_handle(0, Some(vec!["U+005C__DROP__"]), None);
         let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
@@ -1857,6 +1859,7 @@ mod tests {
                 reason: Some("rate limited".to_string()),
                 max_deliveries: None,
                 delay: Some(3000),
+                ..Default::default()
             }),
         };
         let resp: ResponseFromSink = r.into();
@@ -1867,6 +1870,7 @@ mod tests {
                 reason: Some("rate limited".to_string()),
                 max_deliveries: None,
                 delay: Some(3000),
+                ..Default::default()
             }))
         );
 
@@ -1921,6 +1925,7 @@ mod tests {
             delay: Some(750),
             max_deliveries: None,
             reason: Some("bypass nack".to_string()),
+            ..Default::default()
         };
         let (h_ok, rx_ok) = sink_handle(0, None, None);
         let (h_nack, rx_nack) = sink_handle(1, Some(vec!["U+005C__NACK__"]), Some(opts.clone()));
@@ -2030,6 +2035,7 @@ mod tests {
                 delay: Some(5000),
                 max_deliveries: Some(3),
                 reason: Some("sink rate limited".to_string()),
+                ..Default::default()
             }))
         );
 
@@ -2064,6 +2070,7 @@ mod tests {
             delay: Some(500),
             max_deliveries: None,
             reason: Some("n".to_string()),
+            ..Default::default()
         };
         // processed batch reports h1 as nacked, carrying options on the message.
         let nacked_msg = Message {

@@ -105,15 +105,26 @@ impl source::SourceAcker for PulsarSource {
 
     async fn nack(&mut self, offsets: Vec<NackOffset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
+        let mut logged = false;
+
         for offset in offsets {
+            if !logged && offset.option.is_some() {
+                tracing::error!(
+                    "Pulsar does not support per-message nack options; ignoring supplied options."
+                );
+                logged = true;
+            }
+
             let Offset::Int(int_offset) = offset.offset else {
                 return Err(Error::Source(format!(
                     "Expected Offset::Int type for Pulsar. offset={:?}",
                     offset.offset
                 )));
             };
+
             pulsar_offsets.push(int_offset.offset as u64);
         }
+
         self.nack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
 }
@@ -142,6 +153,7 @@ mod tests {
             consumer_name: "test".into(),
             subscription: "test".into(),
             max_unack: 100,
+            dead_letter_policy: None,
             auth: None,
         };
         let mut pulsar = new_pulsar_source(

@@ -1268,6 +1268,7 @@ mod tests {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(3),
                 delay: Some(5000),
+                ..Default::default()
             }),
         };
         let msg: Message = UserDefinedMessage(result, &parent_info, 0).into();
@@ -1278,6 +1279,7 @@ mod tests {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(3),
                 delay: Some(5000),
+                ..Default::default()
             })
         );
 

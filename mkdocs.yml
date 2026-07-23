@@ -127,6 +127,7 @@ nav:
           - user-guide/reference/distributed-throttling.md
           - user-guide/reference/monovertex-bypass.md
           - "Per-message Nack": user-guide/reference/per-message-nack.md
+          - "Memory profiling": user-guide/reference/memory-profiling.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md

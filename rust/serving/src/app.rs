@@ -53,7 +53,7 @@ where
     T: Clone + Send + Sync + DataStore + 'static,
     U: Clone + Send + Sync + CallbackStore + 'static,
 {
-    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_https_port)
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", app.settings.app_listen_https_port)
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 

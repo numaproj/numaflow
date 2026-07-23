@@ -10,26 +10,28 @@ These metrics are emitted by pipeline vertex pods. All pipeline forwarder metric
 
 ### Forwarder Metrics
 
-| Metric name                                  | Metric type | Additional Labels    | Description                                                                                                |
-|----------------------------------------------|-------------|----------------------|------------------------------------------------------------------------------------------------------------|
-| `forwarder_read_total`                       | Counter     | `partition_name`     | Total number of messages read by a vertex from an ISB partition or source                                  |
-| `forwarder_data_read_total`                  | Counter     | `partition_name`     | Total number of data messages read (excludes watermark/control messages)                                   |
-| `forwarder_read_bytes_total`                 | Counter     | `partition_name`     | Total number of bytes read by a vertex from an ISB partition or source                                     |
-| `forwarder_data_read_bytes_total`            | Counter     | `partition_name`     | Total number of data message bytes read (excludes watermark/control messages)                              |
-| `forwarder_write_total`                      | Counter     | `partition_name`     | Total number of messages written to ISB by a vertex                                                        |
-| `forwarder_write_bytes_total`                | Counter     | `partition_name`     | Total number of bytes written to ISB by a vertex                                                           |
-| `forwarder_ack_total`                        | Counter     | `partition_name`     | Total number of messages acknowledged by a vertex                                                          |
-| `forwarder_drop_total`                       | Counter     | `partition_name`, `reason` | Total number of messages dropped by a vertex                                                          |
-| `forwarder_drop_bytes_total`                 | Counter     | `partition_name`, `reason` | Total number of bytes dropped by a vertex                                                             |
-| `forwarder_read_error_total`                 | Counter     | `partition_name`     | Total number of read errors in the forwarder                                                               |
-| `forwarder_write_error_total`                | Counter     | `partition_name`     | Total number of write errors in the forwarder                                                              |
-| `forwarder_critical_error_total`             | Counter     | `reason`             | Total number of critical errors (e.g., EOT, UDF crashes) that could stop pipeline processing               |
-| `forwarder_read_processing_time`             | Histogram   | `partition_name`     | Processing times of read operations, in microseconds                                                       |
-| `forwarder_write_processing_time`            | Histogram   | `partition_name`     | Processing times of write operations, in microseconds                                                      |
-| `forwarder_ack_processing_time`              | Histogram   | `partition_name`     | Processing times of ack operations, in microseconds                                                        |
-| `forwarder_processing_time`                  | Histogram   | `partition_name`     | End-to-end processing time of a forwarding chunk, in microseconds                                          |
-| `forwarder_read_batch_size`                  | Gauge       |                      | Read batch size for the vertex                                                                             |
-| `vertex_pending_messages_raw`                | Gauge       | `partition_name`     | Raw pending messages count exposed by each vertex pod (aggregated by daemon into `vertex_pending_messages`) |
+| Metric name                       | Metric type | Additional Labels    | Description                                                                                                 |
+|-----------------------------------|-------------|----------------------|-------------------------------------------------------------------------------------------------------------|
+| `forwarder_read_total`            | Counter     | `partition_name`     | Total number of messages read by a vertex from an ISB partition or source                                   |
+| `forwarder_data_read_total`       | Counter     | `partition_name`     | Total number of data messages read (excludes watermark/control messages)                                    |
+| `forwarder_read_bytes_total`      | Counter     | `partition_name`     | Total number of bytes read by a vertex from an ISB partition or source                                      |
+| `forwarder_data_read_bytes_total` | Counter     | `partition_name`     | Total number of data message bytes read (excludes watermark/control messages)                               |
+| `forwarder_write_total`           | Counter     | `partition_name`     | Total number of messages written to ISB by a vertex                                                         |
+| `forwarder_write_bytes_total`     | Counter     | `partition_name`     | Total number of bytes written to ISB by a vertex                                                            |
+| `forwarder_ack_total`             | Counter     | `partition_name`     | Total number of messages acknowledged by a vertex                                                           |
+| `forwarder_nack_total`            | Counter     | `partition_name`     | Total number of messages negatively acknowledged by a vertex                                                |
+| `forwarder_drop_total`            | Counter     | `partition_name`, `reason` | Total number of messages dropped by a vertex                                                                |
+| `forwarder_drop_bytes_total`      | Counter     | `partition_name`, `reason` | Total number of bytes dropped by a vertex                                                                   |
+| `forwarder_read_error_total`      | Counter     | `partition_name`     | Total number of read errors in the forwarder                                                                |
+| `forwarder_write_error_total`     | Counter     | `partition_name`     | Total number of write errors in the forwarder                                                               |
+| `forwarder_critical_error_total`  | Counter     | `reason`             | Total number of critical errors (e.g., EOT, UDF crashes) that could stop pipeline processing                |
+| `forwarder_read_processing_time`  | Histogram   | `partition_name`     | Processing times of read operations, in microseconds                                                        |
+| `forwarder_write_processing_time` | Histogram   | `partition_name`     | Processing times of write operations, in microseconds                                                       |
+| `forwarder_ack_processing_time`   | Histogram   | `partition_name`     | Processing times of ack operations, in microseconds                                                         |
+| `forwarder_nack_processing_time`  | Histogram   | `partition_name`     | Processing times of nack operations, in microseconds                                                        |
+| `forwarder_processing_time`       | Histogram   | `partition_name`     | End-to-end processing time of a forwarding chunk, in microseconds                                           |
+| `forwarder_read_batch_size`       | Gauge       |                      | Read batch size for the vertex                                                                              |
+| `vertex_pending_messages_raw`     | Gauge       | `partition_name`     | Raw pending messages count exposed by each vertex pod (aggregated by daemon into `vertex_pending_messages`) |
 
 ### Source Transformer Metrics
 
@@ -100,18 +102,20 @@ These metrics are emitted by MonoVertex pods. All MonoVertex metrics use the fol
 
 ### Core Metrics
 
-| Metric name                  | Metric type | Additional Labels | Description                                                              |
-|------------------------------|-------------|-------------------|--------------------------------------------------------------------------|
-| `monovtx_read_total`         | Counter     |                   | Total number of messages read from the source                            |
-| `monovtx_read_bytes_total`   | Counter     |                   | Total number of bytes read from the source                               |
-| `monovtx_ack_total`          | Counter     |                   | Total number of messages acknowledged by the sink                        |
-| `monovtx_dropped_total`      | Counter     |                   | Total number of messages dropped by the monovertex                       |
-| `monovtx_critical_error_total` | Counter   | `reason`          | Total number of critical errors (e.g., EOT, UDF crashes)                 |
-| `monovtx_pending_raw`        | Gauge       |                   | Total number of source pending messages for the monovertex               |
-| `monovtx_read_batch_size`    | Gauge       |                   | Read batch size for the monovertex                                       |
-| `monovtx_processing_time`    | Histogram   |                   | Total time taken to forward a chunk, in microseconds                     |
-| `monovtx_read_time`          | Histogram   |                   | Total time taken to read from the source, in microseconds                |
-| `monovtx_ack_time`           | Histogram   |                   | Total time taken to ack to the source, in microseconds                   |
+| Metric name                    | Metric type | Additional Labels | Description                                                  |
+|--------------------------------|-------------|-------------------|--------------------------------------------------------------|
+| `monovtx_read_total`           | Counter     |                   | Total number of messages read from the source                |
+| `monovtx_read_bytes_total`     | Counter     |                   | Total number of bytes read from the source                   |
+| `monovtx_ack_total`            | Counter     |                   | Total number of messages acknowledged by the sink            |
+| `monovtx_nack_total`           | Counter     |                   | Total number of messages negatively acknowledged by the sink |
+| `monovtx_dropped_total`        | Counter     |                   | Total number of messages dropped by the monovertex           |
+| `monovtx_critical_error_total` | Counter   | `reason`          | Total number of critical errors (e.g., EOT, UDF crashes)     |
+| `monovtx_pending_raw`          | Gauge       |                   | Total number of source pending messages for the monovertex   |
+| `monovtx_read_batch_size`      | Gauge       |                   | Read batch size for the monovertex                           |
+| `monovtx_processing_time`      | Histogram   |                   | Total time taken to forward a chunk, in microseconds         |
+| `monovtx_read_time`            | Histogram   |                   | Total time taken to read from the source, in microseconds    |
+| `monovtx_ack_time`             | Histogram   |                   | Total time taken to ack to the source, in microseconds       |
+| `monovtx_nack_time`            | Histogram   |                   | Total time taken to nack to the source, in microseconds      |
 
 ### Transformer Metrics
 
@@ -155,20 +159,21 @@ These metrics are emitted by MonoVertex pods. All MonoVertex metrics use the fol
 
 These metrics are emitted by pipeline vertex pods for NATS JetStream Inter-Step Buffer operations.
 
-| Metric name                        | Metric type | Labels                      | Description                                                                                               |
-|------------------------------------|-------------|-----------------------------|-----------------------------------------------------------------------------------------------------------|
-| `isb_jetstream_isFull_total`       | Counter     | `buffer=<buffer-name>`      | Total number of times the ISB was full. Continual increase indicates potential backpressure on the pipeline |
-| `isb_jetstream_isFull_error_total` | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of isFull errors with NATS JetStream ISB                                        |
-| `isb_jetstream_read_error_total`   | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of read errors with NATS JetStream ISB                                          |
-| `isb_jetstream_write_error_total`  | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write errors with NATS JetStream ISB                                         |
-| `isb_jetstream_write_timeout_total` | Counter    | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write timeouts with NATS JetStream ISB                                       |
-| `isb_jetstream_buffer_soft_usage`  | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer soft usage (based on pending + ack pending messages)                                  |
-| `isb_jetstream_buffer_solid_usage` | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer solid usage (based on messages remaining in the stream)                               |
-| `isb_jetstream_buffer_pending`     | Gauge       | `buffer=<buffer-name>`      | Number of pending messages at a given point in time                                                        |
-| `isb_jetstream_buffer_ack_pending` | Gauge       | `buffer=<buffer-name>`      | Number of messages pending acknowledgment at a given point in time                                         |
-| `isb_jetstream_read_time_total`    | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream read operations, in microseconds                                             |
-| `isb_jetstream_write_time_total`   | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream write operations, in microseconds                                            |
-| `isb_jetstream_ack_time_total`     | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream ack operations, in microseconds                                              |
+| Metric name                         | Metric type | Labels                      | Description                                                                                                 |
+|-------------------------------------|-------------|-----------------------------|-------------------------------------------------------------------------------------------------------------|
+| `isb_jetstream_isFull_total`        | Counter     | `buffer=<buffer-name>`      | Total number of times the ISB was full. Continual increase indicates potential backpressure on the pipeline |
+| `isb_jetstream_isFull_error_total`  | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of isFull errors with NATS JetStream ISB                                                       |
+| `isb_jetstream_read_error_total`    | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of read errors with NATS JetStream ISB                                                         |
+| `isb_jetstream_write_error_total`   | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write errors with NATS JetStream ISB                                                        |
+| `isb_jetstream_write_timeout_total` | Counter    | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write timeouts with NATS JetStream ISB                                                      |
+| `isb_jetstream_buffer_soft_usage`   | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer soft usage (based on pending + ack pending messages)                                   |
+| `isb_jetstream_buffer_solid_usage`  | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer solid usage (based on messages remaining in the stream)                                |
+| `isb_jetstream_buffer_pending`      | Gauge       | `buffer=<buffer-name>`      | Number of pending messages at a given point in time                                                         |
+| `isb_jetstream_buffer_ack_pending`  | Gauge       | `buffer=<buffer-name>`      | Number of messages pending acknowledgment at a given point in time                                          |
+| `isb_jetstream_read_time_total`     | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream read operations, in microseconds                                              |
+| `isb_jetstream_write_time_total`    | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream write operations, in microseconds                                             |
+| `isb_jetstream_ack_time_total`      | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream ack operations, in microseconds                                               |
+| `isb_jetstream_nack_time_total`     | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream nack operations, in microseconds                                              |
 
 ## SQS Metrics
 

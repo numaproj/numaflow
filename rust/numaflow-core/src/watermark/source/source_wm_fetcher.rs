@@ -48,7 +48,7 @@ impl SourceWatermarkFetcher {
             .read()
             .expect("failed to acquire lock");
 
-        for (_, processor) in processors.iter() {
+        for processor in processors.values() {
             // We only consider active processors.
             if !processor.is_active() {
                 continue;
@@ -108,12 +108,12 @@ impl SourceWatermarkFetcher {
     pub(crate) fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
         let mut min_wm = i64::MAX;
 
-        for (_, processor) in self
+        for processor in self
             .processor_manager
             .processors
             .read()
             .expect("failed to acquire lock")
-            .iter()
+            .values()
         {
             // We only consider active processors.
             if !processor.is_active() {

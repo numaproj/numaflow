@@ -17,14 +17,16 @@ use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::GcEventEntry;
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
-use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+use crate::reduce::wal::segment::replay::{
+    ReplayWal, SegmentEntry, list_files_with_active, parse_segment_create_micros, sort_filenames,
+};
 use crate::shared::grpc::utc_from_timestamp;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -57,6 +59,8 @@ pub(crate) struct Compactor {
     kind: WindowKind,
     /// join handle for the compaction writer task
     writer_task_handle: JoinHandle<WalResult<()>>,
+    /// Base path where the WAL segments are persisted.
+    base_path: PathBuf,
 }
 
 const WAL_KEY_SEPERATOR: &str = ":";
@@ -94,6 +98,7 @@ impl Compactor {
             compaction_ao_tx,
             kind,
             writer_task_handle: handle,
+            base_path: path,
         })
     }
 
@@ -110,15 +115,18 @@ impl Compactor {
         cln_token: CancellationToken,
     ) -> WalResult<JoinHandle<WalResult<()>>> {
         Ok(tokio::spawn(async move {
-            // First do a one-time compaction with replay
-            self.compact(Some(replay_tx)).await?;
+            // First do a one-time boot compaction with replay. The retention gate is never
+            // applied at boot: `newest_data_micros` would be stale (reflecting only the
+            // previous run's segments) and boot only reads pre-existing `.frozen` data, so no
+            // GC segment is deleted here.
+            self.compact(Some(replay_tx), false).await?;
 
-            // Then start periodic compaction
+            // Then start periodic compaction, with the retention gate applied.
             let mut tick = tokio::time::interval(interval);
             loop {
                 tokio::select! {
                     _ = tick.tick() => {
-                        self.compact(None).await?;
+                        self.compact(None, true).await?;
                     }
                     _ = cln_token.cancelled() => {
                         break;
@@ -140,10 +148,25 @@ impl Compactor {
 
     /// Compact first needs to get all the GC files and build a compaction map. This map will have
     /// the oldest data before which all can be deleted.
-    async fn compact(&self, replay_tx: Option<Sender<Bytes>>) -> WalResult<()> {
+    ///
+    /// `apply_retention_gate` controls whether frozen GC segments are eligible
+    /// for deletion this cycle:
+    /// - `false` during the one-time boot compaction (retain all GC segments)
+    /// - `true` on every periodic tick.
+    async fn compact(
+        &self,
+        replay_tx: Option<Sender<Bytes>>,
+        apply_retention_gate: bool,
+    ) -> WalResult<()> {
         match self.kind {
-            WindowKind::Aligned => self.compact_aligned(replay_tx.clone()).await?,
-            WindowKind::Unaligned => self.compact_unaligned(replay_tx).await?,
+            WindowKind::Aligned => {
+                self.compact_aligned(replay_tx.clone(), apply_retention_gate)
+                    .await?
+            }
+            WindowKind::Unaligned => {
+                self.compact_unaligned(replay_tx, apply_retention_gate)
+                    .await?
+            }
         }
         Ok(())
     }
@@ -157,8 +180,16 @@ impl Compactor {
     /// - Compare the "event_time" of the Message with the oldest time
     /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
     /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
-    /// - Delete the Segment File after the Rotate is complete.
-    async fn compact_aligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
+    /// - Delete the Segment File after the Rotate is complete, subject to the retention gate (see
+    ///   [Compactor::compact]).
+    async fn compact_aligned(
+        &self,
+        replay_tx: Option<mpsc::Sender<Bytes>>,
+        apply_retention_gate: bool,
+    ) -> WalResult<()> {
+        // Snapshot the newest data-segment creation time once, before any WAL is read.
+        let newest_data_micros = self.newest_data_segment_micros();
+
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
@@ -174,11 +205,9 @@ impl Compactor {
         self.process_wal_stream(&self.segment_wal, &compact, replay_tx)
             .await?;
 
-        // Delete the GC files
-        for gc_file in gc_files {
-            debug!(gc_file = %gc_file.display(), "removing segment file");
-            tokio::fs::remove_file(gc_file).await?;
-        }
+        // Delete the GC files, gated on retention (see [Compactor::compact]).
+        self.delete_gc_files(gc_files, apply_retention_gate, newest_data_micros)
+            .await?;
 
         Ok(())
     }
@@ -193,8 +222,16 @@ impl Compactor {
     ///   are the key from the Message::Header.
     /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
     /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
-    /// - Delete the Segment File after the Rotate is complete.
-    async fn compact_unaligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
+    /// - Delete the Segment File after the Rotate is complete, subject to the retention gate (see
+    ///   [Compactor::compact]).
+    async fn compact_unaligned(
+        &self,
+        replay_tx: Option<mpsc::Sender<Bytes>>,
+        apply_retention_gate: bool,
+    ) -> WalResult<()> {
+        // Snapshot the newest data-segment creation time once, before any WAL is read.
+        let newest_data_micros = self.newest_data_segment_micros();
+
         // Get the oldest time map and scanned GC files
         let (oldest_time_map, gc_files) = self.build_unaligned_compaction().await?;
 
@@ -210,13 +247,70 @@ impl Compactor {
         self.process_wal_stream(&self.segment_wal, &compact, replay_tx)
             .await?;
 
-        // Delete the GC files
+        // Delete the GC files, gated on retention (see [Compactor::compact]).
+        self.delete_gc_files(gc_files, apply_retention_gate, newest_data_micros)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Deletes scanned GC segment files subject to the retention gate.
+    ///
+    /// A GC segment `g` is only deleted when:
+    /// - `apply_retention_gate` is `true` AND
+    /// - `newest_data_micros` is strictly greater than `g`'s **successor's** create-time.
+    ///
+    /// If `g` has no successor (possible during shutdown), it is retained (fail-safe).
+    /// If above two conditions aren't satisfied, `g` is retained so it keeps contributing to next
+    /// cycle's `oldest_time_map`/`oldest_time` (built fresh from whatever GC files are still present).
+    async fn delete_gc_files(
+        &self,
+        gc_files: Vec<PathBuf>,
+        apply_retention_gate: bool,
+        newest_data_micros: Option<u64>,
+    ) -> WalResult<()> {
+        if !apply_retention_gate {
+            debug!("retention gate disabled (boot compaction), retaining all GC segments");
+            return Ok(());
+        }
+
+        // Single sorted snapshot of ALL GC segments (including the active `.wal`), used to look
+        // up each candidate's successor. Taking this at the delete loop (rather than at cycle
+        // start) is fine: successor create-times are immutable on-disk facts once a segment is
+        // frozen, only their *existence* matters.
+        let all_gc_sorted =
+            sort_filenames(list_files_with_active(&WalType::Gc, self.base_path.clone()));
+
         for gc_file in gc_files {
-            info!(gc_file = %gc_file.display(), "removing segment file");
-            tokio::fs::remove_file(gc_file).await?;
+            let successor_create_micros = successor_create_micros(&all_gc_sorted, &gc_file);
+
+            let should_delete = newest_data_micros
+                .zip(successor_create_micros)
+                .is_some_and(|(newest, successor)| newest > successor);
+
+            if should_delete {
+                debug!(gc_file = %gc_file.display(), "removing segment file");
+                tokio::fs::remove_file(&gc_file).await?;
+            } else {
+                debug!(gc_file = %gc_file.display(), "retaining segment file, not yet safe to delete");
+            }
         }
 
         Ok(())
+    }
+
+    /// Returns the max create-time (unix micros, parsed from the filename) over all `data_*`
+    /// segment files on disk, including the currently-active `.wal` segment. Returns `None` if
+    /// there are no data segments at all.
+    fn newest_data_segment_micros(&self) -> Option<u64> {
+        list_files_with_active(&WalType::Data, self.base_path.clone())
+            .into_iter()
+            .filter_map(|path| {
+                path.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(parse_segment_create_micros)
+            })
+            .max()
     }
 
     /// Process the WAL stream (Readonly) and write the compacted data to the compaction WAL.
@@ -393,6 +487,16 @@ impl Compactor {
 
         Ok((oldest_time_map, scanned_files))
     }
+}
+
+/// Looks up `g`'s successor's create-time (unix micros) in a `sort_filenames`-ordered snapshot
+/// of GC segments. Returns `None` if `g` cannot be located in the snapshot, or if `g` is the
+/// last (newest) segment in the snapshot - in both cases the caller must retain `g`
+fn successor_create_micros(sorted_gc_files: &[PathBuf], g: &Path) -> Option<u64> {
+    let pos = sorted_gc_files.iter().position(|p| p == g)?;
+    let successor = sorted_gc_files.get(pos + 1)?;
+    let file_name = successor.file_name().and_then(|n| n.to_str())?;
+    Some(parse_segment_create_micros(file_name))
 }
 
 /// ShouldRetain trait defines a method to determine whether a message should be retained.
@@ -806,7 +910,7 @@ mod tests {
         .await
         .unwrap();
 
-        compactor.compact(None).await.unwrap();
+        compactor.compact(None, true).await.unwrap();
 
         drop(compactor.compaction_ao_tx);
         compactor.writer_task_handle.await.unwrap().unwrap();
@@ -1290,6 +1394,578 @@ mod tests {
         assert_eq!(replayed_count, 2, "Expected two messages to be replayed");
         assert_eq!(key1_key2_count, 1, "Expected one key1:key2 message");
         assert_eq!(key3_key4_count, 1, "Expected one key3:key4 message");
+
+        Ok(())
+    }
+
+    /// Counts files directly under `base_path` whose name starts with `prefix` and whose
+    /// extension is exactly `extension` (e.g. `("gc", "frozen")`).
+    fn count_segment_files(base_path: &std::path::Path, prefix: &str, extension: &str) -> usize {
+        fs::read_dir(base_path)
+            .expect("directory should exist")
+            .map(|entry| entry.expect("dir entry should be valid").path())
+            .filter(|path| path.is_file())
+            .filter(|path| {
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default();
+                name.starts_with(prefix) && path.extension().is_some_and(|ext| ext == extension)
+            })
+            .count()
+    }
+
+    /// Regression test for the reduce WAL GC-segment-deletion gate.
+    ///
+    /// Simulates a retired key whose `GcEvent` is scanned in compaction cycle 1, but whose
+    /// matching tail data segment only freezes in cycle 2 (data and GC WALs freeze
+    /// independently). Before the fix, cycle 1 would unconditionally delete the GC segment, so
+    /// by cycle 2 the key would be absent from `oldest_time_map` and the tail would be retained
+    /// forever (the leak). After the fix, the GC segment is retained through cycle 1 (the gate
+    /// does not fire yet, since no data segment has proven the tail was already scanned), so
+    /// cycle 2 still has the key mapped and correctly drops the tail.
+    #[tokio::test]
+    async fn test_retention_gate_retains_gc_until_tail_data_freezes() -> WalResult<()> {
+        let temp_dir = tempdir()?;
+        let path = temp_dir.path().to_path_buf();
+
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
+
+        let retired_key = "retired-key".to_string();
+        let event_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        // GC end time is after the tail's event time, so the tail should be dropped once matched.
+        let gc_end = event_time + chrono::Duration::seconds(10);
+
+        // Open the data WAL *before* the GC WAL and write the tail message first - matching the
+        // real pipeline's causal order (data is ingested before its `GcEvent` is written, see
+        // `reducer.rs:352`), which the successor-predicate's correctness proof relies on. Leave
+        // the segment active (not frozen yet) - it only freezes in the next cycle.
+        let data_wal = AppendOnlyWal::new(WalType::Data, path.clone(), 100, 1000, 300).await?;
+        let (data_tx, data_rx) = mpsc::channel(10);
+        let data_handle = data_wal
+            .streaming_write(ReceiverStream::new(data_rx))
+            .await?;
+
+        let tail_message = Message {
+            event_time,
+            keys: Arc::from(vec![retired_key.clone()]),
+            value: Bytes::from_static(b"tail"),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+        data_tx
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: tail_message.into(),
+            })
+            .await
+            .map_err(|e| format!("Failed to send tail message: {e}"))?;
+
+        // Give the writer a moment to persist the write before the GC WAL is created.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Now write and freeze the GC segment for the retired key. Its successor (the next GC
+        // segment, opened immediately by the rotate below) gets a create-time strictly after the
+        // still-active data segment's create-time.
+        let gc_wal = AppendOnlyWal::new(WalType::Gc, path.clone(), 100, 1000, 300).await?;
+        let (gc_tx, gc_rx) = mpsc::channel(10);
+        let gc_handle = gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
+
+        let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(event_time)),
+            end_time: Some(prost_timestamp_from_utc(gc_end)),
+            keys: vec![retired_key.clone()],
+        };
+        gc_tx
+            .send(SegmentWriteMessage::WriteGcEvent {
+                data: Bytes::from(prost::Message::encode_to_vec(&gc_event)),
+            })
+            .await
+            .map_err(|e| format!("Failed to send GC event: {e}"))?;
+        gc_tx
+            .send(SegmentWriteMessage::Rotate { on_size: false })
+            .await
+            .map_err(|e| format!("Failed to send rotate: {e}"))?;
+        drop(gc_tx);
+        gc_handle
+            .await
+            .map_err(|e| format!("GC writer failed: {e}"))??;
+
+        let gc_dir = path.clone();
+        assert_eq!(
+            count_segment_files(&gc_dir, "gc", "frozen"),
+            1,
+            "expected exactly one frozen GC segment before compaction"
+        );
+
+        let compactor = Compactor::new(path.clone(), WindowKind::Unaligned, 100, 1000, 300).await?;
+
+        // Cycle 1: the tail data segment is still active (not frozen), so the compactor doesn't
+        // even see it yet. The GC segment must be retained: the gate must not fire since no data
+        // segment on disk yet proves the tail was scanned with this GC segment present.
+        compactor.compact(None, true).await?;
+        assert_eq!(
+            count_segment_files(&gc_dir, "gc", "frozen"),
+            1,
+            "GC segment must be retained after cycle 1 (tail data not yet frozen)"
+        );
+
+        // Now freeze the tail data segment - simulating the data WAL's independent freeze
+        // schedule catching up in a later cycle.
+        data_tx
+            .send(SegmentWriteMessage::Rotate { on_size: false })
+            .await
+            .map_err(|e| format!("Failed to send rotate: {e}"))?;
+        drop(data_tx);
+        data_handle
+            .await
+            .map_err(|e| format!("Data writer failed: {e}"))??;
+
+        // Cycle 2: the tail data segment is now frozen. Because the GC segment was retained
+        // through cycle 1, `oldest_time_map` still has the retired key mapped, so the tail is
+        // correctly dropped (not leaked into the compaction WAL).
+        compactor.compact(None, true).await?;
+
+        drop(compactor.compaction_ao_tx);
+        compactor
+            .writer_task_handle
+            .await
+            .expect("writer task should not panic")?;
+
+        let compaction_wal = ReplayWal::new(WalType::Compact, path);
+        let (mut rx, handle) = compaction_wal.streaming_read()?;
+        let mut retained_count = 0;
+        while let Some(entry) = rx.next().await {
+            if matches!(entry, SegmentEntry::DataEntry { .. }) {
+                retained_count += 1;
+            }
+        }
+        handle
+            .await
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
+
+        assert_eq!(
+            retained_count, 0,
+            "tail data for the retired key must be dropped, not leaked, once its segment freezes"
+        );
+
+        Ok(())
+    }
+
+    /// Hand-crafts a raw WAL segment file containing the given length-prefixed entries. Mirrors
+    /// the on-disk wire format `AppendOnlyWal` writes and `ReplayWal::read_segment` reads
+    /// (`<u64_le data_len><data_len bytes>`, repeated). Used so tests can control a segment's
+    /// `create_micros` (embedded in its filename) independent of wall-clock time.
+    fn write_raw_segment_file(path: &Path, entries: &[Vec<u8>]) {
+        use std::io::Write;
+        let mut file = fs::File::create(path).expect("create raw segment file");
+        for entry in entries {
+            file.write_all(&(entry.len() as u64).to_le_bytes())
+                .expect("write entry length prefix");
+            file.write_all(entry).expect("write entry data");
+        }
+    }
+
+    /// Encodes a minimal `isb::ReadMessage` matching the wire format `AppendOnlyWal` produces for
+    /// `SegmentWriteMessage::WriteMessage` (see `crate::reduce::wal::WalMessage`'s `TryFrom`
+    /// impl) - just enough fields for `UnalignedCompaction::should_retain_message` to evaluate.
+    fn encode_tail_message(event_time: DateTime<Utc>, keys: Vec<String>) -> Vec<u8> {
+        let msg = isb::ReadMessage {
+            message: Some(isb::Message {
+                header: Some(isb::Header {
+                    message_info: Some(isb::MessageInfo {
+                        event_time: Some(prost_timestamp_from_utc(event_time)),
+                        is_late: false,
+                    }),
+                    kind: 0,
+                    id: Some(isb::MessageId {
+                        vertex_name: "test-vertex".to_string(),
+                        offset: "1".to_string(),
+                        index: 0,
+                    }),
+                    keys,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                body: Some(isb::Body {
+                    payload: b"sparse-tail".to_vec(),
+                }),
+            }),
+            read_offset: 1,
+            watermark: None,
+            metadata: None,
+        };
+        prost::Message::encode_to_vec(&msg)
+    }
+
+    /// Crafts the on-disk layout directly: a frozen GC segment `g` whose *own* `create_micros`
+    /// is stale (as if it sat open+empty well past any realistic `max_segment_age` before
+    /// finally receiving its one `GcEvent` - an empty segment never age-rotates, see
+    /// `append.rs:198,271-273`), whose successor (the next GC segment) has a much later
+    /// create-time `S` (= `g`'s true freeze-time). Key K's tail data (event time before K's GC
+    /// end-time, i.e. it should be dropped once matched) starts out in an *active* data segment
+    /// created before `S`.
+    ///
+    /// Cycle 1 (`newest_data(=T0) < S`, but `T0 - T_STALE` is deliberately **larger** than this
+    /// test's own `max_segment_age_secs = 300`): the new successor predicate correctly
+    /// **retains** `g` here (`T0 < S`), but the old `create(g)+A` predicate would have already
+    /// fired at this very cycle (`T0 > T_STALE + A`, since the stale gap exceeds `A`) and
+    /// deleted `g` prematurely. This is what makes the `count == 1` assertion below discriminate
+    /// the two predicates at cycle 1, not via a boundary/equality fluke.
+    ///
+    /// Cycle 2 (after freezing the tail's data segment and opening a new one with create `> S`):
+    /// `g` is now safe to delete under the successor predicate, and the tail is correctly
+    /// **dropped** (matched via `g`, which survived into this cycle) rather than leaked into the
+    /// compaction WAL.
+    #[tokio::test]
+    async fn test_retention_gate_sparse_gc_uses_successor_not_own_create_time() -> WalResult<()> {
+        let temp_dir = tempdir()?;
+        let path = temp_dir.path().to_path_buf();
+
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
+
+        // Fully synthetic (unix-micros) timestamps, chosen only relative to one another - the
+        // fix's predicate never compares them to wall-clock "now". `Compactor::new` below is
+        // constructed with `max_segment_age_secs = 300` (300_000_000 micros): `T0 - T_STALE` is
+        // deliberately > that, so the OLD `create(g)+A` predicate would already consider `g`
+        // deletable at cycle 1 (`T0 > T_STALE + 300_000_000`), while the NEW successor predicate
+        // correctly retains it (`T0 < S`) - this is what discriminates the two at cycle 1.
+        const T_STALE: u64 = 1_000_000; // g's own (stale, untrustworthy) create time
+        const T0: u64 = T_STALE + 400_000_000; // data segment opens 400s later (> the 300s max_segment_age)
+        const S: u64 = T0 + 50_000_000; // g's successor's create time = g's true freeze time (> T0)
+        const T1: u64 = S + 50_000_000; // new data segment opens after g freezes (> S)
+
+        let retired_key = "sparse-retired-key".to_string();
+        let event_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        // GC end time is after the tail's event time, so the tail should be dropped once matched.
+        let gc_end = event_time + chrono::Duration::seconds(10);
+
+        // `g`: a frozen GC segment with a single retiring `GcEvent`, stamped with the stale
+        // create time.
+        let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(event_time)),
+            end_time: Some(prost_timestamp_from_utc(gc_end)),
+            keys: vec![retired_key.clone()],
+        };
+        write_raw_segment_file(
+            &path.join(format!("gc_0_{T_STALE}.frozen")),
+            &[prost::Message::encode_to_vec(&gc_event)],
+        );
+
+        // `g`'s successor: the next GC segment, still active - only its create-time matters.
+        write_raw_segment_file(&path.join(format!("gc_1_{S}.wal")), &[]);
+
+        // The tail: an active (not yet frozen) data segment containing the one message that
+        // should be dropped once matched against `g`.
+        write_raw_segment_file(
+            &path.join(format!("data_0_{T0}.wal")),
+            &[encode_tail_message(event_time, vec![retired_key.clone()])],
+        );
+
+        let compactor = Compactor::new(path.clone(), WindowKind::Unaligned, 100, 1000, 300).await?;
+
+        // Cycle 1: `newest_data_micros` (= T0) < S => the gate must not fire; `g` is retained.
+        compactor.compact(None, true).await?;
+        assert_eq!(
+            count_segment_files(&path, "gc", "frozen"),
+            1,
+            "stale-but-not-yet-safe GC segment must be retained (old create(g)+A predicate would have deleted it here)"
+        );
+
+        // Freeze the tail's data segment (rename, preserving T0) and open a new active data
+        // segment with a create-time strictly after `S`.
+        tokio::fs::rename(
+            path.join(format!("data_0_{T0}.wal")),
+            path.join(format!("data_0_{T0}.frozen")),
+        )
+        .await?;
+        write_raw_segment_file(&path.join(format!("data_1_{T1}.wal")), &[]);
+
+        // Cycle 2: `newest_data_micros` (= T1) > S => the tail (now frozen) is scanned and
+        // correctly dropped (matched via `g`, still present in `oldest_time_map`), and only then
+        // is `g` finally safe to delete.
+        compactor.compact(None, true).await?;
+        assert_eq!(
+            count_segment_files(&path, "gc", "frozen"),
+            0,
+            "GC segment should be reclaimed once a data segment newer than its successor exists"
+        );
+
+        drop(compactor.compaction_ao_tx);
+        compactor
+            .writer_task_handle
+            .await
+            .expect("writer task should not panic")?;
+
+        let compaction_wal = ReplayWal::new(WalType::Compact, path);
+        let (mut rx, handle) = compaction_wal.streaming_read()?;
+        let mut retained_count = 0;
+        while let Some(entry) = rx.next().await {
+            if matches!(entry, SegmentEntry::DataEntry { .. }) {
+                retained_count += 1;
+            }
+        }
+        handle
+            .await
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
+
+        assert_eq!(
+            retained_count, 0,
+            "the tail must be dropped, not leaked, into the compaction WAL"
+        );
+
+        Ok(())
+    }
+
+    /// Bounded-retention test: churns many keys across several "rounds". Each round writes
+    /// several retired keys' `GcEvent`s (each frozen into its own GC segment immediately) while
+    /// their tail data accumulates in a single still-active data segment; only at the end of the
+    /// round does the data segment freeze and get compacted. Asserts that the number of retained
+    /// (not-yet-deletable) GC segments plateaus at the round size instead of growing with the
+    /// total number of churned keys, and that no tail data ever leaks into the compaction WAL.
+    #[tokio::test]
+    async fn test_retention_gate_bounded_retention_under_key_churn() -> WalResult<()> {
+        const ROUNDS: usize = 4;
+        const KEYS_PER_ROUND: usize = 5;
+
+        let temp_dir = tempdir()?;
+        let path = temp_dir.path().to_path_buf();
+
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
+
+        // Open the data WAL (and its initial active segment) *before* any GC segment is created,
+        // so the initial active data segment is always older than the first round's GC segments
+        // - otherwise the gate could fire on round 0's GC segments as soon as they freeze, before
+        // any round has had a chance to flush its data.
+        let data_wal = AppendOnlyWal::new(WalType::Data, path.clone(), 100, 1000, 300).await?;
+        let (data_tx, data_rx) = mpsc::channel(100);
+        let data_handle = data_wal
+            .streaming_write(ReceiverStream::new(data_rx))
+            .await?;
+
+        // max_segment_age=0 means the gate fires as soon as ANY strictly newer data segment
+        // exists on disk, which lets this test run fast while still exercising the real gate.
+        let compactor = Compactor::new(path.clone(), WindowKind::Unaligned, 100, 1000, 0).await?;
+
+        let base_time = Utc.with_ymd_and_hms(2025, 4, 1, 0, 0, 0).unwrap();
+        let gc_dir = path.clone();
+
+        for round in 0..ROUNDS {
+            for k in 0..KEYS_PER_ROUND {
+                let key_idx = round * KEYS_PER_ROUND + k;
+                let key = format!("churn-key-{key_idx}");
+                let event_time = base_time + chrono::Duration::seconds(key_idx as i64);
+                let gc_end = event_time + chrono::Duration::seconds(1);
+
+                // Write the tail message into the round's still-active data segment.
+                let message = Message {
+                    event_time,
+                    keys: Arc::from(vec![key.clone()]),
+                    value: Bytes::from_static(b"churn"),
+                    offset: Offset::Int(IntOffset::new(key_idx as i64 + 1, 0)),
+                    id: MessageID {
+                        vertex_name: "test-vertex".to_string().into(),
+                        offset: key_idx.to_string().into(),
+                        index: 0,
+                    },
+                    ..Default::default()
+                };
+                data_tx
+                    .send(SegmentWriteMessage::WriteMessage {
+                        read_message: message.into(),
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to send message: {e}"))?;
+
+                // Write and freeze this key's own GC segment. Each key gets a dedicated,
+                // freshly-opened WAL (fully awaited before moving on) rather than sharing one
+                // long-lived GC WAL across keys: reusing one would leave an empty active segment
+                // (opened by the previous key's rotate) idle across round boundaries, and its
+                // stale creation time would make it eligible for the gate the instant it is
+                // finally written to and frozen - an artifact of how this test drives the WAL,
+                // not something the fix needs to tolerate (see `append.rs::write_data`'s
+                // size-gated age check, which is always what keeps a GC segment's create-time
+                // close to its events).
+                let gc_wal = AppendOnlyWal::new(WalType::Gc, path.clone(), 100, 1000, 300).await?;
+                let (gc_tx, gc_rx) = mpsc::channel(1);
+                let gc_handle = gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
+
+                let gc_event = GcEvent {
+                    start_time: Some(prost_timestamp_from_utc(event_time)),
+                    end_time: Some(prost_timestamp_from_utc(gc_end)),
+                    keys: vec![key.clone()],
+                };
+                gc_tx
+                    .send(SegmentWriteMessage::WriteGcEvent {
+                        data: Bytes::from(prost::Message::encode_to_vec(&gc_event)),
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to send GC event: {e}"))?;
+                gc_tx
+                    .send(SegmentWriteMessage::Rotate { on_size: false })
+                    .await
+                    .map_err(|e| format!("Failed to send rotate: {e}"))?;
+                drop(gc_tx);
+                gc_handle
+                    .await
+                    .map_err(|e| format!("GC writer failed: {e}"))??;
+
+                // Per-key compaction cycle: the round's data segment is still active, so nothing
+                // yet proves it is safe to reclaim this key's GC segment.
+                compactor.compact(None, true).await?;
+            }
+
+            // Peak: right before the round's flush, every retired key from this round must still
+            // have its GC segment retained (none reclaimed prematurely).
+            let peak = count_segment_files(&gc_dir, "gc", "frozen");
+            assert_eq!(
+                peak, KEYS_PER_ROUND,
+                "round {round}: expected {KEYS_PER_ROUND} retained GC segments before flush, got {peak}"
+            );
+
+            // Flush: freeze the round's data segment and run one more compaction cycle. This
+            // proves the round's tail data has been scanned (and, since each message matches a
+            // retired key, dropped), so the round's GC segments can finally be reclaimed.
+            data_tx
+                .send(SegmentWriteMessage::Rotate { on_size: false })
+                .await
+                .map_err(|e| format!("Failed to send rotate: {e}"))?;
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            compactor.compact(None, true).await?;
+
+            let after_flush = count_segment_files(&gc_dir, "gc", "frozen");
+            assert_eq!(
+                after_flush, 0,
+                "round {round}: GC segments should be fully reclaimed after flush, got {after_flush}"
+            );
+        }
+
+        drop(data_tx);
+        data_handle
+            .await
+            .map_err(|e| format!("Data writer failed: {e}"))??;
+
+        drop(compactor.compaction_ao_tx);
+        compactor
+            .writer_task_handle
+            .await
+            .expect("writer task should not panic")?;
+
+        // No tail data ever leaked into the compaction WAL, regardless of the total number of
+        // churned keys (ROUNDS * KEYS_PER_ROUND).
+        let compaction_wal = ReplayWal::new(WalType::Compact, path);
+        let (mut rx, handle) = compaction_wal.streaming_read()?;
+        let mut retained_count = 0;
+        while let Some(entry) = rx.next().await {
+            if matches!(entry, SegmentEntry::DataEntry { .. }) {
+                retained_count += 1;
+            }
+        }
+        handle
+            .await
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
+
+        assert_eq!(
+            retained_count, 0,
+            "no churned key's tail data should leak into the compaction WAL"
+        );
+
+        Ok(())
+    }
+
+    /// The boot compaction (`compact(Some(replay_tx), false)`) must never apply the retention
+    /// gate: even when a strictly newer data segment already exists on disk (a condition that
+    /// would satisfy the gate on a periodic cycle), boot must retain every GC segment.
+    #[tokio::test]
+    async fn test_boot_compaction_retains_all_gc_segments() -> WalResult<()> {
+        let temp_dir = tempdir()?;
+        let path = temp_dir.path().to_path_buf();
+
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
+
+        // Write and freeze a GC segment.
+        let gc_wal = AppendOnlyWal::new(WalType::Gc, path.clone(), 100, 1000, 300).await?;
+        let (gc_tx, gc_rx) = mpsc::channel(10);
+        let gc_handle = gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
+
+        let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(Utc::now())),
+            end_time: Some(prost_timestamp_from_utc(Utc::now())),
+            ..Default::default()
+        };
+        gc_tx
+            .send(SegmentWriteMessage::WriteGcEvent {
+                data: Bytes::from(prost::Message::encode_to_vec(&gc_event)),
+            })
+            .await
+            .map_err(|e| format!("Failed to send GC event: {e}"))?;
+        gc_tx
+            .send(SegmentWriteMessage::Rotate { on_size: false })
+            .await
+            .map_err(|e| format!("Failed to send rotate: {e}"))?;
+        drop(gc_tx);
+        gc_handle
+            .await
+            .map_err(|e| format!("GC writer failed: {e}"))??;
+
+        let gc_dir = path.clone();
+        assert_eq!(
+            count_segment_files(&gc_dir, "gc", "frozen"),
+            1,
+            "expected one frozen GC segment"
+        );
+
+        // Open a data WAL *after* the GC segment has been frozen, so its active segment is
+        // strictly newer than the GC segment - the condition that would satisfy the retention
+        // gate on a periodic cycle.
+        let data_wal = AppendOnlyWal::new(WalType::Data, path.clone(), 100, 1000, 300).await?;
+        let (data_tx, data_rx) = mpsc::channel(10);
+        let _data_handle = data_wal
+            .streaming_write(ReceiverStream::new(data_rx))
+            .await?;
+
+        // max_segment_age=0 so, on a periodic cycle, the newer active data segment alone would
+        // be enough to satisfy the gate.
+        let compactor = Compactor::new(path.clone(), WindowKind::Aligned, 100, 1000, 0).await?;
+
+        let (replay_tx, _replay_rx) = mpsc::channel(10);
+
+        // Boot compaction: must retain the GC segment no matter what.
+        compactor.compact(Some(replay_tx), false).await?;
+        assert_eq!(
+            count_segment_files(&gc_dir, "gc", "frozen"),
+            1,
+            "boot compaction must never delete GC segments, even with a newer data segment present"
+        );
+
+        // Sanity check: a periodic cycle against the same on-disk state *does* reclaim it,
+        // proving the gate is otherwise armed and it is specifically the boot path suppressing
+        // it above.
+        compactor.compact(None, true).await?;
+        assert_eq!(
+            count_segment_files(&gc_dir, "gc", "frozen"),
+            0,
+            "periodic compaction should reclaim the GC segment once it is safe"
+        );
+
+        drop(data_tx);
+        drop(compactor.compaction_ao_tx);
+        compactor
+            .writer_task_handle
+            .await
+            .expect("writer task should not panic")?;
 
         Ok(())
     }

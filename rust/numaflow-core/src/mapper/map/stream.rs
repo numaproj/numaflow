@@ -850,6 +850,7 @@ mod tests {
                 reason: Some("udf nack".to_string()),
                 max_deliveries: Some(3),
                 delay: Some(5000),
+                ..Default::default()
             })
         );
 
