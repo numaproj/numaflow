@@ -1,4 +1,4 @@
-//!  Config module for Sidecar monitor container
+//! Runtime error server configuration.
 use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
