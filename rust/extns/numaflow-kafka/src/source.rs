@@ -731,13 +731,14 @@ pub mod test_utils {
     }
 }
 
-#[cfg(all(test, feature = "kafka-tests", feature = "kafka-tests-utils"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use rdkafka::message::{Header, OwnedHeaders};
     use rdkafka::producer::FutureRecord;
     use tokio::time::Instant;
 
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_source() {
         let (producer, topic_name) = test_utils::setup_test_topic().await;
@@ -936,6 +937,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_source_with_headers() {
         let (producer, topic_name) = test_utils::setup_test_topic().await;
