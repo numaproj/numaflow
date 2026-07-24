@@ -20,19 +20,20 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CronScheduling {
+    /// Schedules are evaluated in order; the first active schedule takes precedence when windows overlap.
     #[serde(rename = "schedules")]
     pub schedules: Vec<crate::models::CronSchedule>,
-    /// Timezone for interpreting cron expressions. IANA Time Zone Database format.
-    #[serde(rename = "timezone")]
-    pub timezone: String,
+    /// Timezone for interpreting cron expressions. IANA Time Zone Database format. Defaults to UTC.
+    #[serde(rename = "timezone", skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
 }
 
 impl CronScheduling {
     /// CronScheduling defines cron-based autoscaling overrides.
-    pub fn new(schedules: Vec<crate::models::CronSchedule>, timezone: String) -> CronScheduling {
+    pub fn new(schedules: Vec<crate::models::CronSchedule>) -> CronScheduling {
         CronScheduling {
             schedules,
-            timezone,
+            timezone: None,
         }
     }
 }

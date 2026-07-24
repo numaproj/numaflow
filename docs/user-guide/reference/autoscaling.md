@@ -63,6 +63,13 @@ spec:
     targetProcessingSeconds: 20 # Optional, defaults to 20.
     replicasPerScaleUp: 2 # Optional, defaults to 2.
     replicasPerScaleDown: 2 # Optional, defaults to 2.
+    cron: # Optional; supported only for MonoVertex.
+      timezone: America/Los_Angeles # Optional, defaults to UTC.
+      schedules:
+        - start: "0 0 22 * * *" # Second Minute Hour Day-of-month Month Day-of-week
+          end: "0 0 6 * * *"
+          min: 10
+          max: 20
 ```
 
 - `disabled` - Whether to disable Numaflow autoscaling, defaults to `false`.
@@ -115,6 +122,13 @@ spec:
 - `replicasPerScale` - (Deprecated: Use `replicasPerScaleUp` and
   `replicasPerScaleDown` instead, will be removed in v1.5) Maximum number of
   replica change happens in one scale up or down operation, defaults to `2`.
+- `cron` - [MonoVertex only] Defines time-based overrides for `min` and `max`.
+  Cron expressions use the six-field extended format: `second minute hour
+  day-of-month month day-of-week`. `timezone` accepts an IANA time zone and
+  defaults to `UTC` when omitted. Each schedule requires `start`, `end`, `min`,
+  and `max`; its bounds may be lower or higher than the base `scale.min` and
+  `scale.max`. When multiple windows overlap, schedules are evaluated in the
+  configured order and the first active schedule takes precedence.
 
 To disable Numaflow autoscaling, set `disabled: true` as following.
 

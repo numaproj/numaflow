@@ -443,7 +443,7 @@ message ContainerTemplate {
 }
 
 message CronSchedule {
-  // Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+  // Start of the cron window. Extended cron format (Second Minute Hour Dom Month Dow).
   optional string start = 1;
 
   // End of the cron window. Same format as Start. Must differ from Start.
@@ -458,9 +458,11 @@ message CronSchedule {
 
 // CronScheduling defines cron-based autoscaling overrides.
 message CronScheduling {
-  // Timezone for interpreting cron expressions. IANA Time Zone Database format.
+  // Timezone for interpreting cron expressions. IANA Time Zone Database format. Defaults to UTC.
+  // +optional
   optional string timezone = 1;
 
+  // Schedules are evaluated in order; the first active schedule takes precedence when windows overlap.
   repeated CronSchedule schedules = 2;
 }
 

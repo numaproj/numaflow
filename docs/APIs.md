@@ -2355,7 +2355,8 @@ Description
 
 <p>
 
-Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+Start of the cron window. Extended cron format (Second Minute Hour Dom
+Month Dow).
 </p>
 
 </td>
@@ -2471,10 +2472,11 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
 Timezone for interpreting cron expressions. IANA Time Zone Database
-format.
+format. Defaults to UTC.
 </p>
 
 </td>
@@ -2491,6 +2493,12 @@ format.
 </td>
 
 <td>
+
+<p>
+
+Schedules are evaluated in order; the first active schedule takes
+precedence when windows overlap.
+</p>
 
 </td>
 

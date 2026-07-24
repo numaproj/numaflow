@@ -4443,7 +4443,6 @@ spec:
                         type: string
                     required:
                     - schedules
-                    - timezone
                     type: object
                   disabled:
                     type: boolean
@@ -17383,7 +17382,6 @@ spec:
                               type: string
                           required:
                           - schedules
-                          - timezone
                           type: object
                         disabled:
                           type: boolean
@@ -30558,7 +30556,6 @@ spec:
                                   type: string
                               required:
                               - schedules
-                              - timezone
                               type: object
                             disabled:
                               type: boolean
@@ -39937,7 +39934,6 @@ spec:
                         type: string
                     required:
                     - schedules
-                    - timezone
                     type: object
                   disabled:
                     type: boolean

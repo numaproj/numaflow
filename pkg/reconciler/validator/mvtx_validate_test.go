@@ -167,16 +167,20 @@ func TestValidateMonoVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid maxUnavailable")
 	})
 
-	t.Run("test cron timezone is required", func(t *testing.T) {
+	t.Run("test omitted cron timezone defaults to UTC", func(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		testObj.Spec.Scale.Cron = &dfv1.CronScheduling{
 			Schedules: []dfv1.CronSchedule{
-				{Start: "0 2 * * *", End: "0 3 * * *"},
+				{
+					Start: "0 0 2 * * *",
+					End:   "0 0 3 * * *",
+					Min:   ptr.To[int32](1),
+					Max:   ptr.To[int32](5),
+				},
 			},
 		}
 		err := ValidateMonoVertex(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "timezone is required")
+		assert.NoError(t, err)
 	})
 
 	t.Run("streaming with built-in Kafka source is rejected", func(t *testing.T) {
@@ -257,8 +261,8 @@ func TestValidateCronScaling(t *testing.T) {
 				Timezone: "America/Los_Angeles",
 				Schedules: []dfv1.CronSchedule{
 					{
-						Start: "0 2 * * *",
-						End:   "0 3 * * *",
+						Start: "0 0 2 * * *",
+						End:   "0 0 3 * * *",
 						Min:   ptr.To[int32](1),
 						Max:   ptr.To[int32](5),
 					},
@@ -320,20 +324,18 @@ func TestValidateCronScaling(t *testing.T) {
 			wantError: "max must not be negative",
 		},
 		{
-			name: "cron min is below parent min",
+			name: "cron min can override parent min",
 			mutate: func(scale *dfv1.Scale) {
 				scale.Min = ptr.To[int32](2)
 				scale.Cron.Schedules[0].Min = ptr.To[int32](1)
 			},
-			wantError: "min must not be less than scale.min",
 		},
 		{
-			name: "cron max is above parent max",
+			name: "cron max can override parent max",
 			mutate: func(scale *dfv1.Scale) {
 				scale.Max = ptr.To[int32](4)
 				scale.Cron.Schedules[0].Max = ptr.To[int32](5)
 			},
-			wantError: "max must not be greater than scale.max",
 		},
 		{
 			name: "cron schedules are empty",
@@ -387,16 +389,16 @@ func TestValidateCronScaling(t *testing.T) {
 		{
 			name: "cron start and end are semantically identical",
 			mutate: func(scale *dfv1.Scale) {
-				scale.Cron.Schedules[0].Start = "0 2 * * *"
-				scale.Cron.Schedules[0].End = "00 02 * * *"
+				scale.Cron.Schedules[0].Start = "0 0 2 * * *"
+				scale.Cron.Schedules[0].End = "00 00 02 * * *"
 			},
 			wantError: "start and end must not be identical",
 		},
 		{
 			name: "cron start and end have different calendar fields",
 			mutate: func(scale *dfv1.Scale) {
-				scale.Cron.Schedules[0].Start = "0 2 * * 1-5"
-				scale.Cron.Schedules[0].End = "0 3 * * *"
+				scale.Cron.Schedules[0].Start = "0 0 2 * * 1-5"
+				scale.Cron.Schedules[0].End = "0 0 3 * * *"
 			},
 			wantError: "day-of-month, month, and day-of-week must match",
 		},

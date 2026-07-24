@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -150,10 +152,134 @@ func TestDesiredReplicas(t *testing.T) {
 	}
 }
 
+func TestParsedCronScheduleIsActiveAt(t *testing.T) {
+	tests := []struct {
+		name     string
+		start    string
+		end      string
+		at       time.Time
+		expected bool
+	}{
+		{
+			name:     "within weekday window",
+			start:    "0 0 9 * * 1-5",
+			end:      "0 0 18 * * 1-5",
+			at:       time.Date(2026, 7, 23, 14, 30, 0, 0, time.UTC),
+			expected: true,
+		},
+		{
+			name:     "outside weekday window",
+			start:    "0 0 9 * * 1-5",
+			end:      "0 0 18 * * 1-5",
+			at:       time.Date(2026, 7, 23, 20, 0, 0, 0, time.UTC),
+			expected: false,
+		},
+		{
+			name:     "cross-midnight window active",
+			start:    "0 0 22 * * *",
+			end:      "0 0 6 * * *",
+			at:       time.Date(2026, 7, 23, 2, 0, 0, 0, time.UTC),
+			expected: true,
+		},
+		{
+			name:     "cross-midnight window inactive",
+			start:    "0 0 22 * * *",
+			end:      "0 0 6 * * *",
+			at:       time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC),
+			expected: false,
+		},
+		{
+			name:     "exactly at start",
+			start:    "0 0 9 * * *",
+			end:      "0 0 18 * * *",
+			at:       time.Date(2026, 7, 23, 9, 0, 0, 0, time.UTC),
+			expected: true,
+		},
+		{
+			name:     "exactly at end",
+			start:    "0 0 9 * * *",
+			end:      "0 0 18 * * *",
+			at:       time.Date(2026, 7, 23, 18, 0, 0, 0, time.UTC),
+			expected: false,
+		},
+		{
+			name:     "seconds field",
+			start:    "15 0 9 * * *",
+			end:      "45 0 9 * * *",
+			at:       time.Date(2026, 7, 23, 9, 0, 30, 0, time.UTC),
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := parseCronSchedules(&dfv1.CronScheduling{
+				Schedules: []dfv1.CronSchedule{{Start: tc.start, End: tc.end}},
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, parsed[0].isActiveAt(tc.at))
+		})
+	}
+}
+
+func TestParseCronSchedulesRejectsInvalidExpressions(t *testing.T) {
+	tests := []struct {
+		name  string
+		start string
+		end   string
+	}{
+		{name: "invalid start", start: "invalid", end: "0 0 18 * * *"},
+		{name: "invalid end", start: "0 0 9 * * *", end: "invalid"},
+		{name: "five-field format", start: "0 9 * * *", end: "0 18 * * *"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseCronSchedules(&dfv1.CronScheduling{
+				Schedules: []dfv1.CronSchedule{{Start: tc.start, End: tc.end}},
+			})
+			assert.Error(t, err)
+		})
+	}
+}
+
+func TestEffectiveScaleBoundsAt(t *testing.T) {
+	now := time.Now().UTC()
+	start := now.Add(-time.Minute)
+	end := now.Add(time.Minute)
+	cronExpression := func(t time.Time) string {
+		return fmt.Sprintf("0 %d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
+	}
+	scale := dfv1.Scale{
+		Min: ptr.To[int32](0),
+		Max: ptr.To[int32](50),
+		Cron: &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: cronExpression(start), End: cronExpression(end), Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+				{Start: cronExpression(start), End: cronExpression(end), Min: ptr.To[int32](10), Max: ptr.To[int32](20)},
+			},
+		},
+	}
+	parsed, err := parseCronSchedules(scale.Cron)
+	require.NoError(t, err)
+
+	minReplicas, maxReplicas, active := effectiveScaleBoundsAt(scale, parsed, now)
+	assert.True(t, active)
+	assert.Equal(t, int32(1), minReplicas)
+	assert.Equal(t, int32(5), maxReplicas)
+
+	minReplicas, maxReplicas, active = effectiveScaleBoundsAt(scale, parsed, now.Add(2*time.Hour))
+	assert.False(t, active)
+	assert.Equal(t, int32(0), minReplicas)
+	assert.Equal(t, int32(50), maxReplicas)
+}
+
 func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 	tests := []struct {
 		name                 string
 		current              int32
+		parentMin            int32
+		parentMax            int32
 		cronMin              int32
 		cronMax              int32
 		replicasPerScaleUp   uint32
@@ -163,6 +289,8 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 		{
 			name:                 "scale up from zero for nightly DLQ drain",
 			current:              0,
+			parentMin:            0,
+			parentMax:            50,
 			cronMin:              1,
 			cronMax:              5,
 			replicasPerScaleUp:   2,
@@ -172,6 +300,8 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 		{
 			name:                 "scale down toward cron max",
 			current:              10,
+			parentMin:            0,
+			parentMax:            50,
 			cronMin:              1,
 			cronMax:              5,
 			replicasPerScaleUp:   2,
@@ -190,7 +320,7 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 			start := now.Add(-time.Minute)
 			end := now.Add(time.Minute)
 			cronExpression := func(t time.Time) string {
-				return fmt.Sprintf("%d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
+				return fmt.Sprintf("0 %d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
 			}
 			mv := &dfv1.MonoVertex{
 				ObjectMeta: metav1.ObjectMeta{
@@ -200,8 +330,8 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 				Spec: dfv1.MonoVertexSpec{
 					Replicas: ptr.To(tc.current),
 					Scale: dfv1.Scale{
-						Min:                  ptr.To[int32](0),
-						Max:                  ptr.To[int32](50),
+						Min:                  ptr.To(tc.parentMin),
+						Max:                  ptr.To(tc.parentMax),
 						ReplicasPerScaleUp:   ptr.To(tc.replicasPerScaleUp),
 						ReplicasPerScaleDown: ptr.To(tc.replicasPerScaleDown),
 						Cron: &dfv1.CronScheduling{
@@ -236,4 +366,61 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 			assert.Equal(t, tc.expected, *updated.Spec.Replicas)
 		})
 	}
+}
+
+func monoVtxWithCronSchedule(uid types.UID, generation int64, start string) *dfv1.MonoVertex {
+	return &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:        uid,
+			Generation: generation,
+		},
+		Spec: dfv1.MonoVertexSpec{
+			Scale: dfv1.Scale{
+				Cron: &dfv1.CronScheduling{
+					Schedules: []dfv1.CronSchedule{{Start: start, End: "0 0 18 * * *"}},
+				},
+			},
+		},
+	}
+}
+
+func TestParsedCronSchedulesForCacheHit(t *testing.T) {
+	scaler := NewScaler(nil)
+	monoVtx := monoVtxWithCronSchedule("first-uid", 1, "0 0 9 * * *")
+
+	first, err := scaler.parsedCronSchedulesFor(monoVtx)
+	require.NoError(t, err)
+	second, err := scaler.parsedCronSchedulesFor(monoVtx)
+	require.NoError(t, err)
+
+	assert.Same(t, &first[0], &second[0])
+	assert.Equal(t, 1, scaler.cronScheduleCache.Len())
+}
+
+func TestParsedCronSchedulesForGenerationChange(t *testing.T) {
+	scaler := NewScaler(nil)
+	original := monoVtxWithCronSchedule("first-uid", 1, "0 0 9 * * *")
+	updated := monoVtxWithCronSchedule("first-uid", 2, "0 0 10 * * *")
+
+	_, err := scaler.parsedCronSchedulesFor(original)
+	require.NoError(t, err)
+	parsed, err := scaler.parsedCronSchedulesFor(updated)
+	require.NoError(t, err)
+
+	assert.Equal(t, "0 0 10 * * *", parsed[0].schedule.Start)
+	assert.Equal(t, 2, scaler.cronScheduleCache.Len())
+}
+
+func TestParsedCronSchedulesForUIDChange(t *testing.T) {
+	scaler := NewScaler(nil)
+	original := monoVtxWithCronSchedule("first-uid", 1, "0 0 9 * * *")
+	recreated := monoVtxWithCronSchedule("second-uid", 1, "0 0 11 * * *")
+
+	_, err := scaler.parsedCronSchedulesFor(original)
+	require.NoError(t, err)
+	parsed, err := scaler.parsedCronSchedulesFor(recreated)
+	require.NoError(t, err)
+
+	assert.Equal(t, "0 0 11 * * *", parsed[0].schedule.Start)
+	assert.Equal(t, 2, scaler.cronScheduleCache.Len())
 }

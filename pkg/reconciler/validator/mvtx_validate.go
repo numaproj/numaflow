@@ -106,16 +106,14 @@ func validateCronScaling(scale dfv1.Scale) error {
 	if parentMin > parentMax {
 		return fmt.Errorf("scale.min must not be greater than scale.max")
 	}
-	if scale.Cron.Timezone == "" {
-		return fmt.Errorf("timezone is required")
-	}
-	if _, err := time.LoadLocation(scale.Cron.Timezone); err != nil {
-		return fmt.Errorf("invalid timezone %q: %w", scale.Cron.Timezone, err)
+	timezone := scale.Cron.GetTimezone()
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return fmt.Errorf("invalid timezone %q: %w", timezone, err)
 	}
 	if len(scale.Cron.Schedules) == 0 {
 		return fmt.Errorf("at least one schedule is required")
 	}
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	for i, sched := range scale.Cron.Schedules {
 		startSchedule, err := parser.Parse(sched.Start)
 		if err != nil {
@@ -156,12 +154,6 @@ func validateCronScaling(scale dfv1.Scale) error {
 		}
 		if *sched.Min > *sched.Max {
 			return fmt.Errorf("schedules[%d]: min (%d) must not be greater than max (%d)", i, *sched.Min, *sched.Max)
-		}
-		if *sched.Min < parentMin {
-			return fmt.Errorf("schedules[%d]: min must not be less than scale.min", i)
-		}
-		if *sched.Max > parentMax {
-			return fmt.Errorf("schedules[%d]: max must not be greater than scale.max", i)
 		}
 	}
 	return nil

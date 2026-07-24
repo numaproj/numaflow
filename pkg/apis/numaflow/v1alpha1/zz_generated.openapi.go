@@ -1187,7 +1187,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CronSchedule(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"start": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).",
+							Description: "Start of the cron window. Extended cron format (Second Minute Hour Dom Month Dow).",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -1231,15 +1231,15 @@ func schema_pkg_apis_numaflow_v1alpha1_CronScheduling(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"timezone": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Timezone for interpreting cron expressions. IANA Time Zone Database format.",
-							Default:     "",
+							Description: "Timezone for interpreting cron expressions. IANA Time Zone Database format. Defaults to UTC.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"schedules": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Schedules are evaluated in order; the first active schedule takes precedence when windows overlap.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -1251,7 +1251,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CronScheduling(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"timezone", "schedules"},
+				Required: []string{"schedules"},
 			},
 		},
 		Dependencies: []string{

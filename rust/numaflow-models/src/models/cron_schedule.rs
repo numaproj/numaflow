@@ -27,7 +27,7 @@ pub struct CronSchedule {
     /// Minimum replicas during this window. Overrides scale.min.
     #[serde(rename = "min")]
     pub min: i32,
-    /// Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+    /// Start of the cron window. Extended cron format (Second Minute Hour Dom Month Dow).
     #[serde(rename = "start")]
     pub start: String,
 }
