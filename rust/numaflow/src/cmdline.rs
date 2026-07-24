@@ -16,7 +16,6 @@ pub(super) fn root_cli() -> Command {
         .long_about("https://numaflow.numaproj.io/")
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .subcommand(add_monitor_subcommand())
         .subcommand(add_serving_subcommand())
         .subcommand(add_processor_subcommand())
         .subcommand(add_mvtx_daemon_server_subcommand())
@@ -39,10 +38,6 @@ fn add_processor_subcommand() -> Command {
         .subcommand(sideinput::add_sideinput_subcommand())
         // TODO: remove after moving e2e to Rust, this is a hack
         .allow_external_subcommands(true)
-}
-
-fn add_monitor_subcommand() -> Command {
-    Command::new("monitor").about("Monitor exposes monitoring endpoints")
 }
 
 fn add_serving_subcommand() -> Command {

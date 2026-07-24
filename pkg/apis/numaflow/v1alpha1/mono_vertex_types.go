@@ -449,6 +449,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
+		{Name: MonoVertexMonitorPortName, ContainerPort: MonoVertexMonitorPort},
 	}
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
@@ -468,18 +469,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			)
 		}
 
-	}
-
-	// TODO(deprecate): remove this when we remove monitor_container.
-	// Only SecurityContext is propagated to the monitor sidecar (not the full
-	// ContainerTemplate) to avoid overriding its fixed resource footprint or
-	// leaking the main container's env into it.
-	if mv.Spec.ContainerTemplate != nil && mv.Spec.ContainerTemplate.SecurityContext != nil {
-		for i := range sidecarContainers {
-			if sidecarContainers[i].Name == CtrMonitor {
-				sidecarContainers[i].SecurityContext = mv.Spec.ContainerTemplate.SecurityContext
-			}
-		}
 	}
 
 	initContainers := []corev1.Container{}
@@ -574,8 +563,7 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	mainContainer := mvspec.getMainContainer(req)
 	containers := []corev1.Container{mainContainer}
 
-	monitorContainer := buildMonitorContainer(req)
-	sidecarContainers := []corev1.Container{monitorContainer}
+	sidecarContainers := []corev1.Container{}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}

@@ -350,6 +350,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
+		{Name: VertexMonitorPortName, ContainerPort: VertexMonitorPort},
 	}
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
@@ -399,27 +400,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
 		for i := 0; i < len(sidecarContainers); i++ {
-			// skip for monitor sidecar container
-			if sidecarContainers[i].Name == CtrMonitor {
-				continue
-			}
-			// Readonly mount for user-defined containers
 			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
-	}
-
-	// TODO(deprecate): remove this when we remove monitor_container.
-	// Only SecurityContext is propagated to the monitor sidecar (not the full
-	// ContainerTemplate) to avoid overriding its fixed resource footprint or
-	// leaking the main container's env into it.
-	if v.Spec.ContainerTemplate != nil && v.Spec.ContainerTemplate.SecurityContext != nil {
-		for i := range sidecarContainers {
-			if sidecarContainers[i].Name == CtrMonitor {
-				sidecarContainers[i].SecurityContext = v.Spec.ContainerTemplate.SecurityContext
-			}
-		}
 	}
 
 	// Add the sidecar containers

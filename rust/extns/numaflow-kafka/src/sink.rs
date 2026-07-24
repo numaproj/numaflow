@@ -236,13 +236,12 @@ pub mod test_utils {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "kafka-tests", feature = "kafka-tests-utils"))]
 mod tests {
     use super::*;
     use bytes::Bytes;
     use std::collections::HashMap;
 
-    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_sink_send_and_consume() {
         let (_producer, topic_name) = test_utils::setup_test_topic().await;
@@ -281,7 +280,6 @@ mod tests {
         assert_eq!(msg.headers.get("header2"), Some(&"value2".to_string()));
     }
 
-    #[cfg(feature = "kafka-tests")]
     #[tokio::test]
     async fn test_kafka_sink_multiple_messages() {
         let (_producer, topic_name) = test_utils::setup_test_topic().await;
