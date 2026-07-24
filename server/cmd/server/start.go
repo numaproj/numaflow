@@ -181,6 +181,7 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"GET:" + baseHref + "api/v1/authinfo":                                                             authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/namespaces":                                                           authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/cluster-summary":                                                      authz.NewRouteInfo(authz.ObjectPipeline, false),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/controller-info":                                authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                      authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                     authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                            authz.NewRouteInfo(authz.ObjectPipeline, true),

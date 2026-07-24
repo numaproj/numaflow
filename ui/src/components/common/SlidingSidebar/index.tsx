@@ -55,7 +55,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
-  [SidebarType.VERSION_DETAILS]: 350,
+  [SidebarType.VERSION_DETAILS]: 420,
 };
 
 export interface SpecEditorModalProps {
@@ -271,6 +271,7 @@ export function SlidingSidebar({
     vertexDetailsProps,
     edgeDetailsProps,
     generatorDetailsProps,
+    versionDetailsProps,
   ]);
 
   return (
@@ -308,12 +309,14 @@ export function SlidingSidebar({
         sx={{
           display: "flex",
           flexDirection: "column",
+          // paddingTop clears the fixed AppBar; with border-box, height must stay
+          // 100% (not calc(100% - padding)) or the scrollport is shortened twice.
           paddingTop: "8.4rem",
           paddingRight: "2.4rem",
           paddingBottom: "2.4rem",
           paddingLeft: "1.6rem",
           width: "100%",
-          height: "calc(100% - 10.8rem)",
+          height: "100%",
           overflowX: "hidden",
           overflowY: "auto",
           minWidth: 0,

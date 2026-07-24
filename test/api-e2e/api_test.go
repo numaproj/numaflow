@@ -53,6 +53,20 @@ func (s *APISuite) TestGetSysInfo() {
 	AssertJsonStringContains(s.T(), sysinfoBody, "data.version", "Platform")
 }
 
+func (s *APISuite) TestGetControllerInfo() {
+	defer s.Given().When().UXServerPodPortForward(8044, 8443).TerminateAllPodPortForwards()
+
+	body := HTTPExpect(s.T(), "https://localhost:8044").GET("/api/v1/namespaces/numaflow-system/controller-info").
+		Expect().
+		Status(200).Body().Raw()
+	AssertJsonEqual(s.T(), body, "data.found", true)
+	AssertJsonEqual(s.T(), body, "data.namespace", "numaflow-system")
+	AssertJsonEqual(s.T(), body, "data.name", "numaflow-controller")
+	AssertJsonExists(s.T(), body, "data.version")
+	AssertJsonExists(s.T(), body, "data.image")
+	AssertJsonExists(s.T(), body, "data.namespaced")
+}
+
 func (s *APISuite) TestISBSVC() {
 	defer s.Given().When().UXServerPodPortForward(8143, 8443).TerminateAllPodPortForwards()
 
