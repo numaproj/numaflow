@@ -76,7 +76,7 @@ macro_rules! mark_failed_batch {
 
 use crate::Error;
 use crate::metadata::Metadata;
-use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
@@ -656,6 +656,46 @@ impl TryFrom<Message> for BytesMut {
             .map_err(|e| Error::Proto(e.to_string()))?;
         Ok(buf)
     }
+}
+
+/// Decode an ISB protobuf [`numaflow_pb::objects::isb::Message`] into a core [`Message`],
+/// assigning the given broker offset.
+///
+/// Shared by JetStream and in-memory ISB readers to keep field mapping in sync.
+/// Callers that need to transform the payload (e.g. decompress) should do so on the
+/// proto before calling this helper. [`watermark`](Message::watermark) and
+/// [`tags`](Message::tags) are always `None` on decode (matching JetStream).
+pub(crate) fn message_from_isb_proto(
+    proto: numaflow_pb::objects::isb::Message,
+    offset: Offset,
+) -> Result<Message, Error> {
+    let header = proto
+        .header
+        .ok_or_else(|| Error::Proto("Missing header".to_string()))?;
+    let body = proto
+        .body
+        .ok_or_else(|| Error::Proto("Missing body".to_string()))?;
+    let message_info = header
+        .message_info
+        .ok_or_else(|| Error::Proto("Missing message_info".to_string()))?;
+
+    Ok(Message {
+        typ: header.kind.into(),
+        keys: Arc::from(header.keys.into_boxed_slice()),
+        tags: None,
+        value: body.payload.into(),
+        offset,
+        event_time: message_info
+            .event_time
+            .map(utc_from_timestamp)
+            .ok_or_else(|| Error::Proto("Missing event_time".to_string()))?,
+        id: header.id.map(MessageID::from).unwrap_or_default(),
+        headers: Arc::new(header.headers),
+        watermark: None,
+        metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
+        is_late: message_info.is_late,
+        nack_options: None,
+    })
 }
 
 #[cfg(test)]

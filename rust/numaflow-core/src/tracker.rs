@@ -487,8 +487,14 @@ mod tests {
             })
             .await?;
 
-        let callback_handler =
-            CallbackHandler::new("test", js_context.clone(), store_name, 10).await;
+        let callback_handler = CallbackHandler::new(
+            "test",
+            Arc::new(numaflow_shared::kv::jetstream::JetstreamKVStore::new(
+                callback_bucket.clone(),
+                store_name,
+            )),
+            10,
+        );
 
         let handle = Tracker::new(Some(callback_handler), CancellationToken::new());
 

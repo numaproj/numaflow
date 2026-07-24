@@ -39,7 +39,6 @@ use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
-use async_nats::jetstream::Context;
 use numaflow_models::models::{NatsAuth, Tls};
 use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
@@ -408,7 +407,12 @@ pub(crate) async fn create_mapper(
                         grpc::DEFAULT_RECONNECT_INTERVAL,
                     )
                     .await?;
-                    Ok(MapHandle::new(
+                    let reconnect_config = grpc::UdfReconnectConfig::new(
+                        config.grpc_client_config(),
+                        cln_token.clone(),
+                        grpc::DEFAULT_RECONNECT_INTERVAL,
+                    );
+                    Ok(MapHandle::new_with_reconnect_config(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
@@ -416,6 +420,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        Some(reconnect_config),
                     )
                     .await?)
                 }
@@ -852,7 +857,8 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
 /// Creates an ISBWatermarkHandle if watermark is enabled in the configuration.
 pub async fn create_edge_watermark_handle(
     config: &PipelineConfig,
-    js_context: &Context,
+    isb_factory: &dyn crate::pipeline::isb::ISBFactory,
+    writers: std::collections::HashMap<&'static str, crate::pipeline::isb::ISBWriterRef>,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
     tracker: Tracker,
@@ -864,7 +870,8 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                js_context.clone(),
+                isb_factory,
+                writers,
                 edge_config,
                 &config.to_vertex_config,
                 cln_token.clone(),

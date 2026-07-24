@@ -37,7 +37,8 @@
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
 use crate::config::pipeline::PipelineConfig;
-use crate::{config, error, pipeline};
+use crate::pipeline::isb::create_isb_factory;
+use crate::{config, error};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -59,7 +60,7 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> error::Result<()> {
-    let js_context = pipeline::create_js_context(config.js_client_config.clone()).await?;
+    let isb_factory = create_isb_factory(&config.isb_client_config, cln_token.clone()).await?;
 
     match &config.vertex_config {
         config::pipeline::VertexConfig::Source(source) => {
@@ -67,7 +68,7 @@ pub(crate) async fn start_forwarder(
 
             source_forwarder::start_source_forwarder(
                 cln_token,
-                js_context,
+                isb_factory,
                 config.clone(),
                 source.clone(),
             )
@@ -77,7 +78,7 @@ pub(crate) async fn start_forwarder(
             info!("Starting sink forwarder");
             sink_forwarder::start_sink_forwarder(
                 cln_token,
-                js_context,
+                isb_factory,
                 config.clone(),
                 (**sink).clone(),
             )
@@ -85,14 +86,14 @@ pub(crate) async fn start_forwarder(
         }
         config::pipeline::VertexConfig::Map(map) => {
             info!("Starting map forwarder");
-            map_forwarder::start_map_forwarder(cln_token, js_context, config.clone(), map.clone())
+            map_forwarder::start_map_forwarder(cln_token, isb_factory, config.clone(), map.clone())
                 .await?;
         }
         config::pipeline::VertexConfig::Reduce(reduce) => {
             info!("Starting reduce forwarder");
             reduce_forwarder::start_reduce_forwarder(
                 cln_token,
-                js_context,
+                isb_factory,
                 config.clone(),
                 reduce.clone(),
             )

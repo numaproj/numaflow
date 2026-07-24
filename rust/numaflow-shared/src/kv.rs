@@ -13,6 +13,8 @@ use futures::Stream;
 use std::error::Error as StdError;
 use std::pin::Pin;
 
+/// In-memory implementation — for local testing only.
+pub mod inmemory;
 pub mod jetstream;
 
 /// Error type for KV operations (boxed for object safety)

@@ -10,7 +10,6 @@ members = [
     "numaflow-daemon",
     "numaflow-shared",
     "numaflow-throttling",
-    "numaflow-testing",
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",

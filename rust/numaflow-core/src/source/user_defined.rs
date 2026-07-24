@@ -193,7 +193,7 @@ impl UserDefinedSourceRead {
             VERTEX_TYPE_SOURCE,
             critical_error_reasons::SOURCE_RUNTIME_ERROR
         );
-        runtime::persist_application_error(status.clone());
+        runtime::persist_application_error_with_container(status.clone(), "udsource");
     }
 }
 
