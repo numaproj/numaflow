@@ -122,7 +122,7 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
 	ports := map[string]int32{
 		MonoVertexMetricsPortName: MonoVertexMetricsPort,
-		MonoVertexMonitorPortName: MonoVertexMonitorPort,
+		MonoVertexRuntimePortName: MonoVertexRuntimePort,
 	}
 	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, ports)}
 	if x := mv.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
@@ -449,7 +449,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
-		{Name: MonoVertexMonitorPortName, ContainerPort: MonoVertexMonitorPort},
+		{Name: MonoVertexRuntimePortName, ContainerPort: MonoVertexRuntimePort},
 	}
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...

@@ -497,7 +497,7 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		// Verify that the ports contain the expected values
 		expectedPorts := map[int32]string{
 			MonoVertexMetricsPort: MonoVertexMetricsPortName,
-			MonoVertexMonitorPort: MonoVertexMonitorPortName,
+			MonoVertexRuntimePort: MonoVertexRuntimePortName,
 		}
 		foundPorts := map[int32]string{}
 		for _, port := range headlessService.Spec.Ports {
@@ -521,13 +521,13 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		// Verify headless service ports
 		ports := map[int32]bool{
 			MonoVertexMetricsPort: false,
-			MonoVertexMonitorPort: false,
+			MonoVertexRuntimePort: false,
 		}
 		for _, port := range services[0].Spec.Ports {
 			ports[port.Port] = true
 		}
 		assert.True(t, ports[MonoVertexMetricsPort], "Metrics port is missing")
-		assert.True(t, ports[MonoVertexMonitorPort], "Monitor port is missing")
+		assert.True(t, ports[MonoVertexRuntimePort], "Runtime port is missing")
 		assert.Equal(t, "None", services[0].Spec.ClusterIP)
 	})
 

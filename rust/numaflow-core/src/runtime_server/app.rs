@@ -6,7 +6,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use super::config::{MonitorServerConfig, RuntimeInfoConfig};
+use super::config::{RuntimeInfoConfig, RuntimeServerConfig};
 use super::error::Error;
 use super::runtime::{ApiResponse, Runtime};
 
@@ -21,7 +21,7 @@ pub(crate) struct AppState {
 pub(crate) async fn start_main_server(
     app_addr: SocketAddr,
     tls_config: RustlsConfig,
-    server_config: MonitorServerConfig,
+    server_config: RuntimeServerConfig,
     cln_token: CancellationToken,
 ) -> super::error::Result<()> {
     let handle = Handle::new();
@@ -95,7 +95,7 @@ async fn handle_runtime_app_errors_head() -> StatusCode {
 /// Gracefully shutdown the server when the process cancellation token fires.
 async fn graceful_shutdown(
     handle: Handle,
-    server_config: MonitorServerConfig,
+    server_config: RuntimeServerConfig,
     cln_token: CancellationToken,
 ) {
     cln_token.cancelled().await;
@@ -135,7 +135,7 @@ mod tests {
             .unwrap();
 
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let server_config = MonitorServerConfig {
+        let server_config = RuntimeServerConfig {
             server_listen_port: 0,
             graceful_shutdown_duration: 2,
         };

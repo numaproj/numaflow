@@ -160,8 +160,8 @@ const (
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
-	VertexMonitorPort           = 2470
-	VertexMonitorPortName       = "monitor"
+	VertexRuntimePort           = 2470
+	VertexRuntimePortName       = "runtime"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
 	VertexHTTPPort              = 8090
@@ -169,8 +169,8 @@ const (
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
-	MonoVertexMonitorPort       = 2470
-	MonoVertexMonitorPortName   = "monitor"
+	MonoVertexRuntimePort       = 2470
+	MonoVertexRuntimePortName   = "runtime"
 	MonoVertexDaemonServicePort = 4327
 	ServingServiceHttpsPort     = 8443
 	ServingServiceHttpPort      = 8090

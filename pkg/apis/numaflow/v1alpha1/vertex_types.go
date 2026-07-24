@@ -142,7 +142,7 @@ func (v Vertex) GetHeadlessServiceName() string {
 func (v Vertex) GetServiceObjs() []*corev1.Service {
 	ports := map[string]int32{
 		VertexMetricsPortName: VertexMetricsPort,
-		VertexMonitorPortName: VertexMonitorPort,
+		VertexRuntimePortName: VertexRuntimePort,
 	}
 	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
@@ -350,7 +350,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
-		{Name: VertexMonitorPortName, ContainerPort: VertexMonitorPort},
+		{Name: VertexRuntimePortName, ContainerPort: VertexRuntimePort},
 	}
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer

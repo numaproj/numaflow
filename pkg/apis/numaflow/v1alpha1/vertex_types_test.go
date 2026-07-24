@@ -191,13 +191,13 @@ func TestGetServiceObjs(t *testing.T) {
 	assert.Equal(t, 2, len(s[0].Spec.Ports))
 	ports := map[int32]bool{
 		VertexMetricsPort: false,
-		VertexMonitorPort: false,
+		VertexRuntimePort: false,
 	}
 	for _, port := range s[0].Spec.Ports {
 		ports[port.Port] = true
 	}
 	assert.True(t, ports[VertexMetricsPort], "Metrics port is missing")
-	assert.True(t, ports[VertexMonitorPort], "Monitor port is missing")
+	assert.True(t, ports[VertexRuntimePort], "Runtime port is missing")
 	assert.Equal(t, "None", s[0].Spec.ClusterIP)
 
 	v.Spec.Source.HTTP.Service = true
@@ -401,7 +401,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, 2, len(s.Containers[0].Ports))
 		assert.Equal(t, VertexMetricsPort, int(s.Containers[0].Ports[0].ContainerPort))
-		assert.Equal(t, VertexMonitorPort, int(s.Containers[0].Ports[1].ContainerPort))
+		assert.Equal(t, VertexRuntimePort, int(s.Containers[0].Ports[1].ContainerPort))
 	})
 
 	t.Run("test user-defined sink", func(t *testing.T) {

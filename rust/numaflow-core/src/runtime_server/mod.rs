@@ -8,7 +8,7 @@ pub mod runtime;
 use std::net::SocketAddr;
 
 use axum_server::tls_rustls::RustlsConfig;
-use config::{MonitorServerConfig, generate_certs};
+use config::{RuntimeServerConfig, generate_certs};
 use error::{Error, Result};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -22,7 +22,7 @@ pub async fn spawn_runtime_errors_server(cln_token: CancellationToken) -> Result
         .await
         .map_err(|e| Error::Init(format!("Failed to create tls config {e:?}")))?;
 
-    let server_config = MonitorServerConfig::default();
+    let server_config = RuntimeServerConfig::default();
     info!(?server_config, "Starting runtime errors server");
 
     let app_addr: SocketAddr = format!("0.0.0.0:{}", server_config.server_listen_port)

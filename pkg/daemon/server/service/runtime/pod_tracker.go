@@ -34,7 +34,7 @@ import (
 type PodTracker struct {
 	pipeline            *v1alpha1.Pipeline
 	log                 *zap.SugaredLogger
-	httpClient          monitorHttpClient
+	httpClient          runtimeHTTPClient
 	activePodsCount     map[string]int
 	activePodsMutex     sync.RWMutex
 	refreshInterval     time.Duration
@@ -126,7 +126,7 @@ func (pt *PodTracker) updateActivePods() {
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	// example for 0th pod: https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2470/runtime/errors
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/errors", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMonitorPort)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/errors", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexRuntimePort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
 		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
