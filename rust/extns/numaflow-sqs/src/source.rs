@@ -49,7 +49,11 @@ pub struct SqsSourceConfig {
     pub message_attribute_names: Vec<String>,
     pub assume_role_config: Option<AssumeRoleConfig>,
 }
-
+#[derive(Debug)]
+pub struct SqsNack {
+    pub receipt_handle: Bytes,
+    pub visibility_timeout: Option<i32>,
+}
 /// Internal message types for the actor implementation.
 ///
 /// The actor pattern is used to:
@@ -65,6 +69,10 @@ enum SQSActorMessage {
     Delete {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Bytes>,
+    },
+    Nack {
+        respond_to: oneshot::Sender<Result<()>>,
+        offsets: Vec<SqsNack>,
     },
     GetPending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -132,6 +140,7 @@ impl SqsActor {
                     .send(messages)
                     .expect("failed to send response from SqsActorMessage::Receive");
             }
+
             SQSActorMessage::Delete {
                 respond_to,
                 offsets,
@@ -141,6 +150,17 @@ impl SqsActor {
                     .send(status)
                     .expect("failed to send response from SqsActorMessage::Delete");
             }
+
+            SQSActorMessage::Nack {
+                respond_to,
+                offsets,
+            } => {
+                let status = self.nack_messages(offsets).await;
+                respond_to
+                    .send(status)
+                    .expect("failed to send response from SqsActorMessage::Nack");
+            }
+
             SQSActorMessage::GetPending { respond_to } => {
                 let status = self.get_pending_messages().await;
                 respond_to
@@ -336,6 +356,37 @@ impl SqsActor {
         Ok(())
     }
 
+    /// Changes visibility timeout for messages, serves as Numaflow source nack.
+    async fn nack_messages(&mut self, offsets: Vec<SqsNack>) -> Result<()> {
+        for nack in offsets {
+            let receipt_handle = std::str::from_utf8(&nack.receipt_handle).map_err(|err| {
+                error!(?err, "failed to parse receipt handle");
+                SqsSourceError::from(Error::Other("failed to parse receipt handle".to_string()))
+            })?;
+
+            let mut request = self
+                .client
+                .change_message_visibility()
+                .queue_url(&self.queue_url)
+                .receipt_handle(receipt_handle);
+
+            if let Some(timeout) = nack.visibility_timeout {
+                request = request.visibility_timeout(timeout);
+            }
+
+            if let Err(err) = request.send().await {
+                error!(
+                    ?err,
+                    queue_url = self.queue_url,
+                    "Failed to change message visibility"
+                );
+
+                return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&err))));
+            }
+        }
+
+        Ok(())
+    }
     /// get the pending message count from SQS using the ApproximateNumberOfMessages attribute
     /// Note: The ApproximateNumberOfMessages metrics may not achieve consistency until at least
     /// 1 minute after the producers stop sending messages.
@@ -542,6 +593,22 @@ impl SqsSource {
             respond_to: tx,
         };
         self.actor_tx.send(msg).await.expect("rx was dropped");
+        rx.await.map_err(Error::ActorTaskTerminated)?
+    }
+
+    /// Change message visibility for the provided offsets.
+    pub async fn nack_offsets(&self, offsets: Vec<SqsNack>) -> Result<()> {
+        tracing::debug!(?offsets, "Nacking offsets");
+
+        let (tx, rx) = oneshot::channel();
+
+        let msg = SQSActorMessage::Nack {
+            offsets,
+            respond_to: tx,
+        };
+
+        self.actor_tx.send(msg).await.expect("rx was dropped");
+
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
