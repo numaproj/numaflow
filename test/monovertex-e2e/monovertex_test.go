@@ -19,7 +19,9 @@ limitations under the License.
 package monovertex_e2e
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,6 +67,48 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
 	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
 
+}
+
+func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
+	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
+		When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+	monoVertexName := "runtime-error-monovertex"
+
+	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
+
+	defer w.MonoVertexPodPortForward(8942, dfv1.MonoVertexRuntimePort).
+		MvtxDaemonPodPortForward(3242, dfv1.MonoVertexDaemonServicePort).
+		UXServerPodPortForward(8142, 8443).
+		TerminateAllPodPortForwards()
+
+	client, err := mvtxclient.NewGRPCClient("localhost:3242")
+	assert.NoError(s.T(), err)
+	defer func() { assert.NoError(s.T(), client.Close()) }()
+
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
+
+	assert.Eventually(s.T(), func() bool {
+		body := HTTPExpect(s.T(), "https://localhost:8942").GET("/runtime/errors").
+			Expect().
+			Status(200).Body().Raw()
+		return strings.Contains(body, `"container":"udf"`)
+	}, 2*time.Minute, time.Second)
+
+	assert.Eventually(s.T(), func() bool {
+		errors, err := client.GetMonoVertexErrors(context.Background(), monoVertexName)
+		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
+	}, 2*time.Minute, time.Second)
+
+	assert.Eventually(s.T(), func() bool {
+		body := HTTPExpect(s.T(), "https://localhost:8142").
+			GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName)).
+			Expect().
+			Status(200).Body().Raw()
+		return strings.Contains(body, `"container":"udf"`)
+	}, 2*time.Minute, time.Second)
+
+	w.Expect().MonoVertexPodsRunning()
 }
 
 func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {

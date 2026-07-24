@@ -1,0 +1,17 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: runtime-error-monovertex
+spec:
+  scale:
+    min: 1
+  source:
+    http:
+      service: true
+  udf:
+    container:
+      # map-filter exits when it receives invalid JSON, which exercises UDF failure capture.
+      image: quay.io/numaio/numaflow-go/map-filter:stable
+      imagePullPolicy: IfNotPresent
+  sink:
+    log: {}
