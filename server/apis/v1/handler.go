@@ -101,7 +101,7 @@ type handler struct {
 	dexObj                *DexObject
 	localUsersAuthObject  *LocalUsersAuthObject
 	healthChecker         *HealthChecker
-	// httpClient is used for direct calls to pod-local monitor endpoints.
+	// httpClient is used for direct calls to pod-local monitor/runtime endpoints.
 	httpClient *http.Client
 	opts       *handlerOptions
 }

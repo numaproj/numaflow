@@ -1,4 +1,4 @@
-//!  Config module for Sidecar monitor container
+//! Runtime error server configuration.
 use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
@@ -7,22 +7,22 @@ pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     Ok((cert, signing_key))
 }
 
-const DEFAULT_METRICS_PORT: u16 = 2470;
+const DEFAULT_RUNTIME_SERVER_PORT: u16 = 2470;
 const DEFAULT_SHUTDOWN_DURATION: u64 = 30;
 pub(crate) const DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH: &str =
     "/var/numaflow/runtime/application-errors";
 pub(crate) const DEFAULT_MAX_ERROR_FILES_PER_CONTAINER: usize = 10;
 
 #[derive(Debug, Clone)]
-pub(crate) struct MonitorServerConfig {
+pub(crate) struct RuntimeServerConfig {
     pub server_listen_port: u16,
     pub graceful_shutdown_duration: u64,
 }
 
-impl Default for MonitorServerConfig {
+impl Default for RuntimeServerConfig {
     fn default() -> Self {
         Self {
-            server_listen_port: DEFAULT_METRICS_PORT,
+            server_listen_port: DEFAULT_RUNTIME_SERVER_PORT,
             graceful_shutdown_duration: DEFAULT_SHUTDOWN_DURATION,
         }
     }
@@ -54,11 +54,11 @@ mod tests {
         assert!(!key_pair.serialize_der().is_empty());
     }
 
-    // Test default values for MonitorServerConfig
+    // Test default values for RuntimeServerConfig
     #[test]
-    fn test_monitor_server_config_default() {
-        let config = MonitorServerConfig::default();
-        assert_eq!(config.server_listen_port, DEFAULT_METRICS_PORT);
+    fn test_runtime_server_config_default() {
+        let config = RuntimeServerConfig::default();
+        assert_eq!(config.server_listen_port, DEFAULT_RUNTIME_SERVER_PORT);
         assert_eq!(config.graceful_shutdown_duration, DEFAULT_SHUTDOWN_DURATION);
     }
 

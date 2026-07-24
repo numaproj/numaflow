@@ -68,7 +68,7 @@ type MonoVertexRuntimeCache interface {
 
 var _ MonoVertexRuntimeCache = (*monoVertexRuntimeCache)(nil)
 
-type monitorHttpClient interface {
+type runtimeHTTPClient interface {
 	Get(url string) (*http.Response, error)
 	Head(url string) (*http.Response, error)
 }
@@ -81,7 +81,7 @@ type monoVertexRuntimeCache struct {
 	cacheMutex sync.RWMutex
 	podTracker *PodTracker
 	log        *zap.SugaredLogger
-	httpClient monitorHttpClient
+	httpClient runtimeHTTPClient
 }
 
 // NewRuntime creates a new instance of monoVertexRuntimeCache.
@@ -157,7 +157,7 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 // fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.
 func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 	// Get the headless service name
-	url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, podIndex, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
+	url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, podIndex, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexRuntimePort, runtimeErrorsPath)
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {

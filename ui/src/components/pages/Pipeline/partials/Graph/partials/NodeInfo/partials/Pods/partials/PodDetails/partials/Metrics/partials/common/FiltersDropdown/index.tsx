@@ -99,7 +99,6 @@ const FiltersDropdown = ({
                       ...(pod?.spec?.initContainers
                         ?.filter(
                           (initContainer: any) =>
-                            initContainer?.name !== "monitor" &&
                             initContainer?.restartPolicy === "Always"
                         )
                         ?.map((ele: any) => ele.name) || []),

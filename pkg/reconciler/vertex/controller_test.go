@@ -238,7 +238,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj := testSrcVertex.DeepCopy()
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 		var envNames []string
 		for _, e := range spec.Containers[0].Env {
@@ -270,7 +270,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 	})
 
@@ -292,7 +292,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 4, len(spec.InitContainers))
+		assert.Equal(t, 3, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 	})
 
@@ -307,7 +307,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.ToEdges = []dfv1.CombinedEdge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 		var envNames []string
 		for _, e := range spec.Containers[0].Env {
@@ -346,14 +346,14 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.ToEdges = []dfv1.CombinedEdge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 
-		assert.Equal(t, "image", spec.InitContainers[2].Image)
-		assert.Equal(t, 1, len(spec.InitContainers[2].Command))
-		assert.Equal(t, "cmd", spec.InitContainers[2].Command[0])
-		assert.Equal(t, 1, len(spec.InitContainers[2].Args))
-		assert.Equal(t, "arg0", spec.InitContainers[2].Args[0])
+		assert.Equal(t, "image", spec.InitContainers[1].Image)
+		assert.Equal(t, 1, len(spec.InitContainers[1].Command))
+		assert.Equal(t, "cmd", spec.InitContainers[1].Command[0])
+		assert.Equal(t, 1, len(spec.InitContainers[1].Args))
+		assert.Equal(t, "arg0", spec.InitContainers[1].Args[0])
 	})
 
 	t.Run("test map udf", func(t *testing.T) {
@@ -367,7 +367,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 		var envNames []string
 		for _, e := range spec.Containers[0].Env {
@@ -404,7 +404,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
 		containsPVC := false
 		containsPVCMount := false
@@ -504,7 +504,7 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
-		assert.Equal(t, 3, len(pods.Items[0].Spec.InitContainers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 		svcs := &corev1.ServiceList{}
 		err = r.client.List(ctx, svcs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
@@ -569,7 +569,7 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
-		assert.Equal(t, 3, len(pods.Items[0].Spec.InitContainers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 	})
 
 	t.Run("test reconcile reduce udf", func(t *testing.T) {
@@ -613,7 +613,7 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
-		assert.Equal(t, 3, len(pods.Items[0].Spec.InitContainers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 		pvc := &corev1.PersistentVolumeClaim{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: dfv1.GeneratePBQStoragePVCName(testPl.Name, testObj.Spec.Name, 0), Namespace: testNamespace}, pvc)
 		assert.NoError(t, err)
@@ -713,7 +713,7 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
-		assert.Equal(t, 4, len(pods.Items[0].Spec.InitContainers))
+		assert.Equal(t, 3, len(pods.Items[0].Spec.InitContainers))
 	})
 
 	t.Run("test reconcile rolling update", func(t *testing.T) {

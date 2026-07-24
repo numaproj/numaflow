@@ -191,13 +191,13 @@ func TestGetServiceObjs(t *testing.T) {
 	assert.Equal(t, 2, len(s[0].Spec.Ports))
 	ports := map[int32]bool{
 		VertexMetricsPort: false,
-		VertexMonitorPort: false,
+		VertexRuntimePort: false,
 	}
 	for _, port := range s[0].Spec.Ports {
 		ports[port.Port] = true
 	}
 	assert.True(t, ports[VertexMetricsPort], "Metrics port is missing")
-	assert.True(t, ports[VertexMonitorPort], "Monitor port is missing")
+	assert.True(t, ports[VertexRuntimePort], "Runtime port is missing")
 	assert.Equal(t, "None", s[0].Spec.ClusterIP)
 
 	v.Spec.Source.HTTP.Service = true
@@ -322,27 +322,15 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, "ct-only-env")
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
-		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, 2, len(s.Volumes))
 		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
-		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
 		assert.Nil(t, s.InitContainers[0].SecurityContext)
-		assert.NotNil(t, s.InitContainers[1].SecurityContext)
-		assert.True(t, *s.InitContainers[1].SecurityContext.RunAsNonRoot)
-		assert.True(t, *s.InitContainers[1].SecurityContext.ReadOnlyRootFilesystem)
-		assert.False(t, *s.InitContainers[1].SecurityContext.AllowPrivilegeEscalation)
-		// The monitor sidecar must only pick up SecurityContext from ContainerTemplate,
-		// not its Resources or Env -- those stay at the monitor's own hardcoded defaults.
-		assert.Equal(t, "10m", s.InitContainers[1].Resources.Requests.Cpu().String())
-		assert.Equal(t, "20Mi", s.InitContainers[1].Resources.Requests.Memory().String())
-		assert.Equal(t, "0", s.InitContainers[1].Resources.Limits.Cpu().String())
-		assert.Equal(t, "0", s.InitContainers[1].Resources.Limits.Memory().String())
-		var monitorEnvNames []string
-		for _, e := range s.InitContainers[1].Env {
-			monitorEnvNames = append(monitorEnvNames, e.Name)
-		}
-		assert.NotContains(t, monitorEnvNames, "ct-only-env")
+		assert.NotNil(t, s.Containers[0].SecurityContext)
+		assert.True(t, *s.Containers[0].SecurityContext.RunAsNonRoot)
+		assert.True(t, *s.Containers[0].SecurityContext.ReadOnlyRootFilesystem)
+		assert.False(t, *s.Containers[0].SecurityContext.AllowPrivilegeEscalation)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
@@ -396,8 +384,6 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, int32(11), s.Containers[0].LivenessProbe.TimeoutSeconds)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].LivenessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].LivenessProbe.HTTPGet.Port.IntValue())
-		assert.Equal(t, 1, len(s.Containers[0].Ports))
-		assert.Equal(t, VertexMetricsPort, int(s.Containers[0].Ports[0].ContainerPort))
 		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
@@ -411,9 +397,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSink))
-		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
-		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
+		assert.Equal(t, 2, len(s.Containers[0].Ports))
+		assert.Equal(t, VertexMetricsPort, int(s.Containers[0].Ports[0].ContainerPort))
+		assert.Equal(t, VertexRuntimePort, int(s.Containers[0].Ports[1].ContainerPort))
 	})
 
 	t.Run("test user-defined sink", func(t *testing.T) {
@@ -432,14 +420,14 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
-		assert.Equal(t, 3, len(s.InitContainers))
-		assert.Equal(t, "image", s.InitContainers[2].Image)
-		assert.Equal(t, 1, len(s.InitContainers[2].Command))
-		assert.Equal(t, "cmd", s.InitContainers[2].Command[0])
-		assert.Equal(t, 1, len(s.InitContainers[2].Args))
-		assert.Equal(t, "arg0", s.InitContainers[2].Args[0])
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, "image", s.InitContainers[1].Image)
+		assert.Equal(t, 1, len(s.InitContainers[1].Command))
+		assert.Equal(t, "cmd", s.InitContainers[1].Command[0])
+		assert.Equal(t, 1, len(s.InitContainers[1].Args))
+		assert.Equal(t, "arg0", s.InitContainers[1].Args[0])
 		var sidecarEnvNames []string
-		for _, env := range s.InitContainers[2].Env {
+		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -471,8 +459,8 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
-		assert.Equal(t, 4, len(s.InitContainers))
-		for i := 2; i < len(s.InitContainers); i++ {
+		assert.Equal(t, 3, len(s.InitContainers))
+		for i := 1; i < len(s.InitContainers); i++ {
 			assert.Equal(t, "image", s.InitContainers[i].Image)
 			assert.Equal(t, 1, len(s.InitContainers[i].Command))
 			assert.Equal(t, "cmd", s.InitContainers[i].Command[0])
@@ -515,10 +503,9 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
-		assert.Equal(t, 3, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
-		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
-		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		var sidecarEnvNames []string
 		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
@@ -543,7 +530,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 2, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, CtrSideInputsWatcher, s.Containers[1].Name)
-		assert.Equal(t, 4, len(s.InitContainers))
+		assert.Equal(t, 3, len(s.InitContainers))
 		// init container
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		// init side inputs container
@@ -551,15 +538,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 1, len(s.InitContainers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.InitContainers[1].VolumeMounts[0].Name)
 		assert.False(t, s.InitContainers[1].VolumeMounts[0].ReadOnly)
-		// monitor container
-		assert.Equal(t, CtrMonitor, s.InitContainers[2].Name)
-		assert.Equal(t, 1, len(s.InitContainers[2].VolumeMounts))
-		assert.Equal(t, "runtime-vol", s.InitContainers[2].VolumeMounts[0].Name)
 		// udf container
-		assert.Equal(t, CtrUdf, s.InitContainers[3].Name)
-		assert.Equal(t, 3, len(s.InitContainers[3].VolumeMounts))
-		assert.Equal(t, "var-run-side-inputs", s.InitContainers[3].VolumeMounts[2].Name)
-		assert.True(t, s.InitContainers[3].VolumeMounts[2].ReadOnly)
+		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
+		assert.Equal(t, 3, len(s.InitContainers[2].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[2].VolumeMounts[2].Name)
+		assert.True(t, s.InitContainers[2].VolumeMounts[2].ReadOnly)
 
 		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
