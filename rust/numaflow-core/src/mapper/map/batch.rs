@@ -1,12 +1,13 @@
 use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, grpc_error_to_redrive,
+    map_redrive_error, reconnect_mapper_client, update_udf_error_metric,
     update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
 };
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
@@ -15,10 +16,11 @@ use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapCl
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
+use tonic::Status;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::{error, warn};
@@ -53,10 +55,18 @@ pub(in crate::mapper) struct MapBatchTask {
     pub cln_token: CancellationToken,
 }
 
+pub(in crate::mapper) enum BatchMapTaskError {
+    Redrive {
+        error: Error,
+        msg_handles: Vec<MessageHandle>,
+    },
+    Terminal(Error),
+}
+
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(mut self) -> Result<()> {
+    pub async fn execute(mut self) -> std::result::Result<(), BatchMapTaskError> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -98,6 +108,16 @@ impl MapBatchTask {
             self.mapper.batch(requests, self.cln_token).await
         };
 
+        if let Some(error) = results.iter().find_map(|result| match result {
+            Err(Error::UdfRedrive(status)) => Some(Error::UdfRedrive(status.clone())),
+            _ => None,
+        }) {
+            return Err(BatchMapTaskError::Redrive {
+                error,
+                msg_handles: self.msg_handles,
+            });
+        }
+
         for (result, (msg_handle, parent_info)) in results
             .into_iter()
             .zip(self.msg_handles.into_iter().zip(parent_infos))
@@ -131,7 +151,8 @@ impl MapBatchTask {
                             &offset,
                             mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                         )
-                        .await?;
+                        .await
+                        .map_err(BatchMapTaskError::Terminal)?;
 
                     for mapped_message in mapped_messages {
                         // Each downstream handle shares the original ack tracking — ACK is
@@ -167,7 +188,7 @@ impl MapBatchTask {
                 Err(e) => {
                     error!(err=?e, "failed to map message");
                     mark_failed!(msg_handle, &e, None);
-                    return Err(e);
+                    return Err(BatchMapTaskError::Terminal(e));
                 }
             }
         }
@@ -180,6 +201,12 @@ impl MapBatchTask {
 /// and forwards the responses.
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedBatchMap {
+    batch_size: usize,
+    connection: Arc<AsyncMutex<BatchMapConnection>>,
+    reconnect_config: Option<UdfReconnectConfig>,
+}
+
+struct BatchMapConnection {
     read_tx: mpsc::Sender<MapRequest>,
     senders: Arc<Mutex<BatchSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
@@ -190,9 +217,23 @@ impl UserDefinedBatchMap {
     pub(in crate::mapper) async fn new(
         batch_size: usize,
         mut client: MapClient<Channel>,
+        reconnect_config: Option<UdfReconnectConfig>,
     ) -> Result<Self> {
+        let connection = Self::create_connection(batch_size, &mut client).await?;
+
+        Ok(Self {
+            batch_size,
+            connection: Arc::new(AsyncMutex::new(connection)),
+            reconnect_config,
+        })
+    }
+
+    async fn create_connection(
+        batch_size: usize,
+        client: &mut MapClient<Channel>,
+    ) -> Result<BatchMapConnection> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, client).await?;
 
         // map to track the oneshot response sender for each request
         let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
@@ -204,12 +245,11 @@ impl UserDefinedBatchMap {
             Self::receive_batch_responses(sender_map_clone, resp_stream).await;
         });
 
-        let mapper = Self {
+        Ok(BatchMapConnection {
             read_tx,
             senders: sender_map,
             _handle: Arc::new(AbortOnDropHandle::new(handle)),
-        };
-        Ok(mapper)
+        })
     }
 
     /// Broadcasts a batch map gRPC error to all pending senders and records error metrics.
@@ -220,8 +260,9 @@ impl UserDefinedBatchMap {
             std::mem::take(&mut sender_guard.map)
         };
 
+        let error = map_redrive_error(error);
         for (_, sender) in senders {
-            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
+            let _ = sender.send(Err(error.clone()));
             update_udf_error_metric(is_mono_vertex())
         }
     }
@@ -243,12 +284,11 @@ impl UserDefinedBatchMap {
                             .is_empty()
                         {
                             error!(
-                                "received EOT but not all responses have been received, gracefully exiting"
+                                "received EOT before all batch map responses, redriving after reconnect"
                             );
-                            critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
                             Self::broadcast_error(
                                 &sender_map,
-                                tonic::Status::with_details(
+                                Status::with_details(
                                     tonic::Code::Internal,
                                     "UDF_PARTIAL_RESPONSE(batch_map)",
                                     Bytes::from_static(
@@ -320,8 +360,30 @@ impl UserDefinedBatchMap {
         requests: Vec<MapRequest>,
         cln_token: CancellationToken,
     ) -> Vec<Result<BatchMapResponse>> {
+        let results = self.batch_once(requests.clone(), cln_token.clone()).await;
+        if results
+            .iter()
+            .any(|result| matches!(result, Err(Error::UdfRedrive(_))))
+        {
+            if let Err(e) = self.reconnect().await {
+                return vec![Err(e)];
+            }
+            return self.batch_once(requests, cln_token).await;
+        }
+        results
+    }
+
+    async fn batch_once(
+        &self,
+        requests: Vec<MapRequest>,
+        cln_token: CancellationToken,
+    ) -> Vec<Result<BatchMapResponse>> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             requests.iter().map(|_| oneshot::channel()).unzip();
+        let (sender_map, read_tx) = {
+            let connection = self.connection.lock().await;
+            (Arc::clone(&connection.senders), connection.read_tx.clone())
+        };
 
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
@@ -331,27 +393,23 @@ impl UserDefinedBatchMap {
             // where the server processes the message faster than the corresponding sender
             // is added to the SenderMap.
             {
-                let mut senders_guard = self
-                    .senders
-                    .lock()
-                    .expect("failed to acquire poisoned lock");
+                let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
                 if !senders_guard.closed {
                     senders_guard.map.insert(key.clone(), sender);
                 } else {
-                    let _ = sender
-                        .send(Err(Error::Mapper("batch mapper closed".to_string())))
-                        .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
-                    continue;
+                    return vec![Err(map_redrive_error(Status::unavailable(
+                        "batch map stream closed",
+                    )))];
                 }
             };
 
             // send the message to the server
-            if let Err(e) = self.read_tx.send(request).await {
+            if let Err(e) = read_tx.send(request).await {
                 warn!(?e, "Failed to send message to server");
                 // We should ideally remove the resp.id from the SenderMap to avoid potential
                 // memory leaks as well as to avoid holding the corresponding receiver waiting
                 let sender_entry = {
-                    self.senders
+                    sender_map
                         .lock()
                         .expect("failed to acquire poisoned lock")
                         .map
@@ -360,21 +418,21 @@ impl UserDefinedBatchMap {
 
                 // We should send error on the sender so the first receiver receiving the error
                 // returns early with the collected results.
+                let error = map_redrive_error(Status::unavailable(format!(
+                    "failed to send message to batch map server: {e}"
+                )));
                 if let Some(sender) = sender_entry {
                     let _ = sender
-                        .send(Err(Error::Mapper(format!(
-                            "failed to send message to batch map server: {e}"
-                        ))))
+                        .send(Err(error.clone()))
                         .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
                 }
-                // Continue collecting results for remaining receivers
-                break;
+                Self::drain_senders(&sender_map, error.clone());
+                return vec![Err(error)];
             }
         }
 
         // send eot request
-        if let Err(e) = self
-            .read_tx
+        if let Err(e) = read_tx
             .send(MapRequest {
                 request: None,
                 id: "".to_string(),
@@ -385,8 +443,13 @@ impl UserDefinedBatchMap {
         {
             error!(
                 ?e,
-                "Failed to send eot request to server, batch map operation should have failed"
+                "failed to send EOT request to batch map server, redriving after reconnect"
             );
+            let error = map_redrive_error(Status::unavailable(format!(
+                "failed to send eot request to batch map server: {e}"
+            )));
+            Self::drain_senders(&sender_map, error.clone());
+            return vec![Err(error)];
         }
 
         let mut results = Vec::with_capacity(receivers.len());
@@ -409,13 +472,46 @@ impl UserDefinedBatchMap {
 
         results
     }
+
+    async fn reconnect(&self) -> Result<()> {
+        let Some(reconnect_config) = &self.reconnect_config else {
+            return Err(map_redrive_error(Status::unavailable(
+                "batch map reconnect config missing",
+            )));
+        };
+
+        let mut connection = self.connection.lock().await;
+        Self::drain_senders(
+            &connection.senders,
+            map_redrive_error(Status::unavailable("batch map reconnecting")),
+        );
+
+        let mut client = reconnect_mapper_client(reconnect_config).await?;
+
+        *connection =
+            grpc_error_to_redrive(Self::create_connection(self.batch_size, &mut client).await)?;
+
+        Ok(())
+    }
+
+    fn drain_senders(sender_map: &Arc<Mutex<BatchSenderMapState>>, error: Error) {
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
+
+        for (_, sender) in senders {
+            let _ = sender.send(Err(error.clone()));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::error::Error as MapError;
     use crate::mapper::map::batch::{BatchSenderMapState, UserDefinedBatchMap};
-    use crate::shared::grpc::create_rpc_channel;
+    use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
@@ -452,6 +548,30 @@ mod tests {
         }
     }
 
+    struct PartialBatchMap;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for PartialBatchMap {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let Some(datum) = input.recv().await else {
+                return vec![];
+            };
+
+            let mut response = batchmap::BatchResponse::from_id(datum.id);
+            response.append(batchmap::Message {
+                keys: Some(datum.keys),
+                value: datum.value,
+                tags: None,
+                nack_options: None,
+            });
+            // Intentionally skip the rest of the batch to force partial EOT.
+            vec![response]
+        }
+    }
+
     #[tokio::test]
     async fn batch_map_operations() -> Result<(), Box<dyn Error>> {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -473,9 +593,12 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client =
-            UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
-                .await?;
+        let client = UserDefinedBatchMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await?),
+            None,
+        )
+        .await?;
 
         // Create MapRequests directly instead of Messages
         let requests = vec![
@@ -553,6 +676,73 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn batch_partial_eot_returns_udf_redrive() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("partial_batch_map.sock");
+        let server_info_file = tmp_dir.path().join("partial_batch_map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            Server::new(PartialBatchMap)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = UserDefinedBatchMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await?),
+            None,
+        )
+        .await?;
+
+        let request = |id: &str| MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: id.as_bytes().to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let results = client
+            .batch_once(vec![request("0"), request("1")], CancellationToken::new())
+            .await;
+        let err = results
+            .into_iter()
+            .next()
+            .expect("expected one error result")
+            .expect_err("partial EOT should be recoverable");
+        match err {
+            MapError::UdfRedrive(status) => {
+                assert_eq!(status.code(), tonic::Code::Internal);
+                assert_eq!(status.message(), "UDF_PARTIAL_RESPONSE(batch_map)");
+            }
+            err => panic!("expected UdfRedrive error from partial EOT, got {err:?}"),
+        }
+
+        drop(client);
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(handle.is_finished(), "expected server to shut down");
+
+        Ok(())
+    }
+
     fn make_response(id: &str) -> MapResponse {
         MapResponse {
             results: vec![],
@@ -618,7 +808,7 @@ mod tests {
         for rx in [rx_a, rx_b] {
             let received = rx.await.expect("oneshot sender should have delivered");
             let err = received.expect_err("expected Err variant");
-            assert!(matches!(err, MapError::Grpc(_)));
+            assert!(matches!(err, MapError::UdfRedrive(_)));
         }
     }
 
@@ -667,6 +857,7 @@ mod tests {
         let client = UserDefinedBatchMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
         )
         .await
         .unwrap();
@@ -719,9 +910,13 @@ mod tests {
 
         let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
         let mapper = UserDefinedBatchMap {
-            read_tx,
-            senders: Arc::clone(&senders),
-            _handle: _abort_handle,
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: _abort_handle,
+            })),
+            reconnect_config: None,
         };
 
         let request = MapRequest {
@@ -738,7 +933,9 @@ mod tests {
             status: None,
         };
 
-        let results = mapper.batch(vec![request], CancellationToken::new()).await;
+        let results = mapper
+            .batch_once(vec![request], CancellationToken::new())
+            .await;
 
         // batch() returns vec![error] on first failure (early return).
         assert_eq!(results.len(), 1);
@@ -746,8 +943,8 @@ mod tests {
             .into_iter()
             .next()
             .unwrap()
-            .expect_err("expected Mapper error from batch()");
-        assert!(matches!(err, MapError::Mapper(_)));
+            .expect_err("expected UdfRedrive error from batch()");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
         assert!(
             err.to_string()
                 .contains("failed to send message to batch map server"),
@@ -759,5 +956,184 @@ mod tests {
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
         );
+    }
+
+    #[tokio::test]
+    async fn batch_eot_send_failure_returns_udf_redrive() {
+        let (read_tx, mut read_rx) = mpsc::channel::<MapRequest>(1);
+        let receiver_handle = tokio::spawn(async move {
+            let _ = read_rx.recv().await;
+        });
+
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let request = MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "42".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let results = mapper
+            .batch_once(vec![request], CancellationToken::new())
+            .await;
+        let err = results
+            .into_iter()
+            .next()
+            .expect("expected one error result")
+            .expect_err("expected UdfRedrive error from eot send failure");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to send eot request to batch map server"),
+            "unexpected error message: {err}"
+        );
+        assert!(senders.lock().unwrap().map.is_empty());
+
+        receiver_handle.await.expect("receiver task should finish");
+    }
+
+    fn dummy_reconnect_config() -> UdfReconnectConfig {
+        UdfReconnectConfig::new(
+            GrpcClientConfig::new(
+                "/tmp/missing-batch-map.sock",
+                "/tmp/missing-server-info",
+                1024,
+            ),
+            CancellationToken::new(),
+            Duration::from_millis(1),
+        )
+    }
+
+    fn test_request(id: &str) -> MapRequest {
+        MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_once_returns_redrive_when_sender_map_is_closed() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        senders.lock().unwrap().closed = true;
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders,
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let results = mapper
+            .batch_once(vec![test_request("closed")], CancellationToken::new())
+            .await;
+        assert_eq!(results.len(), 1);
+        let err = results
+            .into_iter()
+            .next()
+            .expect("expected one result")
+            .expect_err("closed sender map should be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(err.to_string().contains("batch map stream closed"));
+    }
+
+    #[tokio::test]
+    async fn batch_reconnect_without_config_returns_redrive() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::new(Mutex::new(BatchSenderMapState::default())),
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let err = mapper
+            .reconnect()
+            .await
+            .expect_err("missing reconnect config should be redrivable");
+        assert!(matches!(err, MapError::UdfRedrive(_)));
+        assert!(
+            err.to_string()
+                .contains("batch map reconnect config missing")
+        );
+    }
+
+    #[tokio::test]
+    async fn batch_reconnect_drains_senders_before_missing_socket_error() {
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let (tx, rx) = oneshot::channel();
+        senders
+            .lock()
+            .unwrap()
+            .map
+            .insert("pending".to_string(), tx);
+
+        let reconnect_config = dummy_reconnect_config();
+        reconnect_config.cln_token().cancel();
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
+            reconnect_config: Some(reconnect_config),
+        };
+
+        let err = mapper
+            .reconnect()
+            .await
+            .expect_err("cancelled reconnect should return an error");
+        assert!(
+            matches!(err, MapError::UdfRedrive(_) | MapError::Cancelled()),
+            "unexpected reconnect error: {err:?}"
+        );
+        assert!(senders.lock().unwrap().closed);
+        let drained = rx.await.expect("pending sender should be drained");
+        assert!(matches!(drained, Err(MapError::UdfRedrive(_))));
     }
 }

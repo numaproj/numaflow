@@ -15,6 +15,7 @@ tokio.workspace = true
 tracing.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
+numaflow-shared.workspace = true
 backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true

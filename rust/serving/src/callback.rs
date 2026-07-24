@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use async_nats::jetstream::Context;
-use async_nats::jetstream::kv::Store;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
+use numaflow_shared::kv::KVStore;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Semaphore, task::JoinHandle};
 use tracing::{error, warn};
@@ -54,27 +53,22 @@ pub(crate) struct Response {
 #[derive(Clone)]
 pub struct CallbackHandler {
     semaphore: Arc<Semaphore>,
-    store: Arc<Store>,
+    store: Arc<dyn KVStore>,
     /// the client to callback to the request originating pod/container
     vertex_name: &'static str,
 }
 
 impl CallbackHandler {
-    pub async fn new(
+    pub fn new(
         vertex_name: &'static str,
-        js_context: Context,
-        store_name: &'static str,
+        store: Arc<dyn KVStore>,
         concurrency_limit: usize,
     ) -> Self {
-        let store = js_context
-            .get_key_value(store_name)
-            .await
-            .unwrap_or_else(|_| panic!("Failed to get kv store '{store_name}'"));
         let semaphore = Arc::new(Semaphore::new(concurrency_limit));
         Self {
             semaphore,
             vertex_name,
-            store: Arc::new(store),
+            store,
         }
     }
 
@@ -136,8 +130,11 @@ impl CallbackHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use async_nats::jetstream;
-    use tokio_stream::StreamExt;
+    use numaflow_shared::kv::KVStore;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
     use crate::callback::{Callback, CallbackHandler};
 
@@ -172,8 +169,8 @@ mod tests {
             responses: vec![],
         };
 
-        let callback_handler =
-            CallbackHandler::new("test_vertex", context.clone(), store_name, 1).await;
+        let store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(kv_store.clone(), store_name));
+        let callback_handler = CallbackHandler::new("test_vertex", store, 1);
 
         callback_handler
             .callback(
@@ -187,6 +184,7 @@ mod tests {
             .await
             .unwrap();
 
+        use tokio_stream::StreamExt;
         let mut keys = kv_store.keys().await.unwrap();
         let value = kv_store
             .get(keys.next().await.unwrap().unwrap())

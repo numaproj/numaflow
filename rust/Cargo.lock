@@ -2541,7 +2541,6 @@ dependencies = [
  "numaflow-pulsar",
  "numaflow-shared",
  "numaflow-sqs",
- "numaflow-testing",
  "numaflow-throttling",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -2730,6 +2729,7 @@ dependencies = [
  "backoff",
  "bytes",
  "futures",
+ "parking_lot",
  "pep440_rs",
  "semver",
  "serde",
@@ -2737,6 +2737,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
 ]
@@ -2785,20 +2786,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
-]
-
-[[package]]
-name = "numaflow-testing"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "chrono",
- "futures",
- "numaflow-shared",
- "parking_lot",
- "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -4261,6 +4248,7 @@ dependencies = [
  "numaflow 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "numaflow-models",
  "numaflow-pb",
+ "numaflow-shared",
  "parking_lot",
  "prometheus-client",
  "rcgen",
@@ -4679,6 +4667,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

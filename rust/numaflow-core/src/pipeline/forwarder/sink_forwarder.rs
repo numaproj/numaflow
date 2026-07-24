@@ -7,7 +7,7 @@ use crate::metrics::{
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
+use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -23,9 +23,9 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use async_nats::jetstream::Context;
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -82,21 +82,20 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
 
 pub async fn start_sink_forwarder(
     cln_token: CancellationToken,
-    js_context: Context,
+    isb_factory: Arc<dyn ISBFactory>,
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
     // 1. One-time setup
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
-        Some(
-            CallbackHandler::new(
-                config.vertex_name,
-                js_context.clone(),
-                cb_cfg.callback_store,
-                cb_cfg.callback_concurrency,
-            )
-            .await,
-        )
+        let store = isb_factory
+            .create_kv_store(cb_cfg.callback_store.to_string())
+            .await?;
+        Some(CallbackHandler::new(
+            config.vertex_name,
+            store,
+            cb_cfg.callback_concurrency,
+        ))
     } else {
         None
     };
@@ -114,9 +113,11 @@ pub async fn start_sink_forwarder(
     let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
+    // Sink is terminal — no ISB writers; idle detector gets an empty map.
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
-        &js_context,
+        isb_factory.as_ref(),
+        std::collections::HashMap::new(),
         &cln_token,
         None,
         tracker.clone(),
@@ -131,17 +132,15 @@ pub async fn start_sink_forwarder(
                 Some(ServingStore::UserDefined(serving_store))
             }
             ServingStoreType::Nats(config) => {
-                let serving_store =
-                    NatsServingStore::new(js_context.clone(), config.clone()).await?;
+                let store = isb_factory
+                    .create_kv_store(config.rs_store_name.clone())
+                    .await?;
+                let serving_store = NatsServingStore::new(store);
                 Some(ServingStore::Nats(Box::new(serving_store)))
             }
         },
         None => None,
     };
-
-    // Create the ISB factory from the JetStream context
-    use crate::pipeline::isb::jetstream::JetStreamFactory;
-    let isb_factory = JetStreamFactory::new(js_context);
 
     // 2. Clean dispatch logic
     let (forwarder_tasks, first_sink_writer, _pending_reader_task) =
@@ -150,14 +149,14 @@ pub async fn start_sink_forwarder(
                 let redis_config =
                     build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-                let context = PipelineContext::<WithRedisRateLimiter, _>::new(
+                let context = PipelineContext::<WithRedisRateLimiter>::new(
                     cln_token.clone(),
-                    &isb_factory,
+                    isb_factory.as_ref(),
                     &config,
                     tracker.clone(),
                 );
 
-                run_all_sink_forwarders::<WithRedisRateLimiter, _>(
+                run_all_sink_forwarders::<WithRedisRateLimiter>(
                     &context,
                     &sink,
                     reader_config,
@@ -171,14 +170,14 @@ pub async fn start_sink_forwarder(
                     build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone())
                         .await?;
 
-                let context = PipelineContext::<WithInMemoryRateLimiter, _>::new(
+                let context = PipelineContext::<WithInMemoryRateLimiter>::new(
                     cln_token.clone(),
-                    &isb_factory,
+                    isb_factory.as_ref(),
                     &config,
                     tracker.clone(),
                 );
 
-                run_all_sink_forwarders::<WithInMemoryRateLimiter, _>(
+                run_all_sink_forwarders::<WithInMemoryRateLimiter>(
                     &context,
                     &sink,
                     reader_config,
@@ -189,14 +188,14 @@ pub async fn start_sink_forwarder(
                 .await?
             }
         } else {
-            let context = PipelineContext::<WithoutRateLimiter, _>::new(
+            let context = PipelineContext::<WithoutRateLimiter>::new(
                 cln_token.clone(),
-                &isb_factory,
+                isb_factory.as_ref(),
                 &config,
                 tracker.clone(),
             );
 
-            run_all_sink_forwarders::<WithoutRateLimiter, _>(
+            run_all_sink_forwarders::<WithoutRateLimiter>(
                 &context,
                 &sink,
                 reader_config,
@@ -237,8 +236,8 @@ pub async fn start_sink_forwarder(
 }
 
 /// Starts sink forwarder for all the streams.
-async fn run_all_sink_forwarders<C, F>(
-    context: &PipelineContext<'_, C, F>,
+async fn run_all_sink_forwarders<C>(
+    context: &PipelineContext<'_, C>,
     sink: &SinkVtxConfig,
     reader_config: &BufferReaderConfig,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
@@ -250,8 +249,7 @@ async fn run_all_sink_forwarders<C, F>(
     PendingReaderTasks,
 )>
 where
-    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
-    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+    C: NumaflowTypeConfig,
 {
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
@@ -280,14 +278,14 @@ where
             first_sink_writer = Some(sink_writer.clone());
         }
 
-        let reader_components = ISBReaderComponents::new::<C, F>(
+        let reader_components = ISBReaderComponents::new::<C>(
             stream.clone(),
             reader_config.clone(),
             watermark_handle.clone(),
             context,
         );
 
-        let (task, reader) = run_sink_forwarder_for_stream::<C, F>(
+        let (task, reader) = run_sink_forwarder_for_stream::<C>(
             reader_components,
             sink_writer,
             rate_limiter.clone(),
@@ -314,18 +312,17 @@ where
 }
 
 /// Starts sink forwarder for a single stream.
-async fn run_sink_forwarder_for_stream<C, F>(
+async fn run_sink_forwarder_for_stream<C>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &F,
+    isb_factory: &dyn ISBFactory,
 ) -> Result<(
     tokio::task::JoinHandle<Result<()>>,
     ISBReaderOrchestrator<C>,
 )>
 where
-    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
-    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+    C: NumaflowTypeConfig,
 {
     let cln_token = reader_components.cln_token.clone();
 
@@ -356,14 +353,13 @@ mod simple_buffer_tests {
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow::sink;
-    use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc::Receiver;
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::pipeline::isb::inmemory::{SimpleBuffer, SimpleBufferAdapter, WithSimpleBuffer};
     use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use crate::sinker::test_utils::{SinkTestHandle, SinkType as TestSinkType};
     use crate::tracker::Tracker;
 
@@ -485,10 +481,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, input_adapter.reader(), None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -613,7 +612,8 @@ mod simple_buffer_tests {
 
             let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
                 reader_components,
-                input_adapters.get(i).unwrap().reader(),
+                Arc::new(input_adapters.get(i).unwrap().reader())
+                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
                 None,
             )
             .await
@@ -738,10 +738,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, input_adapter.reader(), None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -838,10 +841,13 @@ mod simple_buffer_tests {
             cln_token: cln_token.clone(),
         };
 
-        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-            ISBReaderOrchestrator::new(reader_components, input_adapter.reader(), None)
-                .await
-                .unwrap();
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+            reader_components,
+            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            None,
+        )
+        .await
+        .unwrap();
 
         // Create and start the SinkForwarder
         let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
@@ -874,13 +880,11 @@ mod tests {
     use super::*;
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
+    use crate::config::pipeline::isb::BufferReaderConfig;
     use crate::config::pipeline::isb::Stream;
-    use crate::config::pipeline::{PipelineConfig, VertexType};
-    use crate::pipeline::pipeline::FromVertexConfig;
-    use crate::pipeline::pipeline::SinkVtxConfig;
-    use crate::pipeline::pipeline::VertexConfig;
-    use crate::pipeline::pipeline::isb;
-    use crate::pipeline::pipeline::isb::BufferReaderConfig;
+    use crate::config::pipeline::{
+        FromVertexConfig, PipelineConfig, SinkVtxConfig, VertexConfig, VertexType, isb,
+    };
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
 
@@ -969,11 +973,12 @@ mod tests {
             batch_size: 1000,
             writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
-            js_client_config: isb::jetstream::ClientConfig {
+            isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
                 password: None,
-            },
+                tls_enabled: false,
+            }),
             to_vertex_config: vec![],
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
@@ -1016,9 +1021,10 @@ mod tests {
             let cancellation_token = cancellation_token.clone();
             let context = context.clone();
             async move {
+                use crate::pipeline::isb::jetstream::JetStreamFactory;
                 start_sink_forwarder(
                     cancellation_token,
-                    context,
+                    Arc::new(JetStreamFactory::new(context.clone())),
                     pipeline_config,
                     sink_vtx_config,
                 )

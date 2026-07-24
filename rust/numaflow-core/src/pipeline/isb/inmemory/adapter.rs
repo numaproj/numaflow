@@ -1,25 +1,24 @@
-//! SimpleBuffer adapters for testing ISBReaderOrchestrator and ISBWriterOrchestrator.
+//! SimpleBuffer adapters implementing [`ISBReader`] / [`ISBWriter`] with full proto
+//! round-trip fidelity.
 //!
-//! This module provides adapter types that wrap `numaflow_testing::simplebuffer` types
-//! and implement the ISBReader and ISBWriter traits, enabling comprehensive testing
-//! of error paths without requiring external infrastructure like NATS.
+//! Writes serialize the complete [`Message`] via `TryFrom<Message> for BytesMut`
+//! (same encoding as JetStream). Reads decode the protobuf and map fields via
+//! [`message_from_isb_proto`], then assign the broker offset from the buffer slot.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::Utc;
-use numaflow_testing::simplebuffer::{
-    ErrorInjector, ReadMessage, SimpleBuffer, SimpleBufferError, SimpleReader, SimpleWriter,
-    WriteError as SimpleWriteError,
-};
-use numaflow_throttling::NoOpRateLimiter;
+use prost::Message as ProstMessage;
 
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, NackOptions, Offset};
+use crate::message::{IntOffset, Message, NackOptions, Offset, message_from_isb_proto};
 use crate::pipeline::isb::error::ISBError;
+use crate::pipeline::isb::inmemory::{
+    ErrorInjector, Offset as SimpleOffset, ReadMessage, SimpleBuffer, SimpleBufferError,
+    SimpleReader, SimpleWriter, WriteError as SimpleWriteError, WriteResult as SimpleWriteResult,
+};
 use crate::pipeline::isb::{ISBReader, ISBWriter, PendingWrite, WriteError, WriteResult};
-use crate::typ::NumaflowTypeConfig;
 
 /// Adapter that wraps a `SimpleBuffer` and provides access to reader/writer adapters
 /// and the shared error injector.
@@ -75,6 +74,13 @@ pub(crate) struct SimpleReaderAdapter {
     inner: SimpleReader,
 }
 
+impl SimpleReaderAdapter {
+    /// Create a reader adapter from an existing [`SimpleReader`].
+    pub(crate) fn new(inner: SimpleReader) -> Self {
+        Self { inner }
+    }
+}
+
 /// Convert [SimpleBufferError] to [numaflow_core::Error].
 impl From<SimpleBufferError> for Error {
     fn from(value: SimpleBufferError) -> Self {
@@ -93,62 +99,49 @@ impl From<SimpleBufferError> for Error {
     }
 }
 
-impl From<&Offset> for numaflow_testing::simplebuffer::Offset {
+impl From<&Offset> for SimpleOffset {
     fn from(value: &Offset) -> Self {
         match value {
-            Offset::Int(int_offset) => numaflow_testing::simplebuffer::Offset::new(
-                int_offset.offset,
-                int_offset.partition_idx,
-            ),
+            Offset::Int(int_offset) => {
+                SimpleOffset::new(int_offset.offset, int_offset.partition_idx)
+            }
             Offset::String(str_offset) => {
                 let seq: i64 = std::str::from_utf8(&str_offset.offset)
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
-                numaflow_testing::simplebuffer::Offset::new(seq, str_offset.partition_idx)
+                SimpleOffset::new(seq, str_offset.partition_idx)
             }
         }
     }
 }
 
-/// Convert [numaflow_testing::simplebuffer::Offset] to [numaflow_core::message::Offset].
-impl From<&numaflow_testing::simplebuffer::Offset> for Offset {
-    fn from(value: &numaflow_testing::simplebuffer::Offset) -> Self {
+/// Convert in-memory buffer [`Offset`] to [numaflow_core::message::Offset].
+impl From<&SimpleOffset> for Offset {
+    fn from(value: &SimpleOffset) -> Self {
         Offset::Int(IntOffset::new(value.sequence, value.partition_idx))
     }
 }
 
-/// Convert ReadMessage to Message with default fields.
-fn convert_message(read_msg: ReadMessage) -> Message {
-    let offset = (&read_msg.offset).into();
-
-    Message {
-        typ: Default::default(),
-        keys: Arc::new([]),
-        tags: None,
-        value: read_msg.payload,
-        offset,
-        event_time: Utc::now(),
-        watermark: None,
-        id: MessageID {
-            vertex_name: "test".into(),
-            index: 0,
-            offset: read_msg.offset.to_string().into(),
-        },
-        headers: Arc::new(read_msg.headers),
-        metadata: None,
-        is_late: false,
-        nack_options: None,
-    }
+/// Decode a buffer [`ReadMessage`] into a core [`Message`].
+///
+/// Keep field mapping in sync with `js_reader.rs` / [`message_from_isb_proto`].
+/// Unlike JetStream, WMB messages retain their real broker offset (required for
+/// orchestrator ack at `reader.rs`). Decode failure returns `Err` (not dropped).
+fn convert_message(read_msg: ReadMessage) -> crate::Result<Message> {
+    let offset = Offset::Int(IntOffset::new(
+        read_msg.offset.sequence,
+        read_msg.offset.partition_idx,
+    ));
+    let proto = numaflow_pb::objects::isb::Message::decode(read_msg.payload)
+        .map_err(|e| Error::Proto(e.to_string()))?;
+    message_from_isb_proto(proto, offset)
 }
 
 impl ISBReader for SimpleReaderAdapter {
     async fn fetch(&self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
-        self.inner
-            .fetch(max, timeout)
-            .await
-            .map(|msgs| msgs.into_iter().map(convert_message).collect())
-            .map_err(|e| e.into())
+        let msgs = self.inner.fetch(max, timeout).await.map_err(Error::from)?;
+        msgs.into_iter().map(convert_message).collect()
     }
 
     async fn ack(&self, offset: &Offset) -> crate::Result<()> {
@@ -191,6 +184,13 @@ pub(crate) struct SimpleWriterAdapter {
     inner: SimpleWriter,
 }
 
+impl SimpleWriterAdapter {
+    /// Create a writer adapter from an existing [`SimpleWriter`].
+    pub(crate) fn new(inner: SimpleWriter) -> Self {
+        Self { inner }
+    }
+}
+
 /// Convert [SimpleWriteError] to [WriteError].
 impl From<SimpleWriteError> for WriteError {
     fn from(err: SimpleWriteError) -> Self {
@@ -201,9 +201,9 @@ impl From<SimpleWriteError> for WriteError {
     }
 }
 
-/// Convert [numaflow_testing::simplebuffer::WriteResult] to [WriteResult].
-impl From<numaflow_testing::simplebuffer::WriteResult> for WriteResult {
-    fn from(result: numaflow_testing::simplebuffer::WriteResult) -> Self {
+/// Convert in-memory [`SimpleWriteResult`] to [WriteResult].
+impl From<SimpleWriteResult> for WriteResult {
+    fn from(result: SimpleWriteResult) -> Self {
         let offset = (&result.offset).into();
         if result.is_duplicate {
             WriteResult::duplicate(offset)
@@ -226,9 +226,11 @@ impl ISBWriter for SimpleWriterAdapter {
         }
 
         let id = message.id.to_string();
-        let payload = message.value;
-        let headers: HashMap<String, String> = (*message.headers).clone();
-        let pending = self.inner.async_write(id, payload, headers);
+        // Serialize the full message exactly like JetStream (headers live inside the proto).
+        let encoded: bytes::BytesMut = message
+            .try_into()
+            .map_err(|e: Error| WriteError::WriteFailed(e.to_string()))?;
+        let pending = self.inner.async_write(id, encoded.freeze(), HashMap::new());
 
         // Clone inner writer to capture in the future for resolve() which applies latency/errors
         let writer = self.inner.clone();
@@ -246,10 +248,11 @@ impl ISBWriter for SimpleWriterAdapter {
 
     async fn write(&self, message: Message) -> Result<WriteResult, WriteError> {
         let id = message.id.to_string();
-        let payload = message.value;
-        let headers: HashMap<String, String> = (*message.headers).clone();
+        let encoded: bytes::BytesMut = message
+            .try_into()
+            .map_err(|e: Error| WriteError::WriteFailed(e.to_string()))?;
         self.inner
-            .write(id, payload, headers)
+            .write(id, encoded.freeze(), HashMap::new())
             .await
             .map(|r| r.into())
             .map_err(|e| e.into())
@@ -272,17 +275,17 @@ impl ISBWriter for SimpleWriterAdapter {
 #[cfg(test)]
 pub(crate) struct WithSimpleBuffer;
 #[cfg(test)]
-impl NumaflowTypeConfig for WithSimpleBuffer {
-    type RateLimiter = NoOpRateLimiter;
-    type ISBReader = SimpleReaderAdapter;
-    type ISBWriter = SimpleWriterAdapter;
+impl crate::typ::NumaflowTypeConfig for WithSimpleBuffer {
+    type RateLimiter = numaflow_throttling::NoOpRateLimiter;
 }
 
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)] // Tests use indexing for simplicity
 mod tests {
     use super::*;
+    use crate::message::MessageID;
     use bytes::Bytes;
+    use chrono::Utc;
     use std::time::Duration;
 
     /// Helper to write a message to the buffer via the adapter
@@ -490,5 +493,182 @@ mod tests {
             .mark_wip(&offset)
             .await
             .expect("second mark_wip should succeed");
+    }
+
+    /// Full proto round-trip: every field survives write→fetch except broker-assigned
+    /// `offset` and `watermark` (always `None` on read, matching JetStream).
+    /// `previous_vertex` is rewritten to the current vertex name on encode (same as JetStream).
+    #[tokio::test]
+    async fn test_full_fidelity_round_trip() {
+        use crate::message::MessageType;
+        use crate::metadata::{KeyValueGroup, Metadata};
+        use chrono::TimeZone;
+
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "fidelity-buffer"));
+        let event_time = Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
+
+        let mut headers = HashMap::new();
+        headers.insert("h1".to_string(), "v1".to_string());
+        headers.insert("h2".to_string(), "v2".to_string());
+
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert(
+            "user-group".to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([("uk".to_string(), Bytes::from("uv"))]),
+            },
+        );
+
+        let original = Message {
+            typ: MessageType::Data,
+            keys: Arc::from(vec!["key-a".to_string(), "key-b".to_string()]),
+            tags: Some(Arc::from(vec!["tag-ignored".to_string()])),
+            value: Bytes::from("payload-bytes"),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time,
+            watermark: Some(Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap()),
+            id: MessageID {
+                vertex_name: "in-vertex".into(),
+                index: 7,
+                offset: "msg-fid-1".into(),
+            },
+            headers: Arc::new(headers.clone()),
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: "will-be-overwritten".to_string(),
+                sys_metadata: HashMap::new(),
+                user_metadata,
+            })),
+            is_late: true,
+            nack_options: None,
+        };
+
+        let writer = adapter.writer();
+        writer
+            .write(original.clone())
+            .await
+            .expect("write should succeed");
+
+        let reader = adapter.reader();
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch should succeed");
+        assert_eq!(messages.len(), 1);
+        let got = &messages[0];
+
+        assert_eq!(got.typ, MessageType::Data);
+        assert_eq!(
+            got.keys.as_ref(),
+            &["key-a".to_string(), "key-b".to_string()]
+        );
+        assert!(got.tags.is_none(), "tags are not persisted on ISB read");
+        assert_eq!(got.value, Bytes::from("payload-bytes"));
+        assert_eq!(got.event_time, event_time);
+        assert!(got.watermark.is_none(), "watermark is always None on read");
+        assert_eq!(got.id.vertex_name, Bytes::from("in-vertex"));
+        assert_eq!(got.id.offset, Bytes::from("msg-fid-1"));
+        assert_eq!(got.id.index, 7);
+        assert_eq!(got.headers.as_ref(), &headers);
+        assert!(got.is_late);
+        assert!(got.nack_options.is_none());
+
+        // Broker-assigned offset from the buffer sequence
+        assert!(matches!(
+            &got.offset,
+            Offset::Int(IntOffset {
+                offset: 1,
+                partition_idx: 0
+            })
+        ));
+
+        let md = got.metadata.as_ref().expect("metadata should round-trip");
+        assert_eq!(
+            md.previous_vertex,
+            crate::config::get_vertex_name(),
+            "encode rewrites previous_vertex to current vertex (JetStream parity)"
+        );
+        assert_eq!(
+            md.user_metadata
+                .get("user-group")
+                .unwrap()
+                .key_value
+                .get("uk")
+                .unwrap(),
+            &Bytes::from("uv")
+        );
+    }
+
+    /// WMB messages keep a real broker offset so orchestrator ack succeeds.
+    #[tokio::test]
+    async fn test_wmb_round_trip_with_real_offset() {
+        use crate::message::MessageType;
+
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "wmb-buffer"));
+        let wmb = Message {
+            typ: MessageType::WMB,
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::new(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "wm-vertex".into(),
+                index: 0,
+                offset: "wmb-1".into(),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            nack_options: None,
+        };
+
+        adapter
+            .writer()
+            .write(wmb)
+            .await
+            .expect("wmb write should succeed");
+
+        let reader = adapter.reader();
+        let messages = reader
+            .fetch(10, Duration::from_millis(100))
+            .await
+            .expect("fetch should succeed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].typ, MessageType::WMB);
+        assert!(
+            matches!(
+                &messages[0].offset,
+                Offset::Int(IntOffset {
+                    offset: 1,
+                    partition_idx: 0
+                })
+            ),
+            "WMB must retain a real broker offset, got {:?}",
+            messages[0].offset
+        );
+
+        reader
+            .ack(&messages[0].offset)
+            .await
+            .expect("ack of WMB by real offset should succeed");
+    }
+
+    /// Two writes with the same MessageID → second is duplicate with the first offset.
+    #[tokio::test]
+    async fn test_dedup_parity() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "dedup-buffer"));
+        let writer = adapter.writer();
+        let msg = create_test_message("same-id", "first");
+
+        let r1 = writer.write(msg.clone()).await.expect("first write");
+        assert!(!r1.is_duplicate);
+
+        let r2 = writer
+            .write(create_test_message("same-id", "second-payload"))
+            .await
+            .expect("duplicate write");
+        assert!(r2.is_duplicate);
+        assert_eq!(r1.offset, r2.offset);
     }
 }

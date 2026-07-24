@@ -17,16 +17,18 @@ pub type PendingWrite =
     Pin<Box<dyn Future<Output = std::result::Result<WriteResult, WriteError>> + Send + 'static>>;
 
 pub(crate) mod compression;
+pub(crate) mod dyn_adapter;
 pub(crate) mod error;
 pub(crate) mod factory;
+pub(crate) mod inmemory;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
-// SimpleBuffer for integration tests
-#[cfg(test)]
-pub(crate) mod simplebuffer;
 
-pub(crate) use factory::ISBFactory;
+// Re-exported for callers elsewhere in the crate.
+#[allow(unused_imports)]
+pub(crate) use dyn_adapter::{DynISBReader, DynISBWriter, ISBReaderRef, ISBWriterRef};
+pub(crate) use factory::{ISBFactory, create_isb_factory};
 
 /// Trait for reading messages from an Inter Step Buffer (ISB).
 ///

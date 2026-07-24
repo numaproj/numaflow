@@ -880,7 +880,6 @@ impl From<sink_response::Result> for ResponseFromSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
     use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
@@ -1453,16 +1452,9 @@ mod tests {
             .unwrap();
 
         let tracker = Tracker::new(None, CancellationToken::new());
-        let serving_store = ServingStore::Nats(Box::new(
-            NatsServingStore::new(
-                context.clone(),
-                NatsStoreConfig {
-                    rs_store_name: serving_store.to_string(),
-                },
-            )
-            .await
-            .unwrap(),
-        ));
+        let serving_store = ServingStore::Nats(Box::new(NatsServingStore::new(Arc::new(
+            numaflow_shared::kv::jetstream::JetstreamKVStore::new(kv_store.clone(), serving_store),
+        ))));
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();

@@ -17,6 +17,8 @@ async-trait = "0.1.88"
 pep440_rs = "0.7.3"
 semver = "1.0.26"
 thiserror.workspace = true
+parking_lot.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 tempfile = "3.20.0"

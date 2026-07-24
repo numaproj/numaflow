@@ -319,9 +319,13 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
 
@@ -451,9 +455,13 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         // Create WAL components
         let append_only_wal = AppendOnlyWal::new(
@@ -686,9 +694,13 @@ mod tests {
         .unwrap();
 
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
-            ISBReaderOrchestrator::new(reader_components, js_reader, None)
-                .await
-                .unwrap();
+            ISBReaderOrchestrator::new(
+                reader_components,
+                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                None,
+            )
+            .await
+            .unwrap();
 
         // Create new WAL components for PBQ
         let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)

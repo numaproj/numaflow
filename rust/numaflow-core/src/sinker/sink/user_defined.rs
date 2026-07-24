@@ -129,7 +129,7 @@ impl UserDefinedSink {
     fn redrive_error(status: Status) -> Error {
         warn!(?status, "sink UDF error, redriving after reconnect");
         critical_error!(VERTEX_TYPE_SINK, critical_error_reasons::SINK_RUNTIME_ERROR);
-        runtime::persist_application_error(status.clone());
+        runtime::persist_application_error_with_container(status.clone(), "udsink");
         Error::UdfRedrive(Box::new(status))
     }
 

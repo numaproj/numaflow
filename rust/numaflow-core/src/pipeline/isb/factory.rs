@@ -5,30 +5,27 @@
 //! to be used interchangeably.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
-use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
-use crate::pipeline::isb::{ISBReader, ISBWriter};
+use crate::config::pipeline::isb::{BufferWriterConfig, ISBClientConfig, ISBConfig, Stream};
+use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
+use crate::pipeline::isb::inmemory::InMemoryFactory;
+use crate::pipeline::isb::jetstream::JetStreamFactory;
+use crate::pipeline::isb::jetstream::factory::create_js_context;
+use numaflow_shared::kv::KVStore;
 
 /// Trait for creating ISB readers and writers.
 ///
 /// This factory pattern allows the pipeline to be agnostic of the underlying
 /// ISB implementation. Different implementations (JetStream, SimpleBuffer, etc.)
-/// can provide their own factory that creates the appropriate reader/writer types.
-///
-/// The factory is parameterized by the reader and writer types it creates,
-/// which must implement the `ISBReader` and `ISBWriter` traits respectively.
+/// can provide their own factory that creates type-erased reader/writer handles.
 #[async_trait]
 pub(crate) trait ISBFactory: Send + Sync {
-    /// The reader type created by this factory
-    type Reader: ISBReader + 'static;
-    /// The writer type created by this factory
-    type Writer: ISBWriter + 'static;
-
     /// Creates a reader for the given stream.
     ///
     /// # Arguments
@@ -38,7 +35,7 @@ pub(crate) trait ISBFactory: Send + Sync {
         &self,
         stream: Stream,
         isb_config: Option<&ISBConfig>,
-    ) -> Result<Self::Reader>;
+    ) -> Result<ISBReaderRef>;
 
     /// Creates a writer for the given stream.
     ///
@@ -53,7 +50,7 @@ pub(crate) trait ISBFactory: Send + Sync {
         writer_config: BufferWriterConfig,
         isb_config: Option<&ISBConfig>,
         cln_token: CancellationToken,
-    ) -> Result<Self::Writer>;
+    ) -> Result<ISBWriterRef>;
 
     /// Creates writers for all streams in the given vertex configurations.
     ///
@@ -69,7 +66,7 @@ pub(crate) trait ISBFactory: Send + Sync {
         to_vertex_config: &[ToVertexConfig],
         isb_config: Option<&ISBConfig>,
         cln_token: CancellationToken,
-    ) -> Result<HashMap<&'static str, Self::Writer>> {
+    ) -> Result<HashMap<&'static str, ISBWriterRef>> {
         let mut writers = HashMap::new();
         for vertex_config in to_vertex_config {
             for stream in &vertex_config.writer_config.streams {
@@ -85,5 +82,28 @@ pub(crate) trait ISBFactory: Send + Sync {
             }
         }
         Ok(writers)
+    }
+
+    /// Creates a key-value store for the given bucket.
+    ///
+    /// Used by watermark (offset timeline), serving callbacks/response store,
+    /// and other features that need backend-neutral KV access.
+    async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>>;
+}
+
+/// Creates an ISB factory for the configured backend.
+pub(crate) async fn create_isb_factory(
+    config: &ISBClientConfig,
+    _cln_token: CancellationToken,
+) -> Result<Arc<dyn ISBFactory>> {
+    match config {
+        ISBClientConfig::Jetstream(cfg) => {
+            let js_context = create_js_context(cfg.clone()).await?;
+            Ok(Arc::new(JetStreamFactory::new(js_context)))
+        }
+        ISBClientConfig::InMemory => {
+            tracing::warn!("in-memory ISB backend selected — for local testing only");
+            Ok(Arc::new(InMemoryFactory::new()))
+        }
     }
 }

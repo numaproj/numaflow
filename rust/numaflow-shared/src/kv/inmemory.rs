@@ -13,7 +13,7 @@
 //!
 //! # Example
 //! ```ignore
-//! use numaflow_testing::simplekvstore::SimpleKVStore;
+//! use numaflow_shared::kv::inmemory::SimpleKVStore;
 //! use numaflow_shared::kv::KVStore;
 //! use bytes::Bytes;
 //!

@@ -25,13 +25,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
 use crate::message::{IntOffset, Offset};
+use crate::pipeline::isb::ISBFactory;
+use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
 use crate::reduce::reducer::WindowManager;
 use crate::tracker::Tracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
@@ -260,7 +261,8 @@ impl ISBWatermarkHandle {
         vertex_name: &'static str,
         vertex_replica: u16,
         vertex_type: VertexType,
-        js_context: async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
+        writers: HashMap<&'static str, ISBWriterRef>,
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
@@ -281,7 +283,7 @@ impl ISBWatermarkHandle {
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
             // Create KV store for ProcessorManager
-            let ot_store = Self::create_ot_store(&js_context, from_bucket_config).await;
+            let ot_store = Self::create_ot_store(isb_factory, from_bucket_config).await?;
 
             let processor_manager =
                 ProcessorManager::new(ot_store, from_bucket_config, vertex_type, vertex_replica)
@@ -292,14 +294,13 @@ impl ISBWatermarkHandle {
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
         // Create KV stores for the publisher
-        let ot_stores = Self::create_ot_stores(&js_context, &config.to_vertex_config).await;
+        let ot_stores = Self::create_ot_stores(isb_factory, &config.to_vertex_config).await?;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher =
             ISBWatermarkPublisher::new(processor_name, ot_stores, &config.to_vertex_config, false);
 
-        let idle_manager =
-            ISBIdleDetector::new(wmb_delay, to_vertex_configs, js_context.clone()).await;
+        let idle_manager = ISBIdleDetector::new(wmb_delay, to_vertex_configs, writers).await;
 
         let state = Arc::new(Mutex::new(ISBWatermarkState::new(
             fetcher,
@@ -389,35 +390,27 @@ impl ISBWatermarkHandle {
 
     /// Helper to create OT KV store for a single bucket config.
     async fn create_ot_store(
-        js_context: &async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
         bucket_config: &BucketConfig,
-    ) -> Arc<dyn KVStore> {
-        let ot_bucket = js_context
-            .get_key_value(bucket_config.ot_bucket)
+    ) -> Result<Arc<dyn KVStore>> {
+        isb_factory
+            .create_kv_store(bucket_config.ot_bucket.to_string())
             .await
-            .expect("Failed to get OT bucket");
-        Arc::new(JetstreamKVStore::new(ot_bucket, bucket_config.ot_bucket))
     }
 
-    /// Helper to create OT KV stores from bucket configs using the JetStream context.
+    /// Helper to create OT KV stores from bucket configs via the ISB factory.
     async fn create_ot_stores(
-        js_context: &async_nats::jetstream::Context,
+        isb_factory: &dyn ISBFactory,
         bucket_configs: &[BucketConfig],
-    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
+    ) -> Result<HashMap<&'static str, Arc<dyn KVStore>>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
 
         for config in bucket_configs {
-            let ot_bucket = js_context
-                .get_key_value(config.ot_bucket)
-                .await
-                .expect("Failed to get OT bucket");
-            ot_stores.insert(
-                config.vertex,
-                Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
-            );
+            let ot_store = Self::create_ot_store(isb_factory, config).await?;
+            ot_stores.insert(config.vertex, ot_store);
         }
 
-        ot_stores
+        Ok(ot_stores)
     }
 }
 
@@ -429,10 +422,15 @@ mod tests {
     use async_nats::jetstream::kv::Config;
     use tokio::time::sleep;
 
+    use std::collections::HashMap;
+
     use super::*;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
+    use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
     use crate::tracker::Tracker;
     use crate::watermark::wmb::WMB;
 
@@ -541,7 +539,8 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             &edge_config,
             &[ToVertexConfig {
                 name: "to_vertex",
@@ -706,7 +705,8 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             &edge_config,
             &[ToVertexConfig {
                 name: "from_vertex",
@@ -854,17 +854,56 @@ mod tests {
         };
         let tracker = Tracker::new(None, CancellationToken::new());
 
+        let idle_stream = Stream::new("test_idle_wm_stream", "to_vertex", 0);
+        let _ = js_context.delete_stream(idle_stream.name).await;
+        let _ = js_context
+            .get_or_create_stream(async_nats::jetstream::stream::Config {
+                name: idle_stream.name.to_string(),
+                subjects: vec![idle_stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let _ = js_context
+            .create_consumer_on_stream(
+                async_nats::jetstream::consumer::pull::Config {
+                    name: Some(idle_stream.name.to_string()),
+                    ..Default::default()
+                },
+                idle_stream.name,
+            )
+            .await;
+        let mut writers: HashMap<&'static str, ISBWriterRef> = HashMap::new();
+        writers.insert(
+            idle_stream.name,
+            std::sync::Arc::new(
+                JetStreamWriter::new(
+                    idle_stream.clone(),
+                    js_context.clone(),
+                    BufferWriterConfig {
+                        streams: vec![idle_stream.clone()],
+                        ..Default::default()
+                    },
+                    None,
+                    CancellationToken::new(),
+                )
+                .await
+                .unwrap(),
+            ) as ISBWriterRef,
+        );
+
         let _handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             VertexType::MapUDF,
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            writers,
             &edge_config,
             &[ToVertexConfig {
                 name: "to_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    streams: vec![idle_stream],
                     ..Default::default()
                 },
                 conditions: None,
@@ -956,7 +995,8 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            js_context.clone(),
+            &JetStreamFactory::new(js_context.clone()),
+            HashMap::new(),
             &edge_config,
             &[ToVertexConfig {
                 name: "from_vertex",

@@ -1,13 +1,12 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
-use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
-use async_nats::jetstream;
 use bytes::Bytes;
 use chrono_tz::{Tz, UTC};
 use cron::Schedule;
-use numaflow_shared::isb::jetstream::config::ClientConfig;
+use numaflow_shared::kv::KVStore;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -48,7 +47,6 @@ impl SideInputTrigger {
 
 /// Manager creates the side-input content by running the user-defined code.
 pub(crate) struct SideInputManager {
-    side_input_store: &'static str,
     key: &'static str,
     user_defined_side_input_client: UserDefinedSideInputClient,
     cancellation_token: CancellationToken,
@@ -56,13 +54,11 @@ pub(crate) struct SideInputManager {
 
 impl SideInputManager {
     pub(crate) fn new(
-        side_input_store: &'static str,
         key: &'static str,
         user_defined_side_input_client: UserDefinedSideInputClient,
         cancellation_token: CancellationToken,
     ) -> Self {
         SideInputManager {
-            side_input_store,
             key,
             user_defined_side_input_client,
             cancellation_token,
@@ -71,7 +67,7 @@ impl SideInputManager {
 
     pub(crate) async fn run(
         mut self,
-        js_client_config: ClientConfig,
+        store: Arc<dyn KVStore>,
         side_input_trigger: SideInputTrigger,
     ) -> Result<()> {
         // Wait for the side-input client to be ready
@@ -81,20 +77,8 @@ impl SideInputManager {
         )
         .await?;
 
-        let js_context = create_js_context(js_client_config).await?;
-
-        let bucket = js_context
-            .get_key_value(self.side_input_store)
-            .await
-            .map_err(|e| {
-                Error::SideInput(format!(
-                    "Failed to get kv bucket {}: {}",
-                    self.side_input_store, e
-                ))
-            })?;
-
         // Create a schedule from the cron expression
-        self.run_schedule(bucket, side_input_trigger).await;
+        self.run_schedule(store, side_input_trigger).await;
 
         Ok(())
     }
@@ -104,12 +88,12 @@ impl SideInputManager {
     /// It honors [CancellationToken] to stop the schedule.
     async fn run_schedule(
         &mut self,
-        bucket: jetstream::kv::Store,
+        store: Arc<dyn KVStore>,
         side_input_trigger: SideInputTrigger,
     ) {
         // do the first run before running the schedule
         info!("Running first side-input generation");
-        if let Err(e) = self.generate_side_input(&bucket).await {
+        if let Err(e) = self.generate_side_input(&store).await {
             error!(?e, "Failed to generate the first, initial side input");
         }
 
@@ -143,7 +127,7 @@ impl SideInputManager {
             }
 
             // call the user-defined side-input client and store it in the bucket
-            let result = self.generate_side_input(&bucket).await;
+            let result = self.generate_side_input(&store).await;
             if let Err(e) = result {
                 warn!(
                     ?e,
@@ -155,7 +139,7 @@ impl SideInputManager {
 
     /// Calls the user-defined side-input client to generate the side-input data and stores it in
     /// the bucket.
-    async fn generate_side_input(&mut self, bucket: &jetstream::kv::Store) -> Result<()> {
+    async fn generate_side_input(&mut self, store: &Arc<dyn KVStore>) -> Result<()> {
         let side_input_response = self
             .user_defined_side_input_client
             .retrieve_side_input()
@@ -164,7 +148,7 @@ impl SideInputManager {
 
         if !side_input_response.no_broadcast {
             // store the side-input data in the bucket
-            bucket
+            store
                 .put(self.key, Bytes::from(side_input_response.value))
                 .await
                 .map_err(|e| Error::SideInput(format!("Failed to store side input: {e:?}")))?;
@@ -180,9 +164,10 @@ impl SideInputManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_nats::jetstream;
     use numaflow::sideinput;
-
     use numaflow::sideinput::SideInputer;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
 
@@ -241,12 +226,7 @@ mod tests {
         let side_input_trigger = SideInputTrigger::new("* * * * * *", None)?;
 
         // create manager
-        let manager = SideInputManager::new(
-            "test-side-input-manager-store",
-            "input-1",
-            client,
-            cancel.clone(),
-        );
+        let manager = SideInputManager::new("input-1", client, cancel.clone());
 
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
@@ -263,17 +243,10 @@ mod tests {
             .await
             .unwrap();
 
+        let store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(kv_store.clone(), store_name));
+
         let manager_handle = tokio::spawn(async move {
-            manager
-                .run(
-                    ClientConfig {
-                        url: "localhost:4222".to_string(),
-                        ..Default::default()
-                    },
-                    side_input_trigger,
-                )
-                .await
-                .unwrap();
+            manager.run(store, side_input_trigger).await.unwrap();
         });
 
         // sleep for 100ms and make sure the side-input is generated

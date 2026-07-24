@@ -15,7 +15,7 @@ use tracing::{debug, error};
 use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, MessageType};
 use crate::metrics::{
     jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
 };
@@ -153,8 +153,9 @@ impl JetStreamWriter {
         &self,
         message: Message,
     ) -> std::result::Result<PublishAckFuture, WriteError> {
-        // Check if buffer is full
-        if self.is_full() {
+        // Check if buffer is full (WMB control messages bypass — idle watermark
+        // publishing must not stall on soft buffer-full).
+        if !matches!(message.typ, MessageType::WMB) && self.is_full() {
             pipeline_metrics()
                 .jetstream_isb
                 .isfull_total
@@ -163,8 +164,11 @@ impl JetStreamWriter {
             return Err(WriteError::BufferFull);
         }
 
-        // message id will be used for deduplication
+        // message id will be used for deduplication (skipped for WMB — idle watermark
+        // control messages use the default MessageID and must not collapse within the
+        // JetStream dedup window).
         let id = message.id.to_string();
+        let skip_dedup = matches!(message.typ, MessageType::WMB);
 
         // Compress the message value if compression is enabled
         let mut message = message;
@@ -187,14 +191,11 @@ impl JetStreamWriter {
             let payload: BytesMut = message
                 .try_into()
                 .expect("message serialization should not fail");
-            self.js_ctx
-                .send_publish(
-                    self.stream.name,
-                    PublishMessage::build()
-                        .payload(payload.freeze())
-                        .message_id(&id),
-                )
-                .await
+            let mut publish = PublishMessage::build().payload(payload.freeze());
+            if !skip_dedup {
+                publish = publish.message_id(&id);
+            }
+            self.js_ctx.send_publish(self.stream.name, publish).await
         };
 
         // Try to publish
@@ -238,8 +239,9 @@ impl JetStreamWriter {
     ) -> std::result::Result<crate::pipeline::isb::WriteResult, WriteError> {
         let start_time = Instant::now();
 
-        // Check if buffer is full
-        if self.is_full() {
+        // Check if buffer is full (WMB control messages bypass — idle watermark
+        // publishing must not stall on soft buffer-full).
+        if !matches!(message.typ, MessageType::WMB) && self.is_full() {
             pipeline_metrics()
                 .jetstream_isb
                 .isfull_total

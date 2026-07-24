@@ -150,12 +150,44 @@ pub fn persist_application_error(grpc_status: Status) {
     );
 }
 
+/// Persists a gRPC error using `fallback_container_name` when the status message does not include
+/// the SDK-standard `UDF_EXECUTION_ERROR(container-name)` marker.
+pub fn persist_application_error_with_container(
+    grpc_status: Status,
+    fallback_container_name: impl Into<String>,
+) {
+    persist_application_error_to_file_with_container(
+        RuntimeInfoConfig::default().app_error_path,
+        RuntimeInfoConfig::default().max_error_files_per_container,
+        grpc_status,
+        Some(fallback_container_name.into()),
+    );
+}
+
 pub(crate) fn persist_application_error_to_file(
     application_error_path: String,
     max_error_files_per_container: usize,
     grpc_status: Status,
 ) {
-    let container_name = extract_container_name(grpc_status.message());
+    persist_application_error_to_file_with_container(
+        application_error_path,
+        max_error_files_per_container,
+        grpc_status,
+        None,
+    );
+}
+
+pub(crate) fn persist_application_error_to_file_with_container(
+    application_error_path: String,
+    max_error_files_per_container: usize,
+    grpc_status: Status,
+    fallback_container_name: Option<String>,
+) {
+    let container_name = if let Some(fallback_container_name) = fallback_container_name.as_deref() {
+        extract_container_name_or(grpc_status.message(), Some(fallback_container_name))
+    } else {
+        extract_container_name(grpc_status.message())
+    };
     let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
@@ -337,10 +369,15 @@ fn prune_error_files(dir_path: &Path, max_error_files_per_container: usize) {
 
 ///  Extracts the container name from error message.
 fn extract_container_name(error_message: &str) -> String {
-    if let Some(start) = error_message.find('(')
-        && let Some(end) = error_message[start + 1..].find(')')
-    {
-        return error_message[start + 1..start + 1 + end].to_string();
+    extract_container_name_or(error_message, None)
+}
+
+fn extract_container_name_or(error_message: &str, fallback_container_name: Option<&str>) -> String {
+    if let Some(container_name) = extract_container_name_from_marker(error_message) {
+        return container_name;
+    }
+    if let Some(fallback_container_name) = fallback_container_name {
+        return fallback_container_name.to_string();
     }
     // Setting container to "numa" as the default container name to ensure that the error is
     // persisted in a consistent manner. This can happen in following cases:
@@ -349,6 +386,21 @@ fn extract_container_name(error_message: &str) -> String {
     //    https://github.com/grpc/grpc-go/issues/7641
     // 2. The error is not a gRPC error, and no container name could be extracted from the error message.
     String::from("numa")
+}
+
+fn extract_container_name_from_marker(error_message: &str) -> Option<String> {
+    const ERROR_MARKERS: [&str; 2] = ["UDF_EXECUTION_ERROR(", "UDF_PARTIAL_RESPONSE("];
+
+    for marker in ERROR_MARKERS {
+        if let Some(start) = error_message.find(marker) {
+            let container_start = start + marker.len();
+            if let Some(end) = error_message[container_start..].find(')') {
+                return Some(error_message[container_start..container_start + end].to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Extracts structured error details from protobuf-encoded gRPC status.
@@ -518,6 +570,49 @@ mod tests {
     }
 
     #[test]
+    fn test_persist_application_error_uses_fallback_container_name() {
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+        let grpc_status = Status::internal("panic in map UDF");
+
+        persist_application_error_to_file_with_container(
+            application_error_path.clone(),
+            5,
+            grpc_status,
+            Some("mapper".to_string()),
+        );
+
+        let dir_path = Path::new(&application_error_path).join("mapper");
+        assert!(dir_path.exists());
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 1);
+    }
+
+    #[test]
+    fn test_persist_application_error_prefers_sdk_container_name() {
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+        let grpc_status = Status::internal("UDF_EXECUTION_ERROR(custom-map): Test error message");
+
+        persist_application_error_to_file_with_container(
+            application_error_path.clone(),
+            5,
+            grpc_status,
+            Some("mapper".to_string()),
+        );
+
+        assert!(
+            Path::new(&application_error_path)
+                .join("custom-map")
+                .exists()
+        );
+        assert!(!Path::new(&application_error_path).join("mapper").exists());
+    }
+
+    #[test]
     fn test_get_application_errors() {
         // Create a temporary directory
         let temp_dir = tempdir().expect("Failed to create temp dir");
@@ -566,9 +661,23 @@ mod tests {
 
     #[test]
     fn test_extract_container_name_with_valid_pattern() {
-        let error_message = "Error occurred in container (my-container)";
+        let error_message = "UDF_EXECUTION_ERROR(my-container): Test error message";
         let container_name = extract_container_name(error_message);
         assert_eq!(container_name, "my-container");
+    }
+
+    #[test]
+    fn test_extract_container_name_with_partial_response_marker() {
+        let error_message = "UDF_PARTIAL_RESPONSE(batch_map)";
+        let container_name = extract_container_name(error_message);
+        assert_eq!(container_name, "batch_map");
+    }
+
+    #[test]
+    fn test_extract_container_name_ignores_non_sdk_parentheses_with_fallback() {
+        let error_message = "No such file or directory (os error 2)";
+        let container_name = extract_container_name_or(error_message, Some("udf"));
+        assert_eq!(container_name, "udf");
     }
 
     #[test]

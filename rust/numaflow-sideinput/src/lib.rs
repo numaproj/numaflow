@@ -3,12 +3,14 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::manager::SideInputTrigger;
-use async_nats::jetstream::Context;
 use numaflow_shared::isb::jetstream::config::ClientConfig;
 use numaflow_shared::isb::jetstream::create_js_context;
+use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 mod error;
@@ -47,6 +49,20 @@ pub enum SideInputMode {
 /// build the side-input bucket name from the store name.
 fn get_bucket_name(side_input_store: &str) -> &'static str {
     Box::leak(format!("{side_input_store}_SIDE_INPUTS").into_boxed_str())
+}
+
+/// Opens a backend-neutral KV store for the side-input bucket.
+async fn create_side_input_kv_store(
+    env_vars: HashMap<String, String>,
+    bucket: &'static str,
+) -> Result<Arc<dyn KVStore>> {
+    let client_config = ClientConfig::load(env_vars)?;
+    let js_context = create_js_context(client_config).await?;
+    let store = js_context
+        .get_key_value(bucket)
+        .await
+        .map_err(|e| Error::SideInput(format!("Failed to get kv bucket {bucket}: {e}")))?;
+    Ok(Arc::new(JetstreamKVStore::new(store, bucket)))
 }
 
 /// Runs the side-input system in the specified mode.
@@ -106,9 +122,10 @@ async fn start_manager(
     .await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
+    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
 
-    manager::SideInputManager::new(side_input_store, trigger.name, client, cancellation_token)
-        .run(ClientConfig::load(env_vars)?, side_input_trigger)
+    manager::SideInputManager::new(trigger.name, client, cancellation_token)
+        .run(store, side_input_trigger)
         .await
 }
 
@@ -120,13 +137,12 @@ async fn start_synchronizer(
     env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let js_ctx = build_js_context(env_vars).await?;
+    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
 
     let synchronizer = synchronize::SideInputSynchronizer::new(
-        side_input_store,
         side_inputs,
         mount_path,
-        js_ctx,
+        store,
         run_once,
         cancellation_token,
     );
@@ -134,15 +150,9 @@ async fn start_synchronizer(
     synchronizer.synchronize().await
 }
 
-async fn build_js_context(env_vars: HashMap<String, String>) -> Result<Context> {
-    let client = ClientConfig::load(env_vars)?;
-    create_js_context(client).await.map_err(|e| e.into())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::synchronize::SideInputSynchronizer;
     use async_nats::jetstream;
     use base64::Engine;
     use numaflow::sideinput;
@@ -179,35 +189,14 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_end_to_end_error_scenarios() -> Result<()> {
-        // Test synchronizer with non-existent KV store
-        let tmp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(
-            tmp_dir
-                .path()
-                .to_string_lossy()
-                .into_owned()
-                .into_boxed_str(),
+        // Opening a non-existent KV store should fail at the boundary
+        let mut env_vars = HashMap::new();
+        env_vars.insert(
+            "NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(),
+            "localhost:4222".to_string(),
         );
 
-        let js_ctx = create_js_context(ClientConfig {
-            url: "localhost:4222".to_string(),
-            user: None,
-            password: None,
-            ..Default::default()
-        })
-        .await?;
-
-        let sync_cancel = CancellationToken::new();
-        let synchronizer = SideInputSynchronizer::new(
-            "non-existent-bucket",
-            vec!["test-input"],
-            mount_path,
-            js_ctx,
-            false,
-            sync_cancel,
-        );
-
-        let result = synchronizer.synchronize().await;
+        let result = create_side_input_kv_store(env_vars, "non-existent-bucket").await;
         assert!(result.is_err(), "Should fail with non-existent bucket");
 
         if let Err(crate::error::Error::SideInput(msg)) = result {

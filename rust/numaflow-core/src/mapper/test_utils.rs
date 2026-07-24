@@ -9,6 +9,8 @@ use numaflow_shared::server_info::MapMode;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+const TEST_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
+
 /// A handle to a mapper component.
 ///
 /// Contains the mapper handle and server handle (for the mapper server).
@@ -46,7 +48,7 @@ impl MapperTestHandle {
             .await
             .expect("failed to wait for mapper server to be ready");
 
-        let mapper = MapHandle::new(
+        let mapper = MapHandle::new_with_reconnect_config(
             map_mode,
             batch_size,
             read_timeout,
@@ -54,6 +56,7 @@ impl MapperTestHandle {
             concurrency,
             client,
             tracker.clone(),
+            Some(map_reconnect_config(&server_handle)),
         )
         .await
         .expect("failed to create mapper");
@@ -92,7 +95,7 @@ impl MapperTestHandle {
             .await
             .expect("failed to wait for batch map server to be ready");
 
-        let mapper = MapHandle::new(
+        let mapper = MapHandle::new_with_reconnect_config(
             map_mode,
             batch_size,
             read_timeout,
@@ -100,6 +103,7 @@ impl MapperTestHandle {
             concurrency,
             client,
             tracker.clone(),
+            Some(map_reconnect_config(&server_handle)),
         )
         .await
         .expect("failed to create batch mapper");
@@ -138,7 +142,7 @@ impl MapperTestHandle {
             .await
             .expect("failed to wait for map streamer server to be ready");
 
-        let mapper = MapHandle::new(
+        let mapper = MapHandle::new_with_reconnect_config(
             map_mode,
             batch_size,
             read_timeout,
@@ -146,6 +150,7 @@ impl MapperTestHandle {
             concurrency,
             client,
             tracker.clone(),
+            Some(map_reconnect_config(&server_handle)),
         )
         .await
         .expect("failed to create map streamer");
@@ -155,6 +160,18 @@ impl MapperTestHandle {
             server_handle,
         }
     }
+}
+
+fn map_reconnect_config(server_handle: &TestServerHandle) -> grpc::UdfReconnectConfig {
+    grpc::UdfReconnectConfig::new(
+        grpc::GrpcClientConfig::new(
+            server_handle.socket_path(),
+            server_handle.server_info_path(),
+            TEST_GRPC_MAX_MESSAGE_SIZE,
+        ),
+        CancellationToken::new(),
+        Duration::from_millis(10),
+    )
 }
 
 /// Start a map server with the given handler.

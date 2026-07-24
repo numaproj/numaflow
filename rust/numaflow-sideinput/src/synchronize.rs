@@ -1,13 +1,12 @@
 //! The synchronizer continually monitors and synchronizes side input values from a key-value store
 //! to the local filesystem, making them available to pipeline vertices.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::synchronize::persistence::update_side_input_file;
-use async_nats::jetstream;
-use async_nats::jetstream::Context;
-use async_nats::jetstream::kv::Operation;
+use numaflow_shared::kv::{KVStore, KVWatchOp};
 use std::collections::HashSet;
 use std::path;
+use std::sync::Arc;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, trace, warn};
@@ -17,13 +16,11 @@ mod persistence;
 
 /// Synchronizes the side input values from the ISB to the local file system.
 pub(crate) struct SideInputSynchronizer {
-    /// The name of the side input store. The bucket where each side-input is stored.
-    side_input_store: &'static str,
     /// The list of side inputs to synchronize.
     side_inputs: Vec<&'static str>,
     /// The path where the side input files are mounted on the container.
     mount_path: &'static str,
-    js_ctx: Context,
+    store: Arc<dyn KVStore>,
     /// If true, the synchronizer will only process the initial values and then stops.
     run_once: bool,
     cancellation_token: CancellationToken,
@@ -31,52 +28,38 @@ pub(crate) struct SideInputSynchronizer {
 
 impl SideInputSynchronizer {
     pub(crate) fn new(
-        side_input_store: &'static str,
         side_inputs: Vec<&'static str>,
         mount_path: &'static str,
-        js_ctx: Context,
+        store: Arc<dyn KVStore>,
         run_once: bool,
         cancellation_token: CancellationToken,
     ) -> Self {
         SideInputSynchronizer {
-            side_input_store,
             side_inputs,
             mount_path,
-            js_ctx,
+            store,
             run_once,
             cancellation_token,
         }
     }
 
     pub(crate) async fn synchronize(self) -> Result<()> {
-        // TODO: move create_js_context outside of pipeline
+        let bucket_watcher = self.store.watch(Some(1)).await.map_err(|e| {
+            crate::error::Error::SideInput(format!(
+                "Failed to watch kv bucket {}: {}",
+                self.store.name(),
+                e
+            ))
+        })?;
 
-        let bucket = self
-            .js_ctx
-            .get_key_value(self.side_input_store)
-            .await
-            .map_err(|e| {
-                Error::SideInput(format!(
-                    "Failed to get kv bucket {}: {}",
-                    self.side_input_store, e
-                ))
-            })?;
-
-        let bucket_watcher =
-            numaflow_shared::isb::jetstream::JetstreamWatcher::new(bucket.clone(), Some(1)).await?;
-
-        self.run(bucket, bucket_watcher).await;
+        self.run(bucket_watcher).await;
 
         Ok(())
     }
 
     /// Monitors the bucket for changes and updates the side input files accordingly. If
     /// `SideInputSynchronizer.run_once` is true, it will only process the initial values and then return.
-    async fn run(
-        self,
-        bucket: jetstream::kv::Store,
-        mut bucket_watcher: numaflow_shared::isb::jetstream::JetstreamWatcher,
-    ) {
+    async fn run(self, mut bucket_watcher: numaflow_shared::kv::KVWatchStream) {
         let mut seen_keys: Option<HashSet<String>> = None;
         if self.run_once {
             info!("Running side input synchronizer once for initialization");
@@ -98,7 +81,7 @@ impl SideInputSynchronizer {
                     };
 
                     match kv.operation {
-                        Operation::Put => {
+                        KVWatchOp::Put => {
                             trace!(operation=?kv.operation, key=?kv.key, "Processing operation");
                             // check if the key is one of the side inputs
                             if !self.side_inputs.contains(&kv.key.as_str()) {
@@ -112,12 +95,10 @@ impl SideInputSynchronizer {
                                 info!(?self.side_inputs, ?seen_keys, "Synchronizing side inputs");
                             }
 
-                            let value = bucket.get(&kv.key).await.unwrap().unwrap();
-
                             let mount_path = path::Path::new(self.mount_path).join(&kv.key);
-                            update_side_input_file(mount_path, &value).unwrap();
+                            update_side_input_file(mount_path, &kv.value).unwrap();
                         }
-                        Operation::Delete | Operation::Purge => {
+                        KVWatchOp::Delete | KVWatchOp::Purge => {
                             trace!(operation=?kv.operation, "Skipping operation");
                         }
                     }
@@ -145,11 +126,25 @@ impl SideInputSynchronizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::create_js_context;
+    use crate::error::Error;
+    use async_nats::jetstream;
     use numaflow_shared::isb::jetstream::config::ClientConfig;
+    use numaflow_shared::isb::jetstream::create_js_context;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
+
+    async fn create_store(
+        js_context: &jetstream::Context,
+        store_name: &'static str,
+    ) -> Arc<dyn KVStore> {
+        let store = js_context
+            .get_key_value(store_name)
+            .await
+            .unwrap_or_else(|_| panic!("Failed to get kv store '{store_name}'"));
+        Arc::new(JetstreamKVStore::new(store, store_name))
+    }
 
     /// Test the basic construction of SideInputSynchronizer
     /// This test doesn't require NATS to be running
@@ -165,20 +160,30 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let config = create_js_context(ClientConfig::default()).await.unwrap();
+        let js_context = create_js_context(ClientConfig::default()).await.unwrap();
+        let store_name = "test-store-synchronizer-new";
+        let _ = js_context.delete_key_value(store_name).await;
+        js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
         let cancellation_token = CancellationToken::new();
+        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
-            "test-store",
             vec!["input1", "input2"],
             mount_path,
-            config,
+            store,
             false,
             cancellation_token,
         );
 
-        assert_eq!(synchronizer.side_input_store, "test-store");
         assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
         assert_eq!(synchronizer.mount_path, mount_path);
+        let _ = js_context.delete_key_value(store_name).await;
     }
 
     /// Integration test for SideInputSynchronizer
@@ -220,11 +225,11 @@ mod tests {
         );
 
         let cancellation_token = CancellationToken::new();
+        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
-            "test-side-input-store",
             vec!["input1", "input2"],
             mount_path,
-            js_context.clone(),
+            store,
             false,
             cancellation_token.clone(),
         );
@@ -250,7 +255,8 @@ mod tests {
         let _ = js_context.delete_key_value(store_name).await;
     }
 
-    /// Test error handling when KV store doesn't exist
+    /// Test error handling when watching fails after the store is opened.
+    /// Missing-bucket failures are covered by `create_side_input_kv_store` in lib.rs tests.
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_side_input_synchronizer_error_handling() {
@@ -263,30 +269,43 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let config = ClientConfig {
+        let js_context = create_js_context(ClientConfig {
             url: "localhost:4222".to_string(),
             ..Default::default()
-        };
+        })
+        .await
+        .unwrap();
 
-        let cancellation_token = CancellationToken::new();
+        // Opening a non-existent bucket fails at the KV boundary (same path as production startup).
+        let store_name = "non-existent-store";
+        let result = js_context.get_key_value(store_name).await;
+        assert!(result.is_err());
+        let err = Error::SideInput(format!(
+            "Failed to get kv bucket {store_name}: {}",
+            result.unwrap_err()
+        ));
+        assert!(err.to_string().contains("Failed to get kv bucket"));
+
+        // Smoke-check synchronizer construction against a real empty bucket.
+        let empty_store = "test-error-handling-empty";
+        let _ = js_context.delete_key_value(empty_store).await;
+        js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: empty_store.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let store = create_store(&js_context, empty_store).await;
         let synchronizer = SideInputSynchronizer::new(
-            "non-existent-store",
             vec!["input1"],
             mount_path,
-            create_js_context(config).await.unwrap(),
-            false,
-            cancellation_token,
+            store,
+            true,
+            CancellationToken::new(),
         );
-
-        // This should fail because the store doesn't exist
-        let result = synchronizer.synchronize().await;
-        assert!(result.is_err());
-
-        if let Err(Error::SideInput(msg)) = result {
-            assert!(msg.contains("Failed to get kv bucket"));
-        } else {
-            panic!("Expected SideInput error");
-        }
+        assert_eq!(synchronizer.side_inputs, vec!["input1"]);
+        let _ = js_context.delete_key_value(empty_store).await;
     }
 
     /// Test that side input filtering works correctly
@@ -321,11 +340,11 @@ mod tests {
 
         // Only include "allowed-input" in side_inputs
         let cancellation_token = CancellationToken::new();
+        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
-            store_name,
             vec!["allowed-input"],
             mount_path,
-            js_context.clone(),
+            store,
             false,
             cancellation_token.clone(),
         );
@@ -405,11 +424,11 @@ mod tests {
         );
 
         let cancellation_token = CancellationToken::new();
+        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
-            store_name,
             vec!["input1", "input2"],
             mount_path,
-            js_context.clone(),
+            store,
             true, // run_once = true
             cancellation_token.clone(),
         );
@@ -490,11 +509,11 @@ mod tests {
         );
 
         let cancellation_token = CancellationToken::new();
+        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
-            store_name,
             vec!["input1", "input2"],
             mount_path,
-            js_context.clone(),
+            store,
             true, // run_once = true
             cancellation_token.clone(),
         );
