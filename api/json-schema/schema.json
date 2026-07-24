@@ -20021,6 +20021,55 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.CronSchedule": {
+      "properties": {
+        "end": {
+          "description": "End of the cron window. Same format as Start. Must differ from Start.",
+          "type": "string"
+        },
+        "max": {
+          "description": "Maximum replicas during this window. Overrides scale.max.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "min": {
+          "description": "Minimum replicas during this window. Overrides scale.min.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "min",
+        "max"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.CronScheduling": {
+      "description": "CronScheduling defines cron-based autoscaling overrides.",
+      "properties": {
+        "schedules": {
+          "items": {
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CronSchedule"
+          },
+          "type": "array"
+        },
+        "timezone": {
+          "description": "Timezone for interpreting cron expressions. IANA Time Zone Database format.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "timezone",
+        "schedules"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.DaemonTemplate": {
       "properties": {
         "affinity": {
@@ -22128,6 +22177,10 @@
     "io.numaproj.numaflow.v1alpha1.Scale": {
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
+        "cron": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CronScheduling",
+          "description": "Cron defines time-based autoscaling overrides. During active cron windows, the window's min/max replace the base min/max for scaling decisions."
+        },
         "disabled": {
           "description": "Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.",
           "type": "boolean"

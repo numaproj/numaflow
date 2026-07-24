@@ -167,6 +167,18 @@ func TestValidateMonoVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid maxUnavailable")
 	})
 
+	t.Run("test cron timezone is required", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Scale.Cron = &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: "0 2 * * *", End: "0 3 * * *"},
+			},
+		}
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "timezone is required")
+	})
+
 	t.Run("streaming with built-in Kafka source is rejected", func(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		// Replace UDSource with Kafka-only source (no UDSource/UDTransformer to avoid other validation errors)
@@ -234,4 +246,174 @@ func TestValidateMonoVertex(t *testing.T) {
 		err = ValidateMonoVertex(testObj)
 		assert.NoError(t, err)
 	})
+}
+
+func TestValidateCronScaling(t *testing.T) {
+	validScale := func() dfv1.Scale {
+		return dfv1.Scale{
+			Min: ptr.To[int32](0),
+			Max: ptr.To[int32](50),
+			Cron: &dfv1.CronScheduling{
+				Timezone: "America/Los_Angeles",
+				Schedules: []dfv1.CronSchedule{
+					{
+						Start: "0 2 * * *",
+						End:   "0 3 * * *",
+						Min:   ptr.To[int32](1),
+						Max:   ptr.To[int32](5),
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		mutate    func(*dfv1.Scale)
+		wantError string
+	}{
+		{
+			name: "valid cron scaling",
+		},
+		{
+			name: "cron omitted does not affect existing scale validation",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron = nil
+				scale.Min = ptr.To[int32](10)
+				scale.Max = ptr.To[int32](1)
+			},
+		},
+		{
+			name: "parent min is negative",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Min = ptr.To[int32](-1)
+			},
+			wantError: "scale.min must not be negative",
+		},
+		{
+			name: "parent max is negative",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Max = ptr.To[int32](-1)
+			},
+			wantError: "scale.max must not be negative",
+		},
+		{
+			name: "parent min is greater than max",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Min = ptr.To[int32](10)
+				scale.Max = ptr.To[int32](5)
+			},
+			wantError: "scale.min must not be greater than scale.max",
+		},
+		{
+			name: "cron min is negative",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Min = ptr.To[int32](-1)
+			},
+			wantError: "min must not be negative",
+		},
+		{
+			name: "cron max is negative",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Max = ptr.To[int32](-1)
+			},
+			wantError: "max must not be negative",
+		},
+		{
+			name: "cron min is below parent min",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Min = ptr.To[int32](2)
+				scale.Cron.Schedules[0].Min = ptr.To[int32](1)
+			},
+			wantError: "min must not be less than scale.min",
+		},
+		{
+			name: "cron max is above parent max",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Max = ptr.To[int32](4)
+				scale.Cron.Schedules[0].Max = ptr.To[int32](5)
+			},
+			wantError: "max must not be greater than scale.max",
+		},
+		{
+			name: "cron schedules are empty",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules = nil
+			},
+			wantError: "at least one schedule is required",
+		},
+		{
+			name: "cron timezone is invalid",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Timezone = "invalid/timezone"
+			},
+			wantError: "invalid timezone",
+		},
+		{
+			name: "cron min is missing",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Min = nil
+			},
+			wantError: "min is required",
+		},
+		{
+			name: "cron max is missing",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Max = nil
+			},
+			wantError: "max is required",
+		},
+		{
+			name: "cron configured when autoscaling is disabled",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Disabled = true
+			},
+			wantError: "cron must not be configured when autoscaling is disabled",
+		},
+		{
+			name: "cron start is empty",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Start = ""
+			},
+			wantError: "start",
+		},
+		{
+			name: "cron end is empty",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].End = ""
+			},
+			wantError: "end",
+		},
+		{
+			name: "cron start and end are semantically identical",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Start = "0 2 * * *"
+				scale.Cron.Schedules[0].End = "00 02 * * *"
+			},
+			wantError: "start and end must not be identical",
+		},
+		{
+			name: "cron start and end have different calendar fields",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Cron.Schedules[0].Start = "0 2 * * 1-5"
+				scale.Cron.Schedules[0].End = "0 3 * * *"
+			},
+			wantError: "day-of-month, month, and day-of-week must match",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scale := validScale()
+			if tc.mutate != nil {
+				tc.mutate(&scale)
+			}
+			err := validateCronScaling(scale)
+			if tc.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantError)
+			}
+		})
+	}
 }

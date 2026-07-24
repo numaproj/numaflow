@@ -2307,6 +2307,199 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.CronSchedule">
+
+CronSchedule
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.CronScheduling">CronScheduling</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>start</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>end</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+End of the cron window. Same format as Start. Must differ from Start.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>min</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<p>
+
+Minimum replicas during this window. Overrides scale.min.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>max</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<p>
+
+Maximum replicas during this window. Overrides scale.max.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.CronScheduling">
+
+CronScheduling
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Scale">Scale</a>)
+</p>
+
+<p>
+
+<p>
+
+CronScheduling defines cron-based autoscaling overrides.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>timezone</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Timezone for interpreting cron expressions. IANA Time Zone Database
+format.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>schedules</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CronSchedule"> \[\]CronSchedule
+</a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.DaemonTemplate">
 
 DaemonTemplate
@@ -11556,6 +11749,29 @@ aggressive scaling up operations
 ReplicasPerScaleDown defines the number of maximum replicas that can be
 changed in a single scaled down operation. The is use to prevent from
 too aggressive scaling down operations
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>cron</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CronScheduling"> CronScheduling
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Cron defines time-based autoscaling overrides. During active cron
+windows, the window’s min/max replace the base min/max for scaling
+decisions.
 </p>
 
 </td>

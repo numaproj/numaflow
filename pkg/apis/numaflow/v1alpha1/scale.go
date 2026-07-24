@@ -16,6 +16,46 @@ limitations under the License.
 
 package v1alpha1
 
+import (
+	"time"
+
+	cron "github.com/robfig/cron/v3"
+)
+
+// CronScheduling defines cron-based autoscaling overrides.
+type CronScheduling struct {
+	// Timezone for interpreting cron expressions. IANA Time Zone Database format.
+	Timezone  string         `json:"timezone" protobuf:"bytes,1,opt,name=timezone"`
+	Schedules []CronSchedule `json:"schedules" protobuf:"bytes,2,rep,name=schedules"`
+}
+
+type CronSchedule struct {
+	// Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).
+	Start string `json:"start" protobuf:"bytes,1,opt,name=start"`
+	// End of the cron window. Same format as Start. Must differ from Start.
+	End string `json:"end" protobuf:"bytes,2,opt,name=end"`
+	// Minimum replicas during this window. Overrides scale.min.
+	Min *int32 `json:"min" protobuf:"varint,3,opt,name=min"`
+	// Maximum replicas during this window. Overrides scale.max.
+	Max *int32 `json:"max" protobuf:"varint,4,opt,name=max"`
+}
+
+// IsActiveAt reports whether time t falls within this cron window.
+func (cs CronSchedule) IsActiveAt(t time.Time) bool {
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	startSched, err := parser.Parse(cs.Start)
+	if err != nil {
+		return false
+	}
+	endSched, err := parser.Parse(cs.End)
+	if err != nil {
+		return false
+	}
+	nextStart := startSched.Next(t)
+	nextEnd := endSched.Next(t)
+	return nextEnd.Before(nextStart)
+}
+
 // Scale defines the parameters for autoscaling.
 type Scale struct {
 	// Whether to disable autoscaling.
@@ -65,6 +105,45 @@ type Scale struct {
 	// The is use to prevent from too aggressive scaling down operations
 	// +optional
 	ReplicasPerScaleDown *uint32 `json:"replicasPerScaleDown,omitempty" protobuf:"varint,12,opt,name=replicasPerScaleDown"`
+	// Cron defines time-based autoscaling overrides. During active cron windows, the window's
+	// min/max replace the base min/max for scaling decisions.
+	// +optional
+	Cron *CronScheduling `json:"cron,omitempty" protobuf:"bytes,13,opt,name=cron"`
+}
+
+// GetActiveCronSchedule returns the active cron schedule at the given time.
+func (s Scale) GetActiveCronSchedule(at time.Time) (*CronSchedule, bool) {
+	if s.Cron == nil || len(s.Cron.Schedules) == 0 {
+		return nil, false
+	}
+	loc, err := time.LoadLocation(s.Cron.Timezone)
+	if err != nil {
+		return nil, false
+	}
+	at = at.In(loc)
+	for i := range s.Cron.Schedules {
+		if s.Cron.Schedules[i].IsActiveAt(at) {
+			return &s.Cron.Schedules[i], true
+		}
+	}
+	return nil, false
+}
+
+// GetEffectiveScaleBounds returns the min/max replicas and whether a cron schedule is active.
+func (s Scale) GetEffectiveScaleBounds() (int32, int32, bool) {
+	minR := s.GetMinReplicas()
+	maxR := s.GetMaxReplicas()
+	sched, active := s.GetActiveCronSchedule(time.Now())
+	if !active {
+		return minR, maxR, false
+	}
+	if sched.Min != nil {
+		minR = *sched.Min
+	}
+	if sched.Max != nil {
+		maxR = *sched.Max
+	}
+	return minR, maxR, true
 }
 
 func (s Scale) GetLookbackSeconds() int {

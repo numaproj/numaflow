@@ -20025,6 +20025,55 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.CronSchedule": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "min",
+        "max"
+      ],
+      "properties": {
+        "end": {
+          "description": "End of the cron window. Same format as Start. Must differ from Start.",
+          "type": "string"
+        },
+        "max": {
+          "description": "Maximum replicas during this window. Overrides scale.max.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "min": {
+          "description": "Minimum replicas during this window. Overrides scale.min.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "start": {
+          "description": "Start of the cron window. Linux cron format (Minute Hour Dom Month Dow).",
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.CronScheduling": {
+      "description": "CronScheduling defines cron-based autoscaling overrides.",
+      "type": "object",
+      "required": [
+        "timezone",
+        "schedules"
+      ],
+      "properties": {
+        "schedules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CronSchedule"
+          }
+        },
+        "timezone": {
+          "description": "Timezone for interpreting cron expressions. IANA Time Zone Database format.",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.DaemonTemplate": {
       "type": "object",
       "properties": {
@@ -22115,6 +22164,10 @@
       "description": "Scale defines the parameters for autoscaling.",
       "type": "object",
       "properties": {
+        "cron": {
+          "description": "Cron defines time-based autoscaling overrides. During active cron windows, the window's min/max replace the base min/max for scaling decisions.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CronScheduling"
+        },
         "disabled": {
           "description": "Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.",
           "type": "boolean"
