@@ -30,8 +30,8 @@ endif
 
 DOCKER_PUSH?=false
 IMAGE_NAMESPACE?=quay.io/numaproj
-VERSION?=v1.8.1
-BASE_VERSION:=v1.8.1
+VERSION?=v1.8.2
+BASE_VERSION:=v1.8.2
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
