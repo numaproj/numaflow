@@ -16,6 +16,34 @@ limitations under the License.
 
 package v1alpha1
 
+// CronScheduling defines cron-based autoscaling overrides.
+type CronScheduling struct {
+	// Timezone for interpreting cron expressions. IANA Time Zone Database format. Defaults to UTC.
+	// +optional
+	Timezone string `json:"timezone,omitempty" protobuf:"bytes,1,opt,name=timezone"`
+	// Schedules are evaluated in order; the first active schedule takes precedence when windows overlap.
+	Schedules []CronSchedule `json:"schedules" protobuf:"bytes,2,rep,name=schedules"`
+}
+
+type CronSchedule struct {
+	// Start of the cron window. Extended cron format (Second Minute Hour Dom Month Dow).
+	Start string `json:"start" protobuf:"bytes,1,opt,name=start"`
+	// End of the cron window. Same format as Start. Must differ from Start.
+	End string `json:"end" protobuf:"bytes,2,opt,name=end"`
+	// Minimum replicas during this window. Overrides scale.min.
+	Min *int32 `json:"min" protobuf:"varint,3,opt,name=min"`
+	// Maximum replicas during this window. Overrides scale.max.
+	Max *int32 `json:"max" protobuf:"varint,4,opt,name=max"`
+}
+
+// GetTimezone returns the configured timezone or UTC when it is omitted.
+func (cs CronScheduling) GetTimezone() string {
+	if cs.Timezone == "" {
+		return "UTC"
+	}
+	return cs.Timezone
+}
+
 // Scale defines the parameters for autoscaling.
 type Scale struct {
 	// Whether to disable autoscaling.
@@ -65,6 +93,10 @@ type Scale struct {
 	// The is use to prevent from too aggressive scaling down operations
 	// +optional
 	ReplicasPerScaleDown *uint32 `json:"replicasPerScaleDown,omitempty" protobuf:"varint,12,opt,name=replicasPerScaleDown"`
+	// Cron defines time-based autoscaling overrides. During active cron windows, the window's
+	// min/max replace the base min/max for scaling decisions.
+	// +optional
+	Cron *CronScheduling `json:"cron,omitempty" protobuf:"bytes,13,opt,name=cron"`
 }
 
 func (s Scale) GetLookbackSeconds() int {

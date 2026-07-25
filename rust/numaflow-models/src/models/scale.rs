@@ -20,6 +20,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scale {
+    #[serde(rename = "cron", skip_serializing_if = "Option::is_none")]
+    pub cron: Option<Box<crate::models::CronScheduling>>,
     /// Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
     #[serde(rename = "disabled", skip_serializing_if = "Option::is_none")]
     pub disabled: Option<bool>,
@@ -80,6 +82,7 @@ impl Scale {
     /// Scale defines the parameters for autoscaling.
     pub fn new() -> Scale {
         Scale {
+            cron: None,
             disabled: None,
             lookback_seconds: None,
             max: None,

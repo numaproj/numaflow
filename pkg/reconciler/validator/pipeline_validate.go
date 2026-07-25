@@ -211,6 +211,9 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
 		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
 	}
+	if v.Scale.Cron != nil {
+		return fmt.Errorf("vertex %q: cron autoscaling is not supported for pipeline vertices", v.Name)
+	}
 	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
 	if v.Scale.Min != nil {
 		min = *v.Scale.Min

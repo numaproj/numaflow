@@ -26,6 +26,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +36,58 @@ import (
 	mvtxdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
+
+type parsedCronSchedule struct {
+	schedule dfv1.CronSchedule
+	start    cron.Schedule
+	end      cron.Schedule
+}
+
+func (p *parsedCronSchedule) isActiveAt(t time.Time) bool {
+	return p.end.Next(t).Before(p.start.Next(t))
+}
+
+func parseCronSchedules(cronScheduling *dfv1.CronScheduling) ([]parsedCronSchedule, error) {
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	result := make([]parsedCronSchedule, 0, len(cronScheduling.Schedules))
+	for _, schedule := range cronScheduling.Schedules {
+		start, err := parser.Parse(schedule.Start)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cron start expression %q: %w", schedule.Start, err)
+		}
+		end, err := parser.Parse(schedule.End)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cron end expression %q: %w", schedule.End, err)
+		}
+		result = append(result, parsedCronSchedule{schedule: schedule, start: start, end: end})
+	}
+	return result, nil
+}
+
+func effectiveScaleBoundsAt(scale dfv1.Scale, parsed []parsedCronSchedule, at time.Time) (int32, int32, bool) {
+	minReplicas := scale.GetMinReplicas()
+	maxReplicas := scale.GetMaxReplicas()
+	if scale.Cron == nil || len(parsed) == 0 {
+		return minReplicas, maxReplicas, false
+	}
+	location, err := time.LoadLocation(scale.Cron.GetTimezone())
+	if err != nil {
+		return minReplicas, maxReplicas, false
+	}
+	at = at.In(location)
+	for i := range parsed {
+		if parsed[i].isActiveAt(at) {
+			if parsed[i].schedule.Min != nil {
+				minReplicas = *parsed[i].schedule.Min
+			}
+			if parsed[i].schedule.Max != nil {
+				maxReplicas = *parsed[i].schedule.Max
+			}
+			return minReplicas, maxReplicas, true
+		}
+	}
+	return minReplicas, maxReplicas, false
+}
 
 type Scaler struct {
 	client     client.Client
@@ -46,6 +99,8 @@ type Scaler struct {
 	// Cache to store the vertex metrics such as pending message number
 	monoVtxMetricsCache    *lru.Cache[string, int64]
 	mvtxDaemonClientsCache *lru.Cache[string, mvtxdaemonclient.MonoVertexDaemonClient]
+	// Cache to store the pre-parsed cron schedules for each MonoVertex
+	cronScheduleCache *lru.Cache[string, []parsedCronSchedule]
 }
 
 // NewScaler returns a Scaler instance.
@@ -69,6 +124,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 	})
 	monoVtxMetricsCache, _ := lru.New[string, int64](10000)
 	s.monoVtxMetricsCache = monoVtxMetricsCache
+	s.cronScheduleCache, _ = lru.New[string, []parsedCronSchedule](1000)
 	return s
 }
 
@@ -122,6 +178,33 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 			}
 		}
 	}
+}
+
+// parsedCronSchedulesFor returns the parsed cron schedules for a MonoVertex.
+func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronSchedule, error) {
+	if monoVtx.Spec.Scale.Cron == nil {
+		return nil, nil
+	}
+	key := fmt.Sprintf("%s/%d", monoVtx.UID, monoVtx.Generation)
+	if parsed, ok := s.cronScheduleCache.Get(key); ok {
+		return parsed, nil
+	}
+	parsed, err := parseCronSchedules(monoVtx.Spec.Scale.Cron)
+	if err != nil {
+		return nil, err
+	}
+	s.cronScheduleCache.Add(key, parsed)
+	return parsed, nil
+}
+
+// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time.
+func (s *Scaler) effectiveScaleBoundsFor(monoVtx *dfv1.MonoVertex, at time.Time) (int32, int32, bool, error) {
+	parsed, err := s.parsedCronSchedulesFor(monoVtx)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	minReplicas, maxReplicas, cronActive := effectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
+	return minReplicas, maxReplicas, cronActive, nil
 }
 
 // scaleOneMonoVertex implements the detailed logic of scaling up/down a MonoVertex.
@@ -180,7 +263,23 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		return nil
 	}
 
-	if monoVtx.Spec.Scale.GetMaxReplicas() == monoVtx.Spec.Scale.GetMinReplicas() {
+	minReplicas, maxReplicas, cronActive, boundsErr := s.effectiveScaleBoundsFor(monoVtx, time.Now())
+	if boundsErr != nil {
+		log.Errorw("Failed to parse cron schedules.", zap.Error(boundsErr))
+		return boundsErr
+	}
+	current := int32(monoVtx.Status.Replicas)
+	if cronActive {
+		if current < minReplicas {
+			log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
+			return s.scaleUp(ctx, monoVtx, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
+		}
+		if current > maxReplicas {
+			log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
+			return s.scaleDown(ctx, monoVtx, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
+		}
+	}
+	if maxReplicas == minReplicas {
 		log.Infof("MonoVertex %s has same scale.min and scale.max, skip scaling.", monoVtx.Name)
 		return nil
 	}
@@ -258,8 +357,6 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	}
 
 	log.Infof("Calculated desired replica number of MonoVertex %q is: %d.", monoVtx.Name, desired)
-	maxReplicas := monoVtx.Spec.Scale.GetMaxReplicas()
-	minReplicas := monoVtx.Spec.Scale.GetMinReplicas()
 	if desired > maxReplicas {
 		desired = maxReplicas
 		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", desired, monoVtxName, maxReplicas)
@@ -268,35 +365,44 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		desired = minReplicas
 		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, minReplicas)
 	}
-	current := int32(monoVtx.Status.Replicas)
 	if current > maxReplicas || current < minReplicas { // Someone might have manually scaled up/down the MonoVertex
 		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
 	}
 	if desired < current {
-		maxAllowedDown := int32(monoVtx.Spec.Scale.GetReplicasPerScaleDown())
-		diff := current - desired
-		if diff > maxAllowedDown {
-			diff = maxAllowedDown
-		}
-		if secondsSinceLastScale < scaleDownCooldown {
-			log.Infof("Cooldown period for scaling down, skip scaling.")
-			return nil
-		}
-		return s.patchMonoVertexReplicas(ctx, monoVtx, current-diff) // We scale down gradually
+		return s.scaleDown(ctx, monoVtx, current, desired, secondsSinceLastScale, scaleDownCooldown)
 	}
 	if desired > current {
-		maxAllowedUp := int32(monoVtx.Spec.Scale.GetReplicasPerScaleUp())
-		diff := desired - current
-		if diff > maxAllowedUp {
-			diff = maxAllowedUp
-		}
-		if secondsSinceLastScale < scaleUpCooldown {
-			log.Infof("Cooldown period for scaling up, skip scaling.")
-			return nil
-		}
-		return s.patchMonoVertexReplicas(ctx, monoVtx, current+diff) // We scale up gradually
+		return s.scaleUp(ctx, monoVtx, current, desired, secondsSinceLastScale, scaleUpCooldown)
 	}
 	return nil
+}
+
+func (s *Scaler) scaleUp(ctx context.Context, monoVtx *dfv1.MonoVertex, current, desired int32, secondsSinceLastScale, scaleUpCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedUp := int32(monoVtx.Spec.Scale.GetReplicasPerScaleUp())
+	diff := desired - current
+	if diff > maxAllowedUp {
+		diff = maxAllowedUp
+	}
+	if secondsSinceLastScale < scaleUpCooldown {
+		log.Infof("Cooldown period for scaling up, skip scaling.")
+		return nil
+	}
+	return s.patchMonoVertexReplicas(ctx, monoVtx, current+diff)
+}
+
+func (s *Scaler) scaleDown(ctx context.Context, monoVtx *dfv1.MonoVertex, current, desired int32, secondsSinceLastScale, scaleDownCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedDown := int32(monoVtx.Spec.Scale.GetReplicasPerScaleDown())
+	diff := current - desired
+	if diff > maxAllowedDown {
+		diff = maxAllowedDown
+	}
+	if secondsSinceLastScale < scaleDownCooldown {
+		log.Infof("Cooldown period for scaling down, skip scaling.")
+		return nil
+	}
+	return s.patchMonoVertexReplicas(ctx, monoVtx, current-diff)
 }
 
 func (s *Scaler) desiredReplicas(_ context.Context, monoVtx *dfv1.MonoVertex, processingRate float64, pending int64) int32 {

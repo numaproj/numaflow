@@ -4417,6 +4417,33 @@ spec:
                 type: string
               scale:
                 properties:
+                  cron:
+                    properties:
+                      schedules:
+                        items:
+                          properties:
+                            end:
+                              type: string
+                            max:
+                              format: int32
+                              type: integer
+                            min:
+                              format: int32
+                              type: integer
+                            start:
+                              type: string
+                          required:
+                          - end
+                          - max
+                          - min
+                          - start
+                          type: object
+                        type: array
+                      timezone:
+                        type: string
+                    required:
+                    - schedules
+                    type: object
                   disabled:
                     type: boolean
                   lookbackSeconds:
@@ -17329,6 +17356,33 @@ spec:
                       type: string
                     scale:
                       properties:
+                        cron:
+                          properties:
+                            schedules:
+                              items:
+                                properties:
+                                  end:
+                                    type: string
+                                  max:
+                                    format: int32
+                                    type: integer
+                                  min:
+                                    format: int32
+                                    type: integer
+                                  start:
+                                    type: string
+                                required:
+                                - end
+                                - max
+                                - min
+                                - start
+                                type: object
+                              type: array
+                            timezone:
+                              type: string
+                          required:
+                          - schedules
+                          type: object
                         disabled:
                           type: boolean
                         lookbackSeconds:
@@ -30476,6 +30530,33 @@ spec:
                           type: string
                         scale:
                           properties:
+                            cron:
+                              properties:
+                                schedules:
+                                  items:
+                                    properties:
+                                      end:
+                                        type: string
+                                      max:
+                                        format: int32
+                                        type: integer
+                                      min:
+                                        format: int32
+                                        type: integer
+                                      start:
+                                        type: string
+                                    required:
+                                    - end
+                                    - max
+                                    - min
+                                    - start
+                                    type: object
+                                  type: array
+                                timezone:
+                                  type: string
+                              required:
+                              - schedules
+                              type: object
                             disabled:
                               type: boolean
                             lookbackSeconds:
@@ -39827,6 +39908,33 @@ spec:
                 type: string
               scale:
                 properties:
+                  cron:
+                    properties:
+                      schedules:
+                        items:
+                          properties:
+                            end:
+                              type: string
+                            max:
+                              format: int32
+                              type: integer
+                            min:
+                              format: int32
+                              type: integer
+                            start:
+                              type: string
+                          required:
+                          - end
+                          - max
+                          - min
+                          - start
+                          type: object
+                        type: array
+                      timezone:
+                        type: string
+                    required:
+                    - schedules
+                    type: object
                   disabled:
                     type: boolean
                   lookbackSeconds:

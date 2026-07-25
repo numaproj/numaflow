@@ -248,6 +248,13 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("cron autoscaling is not supported for pipeline vertices", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[1].Scale.Cron = &dfv1.CronScheduling{}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "p1": cron autoscaling is not supported for pipeline vertices`)
+	})
+
 	t.Run("test nil pipeline", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Name = "invalid.name"
