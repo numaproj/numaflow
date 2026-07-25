@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use numaflow_monitor::runtime;
+use crate::runtime_server::runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
     source_transform_client::SourceTransformClient, source_transform_response,

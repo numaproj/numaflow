@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use crate::config::CustomResourceType;
 use bytes::Bytes;
 use config::Settings;
-use numaflow_monitor::runtime;
+pub mod runtime_server;
+
 use pipeline::forwarder;
+use runtime_server::runtime;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -135,6 +137,10 @@ pub async fn run() -> Result<()> {
     let env_vars: HashMap<String, String> = std::env::vars().collect();
     let settings = Settings::load(env_vars)?;
     let crd_type = settings.custom_resource_type.clone();
+
+    let _runtime_server_handle = runtime_server::spawn_runtime_errors_server(cln_token.clone())
+        .await
+        .map_err(|e| Error::Mapper(format!("failed to start runtime errors server: {e}")))?;
 
     match crd_type {
         CustomResourceType::MonoVertex(config) => {

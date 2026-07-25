@@ -35,7 +35,7 @@ import (
 type PodTracker struct {
 	monoVertex          *v1alpha1.MonoVertex
 	log                 *zap.SugaredLogger
-	httpClient          monitorHttpClient
+	httpClient          runtimeHTTPClient
 	activePodsCount     int
 	activePodsMutex     sync.RWMutex
 	refreshInterval     time.Duration
@@ -122,7 +122,7 @@ func (pt *PodTracker) updateActivePods() {
 func (pt *PodTracker) isActive(podName string) bool {
 	headlessSvc := pt.monoVertex.GetHeadlessServiceName()
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2470/runtime/errors
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/errors", podName, headlessSvc, pt.monoVertex.Namespace, v1alpha1.MonoVertexMonitorPort)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/errors", podName, headlessSvc, pt.monoVertex.Namespace, v1alpha1.MonoVertexRuntimePort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
 		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)

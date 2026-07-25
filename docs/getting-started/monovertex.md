@@ -41,7 +41,7 @@ Inspect the status by listing the pods. Note that the pod names in your environm
 kubectl get pods
 
 NAME                                                READY   STATUS    RESTARTS   AGE
-simple-mono-vertex-builtin-mv-0-w7fmq               2/2     Running   0          2m30s
+simple-mono-vertex-builtin-mv-0-w7fmq               1/1     Running   0          2m30s
 simple-mono-vertex-builtin-mv-daemon-55bff65db5-x   1/1     Running   0          2m30s
 ```
 
@@ -124,13 +124,13 @@ Inspect the status by listing the pods. Replace `xxxxx` with the appropriate pod
 kubectl get pods
 
 NAME                                           READY   STATUS    RESTARTS   AGE
-simple-mono-vertex-mv-0-w7fmq                  5/5     Running   0          2m30s
+simple-mono-vertex-mv-0-w7fmq                  6/6     Running   0          2m30s
 simple-mono-vertex-mv-daemon-55bff65db5-mk4g2  1/1     Running   0          2m30s
 ```
 
 ### View Pod Details
 
-Each user-defined container runs as its own container in the pod. To confirm all containers (monitor, udsource, transformer, udf, udsink, and numa) are running, describe the pod:
+Each user-defined container runs as its own container in the pod. To confirm all containers (udsource, transformer, udf, udsink, fb-udsink, and numa) are running, describe the pod:
 
 ```shell
 kubectl describe pod simple-mono-vertex-mv-0-xxxxx
