@@ -69,7 +69,7 @@ type PipelineRuntimeCache interface {
 
 var _ PipelineRuntimeCache = (*pipelineRuntimeCache)(nil)
 
-type monitorHttpClient interface {
+type runtimeHTTPClient interface {
 	Get(url string) (*http.Response, error)
 	Head(url string) (*http.Response, error)
 }
@@ -82,7 +82,7 @@ type pipelineRuntimeCache struct {
 	cacheMutex sync.RWMutex
 	podTracker *PodTracker
 	log        *zap.SugaredLogger
-	httpClient monitorHttpClient
+	httpClient runtimeHTTPClient
 }
 
 func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) PipelineRuntimeCache {
@@ -161,7 +161,7 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podIndex int) {
 	podName := strings.Join([]string{r.pipeline.Name, vtxName, fmt.Sprintf("%d", podIndex)}, "-")
 	// Get the headless service name
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtxName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtxName+"-headless", r.pipeline.Namespace, v1alpha1.VertexRuntimePort, runtimeErrorsPath)
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {

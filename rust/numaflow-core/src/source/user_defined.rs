@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::runtime_server::runtime;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use numaflow_monitor::runtime;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{

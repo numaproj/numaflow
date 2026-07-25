@@ -13,7 +13,6 @@ workspace = true
 [dependencies]
 serving.workspace = true
 numaflow-core.workspace = true
-numaflow-monitor.workspace = true
 numaflow-sideinput.workspace = true
 numaflow-daemon.workspace = true
 tokio.workspace = true

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::runtime_server::runtime;
 use bytes::Bytes;
-use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;

@@ -32,8 +32,7 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	monitorContainer := buildMonitorContainer(req)
-	sidecarContainers := []corev1.Container{monitorContainer, in.getUDFContainer(req)}
+	sidecarContainers := []corev1.Container{in.getUDFContainer(req)}
 	return sidecarContainers, []corev1.Container{in.getMainContainer(req)}, nil
 }
 
