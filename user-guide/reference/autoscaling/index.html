@@ -5312,6 +5312,13 @@ fine-tuned to achieve better results.</p>
 <span class="w">    </span><span class="nt">targetProcessingSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, defaults to 20.</span>
 <span class="w">    </span><span class="nt">replicasPerScaleUp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
 <span class="w">    </span><span class="nt">replicasPerScaleDown</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
+<span class="w">    </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional; supported only for MonoVertex.</span>
+<span class="w">      </span><span class="nt">timezone</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">America/Los_Angeles</span><span class="w"> </span><span class="c1"># Optional, defaults to UTC.</span>
+<span class="w">      </span><span class="nt">schedules</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">22</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w"> </span><span class="c1"># Second Minute Hour Day-of-month Month Day-of-week</span>
+<span class="w">          </span><span class="nt">end</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">6</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+<span class="w">          </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">          </span><span class="nt">max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
 </code></pre></div>
 <ul>
 <li><code>disabled</code> - Whether to disable Numaflow autoscaling, defaults to <code>false</code>.</li>
@@ -5364,6 +5371,13 @@ fine-tuned to achieve better results.</p>
 <li><code>replicasPerScale</code> - (Deprecated: Use <code>replicasPerScaleUp</code> and
   <code>replicasPerScaleDown</code> instead, will be removed in v1.5) Maximum number of
   replica change happens in one scale up or down operation, defaults to <code>2</code>.</li>
+<li><code>cron</code> - [MonoVertex only] Defines time-based overrides for <code>min</code> and <code>max</code>.
+  Cron expressions use the six-field extended format: <code>second minute hour
+  day-of-month month day-of-week</code>. <code>timezone</code> accepts an IANA time zone and
+  defaults to <code>UTC</code> when omitted. Each schedule requires <code>start</code>, <code>end</code>, <code>min</code>,
+  and <code>max</code>; its bounds may be lower or higher than the base <code>scale.min</code> and
+  <code>scale.max</code>. When multiple windows overlap, schedules are evaluated in the
+  configured order and the first active schedule takes precedence.</li>
 </ul>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
