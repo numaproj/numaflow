@@ -5510,7 +5510,7 @@ simple-mono-vertex-builtin<span class="w">   </span>Running<span class="w">   </
 kubectl<span class="w"> </span>get<span class="w"> </span>pods
 
 NAME<span class="w">                                                </span>READY<span class="w">   </span>STATUS<span class="w">    </span>RESTARTS<span class="w">   </span>AGE
-simple-mono-vertex-builtin-mv-0-w7fmq<span class="w">               </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
+simple-mono-vertex-builtin-mv-0-w7fmq<span class="w">               </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
 simple-mono-vertex-builtin-mv-daemon-55bff65db5-x<span class="w">   </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
 </code></pre></div>
 <h3 id="view-the-logs">View the Logs<a class="headerlink" href="#view-the-logs" title="Permanent link">&para;</a></h3>
@@ -5561,11 +5561,11 @@ simple-mono-vertex<span class="w">   </span>Running<span class="w">   </span><sp
 kubectl<span class="w"> </span>get<span class="w"> </span>pods
 
 NAME<span class="w">                                           </span>READY<span class="w">   </span>STATUS<span class="w">    </span>RESTARTS<span class="w">   </span>AGE
-simple-mono-vertex-mv-0-w7fmq<span class="w">                  </span><span class="m">5</span>/5<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
+simple-mono-vertex-mv-0-w7fmq<span class="w">                  </span><span class="m">6</span>/6<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
 simple-mono-vertex-mv-daemon-55bff65db5-mk4g2<span class="w">  </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>2m30s
 </code></pre></div>
 <h3 id="view-pod-details">View Pod Details<a class="headerlink" href="#view-pod-details" title="Permanent link">&para;</a></h3>
-<p>Each user-defined container runs as its own container in the pod. To confirm all containers (monitor, udsource, transformer, udf, udsink, and numa) are running, describe the pod:</p>
+<p>Each user-defined container runs as its own container in the pod. To confirm all containers (udsource, transformer, udf, udsink, fb-udsink, and numa) are running, describe the pod:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>simple-mono-vertex-mv-0-xxxxx
 </code></pre></div>
 <h3 id="monitor-logs-for-the-sink-container">Monitor Logs for the Sink Container<a class="headerlink" href="#monitor-logs-for-the-sink-container" title="Permanent link">&para;</a></h3>
