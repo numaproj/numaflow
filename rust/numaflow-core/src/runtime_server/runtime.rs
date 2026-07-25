@@ -1,6 +1,6 @@
 //! The `runtime` module is responsible for persisting runtime information, such as application errors.
-use crate::config::RuntimeInfoConfig;
-use crate::error::{Error, Result};
+use super::config::RuntimeInfoConfig;
+use super::error::{Error, Result};
 use chrono::Utc;
 use prost::Message;
 use serde::{Deserialize, Serialize};
@@ -138,7 +138,7 @@ impl From<RuntimeErrorEntry> for String {
 ///
 /// # Example:
 /// ```no_run
-///  use numaflow_monitor::runtime;
+///  use numaflow_core::runtime_server::runtime;
 ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
 ///  runtime::persist_application_error(grpc_status);
 /// ```
@@ -459,8 +459,7 @@ fn process_file_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::Result;
-    use crate::runtime::process_file_entry;
+    use crate::runtime_server::error::Result;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;

@@ -215,7 +215,7 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		podSpec, err := testMvtx.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(podSpec.Containers))
-		assert.Equal(t, 4, len(podSpec.InitContainers))
+		assert.Equal(t, 3, len(podSpec.InitContainers))
 		assert.Equal(t, 2, len(podSpec.Volumes))
 		assert.Equal(t, "my-image", podSpec.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, podSpec.Containers[0].ImagePullPolicy)
@@ -223,36 +223,20 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.Equal(t, "200m", podSpec.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "100Mi", podSpec.Containers[0].Resources.Requests.Memory().String())
 		assert.Equal(t, "200Mi", podSpec.Containers[0].Resources.Limits.Memory().String())
-		assert.Equal(t, CtrMonitor, podSpec.InitContainers[0].Name)
-		assert.NotNil(t, podSpec.InitContainers[0].SecurityContext)
-		assert.True(t, *podSpec.InitContainers[0].SecurityContext.RunAsNonRoot)
-		assert.True(t, *podSpec.InitContainers[0].SecurityContext.ReadOnlyRootFilesystem)
-		assert.False(t, *podSpec.InitContainers[0].SecurityContext.AllowPrivilegeEscalation)
-		// The monitor sidecar must only pick up SecurityContext from ContainerTemplate,
-		// not its Resources or Env -- those stay at the monitor's own hardcoded defaults.
-		assert.Equal(t, "10m", podSpec.InitContainers[0].Resources.Requests.Cpu().String())
-		assert.Equal(t, "20Mi", podSpec.InitContainers[0].Resources.Requests.Memory().String())
-		assert.Equal(t, "0", podSpec.InitContainers[0].Resources.Limits.Cpu().String())
-		assert.Equal(t, "0", podSpec.InitContainers[0].Resources.Limits.Memory().String())
-		var monitorEnvNames []string
-		for _, env := range podSpec.InitContainers[0].Env {
-			monitorEnvNames = append(monitorEnvNames, env.Name)
-		}
-		assert.NotContains(t, monitorEnvNames, "ct-only-env")
-		assert.Equal(t, "test-image1", podSpec.InitContainers[1].Image)
-		assert.Equal(t, "test-image2", podSpec.InitContainers[2].Image)
-		assert.Equal(t, "test-image3", podSpec.InitContainers[3].Image)
-		assert.Nil(t, podSpec.InitContainers[1].SecurityContext)
+		assert.NotNil(t, podSpec.Containers[0].SecurityContext)
+		assert.True(t, *podSpec.Containers[0].SecurityContext.RunAsNonRoot)
+		assert.True(t, *podSpec.Containers[0].SecurityContext.ReadOnlyRootFilesystem)
+		assert.False(t, *podSpec.Containers[0].SecurityContext.AllowPrivilegeEscalation)
+		assert.Equal(t, "test-image1", podSpec.InitContainers[0].Image)
+		assert.Equal(t, "test-image2", podSpec.InitContainers[1].Image)
+		assert.Equal(t, "test-image3", podSpec.InitContainers[2].Image)
+		assert.Nil(t, podSpec.InitContainers[0].SecurityContext)
 		for i, c := range podSpec.Containers {
 			if i != 0 {
 				assert.Equal(t, 1, len(c.VolumeMounts))
 			}
 		}
-		for i, c := range podSpec.InitContainers {
-			if i == 0 {
-				assert.Equal(t, 1, len(c.VolumeMounts)) // monitor container
-				continue
-			}
+		for _, c := range podSpec.InitContainers {
 			assert.Equal(t, 2, len(c.VolumeMounts))
 		}
 		envNames := []string{}
@@ -513,7 +497,7 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		// Verify that the ports contain the expected values
 		expectedPorts := map[int32]string{
 			MonoVertexMetricsPort: MonoVertexMetricsPortName,
-			MonoVertexMonitorPort: MonoVertexMonitorPortName,
+			MonoVertexRuntimePort: MonoVertexRuntimePortName,
 		}
 		foundPorts := map[int32]string{}
 		for _, port := range headlessService.Spec.Ports {
@@ -537,13 +521,13 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		// Verify headless service ports
 		ports := map[int32]bool{
 			MonoVertexMetricsPort: false,
-			MonoVertexMonitorPort: false,
+			MonoVertexRuntimePort: false,
 		}
 		for _, port := range services[0].Spec.Ports {
 			ports[port.Port] = true
 		}
 		assert.True(t, ports[MonoVertexMetricsPort], "Metrics port is missing")
-		assert.True(t, ports[MonoVertexMonitorPort], "Monitor port is missing")
+		assert.True(t, ports[MonoVertexRuntimePort], "Runtime port is missing")
 		assert.Equal(t, "None", services[0].Spec.ClusterIP)
 	})
 

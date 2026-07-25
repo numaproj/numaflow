@@ -97,12 +97,6 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
         });
 
     match cli_matches.subcommand() {
-        Some(("monitor", _)) => {
-            info!("Starting monitor");
-            numaflow_monitor::run()
-                .await
-                .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
-        }
         Some(("serving", _)) => {
             info!("Starting serving");
             if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_err() {

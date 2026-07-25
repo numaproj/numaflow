@@ -19,6 +19,8 @@ use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::metrics::critical_error_reasons;
+#[cfg(not(test))]
+use crate::runtime_server::runtime;
 use crate::shared::grpc::{
     DEFAULT_RECONNECT_INTERVAL, UdfReconnectConfig, create_mapper_client, prost_timestamp_from_utc,
 };
@@ -442,7 +444,7 @@ pub(in crate::mapper) fn map_redrive_error(status: tonic::Status) -> Error {
         critical_error_reasons::MAP_RUNTIME_ERROR
     );
     #[cfg(not(test))]
-    numaflow_monitor::runtime::persist_application_error_with_container(status.clone(), "udf");
+    runtime::persist_application_error_with_container(status.clone(), "udf");
     Error::UdfRedrive(Box::new(status))
 }
 
