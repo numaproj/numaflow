@@ -68,3 +68,8 @@ func Test_Scale_Parameters(t *testing.T) {
 	s.Max = ptr.To[int32](500)
 	assert.Equal(t, int32(500), s.GetMaxReplicas())
 }
+
+func TestCronScheduling_GetTimezone(t *testing.T) {
+	assert.Equal(t, "UTC", (CronScheduling{}).GetTimezone())
+	assert.Equal(t, "America/Los_Angeles", (CronScheduling{Timezone: "America/Los_Angeles"}).GetTimezone())
+}
