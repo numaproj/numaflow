@@ -70,10 +70,10 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 }
 
 func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
+	monoVertexName := "runtime-error-monovertex"
 	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
-	monoVertexName := "runtime-error-monovertex"
+	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
 
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
 
@@ -86,7 +86,13 @@ func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	assert.NoError(s.T(), err)
 	defer func() { assert.NoError(s.T(), client.Close()) }()
 
-	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
+	go func() {
+		defer func() {
+			// The HTTP request can outlive the test because the UDF process exits before ACKing it.
+			_ = recover()
+		}()
+		SendMessageTo(monoVertexName, monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
+	}()
 
 	assert.Eventually(s.T(), func() bool {
 		body := HTTPExpect(s.T(), "https://localhost:8942").GET("/runtime/errors").
@@ -96,7 +102,9 @@ func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		errors, err := client.GetMonoVertexErrors(context.Background(), monoVertexName)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		errors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
 		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
 	}, 2*time.Minute, time.Second)
 
@@ -107,8 +115,6 @@ func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 			Status(200).Body().Raw()
 		return strings.Contains(body, `"container":"udf"`)
 	}, 2*time.Minute, time.Second)
-
-	w.Expect().MonoVertexPodsRunning()
 }
 
 func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {

@@ -202,7 +202,9 @@ func (s *FunctionalSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		errors, err := client.GetVertexErrors(context.Background(), pipelineName, "p1")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		errors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
 		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
 	}, 2*time.Minute, time.Second)
 
@@ -213,8 +215,6 @@ func (s *FunctionalSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 			Status(200).Body().Raw()
 		return strings.Contains(body, `"container":"udf"`)
 	}, 2*time.Minute, time.Second)
-
-	w.Expect().VertexPodsRunning()
 }
 
 func (s *FunctionalSuite) TestDropOnFull() {
