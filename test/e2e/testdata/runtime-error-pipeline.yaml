@@ -1,0 +1,26 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: runtime-error-pipeline
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http:
+          service: true
+    - name: p1
+      udf:
+        container:
+          # map-filter exits when it receives invalid JSON, which exercises UDF failure capture.
+          image: quay.io/numaio/numaflow-go/map-filter:stable
+          imagePullPolicy: IfNotPresent
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: p1
+    - from: p1
+      to: out
