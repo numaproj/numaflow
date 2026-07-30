@@ -19,9 +19,7 @@ limitations under the License.
 package monovertex_e2e
 
 import (
-	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -67,54 +65,6 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
 	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
 
-}
-
-func (s *MonoVertexSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
-	monoVertexName := "runtime-error-monovertex"
-	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
-		When().CreateMonoVertexAndWait()
-	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
-
-	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
-
-	defer w.MonoVertexPodPortForward(8942, dfv1.MonoVertexRuntimePort).
-		MvtxDaemonPodPortForward(3242, dfv1.MonoVertexDaemonServicePort).
-		UXServerPodPortForward(8142, 8443).
-		TerminateAllPodPortForwards()
-
-	client, err := mvtxclient.NewGRPCClient("localhost:3242")
-	assert.NoError(s.T(), err)
-	defer func() { assert.NoError(s.T(), client.Close()) }()
-
-	go func() {
-		defer func() {
-			// The HTTP request can outlive the test because the UDF process exits before ACKing it.
-			_ = recover()
-		}()
-		SendMessageTo(monoVertexName, monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
-	}()
-
-	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8942").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
-
-	assert.Eventually(s.T(), func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		errors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
-	}, 2*time.Minute, time.Second)
-
-	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8142").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName)).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
 }
 
 func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {

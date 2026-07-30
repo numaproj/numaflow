@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: runtime-error-sink-pipeline
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http:
+          service: true
+    - name: out
+      sink:
+        udsink:
+          container:
+            # sink-panic exits when it receives a message, which exercises sink failure capture.
+            image: quay.io/numaio/numaflow-go/sink-panic:stable
+            imagePullPolicy: IfNotPresent
+  edges:
+    - from: in
+      to: out

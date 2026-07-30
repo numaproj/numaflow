@@ -19,11 +19,7 @@ limitations under the License.
 package sdks_e2e
 
 import (
-	"context"
-	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -122,49 +118,6 @@ func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 	w.Expect().
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
-}
-
-func (s *MapSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
-	w := s.Given().Pipeline("@testdata/runtime-error-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "runtime-error-pipeline"
-
-	w.Expect().VertexPodsRunning().DaemonPodsRunning()
-
-	defer w.VertexPodPortForward("p1", 8941, dfv1.VertexRuntimePort).
-		DaemonPodPortForward(pipelineName, 1241, dfv1.DaemonServicePort).
-		UXServerPodPortForward(8141, 8443).
-		TerminateAllPodPortForwards()
-
-	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1241")
-	assert.NoError(s.T(), err)
-	defer func() { assert.NoError(s.T(), client.Close()) }()
-
-	SendMessageTo(fmt.Sprintf("%s-in", pipelineName), "in", NewHttpPostRequest().WithBody([]byte("not-json")))
-
-	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8941").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
-
-	assert.Eventually(s.T(), func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		errors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
-	}, 2*time.Minute, time.Second)
-
-	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8141").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "p1")).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
 }
 
 func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
