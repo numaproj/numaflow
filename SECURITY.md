@@ -6,9 +6,9 @@ If you find a security related bug in Numaflow, we kindly ask you for responsibl
 
 Please report vulnerabilities by e-mail to the following address:
 
-- Edward_Lee@intuit.com
-- Vigith_Maurice@intuit.com
-- Derek_Wang@intuit.com
+- [Vigith Maurice](mailto:vigith@gmail.com)
+- [Derek Wang](mailto:Derek_Wang@intuit.com)
+- [Yashash H L](mailto:yashashhl25@gmail.com)
 
 All vulnerabilities and associated information will be treated with full confidentiality.
 
