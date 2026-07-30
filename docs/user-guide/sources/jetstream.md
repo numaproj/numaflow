@@ -1,6 +1,6 @@
 # Jetstream Source
 
-A `Jetstream` source is used to ingest the messages from a [Jetstream stream](https://docs.nats.io/nats-concepts/jetstream).
+A `Jetstream` source is used to ingest the messages from a [Jetstream stream](https://docs.nats.io/concepts/jetstream).
 
 ```yaml
 spec:
@@ -38,7 +38,7 @@ spec:
 
 The `consumer` field represents the name of the consumer of the stream. If not specified, a consumer with name format `numaflow-<pipeline_name>-<vertex_name>-<stream_name>` will used. Numaflow will attempt to create this consumer on the stream if it doesn't exist.
 
-The [valid values](https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy) for `deliver_policy` are:
+The [valid values](https://docs.nats.io/learn/jetstream/reading-back) for `deliver_policy` are:
 
 - `all`
 - `new`

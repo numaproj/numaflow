@@ -224,7 +224,7 @@ JetStream service. By default `TLS` is not enabled.
 
 Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`.
 Be aware this will impact the performance a bit, see the detail at
-[official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
+[official doc](https://docs.nats.io/reference/config/jetstream/encryption_key).
 
 Once a JetStream ISB Service is created, toggling the `encryption` field will
 cause problem for the exiting messages, so if you want to change the value,
