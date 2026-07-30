@@ -26,7 +26,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,60 +33,9 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	mvtxdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
-
-type parsedCronSchedule struct {
-	schedule dfv1.CronSchedule
-	start    cron.Schedule
-	end      cron.Schedule
-}
-
-func (p *parsedCronSchedule) isActiveAt(t time.Time) bool {
-	return p.end.Next(t).Before(p.start.Next(t))
-}
-
-func parseCronSchedules(cronScheduling *dfv1.CronScheduling) ([]parsedCronSchedule, error) {
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	result := make([]parsedCronSchedule, 0, len(cronScheduling.Schedules))
-	for _, schedule := range cronScheduling.Schedules {
-		start, err := parser.Parse(schedule.Start)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cron start expression %q: %w", schedule.Start, err)
-		}
-		end, err := parser.Parse(schedule.End)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cron end expression %q: %w", schedule.End, err)
-		}
-		result = append(result, parsedCronSchedule{schedule: schedule, start: start, end: end})
-	}
-	return result, nil
-}
-
-func effectiveScaleBoundsAt(scale dfv1.Scale, parsed []parsedCronSchedule, at time.Time) (int32, int32, bool) {
-	minReplicas := scale.GetMinReplicas()
-	maxReplicas := scale.GetMaxReplicas()
-	if scale.Cron == nil || len(parsed) == 0 {
-		return minReplicas, maxReplicas, false
-	}
-	location, err := time.LoadLocation(scale.Cron.GetTimezone())
-	if err != nil {
-		return minReplicas, maxReplicas, false
-	}
-	at = at.In(location)
-	for i := range parsed {
-		if parsed[i].isActiveAt(at) {
-			if parsed[i].schedule.Min != nil {
-				minReplicas = *parsed[i].schedule.Min
-			}
-			if parsed[i].schedule.Max != nil {
-				maxReplicas = *parsed[i].schedule.Max
-			}
-			return minReplicas, maxReplicas, true
-		}
-	}
-	return minReplicas, maxReplicas, false
-}
 
 type Scaler struct {
 	client     client.Client
@@ -100,7 +48,7 @@ type Scaler struct {
 	monoVtxMetricsCache    *lru.Cache[string, int64]
 	mvtxDaemonClientsCache *lru.Cache[string, mvtxdaemonclient.MonoVertexDaemonClient]
 	// Cache to store the pre-parsed cron schedules for each MonoVertex
-	cronScheduleCache *lru.Cache[string, []parsedCronSchedule]
+	cronScheduleCache *lru.Cache[string, []scalingutil.ParsedCronSchedule]
 }
 
 // NewScaler returns a Scaler instance.
@@ -124,7 +72,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 	})
 	monoVtxMetricsCache, _ := lru.New[string, int64](10000)
 	s.monoVtxMetricsCache = monoVtxMetricsCache
-	s.cronScheduleCache, _ = lru.New[string, []parsedCronSchedule](1000)
+	s.cronScheduleCache, _ = lru.New[string, []scalingutil.ParsedCronSchedule](1000)
 	return s
 }
 
@@ -181,7 +129,7 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 }
 
 // parsedCronSchedulesFor returns the parsed cron schedules for a MonoVertex.
-func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronSchedule, error) {
+func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]scalingutil.ParsedCronSchedule, error) {
 	if monoVtx.Spec.Scale.Cron == nil {
 		return nil, nil
 	}
@@ -189,7 +137,7 @@ func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronS
 	if parsed, ok := s.cronScheduleCache.Get(key); ok {
 		return parsed, nil
 	}
-	parsed, err := parseCronSchedules(monoVtx.Spec.Scale.Cron)
+	parsed, err := scalingutil.ParseCronSchedules(monoVtx.Spec.Scale.Cron)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +151,7 @@ func (s *Scaler) effectiveScaleBoundsFor(monoVtx *dfv1.MonoVertex, at time.Time)
 	if err != nil {
 		return 0, 0, false, err
 	}
-	minReplicas, maxReplicas, cronActive := effectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
+	minReplicas, maxReplicas, cronActive := scalingutil.EffectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
 	return minReplicas, maxReplicas, cronActive, nil
 }
 

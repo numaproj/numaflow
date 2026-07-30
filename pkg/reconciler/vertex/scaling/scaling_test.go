@@ -1,11 +1,10 @@
 /*
 Copyright 2022 The Numaproj Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package scaling
 
 import (
@@ -55,9 +53,7 @@ func Test_BasicOperations(t *testing.T) {
 	s.StopWatching("key1")
 	assert.False(t, s.Contains("key1"))
 }
-
 func Test_desiredReplicasSinglePartition(t *testing.T) {
-
 	t.Run("test src", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		s := NewScaler(cl)
@@ -75,7 +71,6 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 		assert.Equal(t, int32(13), s.desiredReplicas(context.TODO(), src, []float64{800, 210, 750}, []int64{18932, 800, 24988}, int64(30000), int64(24000), int64(27000)))
 		assert.Equal(t, int32(15), s.desiredReplicas(context.TODO(), src, []float64{800, 21, 750}, []int64{18932, 800, 24988}, int64(30000), int64(24000), int64(27000)))
 	})
-
 	t.Run("test udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		s := NewScaler(cl)
@@ -83,7 +78,6 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 		udf.Spec.UDF = &dfv1.UDF{}
 		udf.Spec.Scale.TargetProcessingSeconds = ptr.To[uint32](5)
 		udf.Spec.Scale.TargetBufferAvailability = ptr.To[uint32](90)
-
 		tests := []struct {
 			name                    string
 			partitionProcessingRate []float64
@@ -169,7 +163,6 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 				want:                    11,
 			},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				udf := fakeVertex.DeepCopy()
@@ -182,5 +175,4 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 			})
 		}
 	})
-
 }
