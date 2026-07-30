@@ -3546,6 +3546,7 @@ func (in *UDTransformer) DeepCopyInto(out *UDTransformer) {
 		*out = new(Container)
 		(*in).DeepCopyInto(*out)
 	}
+	in.RetryStrategy.DeepCopyInto(&out.RetryStrategy)
 	return
 }
 

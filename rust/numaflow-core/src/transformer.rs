@@ -1,14 +1,4 @@
-use bytes::Bytes;
-use futures::stream::{self, StreamExt};
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::collections::HashMap;
-use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tonic::{Code, Status};
-use tracing::error;
-
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -21,6 +11,19 @@ use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::{ReconnectConfig, UserDefinedTransformer};
 use crate::{Result, mark_success};
+use backoff::strategy::exponential::Exponential;
+use bytes::Bytes;
+use futures::stream::{self, StreamExt};
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tonic::{Code, Status};
+use tracing::{error, warn};
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -78,6 +81,7 @@ pub(crate) struct Transformer {
     graceful_shutdown_time: Duration,
     tracker: Tracker,
     health_checker: Option<SourceTransformClient<Channel>>,
+    retry_config: Option<RetryConfig>,
 }
 
 impl Transformer {
@@ -88,6 +92,7 @@ impl Transformer {
         client: SourceTransformClient<Channel>,
         tracker: Tracker,
         reconnect_config: ReconnectConfig,
+        retry_config: Option<RetryConfig>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
@@ -105,6 +110,7 @@ impl Transformer {
             sender,
             tracker,
             health_checker: Some(client),
+            retry_config,
         })
     }
 
@@ -114,26 +120,89 @@ impl Transformer {
         transform_handle: mpsc::Sender<TransformerActorMessage>,
         read_msg: Message,
         hard_shutdown_token: CancellationToken,
+        retry_strategy: Option<OnFailureStrategy>,
+        mut opt_backoff: Option<Exponential>,
+        drop_count: Arc<AtomicUsize>,
     ) -> Result<Vec<Message>> {
-        let (sender, receiver) = oneshot::channel();
-        let msg = TransformerActorMessage {
-            message: read_msg,
-            respond_to: sender,
-        };
+        let mut retry_attempt: u64 = 0;
+        let response = loop {
+            let (sender, receiver) = oneshot::channel();
+            let msg = TransformerActorMessage {
+                message: read_msg.clone(),
+                respond_to: sender,
+            };
 
-        // invoke transformer
-        transform_handle
-            .send(msg)
-            .await
-            .map_err(|e| Error::Transformer(format!("failed to send message to server: {e}")))?;
+            // invoke transformer
+            transform_handle.send(msg).await.map_err(|e| {
+                Error::Transformer(format!("failed to send message to server: {e}"))
+            })?;
 
-        // wait for the response
-        let response = tokio::select! {
-            _ = hard_shutdown_token.cancelled() => {
-                return Err(Error::Transformer("Operation cancelled".to_string()));
-            }
-            response = receiver => {
-                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {e}")))??
+            // wait for the response
+            let response = tokio::select! {
+                _ = hard_shutdown_token.cancelled() => {
+                    return Err(Error::Transformer("Operation cancelled".to_string()));
+                }
+                response = receiver => {
+                    response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {e}")))??
+                }
+            };
+
+            if response.iter().any(|msg| msg.failed()) {
+                // Apply retry strategy if configured, otherwise retry forever
+                // If retry strategy is not configured then we retry infinite times, similar to sink.
+                if let Some(ref mut backoff_iter) = opt_backoff {
+                    match backoff_iter.next() {
+                        Some(delay) => {
+                            retry_attempt += 1;
+                            warn!(?retry_attempt, "Retrying");
+                            // abort the wait promptly on shutdown so a long retry interval
+                            // cannot stall the graceful-shutdown window.
+                            // On cancellation, give up so the message is nacked.
+                            tokio::select! {
+                                _ = tokio::time::sleep(delay) => {}
+                                _ = hard_shutdown_token.cancelled() => {
+                                    return Err(Error::Transformer(
+                                        "Operation cancelled".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        None => {
+                            // retries exhausted, handle the remaining messages based on the strategy
+                            match retry_strategy {
+                                // backoff iter is only configured when retry strategy is configured
+                                // thus we should not reach this condition.
+                                None => unreachable!(
+                                    "Retry strategy missing at runtime when it was initially configured"
+                                ),
+                                // fallback strategy is invalid, should've been caught
+                                // during spec validation, panic if that is set.
+                                Some(OnFailureStrategy::Fallback) => panic!(
+                                    "Invalid fallback failure strategy configuration detected at runtime"
+                                ),
+                                // if strategy is drop, drop the message and move on.
+                                Some(OnFailureStrategy::Drop) => {
+                                    warn!(
+                                        retry_attempts = ?retry_attempt,
+                                        "Retries exhausted, dropping message."
+                                    );
+                                    drop_count.fetch_add(1, Ordering::Relaxed);
+                                    // Return early to avoid tripping EOT before response check
+                                    return Ok(vec![]);
+                                }
+                                // retries exhausted under the retry strategy:
+                                // give up so the message is nacked.
+                                Some(OnFailureStrategy::Retry) => {
+                                    return Err(Error::Transformer(
+                                        "Retries exhausted".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                break response;
             }
         };
 
@@ -202,6 +271,27 @@ impl Transformer {
         }
 
         let message_count = msg_handles.len();
+        let dropped_message_count = Arc::new(AtomicUsize::new(0));
+        let retry_strategy = self
+            .retry_config
+            .as_ref()
+            .map(|retry_config| retry_config.sink_retry_on_fail_strategy.clone());
+
+        let opt_backoff = match self.retry_config {
+            Some(ref retry_config) => {
+                // Build backoff iterator from retry config
+                let backoff = Exponential::from_millis(
+                    retry_config.sink_initial_retry_interval_in_ms,
+                    retry_config.sink_max_retry_interval_in_ms,
+                    retry_config.sink_retry_factor,
+                    retry_config.sink_retry_jitter,
+                    Some(retry_config.sink_max_retry_attempts),
+                );
+
+                Some(backoff)
+            }
+            None => None,
+        };
 
         let transform_futs = msg_handles.into_iter().map(|msg_handle| {
             let transform_handle = transform_handle.clone();
@@ -210,6 +300,9 @@ impl Transformer {
             let read_msg = msg_handle.message().clone();
             let source_transform_parent = dispatch_parent_contexts
                 .and_then(|parent_contexts| parent_contexts.get(&read_msg.offset).cloned());
+            let retry_strategy_cln = retry_strategy.clone();
+            let opt_backoff_cln = opt_backoff.clone();
+            let drop_count_cln = Arc::clone(&dropped_message_count);
 
             async move {
                 let offset = read_msg.offset.clone();
@@ -223,6 +316,9 @@ impl Transformer {
                         transform_handle.clone(),
                         read_msg.clone(),
                         hard_shutdown_token.clone(),
+                        retry_strategy_cln.clone(),
+                        opt_backoff_cln.clone(),
+                        Arc::clone(&drop_count_cln),
                     )
                     .await
                     {
@@ -288,7 +384,8 @@ impl Transformer {
         let dropped_messages_count = transformed_handles
             .iter()
             .filter(|h| h.message().dropped())
-            .count();
+            .count()
+            + dropped_message_count.load(Ordering::Relaxed);
         let nacked_message_count = transformed_handles
             .iter()
             .filter(|h| h.message().nacked())
@@ -442,6 +539,7 @@ mod tests {
                 CancellationToken::new(),
                 crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
+            None,
         )
         .await?;
 
@@ -465,6 +563,9 @@ mod tests {
             transformer.sender.clone(),
             message,
             CancellationToken::new(),
+            None,
+            None,
+            Arc::new(AtomicUsize::new(0)),
         )
         .await;
 
@@ -532,6 +633,7 @@ mod tests {
                 CancellationToken::new(),
                 crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
+            None,
         )
         .await?;
 
@@ -630,6 +732,7 @@ mod tests {
                 cln_token.clone(),
                 crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
+            None,
         )
         .await?;
 

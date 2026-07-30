@@ -2257,6 +2257,10 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
+
+  // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+  // +optional
+  optional RetryStrategy retryStrategy = 2;
 }
 
 // UpdateStrategy indicates the strategy that the

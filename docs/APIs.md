@@ -10931,7 +10931,8 @@ RetryStrategy
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
 </p>
 
 <p>
@@ -14220,6 +14221,28 @@ Description
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>retryStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures.
+</p>
+
 </td>
 
 </tr>

@@ -19,4 +19,7 @@ package v1alpha1
 type UDTransformer struct {
 	// +optional
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
+	// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+	// +optional
+	RetryStrategy RetryStrategy `json:"retryStrategy,omitempty" protobuf:"bytes,2,opt,name=retryStrategy"`
 }

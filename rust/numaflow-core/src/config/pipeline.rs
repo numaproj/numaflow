@@ -19,8 +19,8 @@ use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::{ReducerConfig, StorageConfig};
-use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
+use crate::config::components::sink::{RetryConfig, SinkConfig};
 use crate::config::components::source::SourceConfig;
 use crate::config::components::source::SourceSpec;
 use crate::config::components::source::SourceType;
@@ -388,9 +388,13 @@ impl PipelineConfig {
         let (vertex, vertex_type): (VertexConfig, VertexType) = if let Some(source) =
             vertex_obj.spec.source
         {
-            let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
+            let transformer_config = source.transformer.as_ref().map(|t| TransformerConfig {
                 concurrency,
                 transformer_type: TransformerType::UserDefined(Default::default()),
+                retry_config: t
+                    .retry_strategy
+                    .clone()
+                    .map(|retry_strategy| Box::new(RetryConfig::from(retry_strategy))),
             });
 
             let source = SourceSpec::new(pipeline_name.clone(), vertex_name.clone(), source);

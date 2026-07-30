@@ -322,6 +322,7 @@ pub(crate) async fn create_transformer(
                 transformer_grpc_client.clone(),
                 tracker,
                 reconnect_config,
+                transformer_config.retry_config.map(|c| *c),
             )
             .await?,
         ));
