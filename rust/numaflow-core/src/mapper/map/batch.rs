@@ -38,6 +38,8 @@ type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<BatchMapResponse
 pub(in crate::mapper) struct BatchSenderMapState {
     /// Map of oneshot response senders keyed by message id.
     map: ResponseSenderMap,
+    /// Notifies the in-flight batch that its EOT has been received.
+    eot: Option<oneshot::Sender<()>>,
     /// Flag to indicate whether the rx task has closed the stream and cleared the `map`.
     /// This is because `tx.send()` could return `Ok()` even after the receiver task has closed the
     /// stream.
@@ -257,6 +259,8 @@ impl UserDefinedBatchMap {
         let senders = {
             let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
             sender_guard.closed = true;
+            // Dropping the notifier wakes a batch that is waiting on its EOT.
+            sender_guard.eot = None;
             std::mem::take(&mut sender_guard.map)
         };
 
@@ -277,12 +281,14 @@ impl UserDefinedBatchMap {
             match resp {
                 Ok(resp) => {
                     if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                        if !sender_map
-                            .lock()
-                            .expect("failed to acquire poisoned lock")
-                            .map
-                            .is_empty()
-                        {
+                        // Ensure that a batch waiting on it's EOT is woken and doesn't hang.
+                        let (outstanding, eot_tx) = {
+                            let mut sender_guard =
+                                sender_map.lock().expect("failed to acquire poisoned lock");
+                            (!sender_guard.map.is_empty(), sender_guard.eot.take())
+                        };
+
+                        if outstanding {
                             error!(
                                 "received EOT before all batch map responses, redriving after reconnect"
                             );
@@ -301,6 +307,10 @@ impl UserDefinedBatchMap {
                             return;
                         }
                         update_udf_process_time_metric(is_mono_vertex());
+                        // Let the in-flight batch return now that its EOT has been consumed.
+                        if let Some(eot_tx) = eot_tx {
+                            let _ = eot_tx.send(());
+                        }
                         continue;
                     }
 
@@ -384,6 +394,12 @@ impl UserDefinedBatchMap {
             let connection = self.connection.lock().await;
             (Arc::clone(&connection.senders), connection.read_tx.clone())
         };
+
+        let (eot_tx, eot_rx) = oneshot::channel();
+        sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .eot = Some(eot_tx);
 
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
@@ -470,6 +486,20 @@ impl UserDefinedBatchMap {
             results.push(result);
         }
 
+        // Wait until this batch's EOT is ready.
+        tokio::select! {
+            eot = eot_rx => {
+                if eot.is_err() {
+                    return vec![Err(map_redrive_error(Status::unavailable(
+                        "batch map stream ended before EOT",
+                    )))];
+                }
+            }
+            _ = cln_token.cancelled() => {
+                return vec![Err(Error::Mapper("batch map operation cancelled".to_string()))];
+            }
+        }
+
         results
     }
 
@@ -498,6 +528,7 @@ impl UserDefinedBatchMap {
         let senders = {
             let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
             sender_guard.closed = true;
+            sender_guard.eot = None;
             std::mem::take(&mut sender_guard.map)
         };
 
@@ -740,6 +771,102 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(handle.is_finished(), "expected server to shut down");
 
+        Ok(())
+    }
+
+    /// `batch_once` must consume the EOT that delimits its own batch before returning.
+    #[tokio::test]
+    async fn batch_once_consumes_its_eot_before_returning() -> Result<(), Box<dyn Error>> {
+        struct TrailingEotBatchMap;
+        #[tonic::async_trait]
+        impl batchmap::BatchMapper for TrailingEotBatchMap {
+            async fn batchmap(
+                &self,
+                mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+            ) -> Vec<batchmap::BatchResponse> {
+                let mut responses = Vec::new();
+                while let Some(datum) = input.recv().await {
+                    let mut response = batchmap::BatchResponse::from_id(datum.id);
+                    response.append(batchmap::Message {
+                        keys: Some(datum.keys),
+                        value: datum.value,
+                        tags: None,
+                        nack_options: None,
+                    });
+                    responses.push(response);
+                }
+                // Unmatched ids are logged and skipped by the receiver task, which pushes this
+                // batch's EOT well behind its real responses.
+                for i in 0..2000 {
+                    responses.push(batchmap::BatchResponse::from_id(format!("unmatched-{i}")));
+                }
+                responses
+            }
+        }
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("late_eot.sock");
+        let server_info_file = tmp_dir.path().join("late_eot-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            Server::new(TrailingEotBatchMap)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let connection = UserDefinedBatchMap::create_connection(500, &mut client).await?;
+
+        // Held so the state can be inspected synchronously the moment `batch_once` returns.
+        let senders = Arc::clone(&connection.senders);
+        let mapper = UserDefinedBatchMap {
+            batch_size: 500,
+            connection: Arc::new(tokio::sync::Mutex::new(connection)),
+            reconnect_config: None,
+        };
+
+        for batch in 0..2 {
+            let results = tokio::time::timeout(
+                Duration::from_secs(5),
+                mapper.batch_once(
+                    vec![test_request(&format!("batch-{batch}"))],
+                    CancellationToken::new(),
+                ),
+            )
+            .await
+            .expect("batch_once should not hang waiting for the EOT");
+
+            // No await between `batch_once` returning and this check, so the receiver task cannot
+            // have made further progress. The notifier is taken only when an EOT is consumed, and
+            // the server sends this batch's EOT behind 2000 unmatched responses, so a batch that
+            // did not wait for its EOT would still have its notifier registered here.
+            {
+                let guard = senders.lock().unwrap();
+                assert!(
+                    guard.eot.is_none(),
+                    "batch {batch} returned before its EOT was consumed"
+                );
+                assert!(!guard.closed, "connection should still be usable");
+                assert!(guard.map.is_empty(), "all senders should be drained");
+            }
+
+            let result = results.into_iter().next().expect("expected one result");
+            assert!(
+                result.is_ok(),
+                "batch {batch} should not be failed by another batch's EOT: {:?}",
+                result.err()
+            );
+        }
+
+        drop(mapper);
+        shutdown_tx.send(()).ok();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.abort();
         Ok(())
     }
 
