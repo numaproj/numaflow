@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"testing"
@@ -49,18 +50,30 @@ var runtimeErrorHTTPClient = &http.Client{
 }
 
 // httpBodyContains is used inside assert.Eventually, so transient HTTP failures
-// should return false instead of failing the test before the next poll.
+// should return false instead of failing the test before the next poll. Every miss is logged, as
+// InvokeE2EAPI does for its retries, otherwise a timeout gives no clue about which poll kept failing.
 func httpBodyContains(baseURL, path, expected string) bool {
-	resp, err := runtimeErrorHTTPClient.Get(baseURL + path)
+	url := baseURL + path
+	resp, err := runtimeErrorHTTPClient.Get(url)
 	if err != nil {
+		log.Printf("GET %s failed: %v, retrying.\n", url, err)
 		return false
 	}
 	defer resp.Body.Close()
+	body, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("GET %s returned %s, body: %s, retrying.\n", url, resp.Status, body)
 		return false
 	}
-	body, err := io.ReadAll(resp.Body)
-	return err == nil && strings.Contains(string(body), expected)
+	if readErr != nil {
+		log.Printf("GET %s body read failed: %v, retrying.\n", url, readErr)
+		return false
+	}
+	if !strings.Contains(string(body), expected) {
+		log.Printf("GET %s does not contain %q yet, body: %s, retrying.\n", url, expected, body)
+		return false
+	}
+	return true
 }
 
 // vertexHasContainerError reports whether any replica recorded a runtime error for the given container.
@@ -110,14 +123,14 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains("https://localhost:8941", "/runtime/errors", `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the p1 pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
 		return err == nil && vertexHasContainerError(replicaErrors, "udf")
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the daemon for vertex p1")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
@@ -125,7 +138,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "p1"),
 			`"container":"udf"`,
 		)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the UX server for vertex p1")
 
 	w.Expect().VertexNumaStable(podSnapshot, "p1")
 }
@@ -151,14 +164,14 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains("https://localhost:8942", "/runtime/errors", `"container":"udsink"`)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the out pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "out")
 		return err == nil && vertexHasContainerError(replicaErrors, "udsink")
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the daemon for vertex out")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
@@ -166,7 +179,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "out"),
 			`"container":"udsink"`,
 		)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the UX server for vertex out")
 
 	w.Expect().VertexNumaStable(podSnapshot, "out")
 }
@@ -199,14 +212,14 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains("https://localhost:8943", "/runtime/errors", `"container":"udf"`)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the monovertex pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
 		return err == nil && monoVertexHasContainerError(replicaErrors, "udf")
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the monovertex daemon")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
@@ -214,7 +227,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
 			`"container":"udf"`,
 		)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the UX server for the monovertex")
 
 	w.Expect().MonoVertexNumaStable(podSnapshot)
 }
@@ -239,14 +252,14 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains("https://localhost:8944", "/runtime/errors", `"container":"udsink"`)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the monovertex pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
 		return err == nil && monoVertexHasContainerError(replicaErrors, "udsink")
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the monovertex daemon")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
@@ -254,7 +267,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
 			`"container":"udsink"`,
 		)
-	}, 2*time.Minute, time.Second)
+	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the UX server for the monovertex")
 
 	w.Expect().MonoVertexNumaStable(podSnapshot)
 }
