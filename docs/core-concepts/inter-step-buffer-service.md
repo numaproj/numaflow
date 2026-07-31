@@ -149,12 +149,12 @@ There are 2 places to configure JetStream settings:
 A sample JetStream configuration:
 
 ```
-# https://docs.nats.io/running-a-nats-service/configuration#limits
+# https://docs.nats.io/reference/config/max_payload
 # Only "max_payload" is supported for configuration in this section.
 # Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
 max_payload: 1048576
 #
-# https://docs.nats.io/running-a-nats-service/configuration#jetstream
+# https://docs.nats.io/reference/config/jetstream
 # Only configure "max_memory_store" or "max_file_store" in this section, do not set "store_dir" as it has been hardcoded.
 #
 # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
@@ -224,7 +224,7 @@ JetStream service. By default `TLS` is not enabled.
 
 Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`.
 Be aware this will impact the performance a bit, see the detail at
-[official doc](https://docs.nats.io/reference/config/jetstream/encryption_key).
+[official doc](https://docs.nats.io/learn/security/encryption#encryption-at-rest).
 
 Once a JetStream ISB Service is created, toggling the `encryption` field will
 cause problem for the exiting messages, so if you want to change the value,
