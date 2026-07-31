@@ -101,7 +101,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 		)
 	}, 2*time.Minute, time.Second)
 
-	w.Expect().AssertVertexNumaStable(podSnapshot, "p1")
+	w.Expect().VertexNumaStable(podSnapshot, "p1")
 }
 
 func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
@@ -142,7 +142,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 		)
 	}, 2*time.Minute, time.Second)
 
-	w.Expect().AssertVertexNumaStable(podSnapshot, "out")
+	w.Expect().VertexNumaStable(podSnapshot, "out")
 }
 
 func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
@@ -190,7 +190,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 		)
 	}, 2*time.Minute, time.Second)
 
-	w.Expect().AssertMonoVertexNumaStable(podSnapshot)
+	w.Expect().MonoVertexNumaStable(podSnapshot)
 }
 
 func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
@@ -230,7 +230,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 		)
 	}, 2*time.Minute, time.Second)
 
-	w.Expect().AssertMonoVertexNumaStable(podSnapshot)
+	w.Expect().MonoVertexNumaStable(podSnapshot)
 }
 
 func TestRedriveSuite(t *testing.T) {

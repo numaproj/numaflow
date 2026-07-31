@@ -178,9 +178,9 @@ func (t *Expect) MonoVertexPodRuntimeSnapshot() PodRuntimeSnapshot {
 	return snapshot
 }
 
-// AssertVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// VertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
 // running the vertex, and that its numa container has not restarted since the baseline was taken.
-func (t *Expect) AssertVertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) *Expect {
+func (t *Expect) VertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) *Expect {
 	t.t.Helper()
 	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
 	if err != nil {
@@ -191,9 +191,9 @@ func (t *Expect) AssertVertexNumaStable(baseline PodRuntimeSnapshot, vertexName 
 	return t
 }
 
-// AssertMonoVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// MonoVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
 // running the MonoVertex, and that its numa container has not restarted since the baseline was taken.
-func (t *Expect) AssertMonoVertexNumaStable(baseline PodRuntimeSnapshot) *Expect {
+func (t *Expect) MonoVertexNumaStable(baseline PodRuntimeSnapshot) *Expect {
 	t.t.Helper()
 	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
 	if err != nil {
