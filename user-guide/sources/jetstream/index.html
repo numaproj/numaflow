@@ -5155,7 +5155,7 @@
 
 
 <h1 id="jetstream-source">Jetstream Source<a class="headerlink" href="#jetstream-source" title="Permanent link">&para;</a></h1>
-<p>A <code>Jetstream</code> source is used to ingest the messages from a <a href="https://docs.nats.io/nats-concepts/jetstream">Jetstream stream</a>.</p>
+<p>A <code>Jetstream</code> source is used to ingest the messages from a <a href="https://docs.nats.io/concepts/jetstream">Jetstream stream</a>.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
@@ -5189,7 +5189,7 @@
 <span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-password</span>
 </code></pre></div>
 <p>The <code>consumer</code> field represents the name of the consumer of the stream. If not specified, a consumer with name format <code>numaflow-&lt;pipeline_name&gt;-&lt;vertex_name&gt;-&lt;stream_name&gt;</code> will used. Numaflow will attempt to create this consumer on the stream if it doesn't exist.</p>
-<p>The <a href="https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy">valid values</a> for <code>deliver_policy</code> are:</p>
+<p>The <a href="https://docs.nats.io/learn/jetstream/reading-back#pitfalls">valid values</a> for <code>deliver_policy</code> are:</p>
 <ul>
 <li><code>all</code></li>
 <li><code>new</code></li>

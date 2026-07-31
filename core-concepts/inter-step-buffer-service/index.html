@@ -5567,12 +5567,12 @@ availability.</p>
 <p>This optional property can be used to override the default configuration
   defined in the ConfigMap <code>numaflow-controller-config</code>.</p>
 <p>A sample JetStream configuration:</p>
-<div class="highlight"><pre><span></span><code># https://docs.nats.io/running-a-nats-service/configuration#limits
+<div class="highlight"><pre><span></span><code># https://docs.nats.io/reference/config/max_payload
 # Only &quot;max_payload&quot; is supported for configuration in this section.
 # Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
 max_payload: 1048576
 #
-# https://docs.nats.io/running-a-nats-service/configuration#jetstream
+# https://docs.nats.io/reference/config/jetstream
 # Only configure &quot;max_memory_store&quot; or &quot;max_file_store&quot; in this section, do not set &quot;store_dir&quot; as it has been hardcoded.
 #
 # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
@@ -5635,7 +5635,7 @@ JetStream service. By default <code>TLS</code> is not enabled.</p>
 <h3 id="encryption-at-rest">Encryption At Rest<a class="headerlink" href="#encryption-at-rest" title="Permanent link">&para;</a></h3>
 <p>Encryption at rest can be enabled by setting <code>spec.jetstream.encryption: true</code>.
 Be aware this will impact the performance a bit, see the detail at
-<a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">official doc</a>.</p>
+<a href="https://docs.nats.io/learn/security/encryption#encryption-at-rest">official doc</a>.</p>
 <p>Once a JetStream ISB Service is created, toggling the <code>encryption</code> field will
 cause problem for the exiting messages, so if you want to change the value,
 please delete and recreate the ISB Service, and you also need to restart all the
