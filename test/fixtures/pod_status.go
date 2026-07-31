@@ -22,6 +22,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -64,6 +65,20 @@ func vertexPodLabelSelector(pipelineName, vertexName string) string {
 
 func monoVertexPodLabelSelector(monoVertexName string) string {
 	return fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+}
+
+// getPodSnapshotByName re-reads the exact pod captured in a baseline snapshot. Looking the pod up by
+// name (instead of picking the first one matching the labels) makes the comparison meaningful when the
+// pod has been replaced or the vertex has more than one replica.
+func getPodSnapshotByName(kubeClient kubernetes.Interface, namespace, podName string) (PodRuntimeSnapshot, error) {
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{})
+	if err != nil {
+		if apierr.IsNotFound(err) {
+			return PodRuntimeSnapshot{}, fmt.Errorf("pod %q no longer exists, it was replaced", podName)
+		}
+		return PodRuntimeSnapshot{}, fmt.Errorf("error getting pod %q: %w", podName, err)
+	}
+	return snapshotFromPod(*pod)
 }
 
 func getRunningVertexPodSnapshot(kubeClient kubernetes.Interface, namespace, pipelineName, vertexName string) (PodRuntimeSnapshot, error) {
@@ -120,7 +135,6 @@ func WaitForVertexPodRuntimeSnapshot(kubeClient kubernetes.Interface, vertexClie
 func WaitForMonoVertexPodRuntimeSnapshot(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration) (PodRuntimeSnapshot, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	labelSelector := monoVertexPodLabelSelector(monoVertexName)
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,14 +144,9 @@ func WaitForMonoVertexPodRuntimeSnapshot(kubeClient kubernetes.Interface, monoVe
 		if _, err := monoVertexClient.Get(ctx, monoVertexName, metav1.GetOptions{}); err != nil {
 			return PodRuntimeSnapshot{}, fmt.Errorf("error getting monovertex: %w", err)
 		}
-		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-		if err != nil {
-			return PodRuntimeSnapshot{}, fmt.Errorf("error getting monovertex pod list: %w", err)
-		}
-		if len(podList.Items) > 0 {
-			if snapshot, err := snapshotFromPod(podList.Items[0]); err == nil && podList.Items[0].Status.Phase == corev1.PodRunning {
-				return snapshot, nil
-			}
+		snapshot, err := getRunningMonoVertexPodSnapshot(kubeClient, namespace, monoVertexName)
+		if err == nil {
+			return snapshot, nil
 		}
 		time.Sleep(2 * time.Second)
 	}

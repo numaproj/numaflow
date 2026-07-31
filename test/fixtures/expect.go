@@ -178,24 +178,30 @@ func (t *Expect) MonoVertexPodRuntimeSnapshot() PodRuntimeSnapshot {
 	return snapshot
 }
 
-func (t *Expect) AssertVertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) {
+// AssertVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// running the vertex, and that its numa container has not restarted since the baseline was taken.
+func (t *Expect) AssertVertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) *Expect {
 	t.t.Helper()
-	current, err := getRunningVertexPodSnapshot(t.kubeClient, Namespace, t.pipeline.Name, vertexName)
+	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
 	if err != nil {
-		t.t.Fatalf("Failed to get vertex %q pod runtime snapshot: %v", vertexName, err)
+		t.t.Fatalf("Expected vertex %q pod %q to remain stable: %v", vertexName, baseline.PodName, err)
 	}
 	assert.Equal(t.t, baseline.UID, current.UID, "vertex pod UID should remain stable")
-	assert.Equal(t.t, int32(0), current.NumaRestartCount, "numa container should not restart")
+	assert.Equal(t.t, baseline.NumaRestartCount, current.NumaRestartCount, "numa container should not restart")
+	return t
 }
 
-func (t *Expect) AssertMonoVertexNumaStable(baseline PodRuntimeSnapshot) {
+// AssertMonoVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// running the MonoVertex, and that its numa container has not restarted since the baseline was taken.
+func (t *Expect) AssertMonoVertexNumaStable(baseline PodRuntimeSnapshot) *Expect {
 	t.t.Helper()
-	current, err := getRunningMonoVertexPodSnapshot(t.kubeClient, Namespace, t.monoVertex.Name)
+	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
 	if err != nil {
-		t.t.Fatalf("Failed to get monovertex %q pod runtime snapshot: %v", t.monoVertex.Name, err)
+		t.t.Fatalf("Expected monovertex %q pod %q to remain stable: %v", t.monoVertex.Name, baseline.PodName, err)
 	}
 	assert.Equal(t.t, baseline.UID, current.UID, "monovertex pod UID should remain stable")
-	assert.Equal(t.t, int32(0), current.NumaRestartCount, "numa container should not restart")
+	assert.Equal(t.t, baseline.NumaRestartCount, current.NumaRestartCount, "numa container should not restart")
+	return t
 }
 
 func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
