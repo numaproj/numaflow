@@ -188,7 +188,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	monoVertexName := "runtime-error-monovertex"
 	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
-	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
+	defer w.DeleteMonoVertexAndWait()
 
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
 	podSnapshot := w.Expect().MonoVertexPodRuntimeSnapshot()
@@ -236,7 +236,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 	monoVertexName := "runtime-error-sink-monovertex"
 	w := s.Given().MonoVertex("@testdata/runtime-error-sink-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
-	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
+	defer w.DeleteMonoVertexAndWait()
 
 	podSnapshot := w.Expect().MonoVertexPodRuntimeSnapshot()
 	w.Expect().MvtxDaemonPodsRunning()
