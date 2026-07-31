@@ -486,31 +486,31 @@ impl UserDefinedBatchMap {
             results.push(result);
         }
 
-          const EOT_WAIT_WARN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
-          // Wait until this batch's EOT is ready.
-          let mut eot_rx = eot_rx;
-          loop {
-              tokio::select! {
-                  eot = &mut eot_rx => {
-                      if eot.is_err() {
-                          return vec![Err(map_redrive_error(Status::unavailable(
-                              "batch map stream ended before EOT",
-                          )))];
-                      }
-                      break;
-                  }
-                  _ = cln_token.cancelled() => {
-                      return vec![Err(Error::Mapper("batch map operation cancelled".to_string()))];                                                                      
-                  }
-                  _ = tokio::time::sleep(EOT_WAIT_WARN_INTERVAL) => {
-                      warn!(
-                          ?EOT_WAIT_WARN_INTERVAL,
-                          "all batch map responses received but no End-Of-Transmission yet; \
-                           the batch is blocked waiting for the UDF's EOT"
-                      );
-                  }
-              }
-          }
+        const EOT_WAIT_WARN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+        // Wait until this batch's EOT is ready.
+        let mut eot_rx = eot_rx;
+        loop {
+            tokio::select! {
+                eot = &mut eot_rx => {
+                    if eot.is_err() {
+                        return vec![Err(map_redrive_error(Status::unavailable(
+                            "batch map stream ended before EOT",
+                        )))];
+                    }
+                    break;
+                }
+                _ = cln_token.cancelled() => {
+                    return vec![Err(Error::Mapper("batch map operation cancelled".to_string()))];
+                }
+                _ = tokio::time::sleep(EOT_WAIT_WARN_INTERVAL) => {
+                    warn!(
+                        ?EOT_WAIT_WARN_INTERVAL,
+                        "all batch map responses received but no End-Of-Transmission yet; \
+                         the batch is blocked waiting for the UDF's EOT"
+                    );
+                }
+            }
+        }
 
         results
     }
