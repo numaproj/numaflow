@@ -81,73 +81,63 @@ func getPodSnapshotByName(kubeClient kubernetes.Interface, namespace, podName st
 	return snapshotFromPod(*pod)
 }
 
-func getRunningVertexPodSnapshot(kubeClient kubernetes.Interface, namespace, pipelineName, vertexName string) (PodRuntimeSnapshot, error) {
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: vertexPodLabelSelector(pipelineName, vertexName),
+// getRunningPodSnapshot returns a snapshot of the first Running pod matching labelSelector. description
+// only appears in error messages, e.g. `vertex "p1"`.
+func getRunningPodSnapshot(ctx context.Context, kubeClient kubernetes.Interface, namespace, labelSelector, description string) (PodRuntimeSnapshot, error) {
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
 		FieldSelector: "status.phase=Running",
 	})
 	if err != nil {
-		return PodRuntimeSnapshot{}, fmt.Errorf("error getting vertex pod list: %w", err)
+		return PodRuntimeSnapshot{}, fmt.Errorf("error getting %s pod list: %w", description, err)
 	}
 	if len(podList.Items) == 0 {
-		return PodRuntimeSnapshot{}, fmt.Errorf("no running pod found for vertex %q", vertexName)
+		return PodRuntimeSnapshot{}, fmt.Errorf("no running pod found for %s", description)
 	}
 	return snapshotFromPod(podList.Items[0])
 }
 
-func getRunningMonoVertexPodSnapshot(kubeClient kubernetes.Interface, namespace, monoVertexName string) (PodRuntimeSnapshot, error) {
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: monoVertexPodLabelSelector(monoVertexName),
-		FieldSelector: "status.phase=Running",
-	})
-	if err != nil {
-		return PodRuntimeSnapshot{}, fmt.Errorf("error getting monovertex pod list: %w", err)
+// waitForPodRuntimeSnapshot polls fetch until it succeeds or the deadline expires. Every error is
+// retried, including a NotFound on the owning resource, which is expected right after creation. The
+// last error seen is reported on timeout so a failure is still diagnosable.
+func waitForPodRuntimeSnapshot(description string, timeout time.Duration, fetch func(ctx context.Context) (PodRuntimeSnapshot, error)) (PodRuntimeSnapshot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var lastErr error
+	for {
+		select {
+		case <-ctx.Done():
+			return PodRuntimeSnapshot{}, fmt.Errorf("timeout after %v waiting for %s pod runtime snapshot, last error: %v", timeout, description, lastErr)
+		default:
+		}
+		snapshot, err := fetch(ctx)
+		if err == nil {
+			return snapshot, nil
+		}
+		lastErr = err
+		time.Sleep(2 * time.Second)
 	}
-	if len(podList.Items) == 0 {
-		return PodRuntimeSnapshot{}, fmt.Errorf("no running pod found for monovertex %q", monoVertexName)
-	}
-	return snapshotFromPod(podList.Items[0])
 }
 
 // WaitForVertexPodRuntimeSnapshot waits until the vertex pod is running and reports numa container status.
 // Unlike WaitForVertexPodRunning, it does not require every container in the pod to be ready.
 func WaitForVertexPodRuntimeSnapshot(kubeClient kubernetes.Interface, vertexClient flowpkg.VertexInterface, namespace, pipelineName, vertexName string, timeout time.Duration) (PodRuntimeSnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	for {
-		select {
-		case <-ctx.Done():
-			return PodRuntimeSnapshot{}, fmt.Errorf("timeout after %v waiting for vertex pod runtime snapshot", timeout)
-		default:
-		}
+	description := fmt.Sprintf("vertex %q", vertexName)
+	return waitForPodRuntimeSnapshot(description, timeout, func(ctx context.Context) (PodRuntimeSnapshot, error) {
 		if _, err := vertexClient.Get(ctx, pipelineName+"-"+vertexName, metav1.GetOptions{}); err != nil {
 			return PodRuntimeSnapshot{}, fmt.Errorf("error getting vertex: %w", err)
 		}
-		snapshot, err := getRunningVertexPodSnapshot(kubeClient, namespace, pipelineName, vertexName)
-		if err == nil {
-			return snapshot, nil
-		}
-		time.Sleep(2 * time.Second)
-	}
+		return getRunningPodSnapshot(ctx, kubeClient, namespace, vertexPodLabelSelector(pipelineName, vertexName), description)
+	})
 }
 
 // WaitForMonoVertexPodRuntimeSnapshot waits until the MonoVertex pod is running and reports numa container status.
 func WaitForMonoVertexPodRuntimeSnapshot(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration) (PodRuntimeSnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	for {
-		select {
-		case <-ctx.Done():
-			return PodRuntimeSnapshot{}, fmt.Errorf("timeout after %v waiting for monovertex pod runtime snapshot", timeout)
-		default:
-		}
+	description := fmt.Sprintf("monovertex %q", monoVertexName)
+	return waitForPodRuntimeSnapshot(description, timeout, func(ctx context.Context) (PodRuntimeSnapshot, error) {
 		if _, err := monoVertexClient.Get(ctx, monoVertexName, metav1.GetOptions{}); err != nil {
 			return PodRuntimeSnapshot{}, fmt.Errorf("error getting monovertex: %w", err)
 		}
-		snapshot, err := getRunningMonoVertexPodSnapshot(kubeClient, namespace, monoVertexName)
-		if err == nil {
-			return snapshot, nil
-		}
-		time.Sleep(2 * time.Second)
-	}
+		return getRunningPodSnapshot(ctx, kubeClient, namespace, monoVertexPodLabelSelector(monoVertexName), description)
+	})
 }
