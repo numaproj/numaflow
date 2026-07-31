@@ -17,4 +17,4 @@ Inter-Step Buffer can be implemented by a variety of data buffering technologies
 
 Supported Inter-Step Buffer implementations:
 
-- [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream)
+- [Nats JetStream](https://docs.nats.io/concepts/jetstream)
