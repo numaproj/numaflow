@@ -20,7 +20,10 @@ package redrive_e2e
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +41,26 @@ type RedriveSuite struct {
 	E2ESuite
 }
 
+var runtimeErrorHTTPClient = &http.Client{
+	Timeout:   5 * time.Second,
+	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+}
+
+// httpBodyContains is used inside assert.Eventually, so transient HTTP failures
+// should return false instead of failing the test before the next poll.
+func httpBodyContains(baseURL, path, expected string) bool {
+	resp, err := runtimeErrorHTTPClient.Get(baseURL + path)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	return err == nil && strings.Contains(string(body), expected)
+}
+
 func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	w := s.Given().Pipeline("@testdata/runtime-error-pipeline.yaml").
 		When().
@@ -46,6 +69,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	pipelineName := "runtime-error-pipeline"
 
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("p1")
 
 	defer w.VertexPodPortForward("p1", 8941, dfv1.VertexRuntimePort).
 		DaemonPodPortForward(pipelineName, 1241, dfv1.DaemonServicePort).
@@ -59,10 +83,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	SendMessageTo(fmt.Sprintf("%s-in", pipelineName), "in", NewHttpPostRequest().WithBody([]byte("not-json")))
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8941").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
+		return httpBodyContains("https://localhost:8941", "/runtime/errors", `"container":"udf"`)
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -73,12 +94,14 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8141").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "p1")).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
+		return httpBodyContains(
+			"https://localhost:8141",
+			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "p1"),
+			`"container":"udf"`,
+		)
 	}, 2*time.Minute, time.Second)
+
+	w.Expect().AssertVertexNumaStable(podSnapshot, "p1")
 }
 
 func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
@@ -88,7 +111,8 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 	defer w.DeletePipelineAndWait()
 	pipelineName := "runtime-error-sink-pipeline"
 
-	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("out")
+	w.Expect().DaemonPodsRunning()
 
 	defer w.VertexPodPortForward("out", 8942, dfv1.VertexRuntimePort).
 		DaemonPodPortForward(pipelineName, 1242, dfv1.DaemonServicePort).
@@ -99,13 +123,8 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 	assert.NoError(s.T(), err)
 	defer func() { assert.NoError(s.T(), client.Close()) }()
 
-	SendMessageTo(fmt.Sprintf("%s-in", pipelineName), "in", NewHttpPostRequest().WithBody([]byte("trigger sink panic")))
-
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8942").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udsink"`)
+		return httpBodyContains("https://localhost:8942", "/runtime/errors", `"container":"udsink"`)
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -116,12 +135,14 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8142").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "out")).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udsink"`)
+		return httpBodyContains(
+			"https://localhost:8142",
+			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "out"),
+			`"container":"udsink"`,
+		)
 	}, 2*time.Minute, time.Second)
+
+	w.Expect().AssertVertexNumaStable(podSnapshot, "out")
 }
 
 func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
@@ -131,6 +152,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
 
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
+	podSnapshot := w.Expect().MonoVertexPodRuntimeSnapshot()
 
 	defer w.MonoVertexPodPortForward(8943, dfv1.MonoVertexRuntimePort).
 		MvtxDaemonPodPortForward(3243, dfv1.MonoVertexDaemonServicePort).
@@ -150,10 +172,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	}()
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8943").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
+		return httpBodyContains("https://localhost:8943", "/runtime/errors", `"container":"udf"`)
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -164,12 +183,14 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8143").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName)).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udf"`)
+		return httpBodyContains(
+			"https://localhost:8143",
+			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
+			`"container":"udf"`,
+		)
 	}, 2*time.Minute, time.Second)
+
+	w.Expect().AssertMonoVertexNumaStable(podSnapshot)
 }
 
 func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
@@ -178,7 +199,8 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 		When().CreateMonoVertexAndWait()
 	defer w.Exec("kubectl", []string{"delete", "monovertices.numaflow.numaproj.io", monoVertexName, "-n", Namespace, "--ignore-not-found=true"}, OutputRegexp(""))
 
-	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
+	podSnapshot := w.Expect().MonoVertexPodRuntimeSnapshot()
+	w.Expect().MvtxDaemonPodsRunning()
 
 	defer w.MonoVertexPodPortForward(8944, dfv1.MonoVertexRuntimePort).
 		MvtxDaemonPodPortForward(3244, dfv1.MonoVertexDaemonServicePort).
@@ -189,19 +211,8 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 	assert.NoError(s.T(), err)
 	defer func() { assert.NoError(s.T(), client.Close()) }()
 
-	go func() {
-		defer func() {
-			// The HTTP request can outlive the test because the sink process exits before ACKing it.
-			_ = recover()
-		}()
-		SendMessageTo(monoVertexName, monoVertexName, NewHttpPostRequest().WithBody([]byte("trigger sink panic")))
-	}()
-
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8944").GET("/runtime/errors").
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udsink"`)
+		return httpBodyContains("https://localhost:8944", "/runtime/errors", `"container":"udsink"`)
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -212,12 +223,14 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
-		body := HTTPExpect(s.T(), "https://localhost:8144").
-			GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName)).
-			Expect().
-			Status(200).Body().Raw()
-		return strings.Contains(body, `"container":"udsink"`)
+		return httpBodyContains(
+			"https://localhost:8144",
+			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
+			`"container":"udsink"`,
+		)
 	}, 2*time.Minute, time.Second)
+
+	w.Expect().AssertMonoVertexNumaStable(podSnapshot)
 }
 
 func TestRedriveSuite(t *testing.T) {

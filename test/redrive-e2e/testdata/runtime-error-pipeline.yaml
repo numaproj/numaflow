@@ -5,12 +5,16 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       limits:
         readBatchSize: 1
       source:
         http:
           service: true
     - name: p1
+      scale:
+        min: 1
       udf:
         container:
           # map-filter exits when it receives invalid JSON, which exercises UDF failure capture.

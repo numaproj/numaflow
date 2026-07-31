@@ -6,8 +6,9 @@ spec:
   scale:
     min: 1
   source:
-    http:
-      service: true
+    generator:
+      rpu: 1
+      duration: 1s
   sink:
     udsink:
       container:

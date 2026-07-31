@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -155,6 +156,46 @@ func (t *Expect) MonoVertexPodsRunning() *Expect {
 		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
 	}
 	return t
+}
+
+func (t *Expect) VertexPodRuntimeSnapshot(vertexName string) PodRuntimeSnapshot {
+	t.t.Helper()
+	timeout := 3 * time.Minute
+	snapshot, err := WaitForVertexPodRuntimeSnapshot(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, vertexName, timeout)
+	if err != nil {
+		t.t.Fatalf("Expected vertex %q pod runtime snapshot: %v", vertexName, err)
+	}
+	return snapshot
+}
+
+func (t *Expect) MonoVertexPodRuntimeSnapshot() PodRuntimeSnapshot {
+	t.t.Helper()
+	timeout := 3 * time.Minute
+	snapshot, err := WaitForMonoVertexPodRuntimeSnapshot(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, timeout)
+	if err != nil {
+		t.t.Fatalf("Expected monovertex %q pod runtime snapshot: %v", t.monoVertex.Name, err)
+	}
+	return snapshot
+}
+
+func (t *Expect) AssertVertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) {
+	t.t.Helper()
+	current, err := getRunningVertexPodSnapshot(t.kubeClient, Namespace, t.pipeline.Name, vertexName)
+	if err != nil {
+		t.t.Fatalf("Failed to get vertex %q pod runtime snapshot: %v", vertexName, err)
+	}
+	assert.Equal(t.t, baseline.UID, current.UID, "vertex pod UID should remain stable")
+	assert.Equal(t.t, int32(0), current.NumaRestartCount, "numa container should not restart")
+}
+
+func (t *Expect) AssertMonoVertexNumaStable(baseline PodRuntimeSnapshot) {
+	t.t.Helper()
+	current, err := getRunningMonoVertexPodSnapshot(t.kubeClient, Namespace, t.monoVertex.Name)
+	if err != nil {
+		t.t.Fatalf("Failed to get monovertex %q pod runtime snapshot: %v", t.monoVertex.Name, err)
+	}
+	assert.Equal(t.t, baseline.UID, current.UID, "monovertex pod UID should remain stable")
+	assert.Equal(t.t, int32(0), current.NumaRestartCount, "numa container should not restart")
 }
 
 func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
