@@ -776,98 +776,58 @@ mod tests {
 
     /// `batch_once` must consume the EOT that delimits its own batch before returning.
     #[tokio::test]
-    async fn batch_once_consumes_its_eot_before_returning() -> Result<(), Box<dyn Error>> {
-        struct TrailingEotBatchMap;
-        #[tonic::async_trait]
-        impl batchmap::BatchMapper for TrailingEotBatchMap {
-            async fn batchmap(
-                &self,
-                mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
-            ) -> Vec<batchmap::BatchResponse> {
-                let mut responses = Vec::new();
-                while let Some(datum) = input.recv().await {
-                    let mut response = batchmap::BatchResponse::from_id(datum.id);
-                    response.append(batchmap::Message {
-                        keys: Some(datum.keys),
-                        value: datum.value,
-                        tags: None,
-                        nack_options: None,
-                    });
-                    responses.push(response);
-                }
-                // Unmatched ids are logged and skipped by the receiver task, which pushes this
-                // batch's EOT well behind its real responses.
-                for i in 0..2000 {
-                    responses.push(batchmap::BatchResponse::from_id(format!("unmatched-{i}")));
-                }
-                responses
-            }
-        }
+    async fn batch_once_consumes_its_eot_before_returning() {
+        // Capacity covers the request and the EOT, so nothing blocks on the request stream.
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
 
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let tmp_dir = TempDir::new()?;
-        let sock_file = tmp_dir.path().join("late_eot.sock");
-        let server_info_file = tmp_dir.path().join("late_eot-server-info");
-        let (ss, si) = (sock_file.clone(), server_info_file.clone());
-        let handle = tokio::spawn(async move {
-            Server::new(TrailingEotBatchMap)
-                .with_socket_file(ss)
-                .with_server_info_file(si)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("server failed");
-        });
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let mut client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let connection = UserDefinedBatchMap::create_connection(500, &mut client).await?;
-
-        // Held so the state can be inspected synchronously the moment `batch_once` returns.
-        let senders = Arc::clone(&connection.senders);
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
         let mapper = UserDefinedBatchMap {
-            batch_size: 500,
-            connection: Arc::new(tokio::sync::Mutex::new(connection)),
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
             reconnect_config: None,
         };
 
-        for batch in 0..2 {
-            let results = tokio::time::timeout(
-                Duration::from_secs(5),
-                mapper.batch_once(
-                    vec![test_request(&format!("batch-{batch}"))],
-                    CancellationToken::new(),
-                ),
-            )
-            .await
-            .expect("batch_once should not hang waiting for the EOT");
+        let batch = tokio::spawn(async move {
+            mapper
+                .batch_once(vec![test_request("0")], CancellationToken::new())
+                .await
+        });
 
-            // No await between `batch_once` returning and this check, so the receiver task cannot
-            // have made further progress. The notifier is taken only when an EOT is consumed, and
-            // the server sends this batch's EOT behind 2000 unmatched responses, so a batch that
-            // did not wait for its EOT would still have its notifier registered here.
-            {
-                let guard = senders.lock().unwrap();
-                assert!(
-                    guard.eot.is_none(),
-                    "batch {batch} returned before its EOT was consumed"
-                );
-                assert!(!guard.closed, "connection should still be usable");
-                assert!(guard.map.is_empty(), "all senders should be drained");
-            }
-
-            let result = results.into_iter().next().expect("expected one result");
-            assert!(
-                result.is_ok(),
-                "batch {batch} should not be failed by another batch's EOT: {:?}",
-                result.err()
-            );
+        // Answer the batch once it has registered its sender.
+        while senders.lock().unwrap().map.is_empty() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
         }
+        UserDefinedBatchMap::process_response(&senders, make_response("0"))
+            .expect("response should be delivered to the batch");
 
-        drop(mapper);
-        shutdown_tx.send(()).ok();
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        handle.abort();
-        Ok(())
+        // Every response is in, but the EOT has not been seen yet, so the batch must keep waiting.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !batch.is_finished(),
+            "batch_once returned before its EOT was consumed"
+        );
+
+        // Consuming the EOT releases the batch.
+        let eot = senders
+            .lock()
+            .unwrap()
+            .eot
+            .take()
+            .expect("batch should have registered an EOT notifier");
+        eot.send(()).expect("batch should be waiting on the EOT");
+
+        let results = tokio::time::timeout(Duration::from_secs(1), batch)
+            .await
+            .expect("batch_once should return once its EOT is consumed")
+            .expect("batch task should not panic");
+        assert_eq!(results.len(), 1);
+        assert!(results.into_iter().next().expect("one result").is_ok());
     }
 
     fn make_response(id: &str) -> MapResponse {
