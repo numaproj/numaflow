@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	daemonpb "github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	mvtxdaemonpb "github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	mvtxclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
@@ -59,6 +61,30 @@ func httpBodyContains(baseURL, path, expected string) bool {
 	}
 	body, err := io.ReadAll(resp.Body)
 	return err == nil && strings.Contains(string(body), expected)
+}
+
+// vertexHasContainerError reports whether any replica recorded a runtime error for the given container.
+func vertexHasContainerError(replicaErrors []*daemonpb.ReplicaErrors, container string) bool {
+	for _, re := range replicaErrors {
+		for _, ce := range re.GetContainerErrors() {
+			if ce.GetContainer() == container {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// monoVertexHasContainerError reports whether any replica recorded a runtime error for the given container.
+func monoVertexHasContainerError(replicaErrors []*mvtxdaemonpb.ReplicaErrors, container string) bool {
+	for _, re := range replicaErrors {
+		for _, ce := range re.GetContainerErrors() {
+			if ce.GetContainer() == container {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
@@ -89,8 +115,8 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		errors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
+		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
+		return err == nil && vertexHasContainerError(replicaErrors, "udf")
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -130,8 +156,8 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		errors, err := client.GetVertexErrors(ctx, pipelineName, "out")
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udsink")
+		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "out")
+		return err == nil && vertexHasContainerError(replicaErrors, "udsink")
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -178,8 +204,8 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		errors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udf")
+		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
+		return err == nil && monoVertexHasContainerError(replicaErrors, "udf")
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
@@ -218,8 +244,8 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		errors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
-		return err == nil && strings.Contains(fmt.Sprintf("%v", errors), "udsink")
+		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
+		return err == nil && monoVertexHasContainerError(replicaErrors, "udsink")
 	}, 2*time.Minute, time.Second)
 
 	assert.Eventually(s.T(), func() bool {
