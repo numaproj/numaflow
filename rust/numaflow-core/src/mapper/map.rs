@@ -620,7 +620,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
-            nack_options: value.0.nack_options.map(Into::into),
+            nack_options: value.0.nack_options.map(|o| Box::new(o.into())),
         }
     }
 }
@@ -1276,7 +1276,7 @@ mod tests {
         let msg: Message = UserDefinedMessage(result, &parent_info, 0).into();
         assert!(msg.nacked(), "NACK tag must make the message nacked()");
         assert_eq!(
-            msg.nack_options,
+            msg.nack_options.clone().map(|o| *o),
             Some(NackOptions {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(3),

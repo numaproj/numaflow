@@ -76,7 +76,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 Some(Arc::new(metadata))
             },
             is_late: value.1.is_late,
-            nack_options: value.0.nack_options.map(Into::into),
+            nack_options: value.0.nack_options.map(|o| Box::new(o.into())),
         }
     }
 }
@@ -647,7 +647,7 @@ mod tests {
         let out = messages.first().expect("one message");
         assert!(out.nacked());
         assert_eq!(
-            out.nack_options,
+            out.nack_options.clone().map(|o| *o),
             Some(crate::message::NackOptions {
                 delay: Some(5000),
                 max_deliveries: Some(3),
@@ -697,7 +697,7 @@ mod tests {
         let msg: Message = UserDefinedTransformerMessage(result, &parent_info, 0).into();
         assert!(msg.nacked());
         assert_eq!(
-            msg.nack_options,
+            msg.nack_options.clone().map(|o| *o),
             Some(NackOptions {
                 reason: Some("retry".to_string()),
                 max_deliveries: Some(2),
