@@ -211,6 +211,9 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
 		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
 	}
+	if v.Scale.Cron != nil && !v.IsASource() {
+		return fmt.Errorf("vertex %q: cron autoscaling is only supported for source vertices", v.Name)
+	}
 	if err := validateCronScaling(v.Scale); err != nil {
 		return fmt.Errorf("vertex %q: invalid scale.cron: %w", v.Name, err)
 	}
