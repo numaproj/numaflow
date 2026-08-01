@@ -122,8 +122,9 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
-    // TODO: Move to using Option<Box<NackOptions>> in a separate PR
-    pub(crate) nack_options: Option<NackOptions>,
+    /// Nack options are boxed so they do not inflate every Message on the hot
+    /// path, since they are only populated on the (rare) nack path.
+    pub(crate) nack_options: Option<Box<NackOptions>>,
 }
 
 /// AckHandle is used to send the ack/nak to the source. It uses a reference count to track
