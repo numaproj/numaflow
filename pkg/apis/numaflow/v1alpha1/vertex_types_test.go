@@ -1045,3 +1045,80 @@ func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
 	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
 	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
 }
+
+// TestGetPodSpec_ScaleNormalization guards against the bug reported in issue #3523 where
+// changing scale.min/max caused all vertex pods to be recreated because the Scale field was
+// mutated on the wrong copy before marshaling, making the pod spec hash sensitive to
+// autoscaling parameters it should ignore.
+func TestGetPodSpec_ScaleNormalization(t *testing.T) {
+	req := GetVertexPodSpecReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	// extractHash reads the encoded vertex object from the main container's env vars.
+	extractHash := func(t *testing.T, v Vertex) string {
+		t.Helper()
+		spec, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		for _, env := range spec.Containers[0].Env {
+			if env.Name == EnvVertexObject {
+				return env.Value
+			}
+		}
+		t.Fatal("EnvVertexObject not found in main container env")
+		return ""
+	}
+
+	// baseline: a source vertex with default scale settings
+	baseHash := extractHash(t, *testSrcVertex.DeepCopy())
+	assert.NotEmpty(t, baseHash)
+
+	t.Run("scale.min change does not affect hash", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.Scale.Min = ptr.To[int32](5)
+		assert.Equal(t, baseHash, extractHash(t, *v), "scale.min should not affect the pod spec hash")
+	})
+
+	t.Run("scale.max change does not affect hash", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.Scale.Max = ptr.To[int32](20)
+		assert.Equal(t, baseHash, extractHash(t, *v), "scale.max should not affect the pod spec hash")
+	})
+
+	t.Run("scale.disabled change does not affect hash", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.Scale.Disabled = true
+		assert.Equal(t, baseHash, extractHash(t, *v), "scale.disabled should not affect the pod spec hash")
+	})
+
+	t.Run("scale.lookbackSeconds change DOES affect hash", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.Scale.LookbackSeconds = ptr.To[uint32](999)
+		assert.NotEqual(t, baseHash, extractHash(t, *v), "scale.lookbackSeconds should affect the pod spec hash")
+	})
+
+	t.Run("unrelated field change DOES affect hash", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.ContainerTemplate = &ContainerTemplate{
+			Env: []corev1.EnvVar{{Name: "DIFFERENT_ENV", Value: "changed"}},
+		}
+		assert.NotEqual(t, baseHash, extractHash(t, *v), "unrelated field changes should affect the pod spec hash")
+	})
+
+	t.Run("GetPodSpec does not mutate the original vertex Scale", func(t *testing.T) {
+		v := testSrcVertex.DeepCopy()
+		v.Spec.Scale.Min = ptr.To[int32](3)
+		v.Spec.Scale.Max = ptr.To[int32](10)
+		v.Spec.Scale.Disabled = true
+
+		_, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+
+		// Original scale fields must survive the GetPodSpec call unchanged
+		assert.Equal(t, int32(3), *v.Spec.Scale.Min, "Scale.Min must not be wiped by GetPodSpec")
+		assert.Equal(t, int32(10), *v.Spec.Scale.Max, "Scale.Max must not be wiped by GetPodSpec")
+		assert.True(t, v.Spec.Scale.Disabled, "Scale.Disabled must not be wiped by GetPodSpec")
+	})
+}

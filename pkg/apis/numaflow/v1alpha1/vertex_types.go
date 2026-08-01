@@ -253,7 +253,7 @@ func (v Vertex) simpleCopy() Vertex {
 
 func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	vertexCopy := v.simpleCopy()
-	v.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
+	vertexCopy.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
