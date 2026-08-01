@@ -171,7 +171,7 @@ where
                         // would've been filtered out already before messages were sent
                         // to sink for writing. So we can overwrite nack options here.
                         let mut msg = msg;
-                        msg.nack_options = options;
+                        msg.nack_options = options.map(Box::new);
                         nacked_messages.push(msg);
                     }
                     None => {
