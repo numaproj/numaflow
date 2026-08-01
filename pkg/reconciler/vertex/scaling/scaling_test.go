@@ -16,10 +16,16 @@ package scaling
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -175,4 +181,150 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestScaleOneVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
+	tests := []struct {
+		name                 string
+		current              int32
+		cronMin              int32
+		cronMax              int32
+		replicasPerScaleUp   uint32
+		replicasPerScaleDown uint32
+		scaleUpCooldown      uint32
+		scaleDownCooldown    uint32
+		lastScaledSecondsAgo int
+		expected             int32
+	}{
+		{
+			// diff=1-0=1, maxAllowedUp=2 → clamped diff=1 → 0+1=1
+			name:                 "scale up from zero for nightly DLQ drain",
+			current:              0,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			scaleUpCooldown:      90,
+			scaleDownCooldown:    90,
+			lastScaledSecondsAgo: 600,
+			expected:             1,
+		},
+		{
+			// diff=10-5=5, maxAllowedDown=2 → clamped diff=2 → 10-2=8
+			name:                 "scale down toward cron max",
+			current:              10,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			scaleUpCooldown:      90,
+			scaleDownCooldown:    90,
+			lastScaledSecondsAgo: 600,
+			expected:             8,
+		},
+		{
+			// secondsSinceLastScale≈60: global early-exit requires BOTH cooldowns active (60<30 && 60<90)=false → proceeds;
+			// scaleUpVertex sees 60 < 90 → cooldown active → no patch.
+			name:                 "scale up cooldown prevents scaling",
+			current:              0,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			scaleUpCooldown:      90,
+			scaleDownCooldown:    30,
+			lastScaledSecondsAgo: 60,
+			expected:             0, // no change
+		},
+		{
+			// secondsSinceLastScale≈60: global early-exit (60<90 && 60<30)=false → proceeds;
+			// scaleDownVertex sees 60 < 90 → cooldown active → no patch.
+			name:                 "scale down cooldown prevents scaling",
+			current:              10,
+			cronMin:              1,
+			cronMax:              5,
+			replicasPerScaleUp:   2,
+			replicasPerScaleDown: 2,
+			scaleUpCooldown:      30,
+			scaleDownCooldown:    90,
+			lastScaledSecondsAgo: 60,
+			expected:             10, // no change
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			location, err := time.LoadLocation("America/Los_Angeles")
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().In(location)
+			start := now.Add(-time.Minute)
+			end := now.Add(time.Minute)
+			cronExpression := func(t time.Time) string {
+				return fmt.Sprintf("0 %d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
+			}
+
+			pl := &dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "default",
+				},
+				Spec: dfv1.PipelineSpec{
+					Lifecycle: dfv1.Lifecycle{
+						DesiredPhase: dfv1.PipelinePhaseRunning,
+					},
+				},
+			}
+			vertex := &dfv1.Vertex{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl-source",
+					Namespace: "default",
+				},
+				Spec: dfv1.VertexSpec{
+					Replicas:     ptr.To(tc.current),
+					PipelineName: "test-pl",
+					AbstractVertex: dfv1.AbstractVertex{
+						Name:   "source",
+						Source: &dfv1.Source{},
+						Scale: dfv1.Scale{
+							ReplicasPerScaleUp:       ptr.To(tc.replicasPerScaleUp),
+							ReplicasPerScaleDown:     ptr.To(tc.replicasPerScaleDown),
+							ScaleUpCooldownSeconds:   ptr.To(tc.scaleUpCooldown),
+							ScaleDownCooldownSeconds: ptr.To(tc.scaleDownCooldown),
+							Cron: &dfv1.CronScheduling{
+								Timezone: "America/Los_Angeles",
+								Schedules: []dfv1.CronSchedule{
+									{
+										Start: cronExpression(start),
+										End:   cronExpression(end),
+										Min:   ptr.To(tc.cronMin),
+										Max:   ptr.To(tc.cronMax),
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: dfv1.VertexStatus{
+					Phase:           dfv1.VertexPhaseRunning,
+					Replicas:        uint32(tc.current),
+					DesiredReplicas: uint32(tc.current),
+					LastScaledAt:    metav1.NewTime(time.Now().Add(-time.Duration(tc.lastScaledSecondsAgo) * time.Second)),
+				},
+			}
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, dfv1.AddToScheme(scheme))
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pl, vertex).Build()
+			scaler := NewScaler(cl)
+
+			err = scaler.scaleOneVertex(context.Background(), "default/test-pl-source", 1)
+			assert.NoError(t, err)
+
+			updated := &dfv1.Vertex{}
+			assert.NoError(t, cl.Get(context.Background(), client.ObjectKeyFromObject(vertex), updated))
+			assert.Equal(t, tc.expected, *updated.Spec.Replicas)
+		})
+	}
 }

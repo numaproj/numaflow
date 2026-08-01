@@ -255,11 +255,11 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		if cronActive {
 			if current < minReplicas {
 				log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
-				return s.patchVertexReplicas(ctx, vertex, minReplicas)
+				return s.scaleUpVertex(ctx, vertex, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
 			}
 			if current > maxReplicas {
 				log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
-				return s.patchVertexReplicas(ctx, vertex, maxReplicas)
+				return s.scaleDownVertex(ctx, vertex, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
 			}
 		}
 	} else {
@@ -593,6 +593,34 @@ func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, d
 	}
 	log.Infow("Auto scaling - vertex replicas changed.", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
 	return nil
+}
+
+func (s *Scaler) scaleUpVertex(ctx context.Context, vertex *dfv1.Vertex, current, desired int32, secondsSinceLastScale, scaleUpCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedUp := int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
+	diff := desired - current
+	if diff > maxAllowedUp {
+		diff = maxAllowedUp
+	}
+	if secondsSinceLastScale < scaleUpCooldown {
+		log.Infof("Cooldown period for scaling up, skip scaling.")
+		return nil
+	}
+	return s.patchVertexReplicas(ctx, vertex, current+diff)
+}
+
+func (s *Scaler) scaleDownVertex(ctx context.Context, vertex *dfv1.Vertex, current, desired int32, secondsSinceLastScale, scaleDownCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedDown := int32(vertex.Spec.Scale.GetReplicasPerScaleDown())
+	diff := current - desired
+	if diff > maxAllowedDown {
+		diff = maxAllowedDown
+	}
+	if secondsSinceLastScale < scaleDownCooldown {
+		log.Infof("Cooldown period for scaling down, skip scaling.")
+		return nil
+	}
+	return s.patchVertexReplicas(ctx, vertex, current-diff)
 }
 
 // KeyOfVertex returns the unique key of a vertex

@@ -45,6 +45,13 @@ spec:
         targetBufferAvailability: 50 # Optional, defaults to 50.
         replicasPerScaleUp: 2 # Optional, defaults to 2.
         replicasPerScaleDown: 2 # Optional, defaults to 2.
+        cron: # Optional.
+          timezone: America/Los_Angeles # Optional, defaults to UTC.
+          schedules:
+            - start: "0 0 22 * * *" # Second Minute Hour Day-of-month Month Day-of-week
+              end: "0 0 6 * * *"
+              min: 10
+              max: 20
 ---
 # A MonoVertex example.
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -63,7 +70,7 @@ spec:
     targetProcessingSeconds: 20 # Optional, defaults to 20.
     replicasPerScaleUp: 2 # Optional, defaults to 2.
     replicasPerScaleDown: 2 # Optional, defaults to 2.
-    cron: # Optional; supported only for MonoVertex.
+    cron: # Optional.
       timezone: America/Los_Angeles # Optional, defaults to UTC.
       schedules:
         - start: "0 0 22 * * *" # Second Minute Hour Day-of-month Month Day-of-week
@@ -122,7 +129,7 @@ spec:
 - `replicasPerScale` - (Deprecated: Use `replicasPerScaleUp` and
   `replicasPerScaleDown` instead, will be removed in v1.5) Maximum number of
   replica change happens in one scale up or down operation, defaults to `2`.
-- `cron` - [MonoVertex only] Defines time-based overrides for `min` and `max`.
+- `cron` - Defines time-based overrides for `min` and `max`.
   Cron expressions use the six-field extended format: `second minute hour
   day-of-month month day-of-week`. `timezone` accepts an IANA time zone and
   defaults to `UTC` when omitted. Each schedule requires `start`, `end`, `min`,
