@@ -179,7 +179,7 @@ impl SideInputer for SideInputHandler {
 
 After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.
 
-```golang
+```go
 // BroadcastMessage() is used to broadcast the message with the given value.
 sideinputsdk.BroadcastMessage([]byte(val))
 ```

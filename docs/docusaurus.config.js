@@ -22,7 +22,27 @@ const config = {
     },
   },
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      /** @type {import('@easyops-cn/docusaurus-search-local').PluginOptions} */
+      ({
+        hashed: true,
+        indexDocs: true,
+        indexBlog: false,
+        docsRouteBasePath: '/',
+        docsDir: [
+          'core-concepts',
+          'development',
+          'getting-started',
+          'operations',
+          'specifications',
+          'user-guide',
+        ],
+      }),
+    ],
+  ],
 
   presets: [
     [
@@ -121,6 +141,8 @@ const config = {
       prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.dracula,
+        // Java, bash/shell/sh, and docker/dockerfile are not in Prism's default set.
+        additionalLanguages: ['java', 'bash', 'docker'],
       },
     }),
 };

@@ -80,7 +80,7 @@ container must implement a specific gRPC interface (defined in the Numaflow SDKs
 
 Refer to the Numaflow SDK documentation for your language for the exact interface. The Go interface requires methods like:
 
-```golang
+```go
 type ServingStorer interface {
 	Put(ctx context.Context, put PutDatum)
 	Get(ctx context.Context, get GetDatum) StoredResult
@@ -98,7 +98,7 @@ SDK equivalent) in your sink code.
 
 #### Example (Go SDK)
 
-```golang
+```go
 type serveSink struct{}
 
 func (l *serveSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum) sinksdk.Responses {
