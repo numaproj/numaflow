@@ -78,6 +78,11 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      colorMode: {
+        defaultMode: 'light',
+        disableSwitch: false,
+        respectPrefersColorScheme: true,
+      },
       image: 'img/numaproj.svg',
       navbar: {
         title: 'Numaflow',
@@ -139,7 +144,7 @@ const config = {
         copyright: `Copyright © ${new Date().getFullYear()} Numaflow Authors.`,
       },
       prism: {
-        theme: prismThemes.github,
+        theme: prismThemes.dracula,
         darkTheme: prismThemes.dracula,
         // Java, bash/shell/sh, and docker/dockerfile are not in Prism's default set.
         additionalLanguages: ['java', 'bash', 'docker'],

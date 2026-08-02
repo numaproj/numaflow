@@ -15,7 +15,8 @@
     'Segoe UI', sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', SFMono-Regular, Consolas,
     'Liberation Mono', monospace;
-  --docusaurus-highlighted-code-line-bg: rgb(0 0 0 / 10%);
+  /* Match dark code blocks even when the site is in light mode */
+  --docusaurus-highlighted-code-line-bg: rgb(255 255 255 / 10%);
 }
 
 [data-theme='dark'] {
