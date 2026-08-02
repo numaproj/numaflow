@@ -10,12 +10,17 @@ debug.test
 .coverage
 *.out
 test/*.cov
+node_modules/
+.docusaurus/
+build/
 site/
+docs/site/
 /go-diagrams/
 *__pycache__
 *.idea/
 *.pytest_cache/
 docs/APIs.html
+docs/src/pages/APIs.jsx
 
 # openapi
 */numaflow-models/docs

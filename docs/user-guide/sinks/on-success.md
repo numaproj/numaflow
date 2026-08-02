@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # OnSuccess Sink
 
 OnSuccess sink is used to write messages to a sink, for example, when the processing of the original message has completed 
@@ -61,69 +64,75 @@ Code changes have to be made in the primary sink to generate an **onSuccess** re
 
 SDK methods to generate an onSuccess response in a primary user-defined sink:
 
-=== "Golang"
+<Tabs groupId="sdk-language">
+<TabItem value="golang" label="Golang">
 
-    ```go
-    package main
-    
-    import (
-        sinksdk "github.com/numaproj/numaflow-go/pkg/sinker"
-    )
-    
-    // onSuccessLogSink is a sinker implementation that logs the input to stdout
-    type onSuccessLogSink struct {
+```go
+package main
+
+import (
+    sinksdk "github.com/numaproj/numaflow-go/pkg/sinker"
+)
+
+// onSuccessLogSink is a sinker implementation that logs the input to stdout
+type onSuccessLogSink struct {
+}
+
+func (l *onSuccessLogSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum) sinksdk.Responses {
+    result := sinksdk.ResponsesBuilder()
+    for d := range datumStreamCh {
+        result = result.Append(sinksdk.ResponseOnSuccess(d.id, sinksdk.NewMessage([]byte("primary sink write succeeded"))))
     }
-    
-    func (l *onSuccessLogSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum) sinksdk.Responses {
-        result := sinksdk.ResponsesBuilder()
-        for d := range datumStreamCh {
-            result = result.Append(sinksdk.ResponseOnSuccess(d.id, sinksdk.NewMessage([]byte("primary sink write succeeded"))))
-        }
-        return result
-    }
-    ```
-    - [Golang Response Struct](https://github.com/numaproj/numaflow-go/blob/a75410dfc101ae70edeec4becb30c10f02abca53/pkg/sinker/types.go#L61-L63)
+    return result
+}
+```
+- [Golang Response Struct](https://github.com/numaproj/numaflow-go/blob/a75410dfc101ae70edeec4becb30c10f02abca53/pkg/sinker/types.go#L61-L63)
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    @Override
-    public ResponseList processMessages(DatumIterator datumIterator) {
-        ResponseList.ResponseListBuilder responseListBuilder = ResponseList.newBuilder();
-        while (datumIterator.next() != null) {
-            try {
-                responseListBuilder.addResponse(Response.responseOnSuccess(datum.getId(),
-                        Message.builder()
-                                .value(String.format("Successfully wrote message with ID: %s",
-                                        datum.getId()).getBytes())
-                                .build()));
-            } catch (Exception e) {
-                log.warn("Error while writing to any sink: ", e);
-                responseListBuilder.addResponse(Response.responseFailure(
-                        datum.getId(),
-                        e.getMessage()));
-            }
-        }
-        return responseListBuilder.build();
-    }
-    ```
-    - [Java Response Class](https://github.com/numaproj/numaflow-java/blob/3180f88f71c6b6bd2f1fbff1a690d359710265cf/src/main/java/io/numaproj/numaflow/sinker/Response.java#L99)
-
-=== "Rust"
-
-    ```rust
-    #[tonic::async_trait]
-    impl sink::Sinker for SinkHandler {
-        async fn sink(&self, mut input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
-            let mut responses: Vec<Response> = Vec::new();
-            while let Some(datum) = input.recv().await {
-                responses.push(Response::on_success(
-                    datum.id,
-                    // To write the original message to the on success sink
-                    None,  
-                ));
-            }
+```java
+@Override
+public ResponseList processMessages(DatumIterator datumIterator) {
+    ResponseList.ResponseListBuilder responseListBuilder = ResponseList.newBuilder();
+    while (datumIterator.next() != null) {
+        try {
+            responseListBuilder.addResponse(Response.responseOnSuccess(datum.getId(),
+                    Message.builder()
+                            .value(String.format("Successfully wrote message with ID: %s",
+                                    datum.getId()).getBytes())
+                            .build()));
+        } catch (Exception e) {
+            log.warn("Error while writing to any sink: ", e);
+            responseListBuilder.addResponse(Response.responseFailure(
+                    datum.getId(),
+                    e.getMessage()));
         }
     }
-    ```
-    - [Rust Response Struct](https://github.com/numaproj/numaflow-rs/blob/0a496b1df9771146cb01930e27bb27f02c69dbee/numaflow/src/sink.rs#L550)
+    return responseListBuilder.build();
+}
+```
+- [Java Response Class](https://github.com/numaproj/numaflow-java/blob/3180f88f71c6b6bd2f1fbff1a690d359710265cf/src/main/java/io/numaproj/numaflow/sinker/Response.java#L99)
+
+</TabItem>
+<TabItem value="rust" label="Rust">
+
+```rust
+#[tonic::async_trait]
+impl sink::Sinker for SinkHandler {
+    async fn sink(&self, mut input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
+        let mut responses: Vec<Response> = Vec::new();
+        while let Some(datum) = input.recv().await {
+            responses.push(Response::on_success(
+                datum.id,
+                // To write the original message to the on success sink
+                None,  
+            ));
+        }
+    }
+}
+```
+- [Rust Response Struct](https://github.com/numaproj/numaflow-rs/blob/0a496b1df9771146cb01930e27bb27f02c69dbee/numaflow/src/sink.rs#L550)
+
+</TabItem>
+</Tabs>

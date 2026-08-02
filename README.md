@@ -3,7 +3,7 @@
 [![Built with Rust](https://img.shields.io/badge/built_with-Rust-dca282.svg)](https://github.com/numaproj/numaflow)
 [![Rust Report Card](https://rust-reportcard.xuri.me/badge/github.com/numaproj/numaflow)](https://rust-reportcard.xuri.me/report/github.com/numaproj/numaflow)
 [![slack](https://img.shields.io/badge/slack-numaproj-brightgreen.svg?logo=slack)](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg)
-[![GoDoc](https://godoc.org/github.com/numaproj/numaflow?status.svg)](https://godoc.org/github.com/numaproj/numaflow/pkg/apis)
+[![Go Reference](https://pkg.go.dev/badge/github.com/numaproj/numaflow/pkg/apis.svg)](https://pkg.go.dev/github.com/numaproj/numaflow/pkg/apis)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow&color=dca282)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)

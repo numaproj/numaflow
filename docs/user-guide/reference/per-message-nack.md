@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Per-Message Nack
 
 > **What it is.** Per-message nack lets your user-defined function (UDF) explicitly tell Numaflow
@@ -22,7 +25,7 @@ how I'd like it redelivered." The redelivery is governed by an optional `NackOpt
 | `delay`         | duration (ms)       | Wait this long before redelivering the message.                               |
 | `maxDeliveries` | uint32              | Hint for the maximum number of redelivery attempts (see [Caveats](#caveats)). |
 | `reason`        | string              | Human-readable reason for the nack; logged for observability.                 |
-| `nackMap`       | map<string, string> | A map for other property names and values to be used by UD implementations    | 
+| `nackMap`       | map&lt;string, string&gt; | A map for other property names and values to be used by UD implementations    | 
 
 All three fields are **optional**. A nack with no options simply asks for the message to be
 redelivered with the backend's default behavior.
@@ -51,43 +54,49 @@ per-message control over *when* (delay) and *how often* (max-deliveries) a messa
 
 `NackOptions` is the same shape across all SDKs (field names follow each language's conventions):
 
-=== "Go"
+<Tabs groupId="sdk-language">
+<TabItem value="go" label="Go">
 
-    ```go
-    // pkg/sinker, pkg/mapper, pkg/sourcetransformer, pkg/sourcer all expose NackOptions
-    opts := &sinker.NackOptions{
-        Delay:         ptr(uint64(5000)), // 5s, *uint64
-        MaxDeliveries: ptr(uint32(3)),    // *uint32
-        Reason:        ptr("downstream temporarily unavailable"), // *string
-        NackMap:       map[string]string{"retry": "false"} // map[string]string
-    }
-    ```
+```go
+// pkg/sinker, pkg/mapper, pkg/sourcetransformer, pkg/sourcer all expose NackOptions
+opts := &sinker.NackOptions{
+    Delay:         ptr(uint64(5000)), // 5s, *uint64
+    MaxDeliveries: ptr(uint32(3)),    // *uint32
+    Reason:        ptr("downstream temporarily unavailable"), // *string
+    NackMap:       map[string]string{"retry": "false"} // map[string]string
+}
+```
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    import io.numaproj.numaflow.shared.NackOptions;
+```java
+import io.numaproj.numaflow.shared.NackOptions;
 
-    NackOptions opts = NackOptions.newBuilder()
-            .delay(5000L)                                  // ms
-            .maxDeliveries(3)
-            .reason("downstream temporarily unavailable")
-            .nackMap(Map.of("retry", "false"))
-            .build();
-    ```
+NackOptions opts = NackOptions.newBuilder()
+        .delay(5000L)                                  // ms
+        .maxDeliveries(3)
+        .reason("downstream temporarily unavailable")
+        .nackMap(Map.of("retry", "false"))
+        .build();
+```
 
-=== "Rust"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```rust
-    use numaflow::shared::NackOptions;
+```rust
+use numaflow::shared::NackOptions;
 
-    let opts = NackOptions {
-        delay: Some(5000),          // ms
-        max_deliveries: Some(3),
-        reason: Some("downstream temporarily unavailable".into()),
-        nack_map: HashMap::from([("retry", "false")]),
-    };
-    ```
+let opts = NackOptions {
+    delay: Some(5000),          // ms
+    max_deliveries: Some(3),
+    reason: Some("downstream temporarily unavailable".into()),
+    nack_map: HashMap::from([("retry", "false")]),
+};
+```
+
+</TabItem>
+</Tabs>
 
 > **SDK availability.** Per-message nack is available in the **Rust**, **Go**, and **Java** SDKs.
 > All fields are optional — pass "no options" (`nil` / `null` / `None`) for a plain nack.
@@ -102,147 +111,165 @@ The mechanism differs slightly by component: the **sink**, **map**, and **source
 
 Return a **nack response** for the message instead of a success/failure response.
 
-=== "Go"
+<Tabs groupId="sdk-language">
+<TabItem value="go" label="Go">
 
-    ```go
-    func (s *mySink) Sink(ctx context.Context, datumCh <-chan sinker.Datum) sinker.Responses {
-        responses := sinker.ResponsesBuilder()
-        for d := range datumCh {
-            if err := s.write(d); err != nil && isRetryable(err) {
-                // ask Numaflow to redeliver this message after 5s
-                responses = responses.Append(sinker.ResponseNack(d.ID(),
-                    &sinker.NackOptions{Delay: ptr(uint64(5000)), Reason: ptr(err.Error())}))
-            } else {
-                responses = responses.Append(sinker.ResponseOK(d.ID()))
-            }
+```go
+func (s *mySink) Sink(ctx context.Context, datumCh <-chan sinker.Datum) sinker.Responses {
+    responses := sinker.ResponsesBuilder()
+    for d := range datumCh {
+        if err := s.write(d); err != nil && isRetryable(err) {
+            // ask Numaflow to redeliver this message after 5s
+            responses = responses.Append(sinker.ResponseNack(d.ID(),
+                &sinker.NackOptions{Delay: ptr(uint64(5000)), Reason: ptr(err.Error())}))
+        } else {
+            responses = responses.Append(sinker.ResponseOK(d.ID()))
         }
-        return responses
     }
-    ```
+    return responses
+}
+```
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    @Override
-    public ResponseList processMessages(DatumIterator datums) {
-        ResponseList.ResponseListBuilder builder = ResponseList.newBuilder();
-        Datum d;
-        while ((d = datums.next()) != null) {
-            if (writeFailedRetryably(d)) {
-                builder.addResponse(Response.responseNack(d.getId(),
-                        NackOptions.newBuilder().delay(5000L).reason("downstream unavailable").build()));
-            } else {
-                builder.addResponse(Response.responseOK(d.getId()));
-            }
+```java
+@Override
+public ResponseList processMessages(DatumIterator datums) {
+    ResponseList.ResponseListBuilder builder = ResponseList.newBuilder();
+    Datum d;
+    while ((d = datums.next()) != null) {
+        if (writeFailedRetryably(d)) {
+            builder.addResponse(Response.responseNack(d.getId(),
+                    NackOptions.newBuilder().delay(5000L).reason("downstream unavailable").build()));
+        } else {
+            builder.addResponse(Response.responseOK(d.getId()));
         }
-        return builder.build();
     }
-    ```
+    return builder.build();
+}
+```
 
-=== "Rust"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```rust
-    async fn sink(&self, mut input: Receiver<SinkRequest>) -> Vec<Response> {
-        let mut responses = Vec::new();
-        while let Some(req) = input.recv().await {
-            if self.write(&req).await.is_err() {
-                responses.push(Response::nack(req.id, Some(NackOptions {
-                    delay: Some(5000),
-                    reason: Some("downstream unavailable".into()),
-                    ..Default::default()
-                })));
-            } else {
-                responses.push(Response::ok(req.id));
-            }
+```rust
+async fn sink(&self, mut input: Receiver<SinkRequest>) -> Vec<Response> {
+    let mut responses = Vec::new();
+    while let Some(req) = input.recv().await {
+        if self.write(&req).await.is_err() {
+            responses.push(Response::nack(req.id, Some(NackOptions {
+                delay: Some(5000),
+                reason: Some("downstream unavailable".into()),
+                ..Default::default()
+            })));
+        } else {
+            responses.push(Response::ok(req.id));
         }
-        responses
     }
-    ```
+    responses
+}
+```
+
+</TabItem>
+</Tabs>
 
 ### Map
 
 Return a special **nack message** in place of the normal output. This signals that the *input*
 message should be redelivered (see the [whole-message caveat](#caveats)).
 
-=== "Go"
+<Tabs groupId="sdk-language">
+<TabItem value="go" label="Go">
 
-    ```go
-    func (m *myMapper) Map(ctx context.Context, keys []string, d mapper.Datum) mapper.Messages {
-        if !ready(d) {
-            return mapper.MessagesBuilder().Append(
-                mapper.MessageToNack(&mapper.NackOptions{Delay: ptr(uint64(2000))}))
-        }
-        return mapper.MessagesBuilder().Append(mapper.NewMessage(transform(d.Value())))
+```go
+func (m *myMapper) Map(ctx context.Context, keys []string, d mapper.Datum) mapper.Messages {
+    if !ready(d) {
+        return mapper.MessagesBuilder().Append(
+            mapper.MessageToNack(&mapper.NackOptions{Delay: ptr(uint64(2000))}))
     }
-    ```
+    return mapper.MessagesBuilder().Append(mapper.NewMessage(transform(d.Value())))
+}
+```
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    @Override
-    public MessageList processMessage(String[] keys, Datum d) {
-        if (!ready(d)) {
-            return MessageList.newBuilder()
-                    .addMessage(Message.toNack(NackOptions.newBuilder().delay(2000L).build()))
-                    .build();
-        }
-        return MessageList.newBuilder().addMessage(new Message(transform(d.getValue()))).build();
+```java
+@Override
+public MessageList processMessage(String[] keys, Datum d) {
+    if (!ready(d)) {
+        return MessageList.newBuilder()
+                .addMessage(Message.toNack(NackOptions.newBuilder().delay(2000L).build()))
+                .build();
     }
-    ```
+    return MessageList.newBuilder().addMessage(new Message(transform(d.getValue()))).build();
+}
+```
 
-=== "Rust"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```rust
-    async fn map(&self, input: MapRequest) -> Vec<Message> {
-        if !ready(&input) {
-            return vec![Message::message_to_nack(Some(NackOptions { delay: Some(2000), ..Default::default() }))];
-        }
-        vec![Message::new(transform(input.value))]
+```rust
+async fn map(&self, input: MapRequest) -> Vec<Message> {
+    if !ready(&input) {
+        return vec![Message::message_to_nack(Some(NackOptions { delay: Some(2000), ..Default::default() }))];
     }
-    ```
+    vec![Message::new(transform(input.value))]
+}
+```
+
+</TabItem>
+</Tabs>
 
 ### Source transformer
 
 Same as map, but the nack message also carries an **event time** (the transformer is responsible for
 event-time assignment, and the message still counts toward watermark progression).
 
-=== "Go"
+<Tabs groupId="sdk-language">
+<TabItem value="go" label="Go">
 
-    ```go
-    func (t *myTransformer) Transform(ctx context.Context, keys []string, d sourcetransformer.Datum) sourcetransformer.Messages {
-        if !ready(d) {
-            return sourcetransformer.MessagesBuilder().Append(
-                sourcetransformer.MessageToNack(d.EventTime(), &sourcetransformer.NackOptions{Delay: ptr(uint64(2000))}))
-        }
-        // ... normal transform ...
+```go
+func (t *myTransformer) Transform(ctx context.Context, keys []string, d sourcetransformer.Datum) sourcetransformer.Messages {
+    if !ready(d) {
+        return sourcetransformer.MessagesBuilder().Append(
+            sourcetransformer.MessageToNack(d.EventTime(), &sourcetransformer.NackOptions{Delay: ptr(uint64(2000))}))
     }
-    ```
+    // ... normal transform ...
+}
+```
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    @Override
-    public MessageList processMessage(String[] keys, Datum d) {
-        if (!ready(d)) {
-            return MessageList.newBuilder()
-                    .addMessage(Message.toNack(d.getEventTime(),
-                            NackOptions.newBuilder().delay(2000L).build()))
-                    .build();
-        }
-        // ... normal transform ...
+```java
+@Override
+public MessageList processMessage(String[] keys, Datum d) {
+    if (!ready(d)) {
+        return MessageList.newBuilder()
+                .addMessage(Message.toNack(d.getEventTime(),
+                        NackOptions.newBuilder().delay(2000L).build()))
+                .build();
     }
-    ```
+    // ... normal transform ...
+}
+```
 
-=== "Rust"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```rust
-    async fn transform(&self, input: SourceTransformRequest) -> Vec<Message> {
-        if !ready(&input) {
-            return vec![Message::message_to_nack(input.eventtime, Some(NackOptions { delay: Some(2000), ..Default::default() }))];
-        }
-        // ... normal transform ...
+```rust
+async fn transform(&self, input: SourceTransformRequest) -> Vec<Message> {
+    if !ready(&input) {
+        return vec![Message::message_to_nack(input.eventtime, Some(NackOptions { delay: Some(2000), ..Default::default() }))];
     }
-    ```
+    // ... normal transform ...
+}
+```
+
+</TabItem>
+</Tabs>
 
 ### Source (user-defined)
 
@@ -252,39 +279,45 @@ bundled together. Implement it to re-queue those offsets so a subsequent `Read` 
 (honoring `delay` if you wish).
 Built-in sources (Kafka, JetStream, Pulsar, etc.) redeliver natively and need no user code.
 
-=== "Go"
+<Tabs groupId="sdk-language">
+<TabItem value="go" label="Go">
 
-    ```go
-    func (s *mySource) Nack(ctx context.Context, req sourcer.NackRequest) {
-        for _, n := range req.Offsets() { // []sourcer.NackOffset
-            // n.NackOptions may be nil; carries Delay / MaxDeliveries / Reason
-            s.requeue(n.Offset, n.NackOptions) // make the next Read() return this offset again
-        }
+```go
+func (s *mySource) Nack(ctx context.Context, req sourcer.NackRequest) {
+    for _, n := range req.Offsets() { // []sourcer.NackOffset
+        // n.NackOptions may be nil; carries Delay / MaxDeliveries / Reason
+        s.requeue(n.Offset, n.NackOptions) // make the next Read() return this offset again
     }
-    ```
+}
+```
 
-=== "Java"
+</TabItem>
+<TabItem value="java" label="Java">
 
-    ```java
-    @Override
-    public void nack(NackRequest request) {
-        for (NackOffset n : request.getOffsets()) { // List<NackOffset>
-            // n.getNackOptions() may be null
-            requeue(n.getOffset(), n.getNackOptions());
-        }
+```java
+@Override
+public void nack(NackRequest request) {
+    for (NackOffset n : request.getOffsets()) { // List<NackOffset>
+        // n.getNackOptions() may be null
+        requeue(n.getOffset(), n.getNackOptions());
     }
-    ```
+}
+```
 
-=== "Rust"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```rust
-    async fn nack(&self, offsets: Vec<NackOffset>) {
-        for n in offsets {
-            // n.option: Option<NackOptions>
-            self.requeue(n.offset, &n.option); // re-deliver on a later read()
-        }
+```rust
+async fn nack(&self, offsets: Vec<NackOffset>) {
+    for n in offsets {
+        // n.option: Option<NackOptions>
+        self.requeue(n.offset, &n.option); // re-deliver on a later read()
     }
-    ```
+}
+```
+
+</TabItem>
+</Tabs>
 
 ## Caveats
 
