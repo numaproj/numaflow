@@ -119,7 +119,7 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 	assert.NoError(s.T(), err)
 	defer func() { assert.NoError(s.T(), client.Close()) }()
 
-	SendMessageTo(fmt.Sprintf("%s-in", pipelineName), "in", NewHttpPostRequest().WithBody([]byte("not-json")))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not-json")))
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains("https://localhost:8941", "/runtime/errors", `"container":"udf"`)
@@ -207,7 +207,7 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 			// The HTTP request can outlive the test because the UDF process exits before ACKing it.
 			_ = recover()
 		}()
-		SendMessageTo(monoVertexName, monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
+		w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
 	}()
 
 	assert.Eventually(s.T(), func() bool {
