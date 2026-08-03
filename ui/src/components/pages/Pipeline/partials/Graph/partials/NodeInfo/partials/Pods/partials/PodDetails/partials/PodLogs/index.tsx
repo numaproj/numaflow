@@ -28,11 +28,11 @@ import { ClockIcon } from "@mui/x-date-pickers";
 import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
-import Highlighter from "react-highlight-words";
 import { PodLogsProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
 import { filterLogs } from "./filterLogs";
+import { LogVirtualList } from "./LogVirtualList";
 import { usePodLogStream } from "./usePodLogStream";
 
 import "./style.css";
@@ -75,6 +75,12 @@ export function PodLogs({
     const source = showPreviousLogs ? previousLogs : logs;
     return filterLogs(source, search, negateSearch);
   }, [showPreviousLogs, previousLogs, logs, search, negateSearch]);
+
+  const orderedLogs = useMemo(
+    () =>
+      logsOrder === "desc" ? filteredLogs.slice().reverse() : filteredLogs,
+    [filteredLogs, logsOrder]
+  );
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -350,98 +356,13 @@ export function PodLogs({
         }
       />
       <Box sx={{ height: "calc(100% - 9rem)" }}>
-        <Box
-          sx={{
-            backgroundColor: `${
-              colorMode === "light" ? "whitesmoke" : "black"
-            }`,
-            fontWeight: 600,
-            borderRadius: "0.4rem",
-            padding: "1rem 0rem",
-            height: "calc(100% - 6rem)",
-            overflow: "scroll",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
-            }}
-          >
-            {logsOrder === "asc" &&
-              filteredLogs.map((l: string, idx) => (
-                <Box
-                  key={`${idx}-${podName}-logs`}
-                  component="span"
-                  sx={{
-                    whiteSpace: wrapLines ? "normal" : "nowrap",
-                    height: wrapLines ? "auto" : "1.6rem",
-                    lineHeight: "1.6rem",
-                  }}
-                >
-                  <Highlighter
-                    searchWords={[search]}
-                    autoEscape={true}
-                    textToHighlight={l}
-                    style={{
-                      color: colorMode === "light" ? "black" : "white",
-                      fontFamily: "Consolas,Liberation Mono,Courier,monospace",
-                      fontWeight: "normal",
-                      background: colorMode === "light" ? "#E6E6E6" : "#333333",
-                      fontSize: "1.4rem",
-                      textWrap: wrapLines ? "wrap" : "nowrap",
-                      border: "1px solid #cacaca",
-                    }}
-                    highlightStyle={{
-                      color: `${colorMode === "light" ? "white" : "black"}`,
-                      backgroundColor: `${
-                        colorMode === "light" ? "black" : "white"
-                      }`,
-                    }}
-                  />
-                </Box>
-              ))}
-            {logsOrder === "desc" &&
-              filteredLogs
-                .slice()
-                .reverse()
-                .map((l: string, idx) => (
-                  <Box
-                    key={`${idx}-${podName}-logs`}
-                    component="span"
-                    sx={{
-                      whiteSpace: wrapLines ? "normal" : "nowrap",
-                      height: wrapLines ? "auto" : "1.6rem",
-                      lineHeight: "1.6rem",
-                    }}
-                  >
-                    <Highlighter
-                      searchWords={[search]}
-                      autoEscape={true}
-                      textToHighlight={l}
-                      style={{
-                        color: colorMode === "light" ? "black" : "white",
-                        fontFamily:
-                          "Consolas,Liberation Mono,Courier,monospace",
-                        fontWeight: "normal",
-                        background:
-                          colorMode === "light" ? "#E6E6E6" : "#333333",
-                        fontSize: "1.4rem",
-                        textWrap: wrapLines ? "wrap" : "nowrap",
-                        border: "1px solid #cacaca",
-                      }}
-                      highlightStyle={{
-                        color: `${colorMode === "light" ? "white" : "black"}`,
-                        backgroundColor: `${
-                          colorMode === "light" ? "black" : "white"
-                        }`,
-                      }}
-                    />
-                  </Box>
-                ))}
-          </Box>
-        </Box>
+        <LogVirtualList
+          logs={orderedLogs}
+          search={search}
+          wrapLines={wrapLines}
+          colorMode={colorMode}
+          podName={podName}
+        />
       </Box>
     </Box>
   );
