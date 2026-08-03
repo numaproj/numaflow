@@ -384,12 +384,9 @@ pub mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
         )
         .build()
         .await
