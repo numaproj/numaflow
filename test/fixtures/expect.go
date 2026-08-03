@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -154,6 +155,52 @@ func (t *Expect) MonoVertexPodsRunning() *Expect {
 	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, timeout); err != nil {
 		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
 	}
+	return t
+}
+
+func (t *Expect) VertexPodRuntimeSnapshot(vertexName string) PodRuntimeSnapshot {
+	t.t.Helper()
+	timeout := 3 * time.Minute
+	snapshot, err := WaitForVertexPodRuntimeSnapshot(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, vertexName, timeout)
+	if err != nil {
+		t.t.Fatalf("Expected vertex %q pod runtime snapshot: %v", vertexName, err)
+	}
+	return snapshot
+}
+
+func (t *Expect) MonoVertexPodRuntimeSnapshot() PodRuntimeSnapshot {
+	t.t.Helper()
+	timeout := 3 * time.Minute
+	snapshot, err := WaitForMonoVertexPodRuntimeSnapshot(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, timeout)
+	if err != nil {
+		t.t.Fatalf("Expected monovertex %q pod runtime snapshot: %v", t.monoVertex.Name, err)
+	}
+	return snapshot
+}
+
+// VertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// running the vertex, and that its numa container has not restarted since the baseline was taken.
+func (t *Expect) VertexNumaStable(baseline PodRuntimeSnapshot, vertexName string) *Expect {
+	t.t.Helper()
+	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
+	if err != nil {
+		t.t.Fatalf("Expected vertex %q pod %q to remain stable: %v", vertexName, baseline.PodName, err)
+	}
+	assert.Equal(t.t, baseline.UID, current.UID, "vertex pod UID should remain stable")
+	assert.Equal(t.t, baseline.NumaRestartCount, current.NumaRestartCount, "numa container should not restart")
+	return t
+}
+
+// MonoVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
+// running the MonoVertex, and that its numa container has not restarted since the baseline was taken.
+func (t *Expect) MonoVertexNumaStable(baseline PodRuntimeSnapshot) *Expect {
+	t.t.Helper()
+	current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
+	if err != nil {
+		t.t.Fatalf("Expected monovertex %q pod %q to remain stable: %v", t.monoVertex.Name, baseline.PodName, err)
+	}
+	assert.Equal(t.t, baseline.UID, current.UID, "monovertex pod UID should remain stable")
+	assert.Equal(t.t, baseline.NumaRestartCount, current.NumaRestartCount, "numa container should not restart")
 	return t
 }
 
