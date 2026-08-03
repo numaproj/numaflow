@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import Box from "@mui/material/Box";
@@ -28,62 +29,13 @@ import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
-import "@stardazed/streams-polyfill";
-import { ReadableStreamDefaultReadResult } from "stream/web";
-import { getBaseHref } from "../../../../../../../../../../../../../utils";
 import { PodLogsProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
+import { filterLogs } from "./filterLogs";
+import { usePodLogStream } from "./usePodLogStream";
 
 import "./style.css";
-
-const MAX_LOGS = 1000;
-
-const parsePodLogs = (
-  value: string,
-  enableTimestamp: boolean,
-  levelFilter: string,
-  type: string,
-  isErrorMessage: boolean
-): string[] => {
-  const rawLogs = value.split("\n").filter((s) => s.trim().length);
-  return rawLogs.map((raw: string) => {
-    // 30 characters for RFC 3339 timestamp
-    const timestamp =
-      raw.length >= 31 && !isErrorMessage ? raw.substring(0, 30) : "";
-    const logWithoutTimestamp =
-      raw.length >= 31 && !isErrorMessage ? raw.substring(31) : raw;
-
-    let msg = enableTimestamp ? `${timestamp} ` : "";
-
-    if (type === "monoVertex") {
-      if (
-        levelFilter !== "all" &&
-        !logWithoutTimestamp.includes(levelFilter.toUpperCase())
-      )
-        return "";
-
-      return `${msg}${logWithoutTimestamp}`;
-    } else {
-      let obj;
-      try {
-        obj = JSON.parse(logWithoutTimestamp);
-      } catch {
-        obj = logWithoutTimestamp;
-      }
-      // println log, it is not an object
-      if (obj === logWithoutTimestamp) {
-        if (levelFilter !== "all" && !obj.toLowerCase().includes(levelFilter))
-          return "";
-      } else if (obj?.level) {
-        // logger log
-        msg += `${obj.level.toUpperCase()} `;
-        if (levelFilter !== "all" && obj.level !== levelFilter) return "";
-      }
-      return `${msg}${logWithoutTimestamp}`;
-    }
-  });
-};
 
 export function PodLogs({
   namespaceId,
@@ -91,13 +43,6 @@ export function PodLogs({
   containerName,
   type,
 }: PodLogsProps) {
-  const [logs, setLogs] = useState<string[]>([]);
-  const [previousLogs, setPreviousLogs] = useState<string[]>([]);
-  const [filteredLogs, setFilteredLogs] = useState<string[]>([]);
-  const [logRequestKey, setLogRequestKey] = useState<string>("");
-  const [reader, setReader] = useState<
-    ReadableStreamDefaultReader | undefined
-  >();
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
   const [wrapLines, setWrapLines] = useState<boolean>(false);
@@ -109,172 +54,26 @@ export function PodLogs({
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
   const { host } = useContext<AppContextProps>(AppContext);
 
+  // Restart streaming if the source changes while paused
   useEffect(() => {
-    // reset logs in memory on any log source change
-    setLogs([]);
-    setPreviousLogs([]);
-    // and start logs again if paused
     setPaused(false);
   }, [namespaceId, podName, containerName]);
 
-  useEffect(() => {
-    if (paused) {
-      return;
-    }
-    const requestKey = `${namespaceId}-${podName}-${containerName}`;
-    if (logRequestKey && logRequestKey !== requestKey && reader) {
-      // Cancel open reader on param change
-      reader.cancel();
-      setReader(undefined);
-      return;
-    } else if (reader) {
-      // Don't open a new reader if one exists
-      return;
-    }
-    setLogRequestKey(requestKey);
-    setLogs(["Loading logs..."]);
-    fetch(
-      `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
-    )
-      .then((response) => {
-        if (response && response.body) {
-          const r = response.body
-            .pipeThrough(new TextDecoderStream())
-            .getReader();
-          setReader(r);
-          r.read().then(function process({
-            done,
-            value,
-          }): Promise<ReadableStreamDefaultReadResult<string>> {
-            if (done) {
-              return;
-            }
-            if (value) {
-              // Check if the value is an error response
-              let isErrorMessage = false;
-              try {
-                const jsonResponse = JSON.parse(value);
-                if (jsonResponse?.errMsg) {
-                  // If there's an error message, set value to errMsg
-                  value = jsonResponse.errMsg;
-                  isErrorMessage = true;
-                }
-              } catch {
-                //do nothing
-              }
-              setLogs((logs) => {
-                const latestLogs = parsePodLogs(
-                  value,
-                  enableTimestamp,
-                  levelFilter,
-                  type,
-                  isErrorMessage
-                )?.filter((logs) => logs !== "");
-                let updated = [...logs, ...latestLogs];
-                if (updated.length > MAX_LOGS) {
-                  updated = updated.slice(updated.length - MAX_LOGS);
-                }
-                return updated;
-              });
-            }
-            return r.read().then(process);
-          });
-        }
-      })
-      .catch(console.error);
-  }, [
+  const { logs, previousLogs } = usePodLogStream({
     namespaceId,
     podName,
     containerName,
-    reader,
+    type,
+    host,
     paused,
-    host,
     enableTimestamp,
     levelFilter,
-  ]);
-
-  useEffect(() => {
-    if (showPreviousLogs) {
-      setPreviousLogs([]);
-      const url = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=true&tailLines=${MAX_LOGS}&previous=true`;
-      fetch(url)
-        .then((response) => {
-          if (response && response.body) {
-            const reader = response.body
-              .pipeThrough(new TextDecoderStream())
-              .getReader();
-
-            reader.read().then(function process({ done, value }) {
-              if (done) {
-                return;
-              }
-              if (value) {
-                // Check if the value is an error response
-                let isErrorMessage = false;
-                try {
-                  const jsonResponse = JSON.parse(value);
-                  if (jsonResponse?.errMsg) {
-                    // If there's an error message, set value to errMsg
-                    value = jsonResponse.errMsg;
-                    isErrorMessage = true;
-                  }
-                } catch {
-                  //do nothing
-                }
-                setPreviousLogs((prevLogs) => {
-                  const latestLogs = parsePodLogs(
-                    value,
-                    enableTimestamp,
-                    levelFilter,
-                    type,
-                    isErrorMessage
-                  )?.filter((logs) => logs !== "");
-                  let updated = [...prevLogs, ...latestLogs];
-                  if (updated.length > MAX_LOGS) {
-                    updated = updated.slice(updated.length - MAX_LOGS);
-                  }
-                  return updated;
-                });
-              }
-              return reader.read().then(process);
-            });
-          }
-        })
-        .catch(console.error);
-    } else {
-      // Clear previous logs when the checkbox is unchecked
-      setPreviousLogs([]);
-    }
-  }, [
     showPreviousLogs,
-    namespaceId,
-    podName,
-    containerName,
-    host,
-    enableTimestamp,
-    levelFilter,
-  ]);
+  });
 
-  useEffect(() => {
-    if (!search) {
-      if (showPreviousLogs) {
-        setFilteredLogs(previousLogs);
-      } else {
-        setFilteredLogs(logs);
-      }
-      return;
-    }
-    const searchLowerCase = search.toLowerCase();
-    const filtered = (showPreviousLogs ? previousLogs : logs)?.filter((log) =>
-      negateSearch
-        ? !log.toLowerCase().includes(searchLowerCase)
-        : log.toLowerCase().includes(searchLowerCase)
-    );
-
-    if (!filtered.length) {
-      filtered.push("No logs matching search.");
-    }
-    setFilteredLogs(filtered);
+  const filteredLogs = useMemo(() => {
+    const source = showPreviousLogs ? previousLogs : logs;
+    return filterLogs(source, search, negateSearch);
   }, [showPreviousLogs, previousLogs, logs, search, negateSearch]);
 
   const handleSearchChange = useCallback(
@@ -300,12 +99,8 @@ export function PodLogs({
   }, []);
 
   const handlePause = useCallback(() => {
-    setPaused(!paused);
-    if (!paused && reader) {
-      reader.cancel();
-      setReader(undefined);
-    }
-  }, [paused, reader]);
+    setPaused((prev) => !prev);
+  }, []);
 
   const handleColorMode = useCallback(() => {
     setColorMode(colorMode === "light" ? "dark" : "light");
@@ -332,26 +127,15 @@ export function PodLogs({
 
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [logs]);
+  }, [logs, podName, containerName]);
 
   const handleTimestamps = useCallback(() => {
     setEnableTimestamp((prev) => !prev);
-    if (reader) {
-      reader.cancel();
-      setReader(undefined);
-    }
-  }, [reader]);
+  }, []);
 
-  const handleLevelChange = useCallback(
-    (e) => {
-      setLevelFilter(e.target.value);
-      if (reader) {
-        reader.cancel();
-        setReader(undefined);
-      }
-    },
-    [reader]
-  );
+  const handleLevelChange = useCallback((e) => {
+    setLevelFilter(e.target.value);
+  }, []);
 
   const logsBtnStyle = {
     height: "2.4rem",
