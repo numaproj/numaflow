@@ -1,4 +1,9 @@
-import { useEffect, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import Box from "@mui/material/Box";
 import Highlighter from "react-highlight-words";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -10,15 +15,20 @@ export type LogVirtualListProps = {
   wrapLines: boolean;
   colorMode: string;
   podName: string;
+  activeIndex: number | null;
 };
 
-export function LogVirtualList({
-  logs,
-  search,
-  wrapLines,
-  colorMode,
-  podName,
-}: LogVirtualListProps) {
+export type LogVirtualListHandle = {
+  scrollToIndex: (index: number) => void;
+};
+
+export const LogVirtualList = forwardRef<
+  LogVirtualListHandle,
+  LogVirtualListProps
+>(function LogVirtualList(
+  { logs, search, wrapLines, colorMode, podName, activeIndex },
+  ref
+) {
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   const virtualizer = useVirtualizer({
@@ -38,6 +48,16 @@ export function LogVirtualList({
     virtualizer.measure();
   }, [wrapLines, virtualizer]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToIndex: (index: number) => {
+        virtualizer.scrollToIndex(index, { align: "center", behavior: "auto" });
+      },
+    }),
+    [virtualizer]
+  );
+
   const isLight = colorMode === "light";
 
   return (
@@ -45,10 +65,11 @@ export function LogVirtualList({
       ref={parentRef}
       data-testid="log-virtual-list"
       sx={{
-        backgroundColor: isLight ? "whitesmoke" : "black",
-        fontWeight: 600,
-        borderRadius: "0.4rem",
-        padding: "1rem 0rem",
+        backgroundColor: isLight ? "grey.50" : "#121212",
+        border: "1px solid",
+        borderColor: isLight ? "divider" : "grey.800",
+        borderRadius: 1,
+        padding: "0.8rem",
         height: "calc(100% - 6rem)",
         overflow: "auto",
       }}
@@ -62,11 +83,13 @@ export function LogVirtualList({
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const line = logs[virtualRow.index];
+          const isActive = virtualRow.index === activeIndex;
           return (
             <Box
               key={`${virtualRow.index}-${podName}-logs`}
               data-index={virtualRow.index}
               data-testid="log-virtual-row"
+              data-active={isActive || undefined}
               ref={wrapLines ? virtualizer.measureElement : undefined}
               component="span"
               sx={{
@@ -74,6 +97,19 @@ export function LogVirtualList({
                 top: 0,
                 left: 0,
                 width: "100%",
+                backgroundColor:
+                  isActive
+                    ? isLight
+                      ? "#fff8e1"
+                      : "#453b16"
+                    : virtualRow.index % 2
+                      ? isLight
+                        ? "#f7f7f7"
+                        : "#191919"
+                      : "transparent",
+                outline: isActive ? "2px solid #ffb300" : undefined,
+                outlineOffset: isActive ? "-2px" : undefined,
+                zIndex: isActive ? 1 : undefined,
                 transform: `translateY(${virtualRow.start}px)`,
                 whiteSpace: wrapLines ? "normal" : "nowrap",
                 height: wrapLines ? "auto" : `${LOG_ROW_HEIGHT_PX}px`,
@@ -88,14 +124,20 @@ export function LogVirtualList({
                   color: isLight ? "black" : "white",
                   fontFamily: "Consolas,Liberation Mono,Courier,monospace",
                   fontWeight: "normal",
-                  background: isLight ? "#E6E6E6" : "#333333",
+                  background: "transparent",
                   fontSize: "1.4rem",
                   textWrap: wrapLines ? "wrap" : "nowrap",
-                  border: "1px solid #cacaca",
+                  display: "block",
+                  padding: "0 0.5rem",
                 }}
                 highlightStyle={{
-                  color: isLight ? "white" : "black",
-                  backgroundColor: isLight ? "black" : "white",
+                  color: isActive || isLight ? "black" : "white",
+                  backgroundColor: isActive
+                    ? "#ffca28"
+                    : isLight
+                      ? "#fff59d"
+                      : "#665c1e",
+                  fontWeight: isActive ? "bold" : "normal",
                 }}
               />
             </Box>
@@ -104,4 +146,4 @@ export function LogVirtualList({
       </Box>
     </Box>
   );
-}
+});

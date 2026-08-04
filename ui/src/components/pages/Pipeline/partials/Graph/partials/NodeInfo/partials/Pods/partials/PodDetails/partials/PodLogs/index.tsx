@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Box from "@mui/material/Box";
@@ -24,6 +25,8 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import Download from "@mui/icons-material/Download";
 import WrapTextIcon from "@mui/icons-material/WrapText";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { ClockIcon } from "@mui/x-date-pickers";
 import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -32,7 +35,8 @@ import { PodLogsProps } from "../../../../../../../../../../../../../types/decla
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
 import { filterLogs } from "./filterLogs";
-import { LogVirtualList } from "./LogVirtualList";
+import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
+import { useLogSearchNavigation } from "./useLogSearchNavigation";
 import { usePodLogStream } from "./usePodLogStream";
 
 import "./style.css";
@@ -81,6 +85,20 @@ export function PodLogs({
       logsOrder === "desc" ? filteredLogs.slice().reverse() : filteredLogs,
     [filteredLogs, logsOrder]
   );
+  const logVirtualListRef = useRef<LogVirtualListHandle>(null);
+  const {
+    enabled: searchNavigationEnabled,
+    matchCount,
+    currentMatch,
+    activeIndex,
+    goNext,
+    goPrev,
+  } = useLogSearchNavigation({
+    orderedLogs,
+    search,
+    negateSearch,
+    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}`,
+  });
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -92,6 +110,28 @@ export function PodLogs({
   const handleSearchClear = useCallback(() => {
     setSearch("");
   }, []);
+
+  const handleSearchNavigation = useCallback(
+    (navigate: () => number | null) => {
+      const targetIndex = navigate();
+      if (targetIndex !== null) {
+        logVirtualListRef.current?.scrollToIndex(targetIndex);
+      }
+    },
+    []
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event) => {
+      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      handleSearchNavigation(event.shiftKey ? goPrev : goNext);
+    },
+    [goNext, goPrev, handleSearchNavigation]
+  );
 
   const handleNegateSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -165,7 +205,7 @@ export function PodLogs({
             p: "0.2rem 0.4rem",
             display: "flex",
             alignItems: "center",
-            width: 400,
+            width: 520,
           }}
         >
           <InputBase
@@ -173,10 +213,58 @@ export function PodLogs({
             placeholder="Search logs"
             value={search}
             onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
           />
           <IconButton data-testid="clear-button" onClick={handleSearchClear}>
             <ClearIcon sx={logsBtnStyle} />
           </IconButton>
+          {searchNavigationEnabled && (
+            <>
+              <Typography
+                className="PodLogs-search-match"
+                data-testid="search-match-count"
+                sx={{ fontSize: "1.4rem", whiteSpace: "nowrap" }}
+              >
+                {currentMatch} / {matchCount}
+              </Typography>
+              <Tooltip
+                title={
+                  <div className={"icon-tooltip"}>
+                    Previous match (Shift+Enter)
+                  </div>
+                }
+                placement={"top"}
+                arrow
+              >
+                <span>
+                  <IconButton
+                    data-testid="search-match-prev"
+                    disabled={!matchCount}
+                    onClick={() => handleSearchNavigation(goPrev)}
+                  >
+                    <KeyboardArrowUpIcon sx={logsBtnStyle} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip
+                title={
+                  <div className={"icon-tooltip"}>Next match (Enter)</div>
+                }
+                placement={"top"}
+                arrow
+              >
+                <span>
+                  <IconButton
+                    data-testid="search-match-next"
+                    disabled={!matchCount}
+                    onClick={() => handleSearchNavigation(goNext)}
+                  >
+                    <KeyboardArrowDownIcon sx={logsBtnStyle} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </>
+          )}
         </Paper>
         <FormControlLabel
           control={
@@ -357,11 +445,13 @@ export function PodLogs({
       />
       <Box sx={{ height: "calc(100% - 9rem)" }}>
         <LogVirtualList
+          ref={logVirtualListRef}
           logs={orderedLogs}
           search={search}
           wrapLines={wrapLines}
           colorMode={colorMode}
           podName={podName}
+          activeIndex={activeIndex}
         />
       </Box>
     </Box>

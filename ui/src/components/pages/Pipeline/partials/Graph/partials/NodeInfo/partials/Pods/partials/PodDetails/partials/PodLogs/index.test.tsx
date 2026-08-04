@@ -13,7 +13,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return 320;
       }
-      return 16;
+      return 20;
     },
   });
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -22,7 +22,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return 320;
       }
-      return 16;
+      return 20;
     },
   });
 });
@@ -144,5 +144,49 @@ describe("PodLogs", () => {
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+  });
+
+  it("navigates search matches with buttons and keyboard", async () => {
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            Buffer.from("first match\nno result\nsecond match\n")
+          );
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-infer-0-xah5w"}
+        />
+      );
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search logs");
+    fireEvent.change(searchInput, { target: { value: "match" } });
+
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
+    fireEvent.click(screen.getByTestId("search-match-next"));
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("2 / 2");
+    expect(document.querySelector("[data-active='true']")).not.toBeNull();
+
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
+    fireEvent.keyDown(searchInput, { key: "Enter", shiftKey: true });
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("2 / 2");
+
+    fireEvent.click(screen.getByTestId("negate-search"));
+    expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("clear-button"));
+    expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
   });
 });

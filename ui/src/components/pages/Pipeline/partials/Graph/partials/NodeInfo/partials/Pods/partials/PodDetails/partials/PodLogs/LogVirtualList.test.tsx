@@ -1,5 +1,6 @@
+import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
-import { LogVirtualList } from "./LogVirtualList";
+import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
 
 const VIEWPORT_HEIGHT = 160;
 
@@ -10,7 +11,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return VIEWPORT_HEIGHT;
       }
-      return 16;
+      return 20;
     },
   });
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -19,7 +20,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return VIEWPORT_HEIGHT;
       }
-      return 16;
+      return 20;
     },
   });
   Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
@@ -28,7 +29,7 @@ beforeAll(() => {
       const height =
         this.getAttribute("data-testid") === "log-virtual-list"
           ? VIEWPORT_HEIGHT
-          : 16;
+          : 20;
       return {
         x: 0,
         y: 0,
@@ -56,6 +57,7 @@ describe("LogVirtualList", () => {
           wrapLines={false}
           colorMode="light"
           podName="pod-a"
+          activeIndex={null}
         />
       </div>
     );
@@ -78,10 +80,38 @@ describe("LogVirtualList", () => {
           wrapLines={false}
           colorMode="dark"
           podName="pod-a"
+          activeIndex={null}
         />
       </div>
     );
 
     expect(screen.getByText("foo")).toBeInTheDocument();
+  });
+
+  it("marks the active match row and exposes scroll navigation", () => {
+    const ref = createRef<LogVirtualListHandle>();
+
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          ref={ref}
+          logs={["first match", "second match"]}
+          search="match"
+          wrapLines={false}
+          colorMode="light"
+          podName="pod-a"
+          activeIndex={1}
+        />
+      </div>
+    );
+
+    const activeRow = screen.getAllByTestId("log-virtual-row")[1];
+    expect(activeRow).toHaveAttribute(
+      "data-active",
+      "true"
+    );
+    expect(activeRow).toHaveStyle("outline: 2px solid #ffb300");
+    expect(ref.current).not.toBeNull();
+    expect(() => ref.current?.scrollToIndex(1)).not.toThrow();
   });
 });
