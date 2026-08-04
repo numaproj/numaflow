@@ -24,6 +24,7 @@ use tracing::error;
 use crate::Error::ActorTaskTerminated;
 use crate::{
     AssumeRoleConfig, Error, SQS_METADATA_KEY, SqsConfig, SqsSourceError, extract_aws_error,
+    is_transient_sqs_sdk_error,
 };
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
@@ -247,6 +248,14 @@ impl SqsActor {
         let receive_message_output = match sdk_response {
             Ok(output) => output,
             Err(err) => {
+                if is_transient_sqs_sdk_error(&err) {
+                    tracing::warn!(
+                        ?err,
+                        queue_url = self.queue_url,
+                        "Transient SQS receive failure; returning empty batch"
+                    );
+                    return Some(Ok(vec![]));
+                }
                 tracing::error!(
                     ?err,
                     queue_url = self.queue_url,

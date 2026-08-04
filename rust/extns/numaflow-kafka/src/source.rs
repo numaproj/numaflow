@@ -15,6 +15,9 @@ use tokio_util::sync::CancellationToken;
 
 use tracing::{error, info, warn};
 
+use crate::recover::{
+    is_fatal_commit_error, is_recoverable_commit_error, is_recoverable_startup_error,
+};
 use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,10 +220,18 @@ impl KafkaActor {
             session_timeout,
         };
 
-        actor
-            .pending_messages()
-            .await
-            .map_err(|err| Error::Kafka(format!("Failed to get pending messages: {err:?}")))?;
+        if let Err(err) = actor.pending_messages().await {
+            if is_recoverable_startup_error(&err) {
+                warn!(
+                    ?err,
+                    "Transient error during Kafka startup pending check; continuing without pending count validation"
+                );
+            } else {
+                return Err(Error::Kafka(format!(
+                    "Failed to get pending messages: {err:?}"
+                )));
+            }
+        }
 
         tokio::spawn(async move {
             tracing::info!("Starting Kafka consumer...");
@@ -441,25 +452,17 @@ impl KafkaActor {
                     return Ok(());
                 };
                 if let Some(code) = commit_error.rdkafka_error_code() {
-                    use rdkafka::types::RDKafkaErrorCode::{
-                        FencedInstanceId, FencedMemberEpoch, GroupAuthorizationFailed,
-                        IllegalGeneration, RebalanceInProgress, StaleMemberEpoch, UnknownMemberId,
-                    };
-                    // Potential non-retryable errors that can happen in ACK https://kafka.apache.org/41/design/protocol/#error-codes
-                    if matches!(
-                        code,
-                        // Consumer group membership errors
-                        UnknownMemberId
-                            | IllegalGeneration
-                            | RebalanceInProgress
-                            | FencedInstanceId
-                            | FencedMemberEpoch
-                            | StaleMemberEpoch
-                            | GroupAuthorizationFailed
-                    ) {
+                    if is_recoverable_commit_error(code) {
+                        warn!(
+                            ?code,
+                            error = %commit_error,
+                            "Recoverable Kafka commit error during rebalance; releasing in-flight tracker without committing"
+                        );
+                        return Ok(());
+                    }
+                    if is_fatal_commit_error(code) {
                         return Err(Error::NonRetryable(format!(
-                            "Non-retryable commit error ({:?}): {}",
-                            code, commit_error
+                            "Non-retryable commit error ({code:?}): {commit_error}"
                         )));
                     }
                 }

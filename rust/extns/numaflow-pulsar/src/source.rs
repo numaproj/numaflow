@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result};
 
@@ -184,7 +184,13 @@ impl ConsumerReaderActor {
         }
 
         if self.message_ids.len() >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
+            warn!(
+                pending = self.message_ids.len(),
+                max = self.max_unack,
+                "Pulsar ack pending limit reached; returning empty batch"
+            );
+            time::sleep(Duration::from_millis(50)).await;
+            return Some(Ok(vec![]));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -196,6 +202,16 @@ impl ConsumerReaderActor {
                 Ok(Some(msg)) => msg,
                 Ok(None) => break,
                 Err(e) => {
+                    if is_transient_pulsar_read_error(&e) {
+                        warn!(
+                            ?e,
+                            "Transient Pulsar read error; returning partial or empty batch"
+                        );
+                        if messages.is_empty() {
+                            time::sleep(Duration::from_millis(50)).await;
+                        }
+                        return Some(Ok(messages));
+                    }
                     tracing::error!(?e, "Fetching message from Pulsar");
                     let remaining_time = timeout_at - Instant::now();
                     if remaining_time.as_millis() >= 100 {
@@ -286,6 +302,36 @@ impl ConsumerReaderActor {
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
+    }
+}
+
+fn is_transient_pulsar_read_error(err: &pulsar::Error) -> bool {
+    use pulsar::error::{ConnectionError, ConsumerError};
+    match err {
+        pulsar::Error::Connection(
+            ConnectionError::Io(_) | ConnectionError::SlowDown | ConnectionError::Disconnected,
+        ) => true,
+        pulsar::Error::Consumer(
+            ConsumerError::Io(_)
+            | ConsumerError::Connection(
+                ConnectionError::Io(_) | ConnectionError::SlowDown | ConnectionError::Disconnected,
+            )
+            | ConsumerError::ChannelFull,
+        ) => true,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod recover_tests {
+    use super::is_transient_pulsar_read_error;
+    use pulsar::error::ConnectionError;
+
+    #[test]
+    fn slow_down_is_transient() {
+        assert!(is_transient_pulsar_read_error(&pulsar::Error::Connection(
+            ConnectionError::SlowDown
+        )));
     }
 }
 

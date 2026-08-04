@@ -4,6 +4,8 @@ use tracing::warn;
 pub mod sink;
 pub mod source;
 
+mod recover;
+
 const KAFKA_TOPIC_HEADER_KEY: &str = "X-NF-Kafka-TopicName";
 
 pub type Result<T> = core::result::Result<T, Error>;
