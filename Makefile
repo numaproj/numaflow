@@ -116,6 +116,7 @@ test-coverage:
 test-e2e:
 test-kafka-e2e:
 test-map-e2e:
+test-redrive-e2e:
 test-reduce-one-e2e:
 test-reduce-two-e2e:
 test-api-e2e:

@@ -73,7 +73,7 @@ describe("PodLogs", () => {
       )[0],
       { target: { value: "xyz" } }
     );
-    expect(screen.getByText("No logs matching search.")).toBeVisible();
+    expect(screen.getByText("No logs match your search.")).toBeVisible();
     //negate logs search
     fireEvent.click(
       container.getElementsByClassName(
