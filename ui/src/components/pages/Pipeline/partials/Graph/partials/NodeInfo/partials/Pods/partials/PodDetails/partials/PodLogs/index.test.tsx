@@ -5,6 +5,28 @@ import { PodLogs } from "./index";
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
+// jsdom reports 0 for layout; give the virtual log scroller a viewport.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "log-virtual-list") {
+        return 320;
+      }
+      return 16;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "log-virtual-list") {
+        return 320;
+      }
+      return 16;
+    },
+  });
+});
+
 describe("PodLogs", () => {
   let originFetch: any;
   beforeEach(() => {
