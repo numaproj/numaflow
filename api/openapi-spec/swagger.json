@@ -22856,6 +22856,9 @@
         },
         "groupBy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
+        },
+        "retryStrategy": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         }
       }
     },

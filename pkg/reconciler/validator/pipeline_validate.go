@@ -293,6 +293,13 @@ func validateMapUDF(udf dfv1.UDF) error {
 	if udf.Container == nil || udf.Container.Image == "" {
 		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
+
+	if udf.RetryStrategy != nil {
+		if err := hasValidNonSinkRetryStrategy(*udf.RetryStrategy); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -301,6 +308,10 @@ func validateReduceUDF(udf dfv1.UDF) error {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")
 		}
+	}
+
+	if udf.RetryStrategy != nil {
+		return fmt.Errorf("invalid udf spec, retryStrategy not supported for reduce udf")
 	}
 
 	f := udf.GroupBy.Window.Fixed

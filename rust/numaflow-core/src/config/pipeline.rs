@@ -133,6 +133,7 @@ pub(crate) mod map {
     };
     use crate::error::Error;
 
+    use crate::config::components::sink::RetryConfig;
     /// re-export MapMode from shared.
     pub use numaflow_shared::server_info::MapMode;
 
@@ -155,6 +156,7 @@ pub(crate) mod map {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    retry_config: udf.retry_strategy.map(RetryConfig::from),
                 }))
             } else {
                 Err(Error::Config("Invalid UDF".to_string()))
@@ -167,6 +169,7 @@ pub(crate) mod map {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+        pub retry_config: Option<RetryConfig>,
     }
 
     impl UserDefinedConfig {
@@ -1195,6 +1198,7 @@ mod tests {
                 volume_mounts: None,
             })),
             group_by: None,
+            retry_strategy: None,
         };
 
         let map_type = MapType::try_from(Box::new(udf)).unwrap();
@@ -1252,6 +1256,7 @@ mod tests {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    retry_config: None,
                 }),
             }),
             metrics_config: MetricsConfig::default(),

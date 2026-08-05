@@ -2244,6 +2244,9 @@ message UDF {
 
   // +optional
   optional GroupBy groupBy = 3;
+
+  // +optional
+  optional RetryStrategy retryStrategy = 4;
 }
 
 message UDSink {
