@@ -14,6 +14,7 @@ import { isEqual } from "lodash";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
+import { useControllerInfoFetch } from "../../../utils/fetchWrappers/controllerInfoFetch";
 import { notifyError } from "../../../utils/error";
 import {
   SidebarType,
@@ -54,6 +55,23 @@ function App(props: AppProps) {
 
   const location = useLocation();
   const history = useHistory();
+  const currentNamespace =
+    new URLSearchParams(location.search).get("namespace") ||
+    namespace ||
+    systemInfo?.managedNamespace ||
+    undefined;
+
+  // Plugin apps are usually namespaced; still apply managedNamespace fallback for cluster installs.
+  const {
+    controllerInfo,
+    error: controllerInfoError,
+    loading: controllerInfoLoading,
+  } = useControllerInfoFetch({
+    host: hostUrl,
+    namespace: currentNamespace,
+    managedNamespace: systemInfo?.managedNamespace,
+    namespaced: systemInfo?.namespaced,
+  });
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -127,23 +145,43 @@ function App(props: AppProps) {
     setErrors([]);
   }, []);
 
+  const getVersionDetailsProps = useCallback(
+    (): VersionDetailsProps => ({
+      Version: versionDetails?.Version,
+      BuildDate: versionDetails?.BuildDate,
+      GitCommit: versionDetails?.GitCommit,
+      GitTag: versionDetails?.GitTag,
+      GitTreeState: versionDetails?.GitTreeState,
+      GoVersion: versionDetails?.GoVersion,
+      Compiler: versionDetails?.Compiler,
+      Platform: versionDetails?.Platform,
+      controllerInfo,
+      controllerInfoError,
+      controllerInfoLoading,
+    }),
+    [versionDetails, controllerInfo, controllerInfoError, controllerInfoLoading]
+  );
+
+  useEffect(() => {
+    setSidebarProps((current) => {
+      if (current?.type !== SidebarType.VERSION_DETAILS) {
+        return current;
+      }
+      return {
+        ...current,
+        versionDetailsProps: getVersionDetailsProps(),
+      };
+    });
+  }, [getVersionDetailsProps]);
+
   const handleVersionDetails = useCallback(() => {
     setSidebarProps({
       type: SidebarType.VERSION_DETAILS,
       slide: false,
       pageWidth,
-      versionDetailsProps: {
-        Version: versionDetails?.Version,
-        BuildDate: versionDetails?.BuildDate,
-        GitCommit: versionDetails?.GitCommit,
-        GitTag: versionDetails?.GitTag,
-        GitTreeState: versionDetails?.GitTreeState,
-        GoVersion: versionDetails?.GoVersion,
-        Compiler: versionDetails?.Compiler,
-        Platform: versionDetails?.Platform,
-      },
+      versionDetailsProps: getVersionDetailsProps(),
     });
-  }, [versionDetails, pageWidth]);
+  }, [pageWidth, getVersionDetailsProps]);
 
   const routes = useMemo(() => {
     if (loading) {
