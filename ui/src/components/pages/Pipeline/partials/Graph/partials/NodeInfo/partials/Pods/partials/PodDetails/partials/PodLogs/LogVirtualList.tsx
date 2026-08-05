@@ -7,7 +7,11 @@ import {
 import Box from "@mui/material/Box";
 import Highlighter from "react-highlight-words";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { LOG_ROW_HEIGHT_PX } from "./constants";
+import {
+  LOG_ROW_HEIGHT_PX,
+  NO_LOGS_MATCHING_SEARCH,
+  LOADING_LOGS,
+} from "./constants";
 
 export type LogVirtualListProps = {
   logs: string[];
@@ -30,9 +34,13 @@ export const LogVirtualList = forwardRef<
   ref
 ) {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const isDark = colorMode === "dark";
+  const isEmptyState =
+    logs.length === 1 &&
+    (logs[0] === NO_LOGS_MATCHING_SEARCH || logs[0] === LOADING_LOGS);
 
   const virtualizer = useVirtualizer({
-    count: logs.length,
+    count: isEmptyState ? 0 : logs.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => LOG_ROW_HEIGHT_PX,
     overscan: 10,
@@ -58,92 +66,90 @@ export const LogVirtualList = forwardRef<
     [virtualizer]
   );
 
-  const isLight = colorMode === "light";
+  const textTone = isDark ? "PodLogs-line--dark" : "PodLogs-line--light";
+  const rowTone = isDark ? "PodLogs-row--dark" : "PodLogs-row--light";
 
   return (
     <Box
       ref={parentRef}
       data-testid="log-virtual-list"
-      sx={{
-        backgroundColor: isLight ? "grey.50" : "#121212",
-        border: "1px solid",
-        borderColor: isLight ? "divider" : "grey.800",
-        borderRadius: 1,
-        padding: "0.8rem",
-        height: "calc(100% - 6rem)",
-        overflow: "auto",
-      }}
+      className={`PodLogs-virtual-list ${
+        isDark ? "PodLogs-virtual-list--dark" : "PodLogs-virtual-list--light"
+      }`}
     >
-      <Box
-        sx={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const line = logs[virtualRow.index];
-          const isActive = virtualRow.index === activeIndex;
-          return (
-            <Box
-              key={`${virtualRow.index}-${podName}-logs`}
-              data-index={virtualRow.index}
-              data-testid="log-virtual-row"
-              data-active={isActive || undefined}
-              ref={wrapLines ? virtualizer.measureElement : undefined}
-              component="span"
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                backgroundColor:
-                  isActive
-                    ? isLight
-                      ? "#fff8e1"
-                      : "#453b16"
-                    : virtualRow.index % 2
-                      ? isLight
-                        ? "#f7f7f7"
-                        : "#191919"
-                      : "transparent",
-                outline: isActive ? "2px solid #ffb300" : undefined,
-                outlineOffset: isActive ? "-2px" : undefined,
-                zIndex: isActive ? 1 : undefined,
-                transform: `translateY(${virtualRow.start}px)`,
-                whiteSpace: wrapLines ? "normal" : "nowrap",
-                height: wrapLines ? "auto" : `${LOG_ROW_HEIGHT_PX}px`,
-                lineHeight: `${LOG_ROW_HEIGHT_PX}px`,
-              }}
-            >
-              <Highlighter
-                searchWords={[search]}
-                autoEscape={true}
-                textToHighlight={line}
-                style={{
-                  color: isLight ? "black" : "white",
-                  fontFamily: "Consolas,Liberation Mono,Courier,monospace",
-                  fontWeight: "normal",
-                  background: "transparent",
-                  fontSize: "1.4rem",
-                  textWrap: wrapLines ? "wrap" : "nowrap",
-                  display: "block",
-                  padding: "0 0.5rem",
+      {isEmptyState ? (
+        <div className="PodLogs-empty" data-testid="log-empty-state">
+          {logs[0]}
+        </div>
+      ) : (
+        <Box
+          className={
+            wrapLines
+              ? "PodLogs-virtual-inner PodLogs-virtual-inner--wrap"
+              : "PodLogs-virtual-inner PodLogs-virtual-inner--scroll"
+          }
+          sx={{
+            height: `${virtualizer.getTotalSize()}px`,
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const line = logs[virtualRow.index];
+            const isActive = virtualRow.index === activeIndex;
+
+            return (
+              <Box
+                key={`${virtualRow.index}-${podName}-logs`}
+                data-index={virtualRow.index}
+                data-testid="log-virtual-row"
+                data-active={isActive || undefined}
+                ref={wrapLines ? virtualizer.measureElement : undefined}
+                className={[
+                  "PodLogs-row",
+                  rowTone,
+                  textTone,
+                  wrapLines ? "PodLogs-row--wrap" : "PodLogs-row--nowrap",
+                  isActive ? "PodLogs-row--active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  height: wrapLines ? "auto" : `${LOG_ROW_HEIGHT_PX}px`,
+                  lineHeight: wrapLines
+                    ? undefined
+                    : `${LOG_ROW_HEIGHT_PX}px`,
                 }}
-                highlightStyle={{
-                  color: isActive || isLight ? "black" : "white",
-                  backgroundColor: isActive
-                    ? "#ffca28"
-                    : isLight
-                      ? "#fff59d"
-                      : "#665c1e",
-                  fontWeight: isActive ? "bold" : "normal",
-                }}
-              />
-            </Box>
-          );
-        })}
-      </Box>
+              >
+                <Highlighter
+                  searchWords={[search]}
+                  autoEscape={true}
+                  textToHighlight={line}
+                  style={{
+                    background: "transparent",
+                    fontFamily: "inherit",
+                    fontSize: "inherit",
+                    color: "inherit",
+                    fontWeight: "normal",
+                  }}
+                  highlightStyle={{
+                    color: isActive || !isDark ? "#0f172a" : "#f8fafc",
+                    backgroundColor: isActive
+                      ? "#ffca28"
+                      : isDark
+                        ? "#665c1e"
+                        : "#fff59d",
+                    fontWeight: isActive ? "bold" : "normal",
+                  }}
+                />
+              </Box>
+            );
+          })}
+        </Box>
+      )}
     </Box>
   );
 });

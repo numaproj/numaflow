@@ -1,8 +1,9 @@
 export const MAX_LOGS = 1000;
 
-export const NO_LOGS_MATCHING_SEARCH = "No logs match your search.";
+export const NO_LOGS_MATCHING_SEARCH =
+  "No loaded log lines match this search.";
 
 export const LOADING_LOGS = "Loading logs...";
 
-// Matches unwrapped row height of 2rem with html font-size 10px (App.css).
-export const LOG_ROW_HEIGHT_PX = 20;
+// Matches unwrapped Figma row height (22px).
+export const LOG_ROW_HEIGHT_PX = 22;
