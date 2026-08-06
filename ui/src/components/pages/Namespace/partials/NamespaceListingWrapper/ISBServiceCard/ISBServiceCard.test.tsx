@@ -170,7 +170,7 @@ const mockData = {
 //Mock the DeleteModal component
 jest.mock("../../DeleteModal", () => {
   return {
-    DeleteModal: ({ _, onDeleteCompleted, onCancel }) => {
+    DeleteModal: ({ onDeleteCompleted, onCancel }) => {
       return (
         <div data-testid="mock-delete-confirmation">
           <button onClick={onDeleteCompleted}>Mock Delete Confirmation</button>

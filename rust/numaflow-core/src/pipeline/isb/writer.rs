@@ -95,7 +95,11 @@ impl ISBWriteTask {
 
         if message.nacked() {
             // TODO: send nacked message metric
-            mark_failed!(self.msg_handle, "message nacked", message.nack_options);
+            mark_failed!(
+                self.msg_handle,
+                "message nacked",
+                message.nack_options.map(|o| *o)
+            );
             return;
         }
 
@@ -2136,7 +2140,7 @@ mod simple_buffer_tests {
             ..Default::default()
         };
         let (mut msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__NACK__"]));
-        msg.message.nack_options = Some(opts.clone());
+        msg.message.nack_options = Some(Box::new(opts.clone()));
         tx.send(msg).await.unwrap();
         drop(tx);
 

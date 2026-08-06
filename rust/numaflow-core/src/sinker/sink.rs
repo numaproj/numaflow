@@ -265,7 +265,7 @@ impl SinkWriter {
                                 Self::split_batch_handles(read_batch, processed_messages);
 
                             for nacked_handle in nacked_handles {
-                                let opts = nacked_handle.message.nack_options.clone();
+                                let opts = nacked_handle.message.nack_options.clone().map(|o| *o);
                                 mark_failed!(nacked_handle, "message nacked", opts);
                             }
                             mark_success_batch!(acked_handles);
@@ -1754,7 +1754,7 @@ mod tests {
                 offset: format!("o-{id}").into(),
                 index: id as i32,
             },
-            nack_options,
+            nack_options: nack_options.map(Box::new),
             ..Default::default()
         };
         (MessageHandle::new(message, ack_tx), ack_rx)
@@ -2067,7 +2067,7 @@ mod tests {
         // processed batch reports h1 as nacked, carrying options on the message.
         let nacked_msg = Message {
             id: id1.clone(),
-            nack_options: Some(opts.clone()),
+            nack_options: Some(Box::new(opts.clone())),
             ..Default::default()
         };
         let processed = ProcessedSinkBatch::new().with_nacked(vec![nacked_msg]);
@@ -2079,7 +2079,7 @@ mod tests {
         assert_eq!(
             nacked
                 .first()
-                .and_then(|h| h.message().nack_options.clone()),
+                .and_then(|h| h.message().nack_options.clone().map(|o| *o)),
             Some(opts.clone())
         );
         assert_eq!(acked.len(), 2, "the other two are acked (complement)");
@@ -2089,7 +2089,7 @@ mod tests {
             h.mark_success();
         }
         for h in nacked {
-            let o = h.message().nack_options.clone();
+            let o = h.message().nack_options.clone().map(|o| *o);
             h.mark_failed("message nacked", o);
         }
         assert_eq!(rx0.await.unwrap(), ReadAck::Ack);

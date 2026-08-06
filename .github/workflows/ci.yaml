@@ -203,6 +203,7 @@ jobs:
             transformer-e2e,
             kafka-e2e,
             map-e2e,
+            redrive-e2e,
             reduce-one-e2e,
             reduce-two-e2e,
             udsource-e2e,
