@@ -14,7 +14,7 @@ healthy and scaling correctly.
 Add an `ignoreDifferences` entry to your ArgoCD `Application` so it stops
 comparing `spec.replicas` for autoscaled resources:
 
-\`\`\`yaml
+```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
