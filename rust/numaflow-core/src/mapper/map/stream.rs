@@ -2,6 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use super::{
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
+    create_response_stream, grpc_error_to_redrive, init_retry_backoff, map_redrive_error,
+    reconnect_mapper_client, update_udf_drop_metric, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+    wait_before_map_redrive,
+};
+use crate::config::components::sink::OnFailureStrategy;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
@@ -17,13 +25,6 @@ use tonic::Status;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::{error, warn};
-
-use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, grpc_error_to_redrive, map_redrive_error, reconnect_mapper_client,
-    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_only_metric, wait_before_map_redrive,
-};
 
 /// Type alias for the stream response - raw results from the UDF
 pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
@@ -85,6 +86,10 @@ impl MapStreamTask {
 
         let request: MapRequest = self.msg_handle.message().clone().into();
 
+        let (retry_strategy, mut opt_backoff) = init_retry_backoff(&self.shared_ctx.retry_config);
+
+        let mut retry_attempt: u64 = 0;
+
         loop {
             let mut parent_info = initial_parent_info.clone();
             update_udf_read_metric(self.shared_ctx.is_mono_vertex);
@@ -104,7 +109,8 @@ impl MapStreamTask {
                 .expect("failed to reset tracker");
 
             let mut should_redrive = false;
-            loop {
+            let mut failed_message = false;
+            'receiver: loop {
                 let result = receiver.recv().await;
                 match result {
                     Some(Ok(results)) => {
@@ -115,6 +121,13 @@ impl MapStreamTask {
                             let mut mapped_message: Message =
                                 UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                     .into();
+
+                            // If a message was marked for failure mark it to be retried by default
+                            if mapped_message.failed() {
+                                failed_message = true;
+                                break 'receiver;
+                            }
+
                             parent_info.current_index += 1;
                             mapped_message.strip_tracing_udf();
 
@@ -181,8 +194,64 @@ impl MapStreamTask {
                 }
             }
 
-            if !should_redrive {
+            if !should_redrive && !failed_message {
                 break;
+            }
+
+            // Apply retry strategy if configured, otherwise retry forever,
+            // similar to sink when no retry strategy is set.
+            if let Some(ref mut backoff_iter) = opt_backoff
+                && failed_message
+            {
+                match backoff_iter.next() {
+                    Some(delay) => {
+                        retry_attempt += 1;
+                        warn!(?retry_attempt, offset = ?parent_info.offset, "Retrying map UDF");
+                        // abort the wait promptly on shutdown so a long retry interval
+                        // cannot stall the graceful-shutdown window.
+                        tokio::select! {
+                            _ = tokio::time::sleep(delay) => {}
+                            _ = self.shared_ctx.hard_shutdown_token.cancelled() => {
+                                mark_failed!(self.msg_handle, "map UDF retry wait cancelled", None);
+                                return;
+                            }
+                        }
+                    }
+                    None => {
+                        // retries exhausted, handle the message based on the strategy
+                        match retry_strategy {
+                            // backoff iter is only configured when retry strategy is
+                            // configured, thus we should not reach this condition.
+                            None => unreachable!(
+                                "Retry strategy missing at runtime when it was initially configured"
+                            ),
+                            // fallback strategy is invalid for map (no fallback sink),
+                            // should've been caught during spec validation.
+                            Some(OnFailureStrategy::Fallback) => panic!(
+                                "Invalid fallback failure strategy configuration detected at runtime"
+                            ),
+                            // if strategy is drop, drop the message and move on.
+                            Some(OnFailureStrategy::Drop) => {
+                                warn!(
+                                    retry_attempts = ?retry_attempt,
+                                    offset = ?parent_info.offset,
+                                    "Retries exhausted, dropping message."
+                                );
+                                update_udf_drop_metric(self.shared_ctx.is_mono_vertex);
+                                mark_success!(self.msg_handle);
+                            }
+                            // retries exhausted under the retry strategy: give up so
+                            // the message is nacked.
+                            Some(OnFailureStrategy::Retry) => {
+                                let e = Error::Mapper("Retries exhausted".to_string());
+                                mark_failed!(self.msg_handle, &e, None);
+                                let _ = self.shared_ctx.error_tx.send(e).await;
+                            }
+                        }
+                        // retries exhausted, do not retry this message
+                        return;
+                    }
+                }
             }
         }
 
