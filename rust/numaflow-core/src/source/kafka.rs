@@ -62,6 +62,9 @@ impl From<numaflow_kafka::Error> for Error {
     fn from(value: numaflow_kafka::Error) -> Self {
         match value {
             numaflow_kafka::Error::Kafka(e) => Error::Source(e.to_string()),
+            numaflow_kafka::Error::KafkaClient { operation, source } => {
+                Error::Source(format!("Kafka {operation} failed: {source}"))
+            }
             numaflow_kafka::Error::Connection { server, error } => Error::Source(format!(
                 "Failed to connect to Kafka server: {server} - {error}"
             )),
