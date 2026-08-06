@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::ErrorKind;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
@@ -306,18 +307,32 @@ impl ConsumerReaderActor {
 }
 
 fn is_transient_pulsar_read_error(err: &pulsar::Error) -> bool {
-    use pulsar::error::{ConnectionError, ConsumerError};
+    use pulsar::error::ConsumerError;
     match err {
-        pulsar::Error::Connection(
-            ConnectionError::Io(_) | ConnectionError::SlowDown | ConnectionError::Disconnected,
-        ) => true,
-        pulsar::Error::Consumer(
-            ConsumerError::Io(_)
-            | ConsumerError::Connection(
-                ConnectionError::Io(_) | ConnectionError::SlowDown | ConnectionError::Disconnected,
-            )
-            | ConsumerError::ChannelFull,
-        ) => true,
+        pulsar::Error::Connection(err)
+        | pulsar::Error::Consumer(ConsumerError::Connection(err)) => {
+            is_transient_pulsar_connection_error(err)
+        }
+        pulsar::Error::Consumer(ConsumerError::ChannelFull) => true,
+        _ => false,
+    }
+}
+
+fn is_transient_pulsar_connection_error(err: &pulsar::error::ConnectionError) -> bool {
+    use pulsar::error::ConnectionError;
+    match err {
+        ConnectionError::SlowDown | ConnectionError::Disconnected => true,
+        ConnectionError::Io(err) => matches!(
+            err.kind(),
+            ErrorKind::ConnectionRefused
+                | ErrorKind::ConnectionReset
+                | ErrorKind::ConnectionAborted
+                | ErrorKind::NotConnected
+                | ErrorKind::BrokenPipe
+                | ErrorKind::TimedOut
+                | ErrorKind::Interrupted
+                | ErrorKind::UnexpectedEof
+        ),
         _ => false,
     }
 }
@@ -325,12 +340,30 @@ fn is_transient_pulsar_read_error(err: &pulsar::Error) -> bool {
 #[cfg(test)]
 mod recover_tests {
     use super::is_transient_pulsar_read_error;
-    use pulsar::error::ConnectionError;
+    use pulsar::error::{ConnectionError, ConsumerError};
+    use std::io::{Error as IoError, ErrorKind};
 
     #[test]
     fn slow_down_is_transient() {
         assert!(is_transient_pulsar_read_error(&pulsar::Error::Connection(
             ConnectionError::SlowDown
+        )));
+    }
+
+    #[test]
+    fn connection_timeout_is_transient() {
+        assert!(is_transient_pulsar_read_error(&pulsar::Error::Connection(
+            ConnectionError::Io(IoError::new(ErrorKind::TimedOut, "timed out"))
+        )));
+    }
+
+    #[test]
+    fn consumer_decompression_error_is_not_transient() {
+        assert!(!is_transient_pulsar_read_error(&pulsar::Error::Consumer(
+            ConsumerError::Io(IoError::new(
+                ErrorKind::InvalidData,
+                "invalid compressed payload",
+            ))
         )));
     }
 }

@@ -18,6 +18,13 @@ pub enum Error {
     #[error("Kafka - {0}")]
     Kafka(String),
 
+    #[error("Kafka {operation} failed: {source}")]
+    KafkaClient {
+        operation: &'static str,
+        #[source]
+        source: rdkafka::error::KafkaError,
+    },
+
     #[error("{0}")]
     NonRetryable(String),
 

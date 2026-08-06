@@ -16,7 +16,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::recover::{
-    is_fatal_commit_error, is_recoverable_commit_error, is_recoverable_startup_error,
+    is_fatal_commit_error, is_recoverable_commit_error, is_recoverable_read_error,
+    is_recoverable_startup_error,
 };
 use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
 
@@ -342,6 +343,17 @@ impl KafkaActor {
                             msg
                         }
                         Err(e) => {
+                            if is_recoverable_read_error(&e) {
+                                warn!(
+                                    ?e,
+                                    returned_messages = messages.len(),
+                                    "Recoverable Kafka read error; returning partial or empty batch"
+                                );
+                                if messages.is_empty() {
+                                    tokio::time::sleep(retry_sleep).await;
+                                }
+                                break;
+                            }
                             // TODO: Check the error when topic doesn't exist
                             continuous_failure_count += 1;
                             if continuous_failure_count > MAX_FAILURE_COUNT {
@@ -493,9 +505,13 @@ impl KafkaActor {
             // fetch_metadata internally calls [rd_kafka_metadata](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#a84bba4a4b13fdb515f1a22d6fd4f7344)
             // This may be a blocking call, so we spawn a new task to run it.
             handles.push(tokio::task::spawn_blocking(move || {
-                let metadata = consumer
-                    .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
+                let metadata =
+                    consumer
+                        .fetch_metadata(Some(&topic), timeout)
+                        .map_err(|source| Error::KafkaClient {
+                            operation: "fetch metadata",
+                            source,
+                        })?;
                 let Some(topic_metadata) = metadata.topics().first() else {
                     warn!(topic = topic, "No topic metadata found");
                     return Ok(0);
@@ -504,12 +520,18 @@ impl KafkaActor {
                 for partition in 0..topic_metadata.partitions().len() {
                     let mut tpl = TopicPartitionList::new();
                     tpl.add_partition(&topic, partition as i32);
-                    let committed = consumer.committed_offsets(tpl, timeout).map_err(|e| {
-                        Error::Kafka(format!("Failed to get committed offsets: {e}"))
+                    let committed = consumer.committed_offsets(tpl, timeout).map_err(|source| {
+                        Error::KafkaClient {
+                            operation: "get committed offsets",
+                            source,
+                        }
                     })?;
                     let (low, high) = consumer
                         .fetch_watermarks(&topic, partition as i32, timeout)
-                        .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {e}")))?;
+                        .map_err(|source| Error::KafkaClient {
+                            operation: "fetch watermarks",
+                            source,
+                        })?;
                     let committed_offset = match committed.elements_for_topic(&topic).first() {
                         Some(element) => match element.offset() {
                             Offset::Offset(offset) => offset,

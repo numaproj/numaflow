@@ -100,6 +100,8 @@ pub(crate) fn is_transient_sqs_service_error(code: &str) -> bool {
             | "SlowDown"
             | "TooManyRequestsException"
             | "ProvisionedThroughputExceededException"
+            | "OverLimit"
+            | "KmsThrottled"
     )
 }
 
@@ -112,8 +114,9 @@ where
         SdkError::ServiceError(service_err) => {
             is_transient_sqs_service_error(service_err.err().code().unwrap_or("UnknownError"))
         }
-        SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) | SdkError::ResponseError(_) => {
-            true
+        SdkError::TimeoutError(_) | SdkError::ResponseError(_) => true,
+        SdkError::DispatchFailure(dispatch_err) => {
+            dispatch_err.is_io() || dispatch_err.is_timeout()
         }
         _ => false,
     }
@@ -305,6 +308,8 @@ mod tests {
     fn test_transient_sqs_service_errors() {
         assert!(is_transient_sqs_service_error("Throttling"));
         assert!(is_transient_sqs_service_error("ServiceUnavailable"));
+        assert!(is_transient_sqs_service_error("OverLimit"));
+        assert!(is_transient_sqs_service_error("KmsThrottled"));
         assert!(!is_transient_sqs_service_error("InvalidAddress"));
         assert!(!is_transient_sqs_service_error("QueueDoesNotExist"));
     }

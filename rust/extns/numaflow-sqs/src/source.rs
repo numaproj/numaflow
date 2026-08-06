@@ -28,6 +28,7 @@ use crate::{
 };
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
+const TRANSIENT_RECEIVE_BACKOFF: Duration = Duration::from_millis(100);
 
 pub type Result<T> = std::result::Result<T, SqsSourceError>;
 
@@ -254,6 +255,7 @@ impl SqsActor {
                         queue_url = self.queue_url,
                         "Transient SQS receive failure; returning empty batch"
                     );
+                    tokio::time::sleep(TRANSIENT_RECEIVE_BACKOFF).await;
                     return Some(Ok(vec![]));
                 }
                 tracing::error!(

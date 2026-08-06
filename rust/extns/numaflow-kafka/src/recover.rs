@@ -1,4 +1,11 @@
+use rdkafka::error::KafkaError;
 use rdkafka::types::RDKafkaErrorCode;
+use rdkafka::types::RDKafkaErrorCode::{
+    AllBrokersDown, BrokerNotAvailable, BrokerTransportFailure, CoordinatorLoadInProgress,
+    CoordinatorNotAvailable, IllegalGeneration, NetworkException, NotCoordinator,
+    OperationTimedOut, RebalanceInProgress, RequestTimedOut, StaleMemberEpoch, UnknownMemberId,
+    WaitingForCoordinator,
+};
 
 use crate::Error;
 
@@ -28,17 +35,39 @@ pub(crate) fn is_fatal_commit_error(code: RDKafkaErrorCode) -> bool {
 /// broker metadata fetch, watermark lookup, or rebalance without invalidating credentials.
 pub(crate) fn is_recoverable_startup_error(err: &Error) -> bool {
     match err {
-        Error::Kafka(msg) => {
-            let lower = msg.to_lowercase();
-            lower.contains("timed out")
-                || lower.contains("rebalance")
-                || lower.contains("illegal generation")
-                || lower.contains("unknown member")
-                || lower.contains("stale member")
-                || lower.contains("transport")
-                || lower.contains("broker not available")
-                || lower.contains("all broker connections are down")
-        }
+        Error::KafkaClient { source, .. } => source
+            .rdkafka_error_code()
+            .is_some_and(is_recoverable_runtime_code),
+        _ => false,
+    }
+}
+
+fn is_recoverable_runtime_code(code: RDKafkaErrorCode) -> bool {
+    matches!(
+        code,
+        OperationTimedOut
+            | RequestTimedOut
+            | BrokerTransportFailure
+            | AllBrokersDown
+            | BrokerNotAvailable
+            | NetworkException
+            | RebalanceInProgress
+            | IllegalGeneration
+            | UnknownMemberId
+            | StaleMemberEpoch
+            | WaitingForCoordinator
+            | CoordinatorLoadInProgress
+            | CoordinatorNotAvailable
+            | NotCoordinator
+    )
+}
+
+/// Returns true when a read failure is caused by transient broker connectivity,
+/// coordinator, or rebalance state. These should let librdkafka reconnect without
+/// forcing the numa container to restart.
+pub(crate) fn is_recoverable_read_error(err: &KafkaError) -> bool {
+    match err {
+        KafkaError::MessageConsumption(code) => is_recoverable_runtime_code(*code),
         _ => false,
     }
 }
@@ -81,17 +110,72 @@ mod tests {
 
     #[test]
     fn recoverable_startup_errors() {
-        assert!(is_recoverable_startup_error(&Error::Kafka(
-            "Failed to fetch metadata: Broker transport failure".into()
-        )));
-        assert!(is_recoverable_startup_error(&Error::Kafka(
-            "Failed to get committed offsets: Local: Timed out".into()
-        )));
-        assert!(!is_recoverable_startup_error(&Error::Kafka(
-            "Failed to add partition offset for acknowledging messages: invalid".into()
-        )));
+        for code in [
+            RDKafkaErrorCode::OperationTimedOut,
+            RDKafkaErrorCode::BrokerTransportFailure,
+            RDKafkaErrorCode::RebalanceInProgress,
+            RDKafkaErrorCode::IllegalGeneration,
+        ] {
+            assert!(
+                is_recoverable_startup_error(&Error::KafkaClient {
+                    operation: "pending messages",
+                    source: KafkaError::MetadataFetch(code),
+                }),
+                "{code:?} should be recoverable during startup"
+            );
+        }
+    }
+
+    #[test]
+    fn fatal_startup_errors() {
+        for code in [
+            RDKafkaErrorCode::GroupAuthorizationFailed,
+            RDKafkaErrorCode::TopicAuthorizationFailed,
+            RDKafkaErrorCode::SaslAuthenticationFailed,
+            RDKafkaErrorCode::UnknownTopicOrPartition,
+        ] {
+            assert!(
+                !is_recoverable_startup_error(&Error::KafkaClient {
+                    operation: "pending messages",
+                    source: KafkaError::MetadataFetch(code),
+                }),
+                "{code:?} should not be recoverable during startup"
+            );
+        }
         assert!(!is_recoverable_startup_error(&Error::NonRetryable(
             "auth failed".into()
         )));
+    }
+
+    #[test]
+    fn recoverable_read_errors() {
+        for code in [
+            RDKafkaErrorCode::BrokerTransportFailure,
+            RDKafkaErrorCode::AllBrokersDown,
+            RDKafkaErrorCode::OperationTimedOut,
+            RDKafkaErrorCode::NetworkException,
+        ] {
+            assert!(
+                is_recoverable_read_error(&KafkaError::MessageConsumption(code)),
+                "{code:?} should be recoverable while reading"
+            );
+        }
+    }
+
+    #[test]
+    fn fatal_read_errors() {
+        for code in [
+            RDKafkaErrorCode::TopicAuthorizationFailed,
+            RDKafkaErrorCode::SaslAuthenticationFailed,
+            RDKafkaErrorCode::UnknownTopicOrPartition,
+        ] {
+            assert!(
+                !is_recoverable_read_error(&KafkaError::MessageConsumption(code)),
+                "{code:?} should not be recoverable while reading"
+            );
+        }
+        assert!(!is_recoverable_read_error(
+            &KafkaError::MessageConsumptionFatal(RDKafkaErrorCode::BrokerTransportFailure)
+        ));
     }
 }
