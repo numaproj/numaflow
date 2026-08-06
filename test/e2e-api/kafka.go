@@ -45,9 +45,13 @@ type KafkaController struct {
 */
 
 func (n *KafkaController) getProducerAndConsumer() (sarama.ClusterAdmin, sarama.SyncProducer, sarama.Consumer) {
+	n.mLock.RLock()
 	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
-		return n.adminClient, n.producer, n.consumer
+		adminClient, producer, consumer := n.adminClient, n.producer, n.consumer
+		n.mLock.RUnlock()
+		return adminClient, producer, consumer
 	}
+	n.mLock.RUnlock()
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
@@ -88,6 +92,11 @@ func NewKafkaController() *KafkaController {
 		producer:    nil,
 		consumer:    nil,
 	}
+}
+
+func (kh *KafkaController) ResetHandler(w http.ResponseWriter, _ *http.Request) {
+	kh.reset()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Request) {
@@ -281,6 +290,14 @@ func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	partitionCount := 1
+	if partitions := r.URL.Query().Get("partitions"); partitions != "" {
+		partitionCount, err = strconv.Atoi(partitions)
+		if err != nil || partitionCount < 1 {
+			http.Error(w, "partitions must be a positive integer", http.StatusBadRequest)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(200)
@@ -297,7 +314,7 @@ func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 				Topic:     topic,
 				Value:     sarama.ByteEncoder(mf.newMessage(i)),
 				Key:       sarama.ByteEncoder(strconv.Itoa(i)),
-				Partition: int32(0),
+				Partition: int32(i % partitionCount),
 			}
 			_, _, err := kafkaProducer.SendMessage(message)
 			if err != nil {
@@ -309,7 +326,7 @@ func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 	_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), topic)
 }
 
-func (kh *KafkaController) Close() {
+func (kh *KafkaController) reset() {
 	kh.mLock.Lock()
 	defer kh.mLock.Unlock()
 
@@ -324,4 +341,11 @@ func (kh *KafkaController) Close() {
 	if kh.adminClient != nil {
 		_ = kh.adminClient.Close()
 	}
+	kh.producer = nil
+	kh.consumer = nil
+	kh.adminClient = nil
+}
+
+func (kh *KafkaController) Close() {
+	kh.reset()
 }

@@ -18,6 +18,7 @@ package fixtures
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,38 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+// InvokeE2EAPIContext invokes an e2e API GET request that can be canceled by the caller.
+func InvokeE2EAPIContext(ctx context.Context, format string, args ...interface{}) error {
+	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)
+	log.Printf("GET %s\n", url)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("create e2e API request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("invoke e2e API: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("e2e API returned %s: %s", resp.Status, body)
+	}
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "ERROR") {
+			return errors.New(line)
+		}
+		log.Printf("> %s\n", line)
+	}
+	return scanner.Err()
+}
 
 func InvokeE2EAPI(format string, args ...interface{}) string {
 	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)

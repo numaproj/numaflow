@@ -30,6 +30,7 @@ func main() {
 	http.HandleFunc("/kafka/count-topic", kafkaController.CountTopicHandler)
 	http.HandleFunc("/kafka/produce-topic", kafkaController.ProduceTopicHandler)
 	http.HandleFunc("/kafka/pump-topic", kafkaController.PumpTopicHandler)
+	http.HandleFunc("/kafka/reset", kafkaController.ResetHandler)
 
 	// initialize Redis handlers
 	redisController := NewRedisController()
