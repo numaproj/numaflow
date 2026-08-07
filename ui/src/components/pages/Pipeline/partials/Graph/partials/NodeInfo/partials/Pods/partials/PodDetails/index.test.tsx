@@ -35,7 +35,7 @@ describe("PodDetail screen", () => {
   afterEach(() => {
     (global as any).fetch = originFetch;
   });
-  it("loads Logs without a nested Metrics tab", async () => {
+  it("renders container logs directly without a tab bar", async () => {
     const mRes = {
       body: new ReadableStream({
         start(controller) {
@@ -62,7 +62,14 @@ describe("PodDetail screen", () => {
       );
     });
     expect(screen.getByText("Container Logs")).toBeInTheDocument();
-    expect(screen.getByTestId("logs-tab")).toBeInTheDocument();
+    expect(screen.queryByTestId("logs-tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
+      "infer-0/numa"
+    );
+    expect(screen.getByPlaceholderText("Search logs")).toBeInTheDocument();
+    expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
+    expect(screen.getByLabelText("Show terminated")).toBeInTheDocument();
     expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
     expect(mockedFetch).toBeCalledTimes(1);
   });

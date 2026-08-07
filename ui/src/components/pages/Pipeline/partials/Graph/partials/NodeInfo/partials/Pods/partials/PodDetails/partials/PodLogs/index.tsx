@@ -2,15 +2,16 @@
 // @ts-nocheck
 import {
   ChangeEvent,
+  ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import InputBase from "@mui/material/InputBase";
@@ -24,6 +25,8 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import Download from "@mui/icons-material/Download";
 import WrapTextIcon from "@mui/icons-material/WrapText";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { ClockIcon } from "@mui/x-date-pickers";
 import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -32,10 +35,60 @@ import { PodLogsProps } from "../../../../../../../../../../../../../types/decla
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
 import { filterLogs } from "./filterLogs";
-import { LogVirtualList } from "./LogVirtualList";
+import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
+import { useLogSearchNavigation } from "./useLogSearchNavigation";
 import { usePodLogStream } from "./usePodLogStream";
 
 import "./style.css";
+
+function ToolbarIconButton({
+  active,
+  title,
+  onClick,
+  disabled,
+  testId,
+  children,
+}: {
+  active?: boolean;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip
+      title={<div className="icon-tooltip">{title}</div>}
+      placement="top"
+      arrow
+    >
+      <span>
+        <IconButton
+          data-testid={testId}
+          onClick={onClick}
+          disabled={disabled}
+          className={`PodLogs-icon-btn${active ? " PodLogs-icon-btn--active" : ""}`}
+          size="small"
+        >
+          {children}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+}
+
+function getShortPodName(podName: string): string {
+  const monoVertexMatch = podName.match(
+    /(?:^|-)(mv-\d+)(?:-[a-z0-9]{5,})?$/i
+  );
+  if (monoVertexMatch) {
+    return monoVertexMatch[1];
+  }
+
+  const withoutPodHash = podName.replace(/-[a-z0-9]{5,}$/i, "");
+  const parts = withoutPodHash.split("-");
+  return parts.slice(-2).join("-");
+}
 
 export function PodLogs({
   namespaceId,
@@ -45,7 +98,7 @@ export function PodLogs({
 }: PodLogsProps) {
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
-  const [wrapLines, setWrapLines] = useState<boolean>(false);
+  const [wrapLines, setWrapLines] = useState<boolean>(true);
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
   const [logsOrder, setLogsOrder] = useState<string>("desc");
@@ -81,6 +134,20 @@ export function PodLogs({
       logsOrder === "desc" ? filteredLogs.slice().reverse() : filteredLogs,
     [filteredLogs, logsOrder]
   );
+  const logVirtualListRef = useRef<LogVirtualListHandle>(null);
+  const {
+    enabled: searchNavigationEnabled,
+    matchCount,
+    currentMatch,
+    activeIndex,
+    goNext,
+    goPrev,
+  } = useLogSearchNavigation({
+    orderedLogs,
+    search,
+    negateSearch,
+    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}`,
+  });
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -92,6 +159,28 @@ export function PodLogs({
   const handleSearchClear = useCallback(() => {
     setSearch("");
   }, []);
+
+  const handleSearchNavigation = useCallback(
+    (navigate: () => number | null) => {
+      const targetIndex = navigate();
+      if (targetIndex !== null) {
+        logVirtualListRef.current?.scrollToIndex(targetIndex);
+      }
+    },
+    []
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event) => {
+      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      handleSearchNavigation(event.shiftKey ? goPrev : goNext);
+    },
+    [goNext, goPrev, handleSearchNavigation]
+  );
 
   const handleNegateSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -143,225 +232,184 @@ export function PodLogs({
     setLevelFilter(e.target.value);
   }, []);
 
-  const logsBtnStyle = {
-    height: "2.4rem",
-    width: "2.4rem",
-    color: "var(--text-secondary)",
-  };
+  const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
 
   return (
-    <Box sx={{ height: "100%" }}>
-      <Box
-        sx={{
-          display: "flex",
-          height: "4.8rem",
-          overflow: "scroll",
-        }}
-      >
-        <Paper
-          className="PodLogs-search"
-          variant="outlined"
-          sx={{
-            p: "0.2rem 0.4rem",
-            display: "flex",
-            alignItems: "center",
-            width: 400,
-          }}
-        >
-          <InputBase
-            sx={{ ml: 1, flex: 1, fontSize: "1.6rem" }}
-            placeholder="Search logs"
-            value={search}
-            onChange={handleSearchChange}
-          />
-          <IconButton data-testid="clear-button" onClick={handleSearchClear}>
-            <ClearIcon sx={logsBtnStyle} />
-          </IconButton>
-        </Paper>
-        <FormControlLabel
-          control={
-            <Checkbox
-              data-testid="negate-search"
-              checked={negateSearch}
-              onChange={handleNegateSearchChange}
-              sx={{ "& .MuiSvgIcon-root": { fontSize: 24 } }}
+    <Box className="PodLogs-root">
+      <div className="PodLogs-toolbar">
+        <div className="PodLogs-header">
+          <span className="PodLogs-title">Container Logs</span>
+          <span
+            className="PodLogs-source-badge"
+            title={`${podName}/${containerName}`}
+            data-testid="log-source-badge"
+          >
+            {logSourceLabel}
+          </span>
+        </div>
+        <div className="PodLogs-controls">
+          <div className="PodLogs-search">
+            <InputBase
+              placeholder="Search logs"
+              value={search}
+              onChange={handleSearchChange}
+              onKeyDown={handleSearchKeyDown}
+              inputProps={{ "aria-label": "Search logs" }}
             />
-          }
-          label={
-            <Typography sx={{ fontSize: "1.6rem" }}>Negate search</Typography>
-          }
-        />
-        <Tooltip
-          title={
-            <div className={"icon-tooltip"}>
-              {wrapLines ? "Unwrap Lines" : "Wrap Lines"}
+            {search ? (
+              <IconButton
+                data-testid="clear-button"
+                className="PodLogs-search-clear"
+                onClick={handleSearchClear}
+                size="small"
+              >
+                <ClearIcon />
+              </IconButton>
+            ) : null}
+          </div>
+          {searchNavigationEnabled && (
+            <div className="PodLogs-match-pill">
+              <Typography
+                className="PodLogs-match-count"
+                data-testid="search-match-count"
+              >
+                {currentMatch} / {matchCount}
+              </Typography>
+              <ToolbarIconButton
+                testId="search-match-prev"
+                title="Previous match (Shift+Enter)"
+                onClick={() => handleSearchNavigation(goPrev)}
+                disabled={!matchCount}
+              >
+                <KeyboardArrowUpIcon />
+              </ToolbarIconButton>
+              <ToolbarIconButton
+                testId="search-match-next"
+                title="Next match (Enter)"
+                onClick={() => handleSearchNavigation(goNext)}
+                disabled={!matchCount}
+              >
+                <KeyboardArrowDownIcon />
+              </ToolbarIconButton>
             </div>
-          }
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton
-              data-testid="wrap-lines-button"
-              onClick={handleWrapLines}
-            >
-              <WrapTextIcon
-                sx={{
-                  ...logsBtnStyle,
-                  background: wrapLines ? "lightgray" : "none",
-                  borderRadius: "1rem",
-                }}
+          )}
+          <FormControlLabel
+            className="PodLogs-checkbox-label"
+            control={
+              <Checkbox
+                data-testid="negate-search"
+                checked={negateSearch}
+                onChange={handleNegateSearchChange}
+                size="small"
               />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip
-          title={
-            <div className={"icon-tooltip"}>
-              {paused ? "Play" : "Pause"} logs
-            </div>
-          }
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton data-testid="pause-button" onClick={handlePause}>
-              {paused ? (
-                <PlayArrowIcon sx={logsBtnStyle} />
-              ) : (
-                <PauseIcon sx={logsBtnStyle} />
-              )}
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip
-          title={
-            <div className={"icon-tooltip"}>
-              {colorMode === "light" ? "Dark" : "Light"} mode
-            </div>
-          }
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton
-              data-testid="color-mode-button"
-              onClick={handleColorMode}
-            >
-              {colorMode === "light" ? (
-                <DarkMode sx={logsBtnStyle} />
-              ) : (
-                <LightMode sx={logsBtnStyle} />
-              )}
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip
-          title={
-            <div className={"icon-tooltip"}>
-              {logsOrder === "asc" ? "Descending" : "Ascending"} order
-            </div>
-          }
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton data-testid="order-button" onClick={handleOrder}>
-              {logsOrder === "asc" ? (
-                <ArrowDownward sx={logsBtnStyle} />
-              ) : (
-                <ArrowUpward sx={logsBtnStyle} />
-              )}
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip
-          title={<div className={"icon-tooltip"}>Download logs</div>}
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton
-              data-testid="download-logs-button"
-              onClick={handleLogsDownload}
-            >
-              <Download sx={logsBtnStyle} />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip
-          title={
-            <div className={"icon-tooltip"}>
-              {enableTimestamp ? "Remove Timestamps" : "Add Timestamps"}
-            </div>
-          }
-          placement={"top"}
-          arrow
-        >
-          <span>
-            <IconButton
-              data-testid="toggle-timestamps-button"
-              onClick={handleTimestamps}
-              disabled={paused}
-            >
-              <ClockIcon
-                sx={{
-                  height: "2.4rem",
-                  width: "2.4rem",
-                  background: enableTimestamp ? "lightgray" : "none",
-                  borderRadius: "1rem",
-                }}
-              />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Select
-          labelId="level-filter"
-          id="level-filter"
-          value={levelFilter}
-          onChange={handleLevelChange}
-          sx={{ width: "13rem", fontSize: "1.6rem" }}
-          disabled={paused}
-        >
-          <MenuItem sx={{ fontSize: "1.4rem" }} value={"all"}>
-            All levels
-          </MenuItem>
-          <MenuItem sx={{ fontSize: "1.4rem" }} value={"info"}>
-            Info
-          </MenuItem>
-          <MenuItem sx={{ fontSize: "1.4rem" }} value={"error"}>
-            Error
-          </MenuItem>
-          <MenuItem sx={{ fontSize: "1.4rem" }} value={"warn"}>
-            Warn
-          </MenuItem>
-          <MenuItem sx={{ fontSize: "1.4rem" }} value={"debug"}>
-            Debug
-          </MenuItem>
-        </Select>
-      </Box>
-      <FormControlLabel
-        control={
-          <Checkbox
-            data-testid="previous-logs"
-            checked={showPreviousLogs}
-            onChange={(event) => setShowPreviousLogs(event.target.checked)}
-            sx={{ "& .MuiSvgIcon-root": { fontSize: 24 }, height: "4.2rem" }}
+            }
+            label="Negate search"
           />
-        }
-        label={
-          <Typography sx={{ fontSize: "1.6rem" }}>
-            Show previous terminated container
-          </Typography>
-        }
-      />
-      <Box sx={{ height: "calc(100% - 9rem)" }}>
+          <ToolbarIconButton
+            testId="wrap-lines-button"
+            title={wrapLines ? "Unwrap Lines" : "Wrap Lines"}
+            onClick={handleWrapLines}
+            active={wrapLines}
+          >
+            <WrapTextIcon />
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            testId="pause-button"
+            title={paused ? "Play logs" : "Pause logs"}
+            onClick={handlePause}
+            active={paused}
+          >
+            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            testId="color-mode-button"
+            title={colorMode === "light" ? "Dark mode" : "Light mode"}
+            onClick={handleColorMode}
+            active={colorMode === "dark"}
+          >
+            {colorMode === "light" ? <DarkMode /> : <LightMode />}
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            testId="order-button"
+            title={
+              logsOrder === "asc" ? "Descending order" : "Ascending order"
+            }
+            onClick={handleOrder}
+            active={logsOrder === "asc"}
+          >
+            {logsOrder === "asc" ? <ArrowDownward /> : <ArrowUpward />}
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            testId="download-logs-button"
+            title="Download logs"
+            onClick={handleLogsDownload}
+          >
+            <Download />
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            testId="toggle-timestamps-button"
+            title={
+              enableTimestamp ? "Remove Timestamps" : "Add Timestamps"
+            }
+            onClick={handleTimestamps}
+            disabled={paused}
+            active={enableTimestamp}
+          >
+            <ClockIcon />
+          </ToolbarIconButton>
+          <Select
+            labelId="level-filter"
+            id="level-filter"
+            value={levelFilter}
+            onChange={handleLevelChange}
+            disabled={paused}
+            className="PodLogs-level-select"
+            sx={{ minWidth: "11rem" }}
+            size="small"
+          >
+            <MenuItem sx={{ fontSize: "1.2rem" }} value={"all"}>
+              All levels
+            </MenuItem>
+            <MenuItem sx={{ fontSize: "1.2rem" }} value={"info"}>
+              Info
+            </MenuItem>
+            <MenuItem sx={{ fontSize: "1.2rem" }} value={"error"}>
+              Error
+            </MenuItem>
+            <MenuItem sx={{ fontSize: "1.2rem" }} value={"warn"}>
+              Warn
+            </MenuItem>
+            <MenuItem sx={{ fontSize: "1.2rem" }} value={"debug"}>
+              Debug
+            </MenuItem>
+          </Select>
+        </div>
+        <div className="PodLogs-footer">
+          <FormControlLabel
+            className="PodLogs-checkbox-label"
+            control={
+              <Checkbox
+                data-testid="previous-logs"
+                checked={showPreviousLogs}
+                onChange={(event) =>
+                  setShowPreviousLogs(event.target.checked)
+                }
+                size="small"
+              />
+            }
+            label="Show terminated"
+          />
+        </div>
+      </div>
+      <Box className="PodLogs-list-wrap">
         <LogVirtualList
+          ref={logVirtualListRef}
           logs={orderedLogs}
           search={search}
           wrapLines={wrapLines}
           colorMode={colorMode}
           podName={podName}
+          activeIndex={activeIndex}
         />
       </Box>
     </Box>
