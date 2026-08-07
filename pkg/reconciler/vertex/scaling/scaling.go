@@ -33,6 +33,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -46,6 +47,8 @@ type Scaler struct {
 	// Cache to store the vertex metrics such as pending message number
 	vertexMetricsCache *lru.Cache[string, int64]
 	daemonClientsCache *lru.Cache[string, daemonclient.DaemonClient]
+	// Cache to store the pre-parsed cron schedules for each Vertex
+	cronScheduleCache *lru.Cache[string, []scalingutil.ParsedCronSchedule]
 }
 
 // NewScaler returns a Scaler instance.
@@ -69,6 +72,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 	})
 	vertexMetricsCache, _ := lru.New[string, int64](10000)
 	s.vertexMetricsCache = vertexMetricsCache
+	s.cronScheduleCache, _ = lru.New[string, []scalingutil.ParsedCronSchedule](1000)
 	return s
 }
 
@@ -122,6 +126,33 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 			}
 		}
 	}
+}
+
+// parsedCronSchedulesFor returns the parsed cron schedules for a Vertex.
+func (s *Scaler) parsedCronSchedulesFor(vertex *dfv1.Vertex) ([]scalingutil.ParsedCronSchedule, error) {
+	if vertex.Spec.Scale.Cron == nil {
+		return nil, nil
+	}
+	key := fmt.Sprintf("%s/%d", vertex.UID, vertex.Generation)
+	if parsed, ok := s.cronScheduleCache.Get(key); ok {
+		return parsed, nil
+	}
+	parsed, err := scalingutil.ParseCronSchedules(vertex.Spec.Scale.Cron)
+	if err != nil {
+		return nil, err
+	}
+	s.cronScheduleCache.Add(key, parsed)
+	return parsed, nil
+}
+
+// effectiveScaleBoundsFor returns the effective scale bounds for a Vertex at a given time.
+func (s *Scaler) effectiveScaleBoundsFor(vertex *dfv1.Vertex, at time.Time) (int32, int32, bool, error) {
+	parsed, err := s.parsedCronSchedulesFor(vertex)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	minReplicas, maxReplicas, cronActive := scalingutil.EffectiveScaleBoundsAt(vertex.Spec.Scale, parsed, at)
+	return minReplicas, maxReplicas, cronActive, nil
 }
 
 // scaleOneVertex implements the detailed logic of scaling up/down a vertex.
@@ -209,12 +240,38 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return nil
 	}
 
-	if vertex.Spec.Scale.GetMaxReplicas() == vertex.Spec.Scale.GetMinReplicas() {
+	var minReplicas, maxReplicas int32
+	var cronActive bool
+	var err error
+
+	if vertex.IsASource() {
+		minReplicas, maxReplicas, cronActive, err = s.effectiveScaleBoundsFor(vertex, time.Now())
+		if err != nil {
+			log.Errorw("Failed to parse cron schedules.", zap.Error(err))
+			return err
+		}
+
+		current := int32(vertex.Status.Replicas)
+		if cronActive {
+			if current < minReplicas {
+				log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
+				return s.scaleUpVertex(ctx, vertex, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
+			}
+			if current > maxReplicas {
+				log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
+				return s.scaleDownVertex(ctx, vertex, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
+			}
+		}
+	} else {
+		minReplicas = vertex.Spec.Scale.GetMinReplicas()
+		maxReplicas = vertex.Spec.Scale.GetMaxReplicas()
+	}
+
+	if maxReplicas == minReplicas {
 		log.Infof("Vertex %s has same scale.min and scale.max, skip scaling.", vertex.Name)
 		return nil
 	}
 
-	var err error
 	daemonClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
 	if daemonClient == nil {
 		daemonClient, err = daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
@@ -339,8 +396,6 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 
 	log.Infof("Calculated desired replica number of vertex %q is: %d.", vertex.Name, desired)
-	maxReplicas := vertex.Spec.Scale.GetMaxReplicas()
-	minReplicas := vertex.Spec.Scale.GetMinReplicas()
 	if desired > maxReplicas {
 		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", desired, vertex.Name, maxReplicas)
 		desired = maxReplicas
@@ -538,6 +593,34 @@ func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, d
 	}
 	log.Infow("Auto scaling - vertex replicas changed.", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
 	return nil
+}
+
+func (s *Scaler) scaleUpVertex(ctx context.Context, vertex *dfv1.Vertex, current, desired int32, secondsSinceLastScale, scaleUpCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedUp := int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
+	diff := desired - current
+	if diff > maxAllowedUp {
+		diff = maxAllowedUp
+	}
+	if secondsSinceLastScale < scaleUpCooldown {
+		log.Infof("Cooldown period for scaling up, skip scaling.")
+		return nil
+	}
+	return s.patchVertexReplicas(ctx, vertex, current+diff)
+}
+
+func (s *Scaler) scaleDownVertex(ctx context.Context, vertex *dfv1.Vertex, current, desired int32, secondsSinceLastScale, scaleDownCooldown float64) error {
+	log := logging.FromContext(ctx)
+	maxAllowedDown := int32(vertex.Spec.Scale.GetReplicasPerScaleDown())
+	diff := current - desired
+	if diff > maxAllowedDown {
+		diff = maxAllowedDown
+	}
+	if secondsSinceLastScale < scaleDownCooldown {
+		log.Infof("Cooldown period for scaling down, skip scaling.")
+		return nil
+	}
+	return s.patchVertexReplicas(ctx, vertex, current-diff)
 }
 
 // KeyOfVertex returns the unique key of a vertex

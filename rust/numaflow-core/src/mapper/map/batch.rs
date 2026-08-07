@@ -40,6 +40,8 @@ type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<BatchMapResponse
 pub(in crate::mapper) struct BatchSenderMapState {
     /// Map of oneshot response senders keyed by message id.
     map: ResponseSenderMap,
+    /// Notifies the in-flight batch that its EOT has been received.
+    eot: Option<oneshot::Sender<()>>,
     /// Flag to indicate whether the rx task has closed the stream and cleared the `map`.
     /// This is because `tx.send()` could return `Ok()` even after the receiver task has closed the
     /// stream.
@@ -333,6 +335,8 @@ impl UserDefinedBatchMap {
         let senders = {
             let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
             sender_guard.closed = true;
+            // Dropping the notifier wakes a batch that is waiting on its EOT.
+            sender_guard.eot = None;
             std::mem::take(&mut sender_guard.map)
         };
 
@@ -353,12 +357,14 @@ impl UserDefinedBatchMap {
             match resp {
                 Ok(resp) => {
                     if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                        if !sender_map
-                            .lock()
-                            .expect("failed to acquire poisoned lock")
-                            .map
-                            .is_empty()
-                        {
+                        // Ensure that a batch waiting on it's EOT is woken and doesn't hang.
+                        let (outstanding, eot_tx) = {
+                            let mut sender_guard =
+                                sender_map.lock().expect("failed to acquire poisoned lock");
+                            (!sender_guard.map.is_empty(), sender_guard.eot.take())
+                        };
+
+                        if outstanding {
                             error!(
                                 "received EOT before all batch map responses, redriving after reconnect"
                             );
@@ -377,6 +383,10 @@ impl UserDefinedBatchMap {
                             return;
                         }
                         update_udf_process_time_metric(is_mono_vertex());
+                        // Let the in-flight batch return now that its EOT has been consumed.
+                        if let Some(eot_tx) = eot_tx {
+                            let _ = eot_tx.send(());
+                        }
                         continue;
                     }
 
@@ -460,6 +470,12 @@ impl UserDefinedBatchMap {
             let connection = self.connection.lock().await;
             (Arc::clone(&connection.senders), connection.read_tx.clone())
         };
+
+        let (eot_tx, eot_rx) = oneshot::channel();
+        sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .eot = Some(eot_tx);
 
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
@@ -546,6 +562,32 @@ impl UserDefinedBatchMap {
             results.push(result);
         }
 
+        const EOT_WAIT_WARN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+        // Wait until this batch's EOT is ready.
+        let mut eot_rx = eot_rx;
+        loop {
+            tokio::select! {
+                eot = &mut eot_rx => {
+                    if eot.is_err() {
+                        return vec![Err(map_redrive_error(Status::unavailable(
+                            "batch map stream ended before EOT",
+                        )))];
+                    }
+                    break;
+                }
+                _ = cln_token.cancelled() => {
+                    return vec![Err(Error::Mapper("batch map operation cancelled".to_string()))];
+                }
+                _ = tokio::time::sleep(EOT_WAIT_WARN_INTERVAL) => {
+                    warn!(
+                        ?EOT_WAIT_WARN_INTERVAL,
+                        "all batch map responses received but no End-Of-Transmission yet; \
+                         the batch is blocked waiting for the UDF's EOT"
+                    );
+                }
+            }
+        }
+
         results
     }
 
@@ -574,6 +616,7 @@ impl UserDefinedBatchMap {
         let senders = {
             let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
             sender_guard.closed = true;
+            sender_guard.eot = None;
             std::mem::take(&mut sender_guard.map)
         };
 
@@ -817,6 +860,62 @@ mod tests {
         assert!(handle.is_finished(), "expected server to shut down");
 
         Ok(())
+    }
+
+    /// `batch_once` must consume the EOT that delimits its own batch before returning.
+    #[tokio::test]
+    async fn batch_once_consumes_its_eot_before_returning() {
+        // Capacity covers the request and the EOT, so nothing blocks on the request stream.
+        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let mapper = UserDefinedBatchMap {
+            batch_size: 10,
+            connection: Arc::new(tokio::sync::Mutex::new(super::BatchMapConnection {
+                read_tx,
+                senders: Arc::clone(&senders),
+                _handle: abort_handle,
+            })),
+            reconnect_config: None,
+        };
+
+        let batch = tokio::spawn(async move {
+            mapper
+                .batch_once(vec![test_request("0")], CancellationToken::new())
+                .await
+        });
+
+        // Answer the batch once it has registered its sender.
+        while senders.lock().unwrap().map.is_empty() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        UserDefinedBatchMap::process_response(&senders, make_response("0"))
+            .expect("response should be delivered to the batch");
+
+        // Every response is in, but the EOT has not been seen yet, so the batch must keep waiting.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !batch.is_finished(),
+            "batch_once returned before its EOT was consumed"
+        );
+
+        // Consuming the EOT releases the batch.
+        let eot = senders
+            .lock()
+            .unwrap()
+            .eot
+            .take()
+            .expect("batch should have registered an EOT notifier");
+        eot.send(()).expect("batch should be waiting on the EOT");
+
+        let results = tokio::time::timeout(Duration::from_secs(1), batch)
+            .await
+            .expect("batch_once should return once its EOT is consumed")
+            .expect("batch task should not panic");
+        assert_eq!(results.len(), 1);
+        assert!(results.into_iter().next().expect("one result").is_ok());
     }
 
     fn make_response(id: &str) -> MapResponse {

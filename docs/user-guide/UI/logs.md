@@ -38,6 +38,7 @@ Open the **Logs Tab** on the right to view the container logs.
 ### 2. Search Logs
 
 - Filter logs by typing keywords in the **Search Logs** box.
+- Use the match count and next/previous controls to move between matching log lines. Press `Enter` for the next match or `Shift+Enter` for the previous match.
 
 ![Search Logs](../../assets/logs/logs-search.png)
 

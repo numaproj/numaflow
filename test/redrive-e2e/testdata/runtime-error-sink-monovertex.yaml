@@ -1,0 +1,17 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: runtime-error-sink-monovertex
+spec:
+  scale:
+    min: 1
+  source:
+    generator:
+      rpu: 1
+      duration: 1s
+  sink:
+    udsink:
+      container:
+        # sink-panic exits when it receives a message, which exercises sink failure capture.
+        image: quay.io/numaio/numaflow-go/sink-panic:stable
+        imagePullPolicy: IfNotPresent

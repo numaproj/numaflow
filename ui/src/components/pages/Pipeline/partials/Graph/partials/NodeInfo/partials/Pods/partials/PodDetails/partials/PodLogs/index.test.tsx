@@ -2,8 +2,31 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
 import { PodLogs } from "./index";
+import { NO_LOGS_MATCHING_SEARCH } from "./constants";
 
 Object.assign(global, { TextDecoder, TextEncoder });
+
+// jsdom reports 0 for layout; give the virtual log scroller a viewport.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "log-virtual-list") {
+        return 320;
+      }
+      return 20;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "log-virtual-list") {
+        return 320;
+      }
+      return 20;
+    },
+  });
+});
 
 describe("PodLogs", () => {
   let originFetch: any;
@@ -45,58 +68,65 @@ describe("PodLogs", () => {
     };
     const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
     (global as any).fetch = mockedFetch;
-    let container;
     await act(async () => {
-      const { container: cont } = render(
+      render(
         <PodLogs
           namespaceId={"numaflow-system"}
           containerName={"numa"}
-          podName={"simple-pipeline-infer-0-xah5w"}
+          podName={"simple-mono-vertex-mv-31-abcde"}
         />
       );
-      container = cont;
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+    expect(screen.getByText("Container Logs")).toBeInTheDocument();
+    expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
+      "mv-31/numa"
+    );
+    expect(screen.getByTestId("log-source-badge")).toHaveAttribute(
+      "title",
+      "simple-mono-vertex-mv-31-abcde/numa"
+    );
+    expect(screen.queryByText(/retained lines/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
+    expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    expect(screen.getByTestId("color-mode-button")).not.toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    const showTerminated = screen.getByLabelText("Show terminated");
+    expect(showTerminated).not.toBeChecked();
 
-    //search for logs
-    fireEvent.change(
-      container.getElementsByClassName(
-        "MuiInputBase-input css-yz9k0d-MuiInputBase-input"
-      )[0],
-      { target: { value: "load" } }
-    );
-    //search for logs not present
-    fireEvent.change(
-      container.getElementsByClassName(
-        "MuiInputBase-input css-yz9k0d-MuiInputBase-input"
-      )[0],
-      { target: { value: "xyz" } }
-    );
-    expect(screen.getByText("No logs matching search.")).toBeVisible();
-    //negate logs search
-    fireEvent.click(
-      container.getElementsByClassName(
-        "PrivateSwitchBase-input css-1m9pwf3"
-      )[0],
-      { target: { value: true } }
-    );
-    //clear search
+    const searchInput = screen.getByPlaceholderText("Search logs");
+    fireEvent.change(searchInput, { target: { value: "load" } });
+    fireEvent.change(searchInput, { target: { value: "xyz" } });
+    expect(screen.getByText(NO_LOGS_MATCHING_SEARCH)).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("negate-search"));
     expect(screen.getByTestId("clear-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("clear-button"));
-    //pause logs
+
     expect(screen.getByTestId("pause-button")).toBeVisible();
     act(() => {
       fireEvent.click(screen.getByTestId("pause-button"));
-      //play logs
       fireEvent.click(screen.getByTestId("pause-button"));
     });
-    //toggle theme
     expect(screen.getByTestId("color-mode-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("color-mode-button"));
-    //toggle logs order
     expect(screen.getByTestId("order-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("order-button"));
+
+    mockedFetch.mockResolvedValueOnce({
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      ok: true,
+    } as any);
+    fireEvent.click(showTerminated);
+    expect(showTerminated).toBeChecked();
   });
 
   it("Trigger PodLogs parsing error", async () => {
@@ -122,5 +152,49 @@ describe("PodLogs", () => {
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+  });
+
+  it("navigates search matches with buttons and keyboard", async () => {
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            Buffer.from("first match\nno result\nsecond match\n")
+          );
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-infer-0-xah5w"}
+        />
+      );
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search logs");
+    fireEvent.change(searchInput, { target: { value: "match" } });
+
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
+    fireEvent.click(screen.getByTestId("search-match-next"));
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("2 / 2");
+    expect(document.querySelector("[data-active='true']")).not.toBeNull();
+
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
+    fireEvent.keyDown(searchInput, { key: "Enter", shiftKey: true });
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("2 / 2");
+
+    fireEvent.click(screen.getByTestId("negate-search"));
+    expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("clear-button"));
+    expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
   });
 });
