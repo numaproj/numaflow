@@ -4,6 +4,8 @@ use tracing::warn;
 pub mod sink;
 pub mod source;
 
+mod recover;
+
 const KAFKA_TOPIC_HEADER_KEY: &str = "X-NF-Kafka-TopicName";
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -15,6 +17,13 @@ pub enum Error {
 
     #[error("Kafka - {0}")]
     Kafka(String),
+
+    #[error("Kafka {operation} failed: {source}")]
+    KafkaClient {
+        operation: &'static str,
+        #[source]
+        source: rdkafka::error::KafkaError,
+    },
 
     #[error("{0}")]
     NonRetryable(String),

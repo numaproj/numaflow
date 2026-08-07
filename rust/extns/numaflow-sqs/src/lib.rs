@@ -85,6 +85,43 @@ where
     err.to_string()
 }
 
+/// Returns true for AWS SDK failures where receive/delete can be retried without stopping numa.
+pub(crate) fn is_transient_sqs_service_error(code: &str) -> bool {
+    matches!(
+        code,
+        "Throttling"
+            | "ThrottlingException"
+            | "RequestThrottled"
+            | "ServiceUnavailable"
+            | "InternalError"
+            | "InternalServerError"
+            | "RequestTimeout"
+            | "RequestTimeoutException"
+            | "SlowDown"
+            | "TooManyRequestsException"
+            | "ProvisionedThroughputExceededException"
+            | "OverLimit"
+            | "KmsThrottled"
+    )
+}
+
+pub(crate) fn is_transient_sqs_sdk_error<E, R>(err: &aws_sdk_sqs::error::SdkError<E, R>) -> bool
+where
+    E: ProvideErrorMetadata,
+{
+    use aws_sdk_sqs::error::SdkError;
+    match err {
+        SdkError::ServiceError(service_err) => {
+            is_transient_sqs_service_error(service_err.err().code().unwrap_or("UnknownError"))
+        }
+        SdkError::TimeoutError(_) | SdkError::ResponseError(_) => true,
+        SdkError::DispatchFailure(dispatch_err) => {
+            dispatch_err.is_io() || dispatch_err.is_timeout()
+        }
+        _ => false,
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum SqsSourceError {
     #[error("SQS Source Error: {0}")]
@@ -265,6 +302,16 @@ mod tests {
         assert!(matches!(converted_error, Error::Sqs(_)));
         // Error message now contains the actual error details
         assert!(converted_error.to_string().contains("InvalidAddress"));
+    }
+
+    #[test]
+    fn test_transient_sqs_service_errors() {
+        assert!(is_transient_sqs_service_error("Throttling"));
+        assert!(is_transient_sqs_service_error("ServiceUnavailable"));
+        assert!(is_transient_sqs_service_error("OverLimit"));
+        assert!(is_transient_sqs_service_error("KmsThrottled"));
+        assert!(!is_transient_sqs_service_error("InvalidAddress"));
+        assert!(!is_transient_sqs_service_error("QueueDoesNotExist"));
     }
 
     #[test]
