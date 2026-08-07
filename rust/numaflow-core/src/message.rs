@@ -92,6 +92,7 @@ use tracing::{error, warn};
 
 const DROP: &str = "U+005C__DROP__";
 const NACK: &str = "U+005C__NACK__";
+const FAIL: &str = "U+005C__FAIL__";
 
 /// The message that is passed from the source to the sink.
 /// NOTE: It is cheap to clone.
@@ -419,6 +420,12 @@ impl Message {
         self.tags
             .as_ref()
             .is_some_and(|tags| tags.contains(&NACK.to_string()))
+    }
+
+    pub(crate) fn failed(&self) -> bool {
+        self.tags
+            .as_ref()
+            .is_some_and(|tags| tags.contains(&FAIL.to_string()))
     }
 
     pub(crate) fn strip_tracing_udf(&mut self) {

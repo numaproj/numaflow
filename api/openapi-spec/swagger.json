@@ -22856,6 +22856,9 @@
         },
         "groupBy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
+        },
+        "retryStrategy": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         }
       }
     },
@@ -22886,6 +22889,10 @@
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
+        "retryStrategy": {
+          "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         }
       }
     },
