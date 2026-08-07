@@ -2884,6 +2884,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Numaflow Autoscaling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cron-autoscaling-for-source-vertices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron Autoscaling for Source Vertices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -5194,6 +5211,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Numaflow Autoscaling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cron-autoscaling-for-source-vertices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron Autoscaling for Source Vertices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -5371,7 +5405,9 @@ fine-tuned to achieve better results.</p>
 <li><code>replicasPerScale</code> - (Deprecated: Use <code>replicasPerScaleUp</code> and
   <code>replicasPerScaleDown</code> instead, will be removed in v1.5) Maximum number of
   replica change happens in one scale up or down operation, defaults to <code>2</code>.</li>
-<li><code>cron</code> - [MonoVertex only] Defines time-based overrides for <code>min</code> and <code>max</code>.
+<li><code>cron</code> - [MonoVertex and source vertices only] Defines time-based overrides
+  for <code>min</code> and <code>max</code>. Note: configuring cron autoscaling on a non-source
+  pipeline vertex will fail validation with an error.
   Cron expressions use the six-field extended format: <code>second minute hour
   day-of-month month day-of-week</code>. <code>timezone</code> accepts an IANA time zone and
   defaults to <code>UTC</code> when omitted. Each schedule requires <code>start</code>, <code>end</code>, <code>min</code>,
@@ -5379,6 +5415,30 @@ fine-tuned to achieve better results.</p>
   <code>scale.max</code>. When multiple windows overlap, schedules are evaluated in the
   configured order and the first active schedule takes precedence.</li>
 </ul>
+<h4 id="cron-autoscaling-for-source-vertices">Cron Autoscaling for Source Vertices<a class="headerlink" href="#cron-autoscaling-for-source-vertices" title="Permanent link">&para;</a></h4>
+<p>Cron-based autoscaling allows time-based overrides of <code>min</code> and <code>max</code> replicas.
+It is <strong>only valid for Pipeline source vertices</strong> (and MonoVertices — see the
+MonoVertex example above). Configuring <code>cron</code> on a non-source Pipeline vertex
+(UDF or Sink) will be <strong>rejected at validation time</strong> with an error.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">      </span><span class="nt">scale</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional; only valid on source vertices.</span>
+<span class="w">          </span><span class="nt">timezone</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">America/Los_Angeles</span><span class="w"> </span><span class="c1"># Optional, defaults to UTC.</span>
+<span class="w">          </span><span class="nt">schedules</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">22</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w"> </span><span class="c1"># Second Minute Hour Day-of-month Month Day-of-week</span>
+<span class="w">              </span><span class="nt">end</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">6</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+<span class="w">              </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">              </span><span class="nt">max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+</code></pre></div>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
