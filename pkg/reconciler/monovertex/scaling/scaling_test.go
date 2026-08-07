@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 )
 
 func monoVtxWithScale(targetSec uint32, readyReplicas uint32, currentReplicas uint32) *dfv1.MonoVertex {
@@ -213,11 +214,11 @@ func TestParsedCronScheduleIsActiveAt(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			parsed, err := parseCronSchedules(&dfv1.CronScheduling{
+			parsed, err := scalingutil.ParseCronSchedules(&dfv1.CronScheduling{
 				Schedules: []dfv1.CronSchedule{{Start: tc.start, End: tc.end}},
 			})
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, parsed[0].isActiveAt(tc.at))
+			assert.Equal(t, tc.expected, parsed[0].IsActiveAt(tc.at))
 		})
 	}
 }
@@ -235,7 +236,7 @@ func TestParseCronSchedulesRejectsInvalidExpressions(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := parseCronSchedules(&dfv1.CronScheduling{
+			_, err := scalingutil.ParseCronSchedules(&dfv1.CronScheduling{
 				Schedules: []dfv1.CronSchedule{{Start: tc.start, End: tc.end}},
 			})
 			assert.Error(t, err)
@@ -260,15 +261,15 @@ func TestEffectiveScaleBoundsAt(t *testing.T) {
 			},
 		},
 	}
-	parsed, err := parseCronSchedules(scale.Cron)
+	parsed, err := scalingutil.ParseCronSchedules(scale.Cron)
 	require.NoError(t, err)
 
-	minReplicas, maxReplicas, active := effectiveScaleBoundsAt(scale, parsed, now)
+	minReplicas, maxReplicas, active := scalingutil.EffectiveScaleBoundsAt(scale, parsed, now)
 	assert.True(t, active)
 	assert.Equal(t, int32(1), minReplicas)
 	assert.Equal(t, int32(5), maxReplicas)
 
-	minReplicas, maxReplicas, active = effectiveScaleBoundsAt(scale, parsed, now.Add(2*time.Hour))
+	minReplicas, maxReplicas, active = scalingutil.EffectiveScaleBoundsAt(scale, parsed, now.Add(2*time.Hour))
 	assert.False(t, active)
 	assert.Equal(t, int32(0), minReplicas)
 	assert.Equal(t, int32(50), maxReplicas)
@@ -407,7 +408,7 @@ func TestParsedCronSchedulesForGenerationChange(t *testing.T) {
 	parsed, err := scaler.parsedCronSchedulesFor(updated)
 	require.NoError(t, err)
 
-	assert.Equal(t, "0 0 10 * * *", parsed[0].schedule.Start)
+	assert.Equal(t, "0 0 10 * * *", parsed[0].Schedule.Start)
 	assert.Equal(t, 2, scaler.cronScheduleCache.Len())
 }
 
@@ -421,6 +422,6 @@ func TestParsedCronSchedulesForUIDChange(t *testing.T) {
 	parsed, err := scaler.parsedCronSchedulesFor(recreated)
 	require.NoError(t, err)
 
-	assert.Equal(t, "0 0 11 * * *", parsed[0].schedule.Start)
+	assert.Equal(t, "0 0 11 * * *", parsed[0].Schedule.Start)
 	assert.Equal(t, 2, scaler.cronScheduleCache.Len())
 }

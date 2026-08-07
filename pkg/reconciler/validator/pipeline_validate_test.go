@@ -248,11 +248,33 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("cron autoscaling is not supported for pipeline vertices", func(t *testing.T) {
+	t.Run("valid cron autoscaling is accepted for source pipeline vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[1].Scale.Cron = &dfv1.CronScheduling{}
+		testObj.Spec.Vertices[0].Scale.Cron = &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: "0 0 9 * * *", End: "0 0 18 * * *", Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+			},
+		}
 		err := ValidatePipeline(testObj)
-		assert.ErrorContains(t, err, `vertex "p1": cron autoscaling is not supported for pipeline vertices`)
+		assert.NoError(t, err)
+	})
+
+	t.Run("cron autoscaling on non-source pipeline vertex is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[1].Scale.Cron = &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: "0 0 9 * * *", End: "0 0 18 * * *", Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+			},
+		}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "p1": cron autoscaling is only supported for source vertices`)
+	})
+
+	t.Run("invalid cron config on source pipeline vertex is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale.Cron = &dfv1.CronScheduling{} // empty schedules → validateCronScaling rejects
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "input": invalid scale.cron`)
 	})
 
 	t.Run("test nil pipeline", func(t *testing.T) {
