@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getLogSearchMatchInfo } from "./matchLogSearch";
 
 type UseLogSearchNavigationArgs = {
@@ -35,7 +35,7 @@ export function useLogSearchNavigation({
     });
   }, [enabled, matchCount]);
 
-  const goNext = (): number | null => {
+  const goNext = useCallback((): number | null => {
     if (!enabled || !matchCount) {
       return null;
     }
@@ -43,9 +43,9 @@ export function useLogSearchNavigation({
     const nextMatch = currentMatch >= matchCount ? 1 : currentMatch + 1;
     setCurrentMatch(nextMatch);
     return nextMatch - 1;
-  };
+  }, [enabled, matchCount, currentMatch]);
 
-  const goPrev = (): number | null => {
+  const goPrev = useCallback((): number | null => {
     if (!enabled || !matchCount) {
       return null;
     }
@@ -54,7 +54,22 @@ export function useLogSearchNavigation({
       currentMatch <= 1 ? matchCount : currentMatch - 1;
     setCurrentMatch(previousMatch);
     return previousMatch - 1;
-  };
+  }, [enabled, matchCount, currentMatch]);
+
+  const focusLine = useCallback(
+    (line: string): number | null => {
+      if (!enabled || !matchCount) {
+        return null;
+      }
+      const index = orderedLogs.indexOf(line);
+      if (index < 0) {
+        return null;
+      }
+      setCurrentMatch(index + 1);
+      return index;
+    },
+    [enabled, matchCount, orderedLogs]
+  );
 
   return {
     enabled,
@@ -63,5 +78,6 @@ export function useLogSearchNavigation({
     activeIndex: currentMatch > 0 ? currentMatch - 1 : null,
     goNext,
     goPrev,
+    focusLine,
   };
 }

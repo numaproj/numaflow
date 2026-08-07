@@ -14,10 +14,27 @@
 
 .PodLogs-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1.2rem;
   margin-bottom: 1rem;
+}
+
+.PodLogs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  min-width: 0;
+}
+
+.PodLogs-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-left: auto;
 }
 
 .PodLogs-title {
@@ -40,6 +57,47 @@
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.PodLogs-loaded-count {
+  color: #64748b;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.PodLogs-end-history {
+  color: #94a3b8;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.PodLogs-load-older-group {
+  height: 2.8rem;
+}
+
+.PodLogs-load-older-main {
+  text-transform: none !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  padding: 0 1rem !important;
+  border-color: #cbd5e1 !important;
+  color: #036b8f !important;
+}
+
+.PodLogs-load-older-menu-btn {
+  min-width: 2.8rem !important;
+  padding: 0 !important;
+  border-color: #cbd5e1 !important;
+  color: #036b8f !important;
+}
+
+.PodLogs-load-older-group.Mui-disabled .PodLogs-load-older-main,
+.PodLogs-load-older-group.Mui-disabled .PodLogs-load-older-menu-btn {
+  color: #94a3b8 !important;
 }
 
 .PodLogs-controls {

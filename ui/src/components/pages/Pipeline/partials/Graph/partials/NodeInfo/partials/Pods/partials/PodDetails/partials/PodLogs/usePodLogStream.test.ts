@@ -3,10 +3,11 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import {
   appendCapped,
   buildPodLogsUrl,
+  mergeOlderLogs,
   usePodLogStream,
   UsePodLogStreamParams,
 } from "./usePodLogStream";
-import { MAX_LOGS } from "./constants";
+import { LOADING_LOGS, MAX_LOGS, MAX_TOTAL_LOGS } from "./constants";
 
 // jsdom lacks these; @stardazed/streams-polyfill's TextDecoderStream needs them.
 Object.assign(global, { TextDecoder, TextEncoder });
@@ -177,6 +178,21 @@ describe("buildPodLogsUrl", () => {
       "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=true&tailLines=500&previous=true"
     );
   });
+
+  it("supports follow=false history fetches", () => {
+    expect(
+      buildPodLogsUrl({
+        host: "",
+        namespaceId: "ns",
+        podName: "pod-a",
+        containerName: "numa",
+        follow: false,
+        tailLines: 1500,
+      })
+    ).toBe(
+      "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=false&tailLines=1500"
+    );
+  });
 });
 
 describe("appendCapped", () => {
@@ -190,6 +206,34 @@ describe("appendCapped", () => {
       "d",
       "e",
     ]);
+  });
+});
+
+describe("mergeOlderLogs", () => {
+  it("prepends only the net-older prefix before the overlap", () => {
+    expect(
+      mergeOlderLogs(["b", "c", "d"], ["a", "b", "c", "d"])
+    ).toEqual({ logs: ["a", "b", "c", "d"], prependedCount: 1 });
+  });
+
+  it("strips the loading sentinel before merging", () => {
+    expect(
+      mergeOlderLogs([LOADING_LOGS, "b", "c"], ["a", "b", "c"])
+    ).toEqual({ logs: ["a", "b", "c"], prependedCount: 1 });
+  });
+
+  it("returns zero prepended lines when the window did not grow", () => {
+    expect(mergeOlderLogs(["a", "b"], ["a", "b"])).toEqual({
+      logs: ["a", "b"],
+      prependedCount: 0,
+    });
+  });
+
+  it("returns zero prepended lines when there is no overlap", () => {
+    expect(mergeOlderLogs(["x", "y"], ["a", "b"])).toEqual({
+      logs: ["x", "y"],
+      prependedCount: 0,
+    });
   });
 });
 
@@ -322,5 +366,97 @@ describe("usePodLogStream lifecycle", () => {
     });
 
     await waitFor(() => expect(previous!.signal.aborted).toBe(true));
+  });
+
+  it("loads older lines with follow=false without aborting the live stream", async () => {
+    const { handles } = installFetchMock();
+
+    const { result } = renderHook(() => usePodLogStream(defaultParams));
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    const live = handles[0];
+
+    await act(async () => {
+      live.resolveFetch();
+      await Promise.resolve();
+      live.pushText("line-b\nline-c\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual(
+        expect.arrayContaining(["line-b", "line-c"])
+      );
+    });
+
+    let loadPromise!: Promise<{ prependedCount: number }>;
+    act(() => {
+      loadPromise = result.current.loadOlderLogs(500);
+    });
+
+    await waitFor(() => expect(handles.length).toBe(2));
+    const history = handles[1];
+    expect(history.url).toContain("follow=false");
+    expect(history.url).toContain(`tailLines=${MAX_LOGS + 500}`);
+    expect(live.signal.aborted).toBe(false);
+
+    await act(async () => {
+      history.resolveFetch();
+      await Promise.resolve();
+      history.pushText("line-a\nline-b\nline-c\n");
+      history.close();
+      await loadPromise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual(["line-a", "line-b", "line-c"]);
+      expect(result.current.loadedCount).toBe(3);
+      expect(result.current.remainingCapacity).toBe(
+        MAX_TOTAL_LOGS - (MAX_LOGS + 500)
+      );
+    });
+    expect(live.signal.aborted).toBe(false);
+  });
+
+  it("marks history exhausted when a larger window adds no older lines", async () => {
+    const { handles } = installFetchMock();
+
+    const { result } = renderHook(() => usePodLogStream(defaultParams));
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    const live = handles[0];
+
+    await act(async () => {
+      live.resolveFetch();
+      await Promise.resolve();
+      live.pushText("line-a\nline-b\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(2));
+
+    let loadPromise!: Promise<{ prependedCount: number }>;
+    act(() => {
+      loadPromise = result.current.loadOlderLogs(500);
+    });
+
+    await waitFor(() => expect(handles.length).toBe(2));
+    const history = handles[1];
+
+    await act(async () => {
+      history.resolveFetch();
+      await Promise.resolve();
+      history.pushText("line-a\nline-b\n");
+      history.close();
+      await loadPromise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMoreOlder).toBe(false);
+    });
+    expect(result.current.logs).toEqual(
+      expect.arrayContaining(["line-a", "line-b"])
+    );
+    expect(result.current.loadedCount).toBe(2);
   });
 });

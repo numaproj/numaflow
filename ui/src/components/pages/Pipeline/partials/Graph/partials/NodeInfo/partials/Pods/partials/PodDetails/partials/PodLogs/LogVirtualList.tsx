@@ -22,8 +22,20 @@ export type LogVirtualListProps = {
   activeIndex: number | null;
 };
 
+export type ScrollAnchor = {
+  line: string;
+  index: number;
+  offsetTop: number;
+};
+
 export type LogVirtualListHandle = {
   scrollToIndex: (index: number) => void;
+  captureScrollAnchor: () => ScrollAnchor | null;
+  restoreScrollAnchor: (
+    anchor: ScrollAnchor,
+    prependedCount: number,
+    logsOrder: string
+  ) => void;
 };
 
 export const LogVirtualList = forwardRef<
@@ -34,6 +46,8 @@ export const LogVirtualList = forwardRef<
   ref
 ) {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
   const isDark = colorMode === "dark";
   const isEmptyState =
     logs.length === 1 &&
@@ -62,8 +76,51 @@ export const LogVirtualList = forwardRef<
       scrollToIndex: (index: number) => {
         virtualizer.scrollToIndex(index, { align: "center", behavior: "auto" });
       },
+      captureScrollAnchor: () => {
+        const el = parentRef.current;
+        if (!el || isEmptyState) {
+          return null;
+        }
+        const items = virtualizer.getVirtualItems();
+        const first = items[0];
+        if (!first) {
+          return null;
+        }
+        const line = logsRef.current[first.index];
+        if (line === undefined) {
+          return null;
+        }
+        return {
+          line,
+          index: first.index,
+          offsetTop: el.scrollTop,
+        };
+      },
+      restoreScrollAnchor: (anchor, prependedCount, logsOrder) => {
+        if (!anchor || prependedCount <= 0) {
+          return;
+        }
+        const el = parentRef.current;
+        if (logsOrder === "asc") {
+          if (el && !wrapLines) {
+            el.scrollTop =
+              anchor.offsetTop + prependedCount * LOG_ROW_HEIGHT_PX;
+          } else {
+            virtualizer.scrollToIndex(anchor.index + prependedCount, {
+              align: "start",
+              behavior: "auto",
+            });
+          }
+          return;
+        }
+        // desc: older rows land at the bottom; keep the current top offset.
+        if (el) {
+          el.scrollTop = anchor.offsetTop;
+        }
+        virtualizer.measure();
+      },
     }),
-    [virtualizer]
+    [virtualizer, isEmptyState, wrapLines]
   );
 
   const textTone = isDark ? "PodLogs-line--dark" : "PodLogs-line--light";
@@ -99,7 +156,7 @@ export const LogVirtualList = forwardRef<
 
             return (
               <Box
-                key={`${virtualRow.index}-${podName}-logs`}
+                key={`${podName}:${virtualRow.index}:${line}`}
                 data-index={virtualRow.index}
                 data-testid="log-virtual-row"
                 data-active={isActive || undefined}

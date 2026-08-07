@@ -1,8 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
 import { PodLogs } from "./index";
-import { NO_LOGS_MATCHING_SEARCH } from "./constants";
+import {
+  END_OF_RETAINED_LOGS,
+  MAX_LOGS,
+  NO_LOGS_MATCHING_SEARCH,
+} from "./constants";
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
@@ -87,7 +91,11 @@ describe("PodLogs", () => {
       "title",
       "simple-mono-vertex-mv-31-abcde/numa"
     );
-    expect(screen.queryByText(/retained lines/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("log-loaded-count")).toBeInTheDocument();
+    expect(screen.getByTestId("load-older-logs-button")).toHaveTextContent(
+      "Load older 500"
+    );
+    expect(screen.queryByTestId("log-end-of-history")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
     expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
       "PodLogs-icon-btn--active"
@@ -196,5 +204,80 @@ describe("PodLogs", () => {
 
     fireEvent.click(screen.getByTestId("clear-button"));
     expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
+  });
+
+  it("loads older logs from the header control and shows end of history", async () => {
+    const liveBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.from("line-b\nline-c\n"));
+        // Keep the live stream open so a second history fetch can be asserted.
+      },
+    });
+    const historyBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.from("line-a\nline-b\nline-c\n"));
+        controller.close();
+      },
+    });
+    const emptyHistoryBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.from("line-a\nline-b\nline-c\n"));
+        controller.close();
+      },
+    });
+
+    const mockedFetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, body: liveBody } as any)
+      .mockResolvedValueOnce({ ok: true, body: historyBody } as any)
+      .mockResolvedValueOnce({ ok: true, body: emptyHistoryBody } as any);
+    (global as any).fetch = mockedFetch;
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-infer-0-xah5w"}
+        />
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
+        "2 loaded"
+      )
+    );
+
+    fireEvent.click(screen.getByTestId("load-older-logs-menu-button"));
+    expect(screen.getByTestId("load-older-batch-500")).toBeInTheDocument();
+    expect(screen.getByTestId("load-older-batch-1000")).toBeInTheDocument();
+    expect(screen.getByTestId("load-older-batch-2000")).toBeInTheDocument();
+    expect(screen.getByTestId("load-older-batch-5000")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("load-older-batch-500"));
+    });
+
+    await waitFor(() => {
+      expect(mockedFetch).toHaveBeenCalledTimes(2);
+      expect(String(mockedFetch.mock.calls[1][0])).toContain("follow=false");
+      expect(String(mockedFetch.mock.calls[1][0])).toContain(
+        `tailLines=${MAX_LOGS + 500}`
+      );
+      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
+        "3 loaded"
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("load-older-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("log-end-of-history")).toHaveTextContent(
+        END_OF_RETAINED_LOGS
+      );
+    });
   });
 });
