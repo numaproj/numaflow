@@ -20,6 +20,7 @@
  * [d5f32d110](https://github.com/numaproj/numaflow/commit/d5f32d11014d3fe131ef57fc710b9caa7b28d37e) Update manifests to v1.8.2
  * [4840682b9](https://github.com/numaproj/numaflow/commit/4840682b90ca3b13f7e5f549ce488ae732d65dde) feat(sqs): utilize nack options for SQS (#3557)
  * [7572b5735](https://github.com/numaproj/numaflow/commit/7572b573568ece4fa8e1fb14ec2b77c5d2c8be89) chore: prepare for release v1.8.2 (#3556) 
+
 ### Contributors
 
  * Ayush Srivastava
