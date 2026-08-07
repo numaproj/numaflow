@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
 import { PodLogs } from "./index";
+import { NO_LOGS_MATCHING_SEARCH } from "./constants";
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
@@ -67,58 +68,65 @@ describe("PodLogs", () => {
     };
     const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
     (global as any).fetch = mockedFetch;
-    let container;
     await act(async () => {
-      const { container: cont } = render(
+      render(
         <PodLogs
           namespaceId={"numaflow-system"}
           containerName={"numa"}
-          podName={"simple-pipeline-infer-0-xah5w"}
+          podName={"simple-mono-vertex-mv-31-abcde"}
         />
       );
-      container = cont;
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+    expect(screen.getByText("Container Logs")).toBeInTheDocument();
+    expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
+      "mv-31/numa"
+    );
+    expect(screen.getByTestId("log-source-badge")).toHaveAttribute(
+      "title",
+      "simple-mono-vertex-mv-31-abcde/numa"
+    );
+    expect(screen.queryByText(/retained lines/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
+    expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    expect(screen.getByTestId("color-mode-button")).not.toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    const showTerminated = screen.getByLabelText("Show terminated");
+    expect(showTerminated).not.toBeChecked();
 
-    //search for logs
-    fireEvent.change(
-      container.getElementsByClassName(
-        "MuiInputBase-input css-yz9k0d-MuiInputBase-input"
-      )[0],
-      { target: { value: "load" } }
-    );
-    //search for logs not present
-    fireEvent.change(
-      container.getElementsByClassName(
-        "MuiInputBase-input css-yz9k0d-MuiInputBase-input"
-      )[0],
-      { target: { value: "xyz" } }
-    );
-    expect(screen.getByText("No logs match your search.")).toBeVisible();
-    //negate logs search
-    fireEvent.click(
-      container.getElementsByClassName(
-        "PrivateSwitchBase-input css-1m9pwf3"
-      )[0],
-      { target: { value: true } }
-    );
-    //clear search
+    const searchInput = screen.getByPlaceholderText("Search logs");
+    fireEvent.change(searchInput, { target: { value: "load" } });
+    fireEvent.change(searchInput, { target: { value: "xyz" } });
+    expect(screen.getByText(NO_LOGS_MATCHING_SEARCH)).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("negate-search"));
     expect(screen.getByTestId("clear-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("clear-button"));
-    //pause logs
+
     expect(screen.getByTestId("pause-button")).toBeVisible();
     act(() => {
       fireEvent.click(screen.getByTestId("pause-button"));
-      //play logs
       fireEvent.click(screen.getByTestId("pause-button"));
     });
-    //toggle theme
     expect(screen.getByTestId("color-mode-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("color-mode-button"));
-    //toggle logs order
     expect(screen.getByTestId("order-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("order-button"));
+
+    mockedFetch.mockResolvedValueOnce({
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      ok: true,
+    } as any);
+    fireEvent.click(showTerminated);
+    expect(showTerminated).toBeChecked();
   });
 
   it("Trigger PodLogs parsing error", async () => {
