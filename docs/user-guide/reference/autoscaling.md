@@ -122,13 +122,43 @@ spec:
 - `replicasPerScale` - (Deprecated: Use `replicasPerScaleUp` and
   `replicasPerScaleDown` instead, will be removed in v1.5) Maximum number of
   replica change happens in one scale up or down operation, defaults to `2`.
-- `cron` - [MonoVertex only] Defines time-based overrides for `min` and `max`.
+- `cron` - [MonoVertex and source vertices only] Defines time-based overrides
+  for `min` and `max`. Note: configuring cron autoscaling on a non-source
+  pipeline vertex will fail validation with an error.
   Cron expressions use the six-field extended format: `second minute hour
   day-of-month month day-of-week`. `timezone` accepts an IANA time zone and
   defaults to `UTC` when omitted. Each schedule requires `start`, `end`, `min`,
   and `max`; its bounds may be lower or higher than the base `scale.min` and
   `scale.max`. When multiple windows overlap, schedules are evaluated in the
   configured order and the first active schedule takes precedence.
+
+#### Cron Autoscaling for Source Vertices
+
+Cron-based autoscaling allows time-based overrides of `min` and `max` replicas.
+It is **only valid for Pipeline source vertices** (and MonoVertices — see the
+MonoVertex example above). Configuring `cron` on a non-source Pipeline vertex
+(UDF or Sink) will be **rejected at validation time** with an error.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        generator:
+          rpu: 5
+      scale:
+        cron: # Optional; only valid on source vertices.
+          timezone: America/Los_Angeles # Optional, defaults to UTC.
+          schedules:
+            - start: "0 0 22 * * *" # Second Minute Hour Day-of-month Month Day-of-week
+              end: "0 0 6 * * *"
+              min: 10
+              max: 20
+```
 
 To disable Numaflow autoscaling, set `disabled: true` as following.
 
