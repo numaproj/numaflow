@@ -315,7 +315,7 @@ export function Pods(props: PodsProps) {
             display: "flex",
             flexDirection: "column",
             padding: "1rem",
-            width: "calc(40% - 2rem)",
+            width: "calc(35% - 2rem)",
             height: "calc(100% - 2rem)",
             justifyContent: "space-between",
             gap: "1rem",
@@ -385,8 +385,8 @@ export function Pods(props: PodsProps) {
         <Box
           sx={{
             display: "flex",
-            padding: "1rem",
-            width: "calc(60% - 2rem)",
+            padding: "1rem 0 1rem 1rem",
+            width: "calc(65% - 1rem)",
             height: "calc(100% - 2rem)",
           }}
         >
