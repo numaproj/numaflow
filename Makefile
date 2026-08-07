@@ -345,9 +345,6 @@ ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
 
-/usr/local/bin/mkdocs:
-	$(PYTHON) -m pip install mkdocs==1.6.1 mkdocs_material==9.7.6 mkdocs-embed-external-markdown==3.0.2
-
 /usr/local/bin/lychee:
 ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
@@ -359,17 +356,25 @@ endif
 
 # docs
 
+docs/node_modules/.package-lock.json: docs/package-lock.json
+	cd docs && npm ci
+
 .PHONY: docs
-docs: /usr/local/bin/mkdocs docs-linkcheck
-	$(PYTHON) -m mkdocs build
+docs: docs/node_modules/.package-lock.json
+	cd docs && npm run docs
+	$(MAKE) docs-linkcheck
 
 .PHONY: docs-serve
 docs-serve: docs
-	$(PYTHON) -m mkdocs serve
+	cd docs && npm run docs:serve
+
+.PHONY: docs-start
+docs-start: docs/node_modules/.package-lock.json
+	cd docs && npm run docs:start
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --insecure --accept '100..=399,403,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" --exclude "https://kubernetes.io/" --exclude "https://goreportcard.com/"  --exclude "https://classic.yarnpkg.com" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
+	lychee --insecure --root-dir ${CURRENT_DIR}/docs/site --accept '100..=399,403,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" --exclude "https://kubernetes.io/" --exclude "https://goreportcard.com/" --exclude "https://classic.yarnpkg.com" --exclude "https://github.com/numaproj/numaflow/edit/.*" --exclude "https://numaflow.numaproj.io/.*" README.md docs/site $(shell find ./examples -name '*.yaml')
 
 # pre-push checks
 

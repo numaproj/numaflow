@@ -233,5 +233,5 @@ Vertex Pods to pick up the new credentials.
 
 ### Other Configuration
 
-Check [here](../APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService)
+Check [here](/APIs/)
 for the full spec of `spec.jetstream`.
