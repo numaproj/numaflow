@@ -63,6 +63,7 @@ pub struct PulsarMessage {
 }
 
 struct ConsumerReaderActor {
+    config: PulsarSourceConfig,
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
     message_ids: BTreeMap<u64, MessageIdData>,
@@ -77,6 +78,30 @@ impl ConsumerReaderActor {
         handler_rx: mpsc::Receiver<ConsumerActorMessage>,
         cancel_token: CancellationToken,
     ) -> Result<()> {
+        let consumer = Self::build_consumer(&config)
+            .await
+            .map_err(|e| format!("Creating a Pulsar consumer: {e:?}"))?;
+        let max_unack = config.max_unack;
+        let topic = config.topic.clone();
+
+        tokio::spawn(async move {
+            let mut consumer_actor = ConsumerReaderActor {
+                config,
+                consumer,
+                handler_rx,
+                message_ids: BTreeMap::new(),
+                max_unack,
+                topic,
+                cancel_token,
+            };
+            consumer_actor.run().await;
+        });
+        Ok(())
+    }
+
+    async fn build_consumer(
+        config: &PulsarSourceConfig,
+    ) -> core::result::Result<Consumer<Vec<u8>, TokioExecutor>, pulsar::Error> {
         info!(
             addr = &config.pulsar_server_addr,
             "Pulsar connection details"
@@ -85,11 +110,11 @@ impl ConsumerReaderActor {
         // Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
         // The `with_allow_insecure_connection()` option has no effect
         let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
-        match config.auth {
+        match &config.auth {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {
                     name: "token".into(),
-                    data: token.into(),
+                    data: token.clone().into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }
@@ -103,10 +128,7 @@ impl ConsumerReaderActor {
             None => info!("No authentication mechanism specified for Pulsar"),
         }
 
-        let pulsar: Pulsar<_> = pulsar
-            .build()
-            .await
-            .map_err(|e| format!("Creating Pulsar client connection: {e:?}"))?;
+        let pulsar: Pulsar<_> = pulsar.build().await?;
 
         let mut builder = pulsar
             .consumer()
@@ -123,23 +145,7 @@ impl ConsumerReaderActor {
             });
         }
 
-        let consumer = builder
-            .build()
-            .await
-            .map_err(|e| format!("Creating a Pulsar consumer: {e:?}"))?;
-
-        tokio::spawn(async move {
-            let mut consumer_actor = ConsumerReaderActor {
-                consumer,
-                handler_rx,
-                message_ids: BTreeMap::new(),
-                max_unack: config.max_unack,
-                topic: config.topic,
-                cancel_token,
-            };
-            consumer_actor.run().await;
-        });
-        Ok(())
+        builder.build().await
     }
 
     async fn run(&mut self) {
@@ -201,7 +207,28 @@ impl ConsumerReaderActor {
             };
             let msg = match msg {
                 Ok(Some(msg)) => msg,
-                Ok(None) => break,
+                Ok(None) => {
+                    if !self.message_ids.is_empty() {
+                        warn!(
+                            pending = self.message_ids.len(),
+                            "Pulsar consumer stream closed with unacknowledged messages; deferring recreation"
+                        );
+                        if messages.is_empty() {
+                            time::sleep(Duration::from_millis(50)).await;
+                        }
+                        return Some(Ok(messages));
+                    }
+
+                    warn!("Pulsar consumer stream closed; recreating consumer");
+                    let recreated = match self.try_recreate_consumer(timeout_at).await {
+                        Ok(recreated) => recreated,
+                        Err(e) => return Some(Err(e)),
+                    };
+                    if recreated {
+                        info!("Pulsar consumer recreated after stream closure");
+                    }
+                    return Some(Ok(messages));
+                }
                 Err(e) => {
                     if is_transient_pulsar_read_error(&e) {
                         warn!(
@@ -262,6 +289,33 @@ impl ConsumerReaderActor {
             }
         }
         Some(Ok(messages))
+    }
+
+    async fn try_recreate_consumer(&mut self, timeout_at: Instant) -> Result<bool> {
+        let now = Instant::now();
+        if timeout_at <= now {
+            time::sleep(Duration::from_millis(50)).await;
+            return Ok(false);
+        }
+
+        let remaining_time = timeout_at - now;
+        match time::timeout(remaining_time, Self::build_consumer(&self.config)).await {
+            Ok(Ok(consumer)) => {
+                self.consumer = consumer;
+                Ok(true)
+            }
+            Ok(Err(err)) if is_transient_pulsar_read_error(&err) => {
+                warn!(?err, "Transient error recreating Pulsar consumer");
+                time::sleep(Duration::from_millis(50)).await;
+                Ok(false)
+            }
+            Ok(Err(err)) => Err(Error::Pulsar(err)),
+            Err(_) => {
+                warn!("Timed out recreating Pulsar consumer");
+                time::sleep(Duration::from_millis(50)).await;
+                Ok(false)
+            }
+        }
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
