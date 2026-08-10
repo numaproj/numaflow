@@ -105,6 +105,51 @@ func (ps *PulsarSuite) scaleOutput(w *fixtures.When, pipelineName string, replic
 	w.Expect().VertexSizeScaledTo("output", replicas)
 }
 
+func (ps *PulsarSuite) TestPulsarBrokerInterruptionDoesNotRestartNuma() {
+	topic := fixtures.GeneratePulsarTopicName()
+	subscription := fixtures.GeneratePulsarSubscriptionName()
+	sinkHash := fmt.Sprintf("pulsar-restart-%s", subscription)
+	pipeline := pulsarSourceRedisPipeline(
+		"pulsar-broker-restart",
+		topic,
+		subscription,
+		sinkHash,
+		100,
+	)
+
+	w := ps.Given().WithPipeline(pipeline).When().CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	w.Expect().VertexPodsRunning()
+
+	warmupMarker := fmt.Sprintf("restart-warmup-%s", subscription)
+	fixtures.SendPulsarMessage(topic, warmupMarker)
+	w.Expect().RedisSinkContains(sinkHash, warmupMarker)
+
+	snapshot := w.Expect().VertexPodRuntimeSnapshot(pulsarSourceVertex)
+	ps.EqualValues(0, snapshot.NumaRestartCount, "numa should not restart before broker restart")
+
+	ps.Require().NoError(fixtures.RestartPulsarBroker(3 * time.Minute))
+	fixtures.ResetPulsarClients()
+
+	recoveryMarker := fmt.Sprintf("restart-recovered-%s", subscription)
+	fixtures.SendPulsarMessage(topic, recoveryMarker)
+	w.Expect().
+		RedisSinkContains(sinkHash, recoveryMarker).
+		VertexNumaStable(snapshot, pulsarSourceVertex).
+		VertexPodLogNotContains(
+			pulsarSourceVertex,
+			fatalSourceForwarderLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
+		).
+		VertexPodLogNotContains(
+			pulsarSourceVertex,
+			nonRetryableSourceAckLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
+		)
+}
+
 func (ps *PulsarSuite) TestPulsarAckPendingDoesNotRestartNuma() {
 	const maxUnack = 5
 

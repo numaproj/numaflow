@@ -36,6 +36,7 @@ func main() {
 	pulsarController := NewPulsarController()
 	http.HandleFunc("/pulsar/produce-topic", pulsarController.ProduceTopicHandler)
 	http.HandleFunc("/pulsar/pump-topic", pulsarController.PumpTopicHandler)
+	http.HandleFunc("/pulsar/reset", pulsarController.ResetHandler)
 
 	// initialize Redis handlers
 	redisController := NewRedisController()

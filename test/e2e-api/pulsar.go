@@ -142,6 +142,11 @@ func (p *PulsarController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 	)
 }
 
+func (p *PulsarController) ResetHandler(w http.ResponseWriter, _ *http.Request) {
+	p.Close()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (p *PulsarController) Close() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
