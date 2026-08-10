@@ -45,8 +45,6 @@
 }
 
 .PodLogs-source-badge {
-  max-width: 45%;
-  overflow: hidden;
   padding: 0.5rem 1.2rem;
   border-radius: 999px;
   background: #f0f9ff;
@@ -55,7 +53,6 @@
   font-size: 1.2rem;
   font-weight: 700;
   line-height: 1.4;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -334,10 +331,6 @@
 }
 
 @media (max-width: 720px) {
-  .PodLogs-source-badge {
-    max-width: 60%;
-  }
-
   .PodLogs-search {
     width: min(22.4rem, 100%);
   }
