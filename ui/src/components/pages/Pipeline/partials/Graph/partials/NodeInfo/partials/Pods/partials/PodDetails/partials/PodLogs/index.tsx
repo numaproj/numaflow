@@ -2,6 +2,7 @@
 // @ts-nocheck
 import {
   ChangeEvent,
+  MouseEvent,
   ReactNode,
   useCallback,
   useContext,
@@ -38,18 +39,9 @@ import Checkbox from "@mui/material/Checkbox";
 import { PodLogsProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
-import {
-  DEFAULT_LOG_HISTORY_BATCH_SIZE,
-  END_OF_RETAINED_LOGS,
-  LOADING_OLDER_LOGS,
-  LOG_HISTORY_BATCH_SIZES,
-} from "./constants";
+import { DEFAULT_LOG_TAIL_SIZE, LOG_TAIL_SIZES } from "./constants";
 import { filterLogs } from "./filterLogs";
-import {
-  LogVirtualList,
-  LogVirtualListHandle,
-  ScrollAnchor,
-} from "./LogVirtualList";
+import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
 import { useLogSearchNavigation } from "./useLogSearchNavigation";
 import { usePodLogStream } from "./usePodLogStream";
 
@@ -104,12 +96,6 @@ function getShortPodName(podName: string): string {
   return parts.slice(-2).join("-");
 }
 
-type PendingRestore = {
-  anchor: ScrollAnchor | null;
-  prependedCount: number;
-  activeLine: string | null;
-};
-
 export function PodLogs({
   namespaceId,
   podName,
@@ -125,29 +111,27 @@ export function PodLogs({
   const [enableTimestamp, setEnableTimestamp] = useState<boolean>(false);
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
-  const [selectedBatchSize, setSelectedBatchSize] = useState(
-    DEFAULT_LOG_HISTORY_BATCH_SIZE
-  );
-  const [batchMenuAnchor, setBatchMenuAnchor] = useState<null | HTMLElement>(
+  const [tailLines, setTailLines] = useState(DEFAULT_LOG_TAIL_SIZE);
+  const [tailMenuAnchor, setTailMenuAnchor] = useState<null | HTMLElement>(
     null
   );
   const { host } = useContext<AppContextProps>(AppContext);
-  const pendingRestoreRef = useRef<PendingRestore | null>(null);
 
-  // Restart streaming if the source changes while paused
+  // New container/pod: resume live with the default tail window.
   useEffect(() => {
     setPaused(false);
+    setTailLines(DEFAULT_LOG_TAIL_SIZE);
+    setTailMenuAnchor(null);
   }, [namespaceId, podName, containerName]);
 
-  const {
-    logs,
-    previousLogs,
-    loadOlderLogs,
-    isLoadingOlder,
-    hasMoreOlder,
-    loadedCount,
-    remainingCapacity,
-  } = usePodLogStream({
+  // Close the tail menu when resuming live (selector becomes disabled).
+  useEffect(() => {
+    if (!paused) {
+      setTailMenuAnchor(null);
+    }
+  }, [paused]);
+
+  const { logs, previousLogs, loadedCount } = usePodLogStream({
     namespaceId,
     podName,
     containerName,
@@ -157,7 +141,10 @@ export function PodLogs({
     enableTimestamp,
     levelFilter,
     showPreviousLogs,
+    tailLines,
   });
+
+  const tailSelectorDisabled = !paused;
 
   const filteredLogs = useMemo(() => {
     const source = showPreviousLogs ? previousLogs : logs;
@@ -177,31 +164,12 @@ export function PodLogs({
     activeIndex,
     goNext,
     goPrev,
-    focusLine,
   } = useLogSearchNavigation({
     orderedLogs,
     search,
     negateSearch,
-    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}`,
+    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}-${tailLines}`,
   });
-
-  useEffect(() => {
-    const pending = pendingRestoreRef.current;
-    if (!pending || pending.prependedCount <= 0) {
-      return;
-    }
-    pendingRestoreRef.current = null;
-    if (pending.anchor) {
-      logVirtualListRef.current?.restoreScrollAnchor(
-        pending.anchor,
-        pending.prependedCount,
-        logsOrder
-      );
-    }
-    if (pending.activeLine) {
-      focusLine(pending.activeLine);
-    }
-  }, [logs, previousLogs, orderedLogs, logsOrder, focusLine]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -248,8 +216,14 @@ export function PodLogs({
   }, []);
 
   const handlePause = useCallback(() => {
-    setPaused((prev) => !prev);
-  }, []);
+    if (paused) {
+      // Resuming live: always restart with the default tail window.
+      setTailLines(DEFAULT_LOG_TAIL_SIZE);
+      setPaused(false);
+      return;
+    }
+    setPaused(true);
+  }, [paused]);
 
   const handleColorMode = useCallback(() => {
     setColorMode(colorMode === "light" ? "dark" : "light");
@@ -286,33 +260,25 @@ export function PodLogs({
     setLevelFilter(e.target.value);
   }, []);
 
-  const handleLoadOlder = useCallback(
-    async (batchSize: number) => {
-      setSelectedBatchSize(batchSize);
-      setBatchMenuAnchor(null);
-      const activeLine =
-        activeIndex !== null ? orderedLogs[activeIndex] ?? null : null;
-      const anchor = logVirtualListRef.current?.captureScrollAnchor() ?? null;
-      const { prependedCount } = await loadOlderLogs(batchSize);
-      if (prependedCount > 0) {
-        pendingRestoreRef.current = {
-          anchor,
-          prependedCount,
-          activeLine,
-        };
+  const handleSelectTailLines = useCallback((size: number) => {
+    setTailMenuAnchor(null);
+    setTailLines((current) => (current === size ? current : size));
+  }, []);
+
+  const handleOpenTailMenu = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (tailSelectorDisabled) {
+        return;
       }
+      setTailMenuAnchor(event.currentTarget);
     },
-    [activeIndex, orderedLogs, loadOlderLogs]
+    [tailSelectorDisabled]
   );
 
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
-  // Keep the control visible during bootstrap; only treat retention as exhausted
-  // after a real loadOlder attempt (hasMoreOlder) or hitting the client ceiling.
-  const canLoadOlder = hasMoreOlder && remainingCapacity > 0;
-  const loadOlderDisabled =
-    isLoadingOlder || !canLoadOlder || loadedCount === 0;
-  const effectiveBatchSize = Math.min(selectedBatchSize, remainingCapacity);
-  const showEndOfHistory = !hasMoreOlder || remainingCapacity <= 0;
+  const tailSelectorTooltip = tailSelectorDisabled
+    ? "Pause to change window size"
+    : "Choose how many recent log lines to show";
 
   return (
     <Box className="PodLogs-root">
@@ -335,56 +301,52 @@ export function PodLogs({
             >
               {loadedCount.toLocaleString()} loaded
             </span>
-            {showEndOfHistory ? (
-              <span
-                className="PodLogs-end-history"
-                data-testid="log-end-of-history"
-              >
-                {END_OF_RETAINED_LOGS}
-              </span>
-            ) : (
-              <ButtonGroup
-                className="PodLogs-load-older-group"
-                variant="outlined"
-                size="small"
-                disabled={loadOlderDisabled}
-              >
-                <Button
-                  data-testid="load-older-logs-button"
-                  className="PodLogs-load-older-main"
-                  onClick={() => handleLoadOlder(selectedBatchSize)}
-                  disabled={loadOlderDisabled || effectiveBatchSize <= 0}
-                >
-                  {isLoadingOlder
-                    ? LOADING_OLDER_LOGS
-                    : `Load older ${selectedBatchSize.toLocaleString()}`}
-                </Button>
-                <Button
-                  data-testid="load-older-logs-menu-button"
-                  className="PodLogs-load-older-menu-btn"
-                  aria-label="Choose how many older lines to load"
-                  onClick={(event) => setBatchMenuAnchor(event.currentTarget)}
-                  disabled={loadOlderDisabled}
-                >
-                  <ArrowDropDownIcon fontSize="small" />
-                </Button>
-              </ButtonGroup>
-            )}
-            <Menu
-              anchorEl={batchMenuAnchor}
-              open={Boolean(batchMenuAnchor)}
-              onClose={() => setBatchMenuAnchor(null)}
-              data-testid="load-older-logs-menu"
+            <Tooltip
+              title={<div className="icon-tooltip">{tailSelectorTooltip}</div>}
+              placement="top"
+              arrow
             >
-              {LOG_HISTORY_BATCH_SIZES.map((size) => (
+              <span data-testid="log-tail-size-control">
+                <ButtonGroup
+                  className="PodLogs-load-older-group"
+                  variant="outlined"
+                  size="small"
+                  disabled={tailSelectorDisabled}
+                >
+                  <Button
+                    data-testid="log-tail-size-button"
+                    className="PodLogs-load-older-main"
+                    disabled={tailSelectorDisabled}
+                    onClick={handleOpenTailMenu}
+                  >
+                    {`${tailLines.toLocaleString()} lines`}
+                  </Button>
+                  <Button
+                    data-testid="log-tail-size-menu-button"
+                    className="PodLogs-load-older-menu-btn"
+                    aria-label="Choose how many recent log lines to show"
+                    disabled={tailSelectorDisabled}
+                    onClick={handleOpenTailMenu}
+                  >
+                    <ArrowDropDownIcon fontSize="small" />
+                  </Button>
+                </ButtonGroup>
+              </span>
+            </Tooltip>
+            <Menu
+              anchorEl={tailMenuAnchor}
+              open={Boolean(tailMenuAnchor)}
+              onClose={() => setTailMenuAnchor(null)}
+              data-testid="log-tail-size-menu"
+            >
+              {LOG_TAIL_SIZES.map((size) => (
                 <MenuItem
                   key={size}
-                  data-testid={`load-older-batch-${size}`}
-                  disabled={size > remainingCapacity}
-                  selected={size === selectedBatchSize}
-                  onClick={() => handleLoadOlder(size)}
+                  data-testid={`log-tail-size-${size}`}
+                  selected={size === tailLines}
+                  onClick={() => handleSelectTailLines(size)}
                 >
-                  {size.toLocaleString()}
+                  {`${size.toLocaleString()} lines`}
                 </MenuItem>
               ))}
             </Menu>

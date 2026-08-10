@@ -3,11 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import {
   appendCapped,
   buildPodLogsUrl,
-  mergeOlderLogs,
   usePodLogStream,
   UsePodLogStreamParams,
 } from "./usePodLogStream";
-import { LOADING_LOGS, MAX_LOGS, MAX_TOTAL_LOGS } from "./constants";
+import { MAX_LOGS } from "./constants";
 
 // jsdom lacks these; @stardazed/streams-polyfill's TextDecoderStream needs them.
 Object.assign(global, { TextDecoder, TextEncoder });
@@ -148,6 +147,7 @@ const defaultParams: UsePodLogStreamParams = {
   enableTimestamp: false,
   levelFilter: "all",
   showPreviousLogs: false,
+  tailLines: MAX_LOGS,
 };
 
 describe("buildPodLogsUrl", () => {
@@ -206,34 +206,6 @@ describe("appendCapped", () => {
       "d",
       "e",
     ]);
-  });
-});
-
-describe("mergeOlderLogs", () => {
-  it("prepends only the net-older prefix before the overlap", () => {
-    expect(
-      mergeOlderLogs(["b", "c", "d"], ["a", "b", "c", "d"])
-    ).toEqual({ logs: ["a", "b", "c", "d"], prependedCount: 1 });
-  });
-
-  it("strips the loading sentinel before merging", () => {
-    expect(
-      mergeOlderLogs([LOADING_LOGS, "b", "c"], ["a", "b", "c"])
-    ).toEqual({ logs: ["a", "b", "c"], prependedCount: 1 });
-  });
-
-  it("returns zero prepended lines when the window did not grow", () => {
-    expect(mergeOlderLogs(["a", "b"], ["a", "b"])).toEqual({
-      logs: ["a", "b"],
-      prependedCount: 0,
-    });
-  });
-
-  it("returns zero prepended lines when there is no overlap", () => {
-    expect(mergeOlderLogs(["x", "y"], ["a", "b"])).toEqual({
-      logs: ["x", "y"],
-      prependedCount: 0,
-    });
   });
 });
 
@@ -368,95 +340,175 @@ describe("usePodLogStream lifecycle", () => {
     await waitFor(() => expect(previous!.signal.aborted).toBe(true));
   });
 
-  it("loads older lines with follow=false without aborting the live stream", async () => {
+  it("refetches with an absolute larger tailLines window", async () => {
     const { handles } = installFetchMock();
 
-    const { result } = renderHook(() => usePodLogStream(defaultParams));
+    const { result, rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
 
     await waitFor(() => expect(handles.length).toBe(1));
-    const live = handles[0];
+    expect(handles[0].url).toContain(`tailLines=${MAX_LOGS}`);
 
     await act(async () => {
-      live.resolveFetch();
+      handles[0].resolveFetch();
       await Promise.resolve();
-      live.pushText("line-b\nline-c\n");
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(result.current.logs).toEqual(
-        expect.arrayContaining(["line-b", "line-c"])
-      );
-    });
-
-    let loadPromise!: Promise<{ prependedCount: number }>;
-    act(() => {
-      loadPromise = result.current.loadOlderLogs(500);
-    });
-
-    await waitFor(() => expect(handles.length).toBe(2));
-    const history = handles[1];
-    expect(history.url).toContain("follow=false");
-    expect(history.url).toContain(`tailLines=${MAX_LOGS + 500}`);
-    expect(live.signal.aborted).toBe(false);
-
-    await act(async () => {
-      history.resolveFetch();
-      await Promise.resolve();
-      history.pushText("line-a\nline-b\nline-c\n");
-      history.close();
-      await loadPromise;
-    });
-
-    await waitFor(() => {
-      expect(result.current.logs).toEqual(["line-a", "line-b", "line-c"]);
-      expect(result.current.loadedCount).toBe(3);
-      expect(result.current.remainingCapacity).toBe(
-        MAX_TOTAL_LOGS - (MAX_LOGS + 500)
-      );
-    });
-    expect(live.signal.aborted).toBe(false);
-  });
-
-  it("marks history exhausted when a larger window adds no older lines", async () => {
-    const { handles } = installFetchMock();
-
-    const { result } = renderHook(() => usePodLogStream(defaultParams));
-
-    await waitFor(() => expect(handles.length).toBe(1));
-    const live = handles[0];
-
-    await act(async () => {
-      live.resolveFetch();
-      await Promise.resolve();
-      live.pushText("line-a\nline-b\n");
+      handles[0].pushText("old-a\nold-b\n");
       await Promise.resolve();
     });
 
     await waitFor(() => expect(result.current.loadedCount).toBe(2));
 
-    let loadPromise!: Promise<{ prependedCount: number }>;
-    act(() => {
-      loadPromise = result.current.loadOlderLogs(500);
-    });
+    rerender({ ...defaultParams, tailLines: 5000 });
 
     await waitFor(() => expect(handles.length).toBe(2));
-    const history = handles[1];
+    expect(handles[0].signal.aborted).toBe(true);
+    expect(handles[1].url).toContain("tailLines=5000");
+    expect(handles[1].url).toContain("follow=true");
 
     await act(async () => {
-      history.resolveFetch();
+      handles[1].resolveFetch();
       await Promise.resolve();
-      history.pushText("line-a\nline-b\n");
-      history.close();
-      await loadPromise;
+      handles[1].pushText("line-1\nline-2\nline-3\n");
+      await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(result.current.hasMoreOlder).toBe(false);
+      expect(result.current.logs).toEqual(["line-1", "line-2", "line-3"]);
+      expect(result.current.loadedCount).toBe(3);
     });
-    expect(result.current.logs).toEqual(
-      expect.arrayContaining(["line-a", "line-b"])
+  });
+
+  it("refetches with an absolute smaller tailLines window", async () => {
+    const { handles } = installFetchMock();
+
+    const { rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: { ...defaultParams, tailLines: 5000 } }
     );
-    expect(result.current.loadedCount).toBe(2);
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    expect(handles[0].url).toContain("tailLines=5000");
+
+    rerender({ ...defaultParams, tailLines: 1000 });
+
+    await waitFor(() => expect(handles.length).toBe(2));
+    expect(handles[0].signal.aborted).toBe(true);
+    expect(handles[1].url).toContain("tailLines=1000");
+  });
+
+  it("does not fetch a snapshot when pausing alone", async () => {
+    const { handles } = installFetchMock();
+
+    const { result, rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("frozen-a\nfrozen-b\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(2));
+
+    rerender({ ...defaultParams, paused: true });
+
+    await waitFor(() => expect(handles[0].signal.aborted).toBe(true));
+
+    expect(handles.filter((h) => h.url.includes("follow=false"))).toHaveLength(
+      0
+    );
+    expect(result.current.logs).toEqual(["frozen-a", "frozen-b"]);
+  });
+
+  it("fetches follow=false when tailLines changes while paused", async () => {
+    const { handles } = installFetchMock();
+
+    const { result, rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("old-a\nold-b\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(2));
+
+    rerender({ ...defaultParams, paused: true });
+    await waitFor(() => expect(handles[0].signal.aborted).toBe(true));
+
+    rerender({ ...defaultParams, paused: true, tailLines: 5000 });
+
+    await waitFor(() =>
+      expect(handles.some((h) => h.url.includes("follow=false"))).toBe(true)
+    );
+
+    const snapshot = handles.find((h) => h.url.includes("follow=false"))!;
+    expect(snapshot.url).toContain("tailLines=5000");
+
+    await act(async () => {
+      snapshot.resolveFetch();
+      await Promise.resolve();
+      snapshot.pushText("snap-1\nsnap-2\nsnap-3\n");
+      snapshot.close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual(["snap-1", "snap-2", "snap-3"]);
+      expect(result.current.loadedCount).toBe(3);
+    });
+  });
+
+  it("aborts an in-flight paused snapshot when unpausing and starts live follow", async () => {
+    const { handles } = installFetchMock();
+
+    const { rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("live-1\n");
+      await Promise.resolve();
+    });
+
+    rerender({ ...defaultParams, paused: true });
+    await waitFor(() => expect(handles[0].signal.aborted).toBe(true));
+
+    rerender({ ...defaultParams, paused: true, tailLines: 2000 });
+
+    await waitFor(() =>
+      expect(handles.some((h) => h.url.includes("follow=false"))).toBe(true)
+    );
+    const snapshot = handles.find((h) => h.url.includes("follow=false"))!;
+
+    rerender({ ...defaultParams, paused: false, tailLines: 2000 });
+
+    await waitFor(() => expect(snapshot.signal.aborted).toBe(true));
+    await waitFor(() => {
+      const liveAfterPlay = handles.filter(
+        (h) => h.url.includes("follow=true") && h.url.includes("tailLines=2000")
+      );
+      expect(liveAfterPlay.length).toBeGreaterThan(0);
+      expect(liveAfterPlay[liveAfterPlay.length - 1].signal.aborted).toBe(
+        false
+      );
+    });
   });
 });

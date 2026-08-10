@@ -2,11 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
 import { PodLogs } from "./index";
-import {
-  END_OF_RETAINED_LOGS,
-  MAX_LOGS,
-  NO_LOGS_MATCHING_SEARCH,
-} from "./constants";
+import { NO_LOGS_MATCHING_SEARCH } from "./constants";
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
@@ -83,6 +79,7 @@ describe("PodLogs", () => {
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+    expect(String(mockedFetch.mock.calls[0][0])).toContain("tailLines=1000");
     expect(screen.getByText("Container Logs")).toBeInTheDocument();
     expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
       "mv-31/numa"
@@ -92,10 +89,9 @@ describe("PodLogs", () => {
       "simple-mono-vertex-mv-31-abcde/numa"
     );
     expect(screen.getByTestId("log-loaded-count")).toBeInTheDocument();
-    expect(screen.getByTestId("load-older-logs-button")).toHaveTextContent(
-      "Load older 500"
+    expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+      "1,000 lines"
     );
-    expect(screen.queryByTestId("log-end-of-history")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
     expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
       "PodLogs-icon-btn--active"
@@ -206,31 +202,31 @@ describe("PodLogs", () => {
     expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
   });
 
-  it("loads older logs from the header control and shows end of history", async () => {
-    const liveBody = new ReadableStream({
+  it("disables the tail selector while live and applies size after pause", async () => {
+    const firstBody = new ReadableStream({
       start(controller) {
-        controller.enqueue(Buffer.from("line-b\nline-c\n"));
-        // Keep the live stream open so a second history fetch can be asserted.
+        controller.enqueue(Buffer.from("line-a\nline-b\n"));
+        // Keep open so pause/play and snapshot refetch can be asserted.
       },
     });
-    const historyBody = new ReadableStream({
+    const snapshotBody = new ReadableStream({
       start(controller) {
-        controller.enqueue(Buffer.from("line-a\nline-b\nline-c\n"));
+        controller.enqueue(Buffer.from("line-1\nline-2\nline-3\n"));
         controller.close();
       },
     });
-    const emptyHistoryBody = new ReadableStream({
+    const liveResumeBody = new ReadableStream({
       start(controller) {
-        controller.enqueue(Buffer.from("line-a\nline-b\nline-c\n"));
-        controller.close();
+        controller.enqueue(Buffer.from("live-after-play\n"));
+        // Keep open for follow=true.
       },
     });
 
     const mockedFetch = jest
       .fn()
-      .mockResolvedValueOnce({ ok: true, body: liveBody } as any)
-      .mockResolvedValueOnce({ ok: true, body: historyBody } as any)
-      .mockResolvedValueOnce({ ok: true, body: emptyHistoryBody } as any);
+      .mockResolvedValueOnce({ ok: true, body: firstBody } as any)
+      .mockResolvedValueOnce({ ok: true, body: snapshotBody } as any)
+      .mockResolvedValueOnce({ ok: true, body: liveResumeBody } as any);
     (global as any).fetch = mockedFetch;
 
     await act(async () => {
@@ -248,22 +244,40 @@ describe("PodLogs", () => {
         "2 loaded"
       )
     );
+    expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+      "1,000 lines"
+    );
+    expect(screen.getByTestId("log-tail-size-button")).toBeDisabled();
+    expect(screen.getByTestId("log-tail-size-menu-button")).toBeDisabled();
 
-    fireEvent.click(screen.getByTestId("load-older-logs-menu-button"));
-    expect(screen.getByTestId("load-older-batch-500")).toBeInTheDocument();
-    expect(screen.getByTestId("load-older-batch-1000")).toBeInTheDocument();
-    expect(screen.getByTestId("load-older-batch-2000")).toBeInTheDocument();
-    expect(screen.getByTestId("load-older-batch-5000")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
+    expect(screen.queryByTestId("log-tail-size-5000")).not.toBeInTheDocument();
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("load-older-batch-500"));
+      fireEvent.click(screen.getByTestId("pause-button"));
+    });
+
+    expect(screen.getByTestId("log-tail-size-button")).not.toBeDisabled();
+    expect(screen.getByTestId("log-tail-size-menu-button")).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
+    expect(screen.getByTestId("log-tail-size-500")).toBeInTheDocument();
+    expect(screen.getByTestId("log-tail-size-1000")).toBeInTheDocument();
+    expect(screen.getByTestId("log-tail-size-2000")).toBeInTheDocument();
+    expect(screen.getByTestId("log-tail-size-5000")).toBeInTheDocument();
+    expect(screen.getByTestId("log-tail-size-10000")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("log-tail-size-5000"));
     });
 
     await waitFor(() => {
       expect(mockedFetch).toHaveBeenCalledTimes(2);
+      expect(String(mockedFetch.mock.calls[1][0])).toContain("tailLines=5000");
       expect(String(mockedFetch.mock.calls[1][0])).toContain("follow=false");
-      expect(String(mockedFetch.mock.calls[1][0])).toContain(
-        `tailLines=${MAX_LOGS + 500}`
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "5,000 lines"
       );
       expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
         "3 loaded"
@@ -271,13 +285,100 @@ describe("PodLogs", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("load-older-logs-button"));
+      fireEvent.click(screen.getByTestId("pause-button"));
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("log-end-of-history")).toHaveTextContent(
-        END_OF_RETAINED_LOGS
+      expect(mockedFetch).toHaveBeenCalledTimes(3);
+      expect(String(mockedFetch.mock.calls[2][0])).toContain("tailLines=1000");
+      expect(String(mockedFetch.mock.calls[2][0])).toContain("follow=true");
+      expect(screen.getByTestId("log-tail-size-button")).toBeDisabled();
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "1,000 lines"
       );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
+        "1 loaded"
+      )
+    );
+  });
+
+  it("resets the tail window to default when the container changes", async () => {
+    const openBody = () =>
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from("line-a\n"));
+        },
+      });
+    const snapshotBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.from("snap-1\nsnap-2\n"));
+        controller.close();
+      },
+    });
+
+    const mockedFetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, body: openBody() } as any)
+      .mockResolvedValueOnce({ ok: true, body: snapshotBody } as any)
+      .mockResolvedValueOnce({ ok: true, body: openBody() } as any);
+    (global as any).fetch = mockedFetch;
+
+    let view: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-infer-0-xah5w"}
+        />
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
+        "1 loaded"
+      )
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pause-button"));
+    });
+    fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("log-tail-size-5000"));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "5,000 lines"
+      )
+    );
+
+    await act(async () => {
+      view.rerender(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"udf"}
+          podName={"simple-pipeline-infer-0-xah5w"}
+        />
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "1,000 lines"
+      );
+      expect(screen.getByTestId("log-tail-size-button")).toBeDisabled();
+      expect(String(mockedFetch.mock.calls.at(-1)[0])).toContain(
+        "tailLines=1000"
+      );
+      expect(String(mockedFetch.mock.calls.at(-1)[0])).toContain(
+        "container=udf"
+      );
+      expect(String(mockedFetch.mock.calls.at(-1)[0])).toContain("follow=true");
     });
   });
 });
