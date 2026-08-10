@@ -13,7 +13,7 @@ the message can instead be moved to the fallback sink to be reprocessed later (f
 
 ## Caveats
 
-- A fallback sink can only be configured when the primary sink is a user-defined sink.
+- A fallback sink can only be configured when the primary sink is a user-defined sink (this is because builtin sinks will not know what tags to use and whether those will be honored).
 - A message routed to the fallback sink continues the lifecycle it began in the primary sink.
   - e.g., a message that arrived at the primary sink and was routed to the fallback sink
     is not considered processed until its fate is decided in the fallback sink (success/fail).
