@@ -1,21 +1,24 @@
 # Fallback Sink
 
 A `Fallback` Sink functions as a `Dead Letter Queue (DLQ)` Sink.
-It can be configured to serve as a backup sink when the primary sink fails processing messages. 
+It can be configured to serve as a backup sink when the primary sink fails to process messages. 
 
 ## The Use Case
 
 Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.
 
-In a pipeline without fallback sinks, if a sink fails to process certain messages, 
-the failed messages, by default, can get retried indefinitely, 
-causing back pressures propagated all the way back to the source vertex.
-Eventually, the pipeline will be blocked, and no new messages will be processed.
-A fallback sink can be set up to prevent this from happening, by storing the failed messages in a separate sink.
+It lets you define a DLQ associated with a given user-defined sink (hereafter referred to as the *primary sink*). 
+The final fate of a message — success, retry-until-failure, etc. — need not be decided within the primary sink; 
+the message can instead be moved to the fallback sink to be reprocessed later (for example, by a separate pipeline/MonoVertex).
 
 ## Caveats
 
-A fallback sink can only be configured when the primary sink is a user-defined sink.
+- A fallback sink can only be configured when the primary sink is a user-defined sink.
+- A message routed to the fallback sink continues the lifecycle it began in the primary sink.
+  - e.g., a message that arrived at the primary sink and was routed to the fallback sink
+    is not considered processed until its fate is decided in the fallback sink (success/fail).
+  - This matters for a non-streaming MonoVertex, where the next batch is not read until
+    the current batch finishes processing.
 
 ## How to use
 
