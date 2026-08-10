@@ -596,18 +596,26 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
+    use super::MapStreamTask;
+    use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+    use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
+    use crate::mapper::map::SharedMapTaskContext;
     use crate::mapper::map::stream::{StreamSenderMapState, UserDefinedStreamMap};
+    use crate::message::{Message, MessageHandle, ReadAck};
+    use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
     use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
+    use crate::tracker::Tracker;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::map::{MapRequest, MapResponse, TransmissionStatus};
     use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
-    use tokio::sync::mpsc;
+    use tokio::sync::{Semaphore, mpsc, oneshot};
     use tokio_util::sync::CancellationToken;
     use tokio_util::task::AbortOnDropHandle;
 
@@ -1092,5 +1100,307 @@ mod tests {
             !senders.lock().unwrap().closed,
             "stale reconnect should not drain the current sender map"
         );
+    }
+
+    // ---- retryStrategy tests ----
+
+    /// Stream mapper that fails (via the reserved FAIL tag) the first `fail_first_n` invocations,
+    /// then succeeds. It emits a single result so a FAIL is always the first (and only) output —
+    /// this keeps the retry clean (no partially-forwarded prefix to duplicate).
+    struct StreamRetryThenSucceed {
+        attempts: AtomicUsize,
+        fail_first_n: usize,
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for StreamRetryThenSucceed {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: tokio::sync::mpsc::Sender<mapstream::Message>,
+        ) {
+            let fail = self.attempts.fetch_add(1, Ordering::SeqCst) < self.fail_first_n;
+            let tags = if fail {
+                vec!["U+005C__FAIL__".to_string()] // must match message.rs FAIL const
+            } else {
+                vec![]
+            };
+            let _ = tx
+                .send(
+                    mapstream::Message::new(input.value)
+                        .with_keys(input.keys)
+                        .with_tags(tags),
+                )
+                .await;
+        }
+    }
+
+    /// Stream mapper that always fails (via the reserved FAIL tag), emitting a single result.
+    struct StreamAlwaysFail;
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for StreamAlwaysFail {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: tokio::sync::mpsc::Sender<mapstream::Message>,
+        ) {
+            let _ = tx
+                .send(
+                    mapstream::Message::new(input.value)
+                        .with_keys(input.keys)
+                        .with_tags(vec!["U+005C__FAIL__".to_string()]),
+                )
+                .await;
+        }
+    }
+
+    fn fast_retry_config(strategy: OnFailureStrategy, max_attempts: u16) -> RetryConfig {
+        RetryConfig {
+            sink_max_retry_attempts: max_attempts,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_retry_factor: 1.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 5,
+            sink_retry_on_fail_strategy: strategy,
+        }
+    }
+
+    fn test_message() -> Message {
+        Message {
+            value: b"hello".to_vec().into(),
+            ..Default::default()
+        }
+    }
+
+    async fn build_stream_client<T>(
+        svc: T,
+    ) -> (
+        UserDefinedStreamMap,
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<()>,
+        TempDir,
+    )
+    where
+        T: mapstream::MapStreamer + Send + Sync + 'static,
+    {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map_stream.sock");
+        let server_info_file = tmp_dir.path().join("map_stream-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(svc)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let client = UserDefinedStreamMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
+        )
+        .await
+        .unwrap();
+        (client, shutdown_tx, handle, tmp_dir)
+    }
+
+    /// Spawns a [MapStreamTask] for `message` against `mapper` with the given retry config, and
+    /// returns the channels needed to observe the outcome: the ack/nak receiver, the mapped-output
+    /// receiver, and the map-error receiver.
+    async fn spawn_stream_task(
+        mapper: UserDefinedStreamMap,
+        message: Message,
+        retry_config: Option<RetryConfig>,
+    ) -> (
+        oneshot::Receiver<ReadAck>,
+        mpsc::Receiver<MessageHandle>,
+        mpsc::Receiver<MapError>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(message, ack_tx);
+
+        let (output_tx, output_rx) = mpsc::channel(10);
+        let (error_tx, error_rx) = mpsc::channel(10);
+        let semaphore = Arc::new(Semaphore::new(1));
+        let permit = semaphore.acquire_owned().await.unwrap();
+
+        let shared_ctx = Arc::new(SharedMapTaskContext {
+            output_tx,
+            error_tx,
+            tracker: Tracker::new(None, CancellationToken::new()),
+            bypass_router: None,
+            hard_shutdown_token: CancellationToken::new(),
+            is_mono_vertex: false,
+            retry_config,
+        });
+
+        MapStreamTask {
+            mapper,
+            permit,
+            msg_handle,
+            shared_ctx,
+        }
+        .spawn();
+
+        (ack_rx, output_rx, error_rx)
+    }
+
+    #[tokio::test]
+    async fn stream_retries_then_succeeds() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 2,
+        })
+        .await;
+
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Retry, 10)),
+        )
+        .await;
+
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message after retries succeed");
+        assert!(!mapped.message().failed());
+        assert_eq!(mapped.message().value, "hello");
+        // Simulate the downstream ISB writer marking the forwarded copy success.
+        mapped.mark_success();
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_retries_without_config_until_success() -> Result<(), Box<dyn Error>> {
+        // With no retry config, a FAIL-tagged response must still be retried (indefinitely,
+        // with no backoff) rather than forwarded as-is.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 3,
+        })
+        .await;
+
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_stream_task(client, test_message(), None).await;
+
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message once the UDF stops failing");
+        assert!(!mapped.message().failed());
+        mapped.mark_success();
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn stream_drops_message_on_retries_exhausted() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamAlwaysFail).await;
+
+        let drop_before = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Drop, 1)),
+        )
+        .await;
+
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx).await??;
+        assert_eq!(ack, ReadAck::Ack, "dropped message must be ACK'd");
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+
+        let drop_after = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+        assert_eq!(drop_after, drop_before + 1);
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_retries_exhausted_propagates_error() -> Result<(), Box<dyn Error>> {
+        // A finite `Retry` budget is only reachable by constructing RetryConfig directly (the spec
+        // conversion forces u16::MAX for onFailure=Retry); this exercises the exhaustion arm.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamAlwaysFail).await;
+
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Retry, 1)),
+        )
+        .await;
+
+        let err = tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+            .await?
+            .expect("expected an error once retries are exhausted");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(err.to_string().contains("Retries exhausted"));
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Nak(None)
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
     }
 }

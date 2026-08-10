@@ -628,15 +628,22 @@ impl UserDefinedBatchMap {
 
 #[cfg(test)]
 mod tests {
+    use super::{BatchMapTaskError, MapBatchTask};
+    use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+    use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
     use crate::mapper::map::batch::{BatchSenderMapState, UserDefinedBatchMap};
+    use crate::message::{Message, MessageHandle, MessageID, Offset, ReadAck, StringOffset};
+    use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
     use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
+    use crate::tracker::Tracker;
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::map::{MapRequest, MapResponse};
     use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
@@ -1271,6 +1278,291 @@ mod tests {
             err.to_string()
                 .contains("batch map reconnect config missing")
         );
+    }
+
+    // ---- retryStrategy tests ----
+
+    /// Batch mapper that fails (via the reserved FAIL tag) the first `fail_first_n` batch calls,
+    /// then succeeds. Exercises the "retry then succeed" path.
+    struct BatchRetryThenSucceed {
+        attempts: AtomicUsize,
+        fail_first_n: usize,
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for BatchRetryThenSucceed {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let fail = self.attempts.fetch_add(1, Ordering::SeqCst) < self.fail_first_n;
+            let mut responses = vec![];
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Some(datum.keys),
+                    value: datum.value,
+                    // must match message.rs FAIL const
+                    tags: fail.then(|| vec!["U+005C__FAIL__".to_string()]),
+                    nack_options: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    /// Batch mapper that always fails (via the reserved FAIL tag).
+    struct BatchAlwaysFail;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for BatchAlwaysFail {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let mut responses = vec![];
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Some(datum.keys),
+                    value: datum.value,
+                    tags: Some(vec!["U+005C__FAIL__".to_string()]),
+                    nack_options: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    fn fast_retry_config(strategy: OnFailureStrategy, max_attempts: u16) -> RetryConfig {
+        RetryConfig {
+            sink_max_retry_attempts: max_attempts,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_retry_factor: 1.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 5,
+            sink_retry_on_fail_strategy: strategy,
+        }
+    }
+
+    fn retry_test_message(id: &str) -> Message {
+        Message {
+            value: b"hello".to_vec().into(),
+            offset: Offset::String(StringOffset::new(id.to_string(), 0)),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: id.to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        }
+    }
+
+    async fn build_batch_client<T>(
+        svc: T,
+    ) -> (
+        UserDefinedBatchMap,
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<()>,
+        TempDir,
+    )
+    where
+        T: batchmap::BatchMapper + Send + Sync + 'static,
+    {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            Server::new(svc)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let client = UserDefinedBatchMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
+        )
+        .await
+        .unwrap();
+        (client, shutdown_tx, handle, tmp_dir)
+    }
+
+    /// Runs a [MapBatchTask] to completion and returns its result plus the downstream output
+    /// receiver. The task consumes `mapper` (and thus the underlying client), so callers can shut
+    /// the server down immediately after this returns.
+    async fn run_batch_task(
+        mapper: UserDefinedBatchMap,
+        msg_handles: Vec<MessageHandle>,
+        retry_config: Option<RetryConfig>,
+    ) -> (
+        std::result::Result<(), BatchMapTaskError>,
+        mpsc::Receiver<MessageHandle>,
+    ) {
+        let (output_tx, output_rx) = mpsc::channel(16);
+        let result = MapBatchTask {
+            mapper,
+            msg_handles,
+            output_tx,
+            tracker: Tracker::new(None, CancellationToken::new()),
+            bypass_router: None,
+            is_mono_vertex: false,
+            cln_token: CancellationToken::new(),
+            retry_config,
+        }
+        .execute()
+        .await;
+        (result, output_rx)
+    }
+
+    #[tokio::test]
+    async fn batch_retries_then_succeeds() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 2,
+        })
+        .await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Retry, 10)),
+        )
+        .await;
+
+        assert!(result.is_ok(), "batch task should succeed after retries");
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message after retries succeed");
+        assert!(!mapped.message().failed());
+        assert_eq!(mapped.message().value, "hello");
+        // Simulate the downstream ISB writer marking the forwarded copy success.
+        mapped.mark_success();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn batch_retries_without_config_until_success() -> Result<(), Box<dyn Error>> {
+        // With no retry config, a FAIL-tagged response must still be retried (indefinitely,
+        // with no backoff) rather than forwarded as-is.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 3,
+        })
+        .await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(client, vec![msg_handle], None).await;
+
+        assert!(result.is_ok());
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message once the UDF stops failing");
+        assert!(!mapped.message().failed());
+        mapped.mark_success();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn batch_drops_messages_on_retries_exhausted() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchAlwaysFail).await;
+
+        let drop_before = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Drop, 1)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack,
+            "dropped message must be ACK'd"
+        );
+        assert!(
+            output_rx.recv().await.is_none(),
+            "no message should be forwarded downstream"
+        );
+
+        let drop_after = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+        assert_eq!(drop_after, drop_before + 1);
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn batch_retries_exhausted_naks_messages() -> Result<(), Box<dyn Error>> {
+        // Under a finite `Retry` budget (only constructible directly; the spec conversion forces
+        // u16::MAX for onFailure=Retry), batch map NAKs the messages and returns Ok — it does not
+        // surface a terminal error the way the unary/stream paths do.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchAlwaysFail).await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Retry, 1)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert!(
+            output_rx.recv().await.is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Nak(None)
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
     }
 
     #[tokio::test]
