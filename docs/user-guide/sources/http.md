@@ -210,7 +210,7 @@ As with a Pipeline, data can be sent to a MonoVertex's HTTP Source through:
 
 ### ClusterIP Service
 
-An HTTP Source in a MonoVertex can generate 'ClusterIP' Service if 'service:true' is specified. Unlike a Pipeline, where the Service name combines the pipelinen and vertex names, a MonoVertex's HTTP Source Service is simple named after the MonoVertex, so it can be accessed at `https://{monoVertexName}.{namespace}.svc:8443/vertices/{monoVertexName}` within the cluster by default.
+An HTTP Source in a MonoVertex can generate 'ClusterIP' Service if 'service:true' is specified. Unlike a Pipeline, where the Service name combines the pipeline and vertex names, a MonoVertex's HTTP Source Service is simple named after the MonoVertex, so it can be accessed at `https://{monoVertexName}.{namespace}.svc:8443/vertices/{monoVertexName}` within the cluster by default.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
