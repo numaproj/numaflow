@@ -189,7 +189,7 @@ The HTTP Source can also be used in a MonoVertex, which is useful when you just 
 only difference is on how to send data since MonoVertex has only one Vertex.
 
 ```yaml 
-apiVersion: numaflow.numaprof.io/v1alpha1
+apiVersion: numaflow.numaproj.io/v1alpha1
 kind: MonoVertex
 metadata:
   name: simple-mono-vertex
