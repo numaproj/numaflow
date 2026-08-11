@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::error::{Error, Result};
 use crate::message::{Message, NackOffset, Offset};
 use crate::reader::LagReader;
+use crate::source::source_runtime_error::SourceRuntimeErrorTracker;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 
 const READ_RETRY_WAIT_CAP: Duration = Duration::from_millis(100);
@@ -102,6 +103,7 @@ struct SupervisorState {
     retry_at: Instant,
     last_pending: Option<usize>,
     last_partitions: SourcePartitions,
+    runtime_error_tracker: SourceRuntimeErrorTracker,
 }
 
 /// Keeps a built-in source alive while its replaceable backend is unavailable.
@@ -130,6 +132,35 @@ impl BuiltinSource {
         cancel_token: CancellationToken,
         retry_config: BuiltinSourceRetryConfig,
     ) -> Self {
+        Self::with_state(
+            factory,
+            cancel_token,
+            retry_config,
+            SourceRuntimeErrorTracker::default(),
+        )
+    }
+
+    #[cfg(test)]
+    fn with_runtime_error_path(
+        factory: Arc<dyn BuiltinSourceFactory>,
+        cancel_token: CancellationToken,
+        retry_config: BuiltinSourceRetryConfig,
+        app_error_path: String,
+    ) -> Self {
+        Self::with_state(
+            factory,
+            cancel_token,
+            retry_config,
+            SourceRuntimeErrorTracker::with_runtime_error_path(app_error_path),
+        )
+    }
+
+    fn with_state(
+        factory: Arc<dyn BuiltinSourceFactory>,
+        cancel_token: CancellationToken,
+        retry_config: BuiltinSourceRetryConfig,
+        runtime_error_tracker: SourceRuntimeErrorTracker,
+    ) -> Self {
         assert!(
             !retry_config.initial_backoff.is_zero(),
             "initial source retry backoff must be greater than zero"
@@ -152,6 +183,7 @@ impl BuiltinSource {
                 retry_at: Instant::now(),
                 last_pending: None,
                 last_partitions: SourcePartitions::default(),
+                runtime_error_tracker,
             })),
             cancel_token,
             retry_config,
@@ -175,6 +207,9 @@ impl BuiltinSource {
     }
 
     fn mark_degraded(&self, state: &mut SupervisorState, operation: &'static str, error: &Error) {
+        state
+            .runtime_error_tracker
+            .record_failure(self.factory.name(), operation, error);
         warn!(
             source = self.factory.name(),
             operation,
@@ -215,6 +250,9 @@ impl BuiltinSource {
                 state.retry_backoff = self.retry_config.initial_backoff;
                 state.retry_at = Instant::now();
                 if recovered {
+                    state
+                        .runtime_error_tracker
+                        .record_recovery(self.factory.name());
                     info!(
                         source = self.factory.name(),
                         "Built-in source backend recreated"
@@ -486,17 +524,27 @@ mod tests {
         }
     }
 
+    fn test_source(
+        factory: Arc<FakeFactory>,
+        cancel_token: CancellationToken,
+    ) -> (BuiltinSource, tempfile::TempDir) {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let source = BuiltinSource::with_runtime_error_path(
+            factory,
+            cancel_token,
+            retry_config(),
+            temp_dir.path().to_str().expect("temp path").to_string(),
+        );
+        (source, temp_dir)
+    }
+
     #[tokio::test]
     async fn startup_failure_is_retried_without_returning_read_error() {
         let factory = Arc::new(FakeFactory::new(vec![
             Err(Error::Config("missing secret".into())),
             Ok(FakeBackend::healthy()),
         ]));
-        let mut source = BuiltinSource::with_retry_config(
-            factory.clone(),
-            CancellationToken::new(),
-            retry_config(),
-        );
+        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
 
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -514,11 +562,7 @@ mod tests {
             Ok(failed_backend),
             Ok(FakeBackend::healthy()),
         ]));
-        let mut source = BuiltinSource::with_retry_config(
-            factory.clone(),
-            CancellationToken::new(),
-            retry_config(),
-        );
+        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
 
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -536,11 +580,7 @@ mod tests {
             Ok(failed_backend),
             Ok(FakeBackend::healthy()),
         ]));
-        let mut source = BuiltinSource::with_retry_config(
-            factory.clone(),
-            CancellationToken::new(),
-            retry_config(),
-        );
+        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
 
         let error = source.ack(vec![]).await.unwrap_err();
         assert!(matches!(

@@ -28,6 +28,7 @@ impl Default for RuntimeServerConfig {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RuntimeInfoConfig {
     pub app_error_path: String,
     pub max_error_files_per_container: usize,
