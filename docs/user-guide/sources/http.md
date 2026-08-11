@@ -6,7 +6,7 @@ A plain HTTP (non-TLS) server can also be enabled by explicitly setting `ports.h
 
 ## Spec
 
-The `source.http` spec is the same whether the HTTP Source is used in a Pipeline Vertex or a MonoVertex:
+Minimal spec for an http source which exposes a https endpoint for access on port 8443:
 
 ```yaml
 source:
