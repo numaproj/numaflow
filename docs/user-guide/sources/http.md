@@ -182,3 +182,62 @@ curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeli
 ## Health Check
 
 The HTTP Source also has an endpoint `/health` created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.
+
+## HTTP Source with MonoVertex
+
+The HTTP Source can also be used in a MonoVertex, which is useful when you just need to read from the HTTP Source and write to a Sink (optionally with a Transformer or Map UDF), without needing the full Pipeline semantics. The 'source.http' spec is identical to the one used in a Pipeline,
+only difference is on how to send data since MonoVertex has only one Vertex.
+
+```yaml 
+apiVersion: numaflow.numaprof.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: simple-mono-vertex
+spec:
+  source:
+    http: {}
+  sink: 
+    log: {} 
+```
+
+## Sending Data
+
+As with a Pipeline, data can be sent to a MonoVertex's HTTP Source through:
+
+- ClusterIP Service (withing the cluster)
+- Ingress or LoadBalancer Service (outside of the cluster)
+- Port-forward (for testing)
+
+### ClusterIP Service
+
+An HTTP Source in a MonoVertex can generate 'ClusterIP' Service if 'service:true' is specified. Unlike a Pipeline, where the Service name combines the pipelinen and vertex names, a MonoVertex's HTTP Source Service is simple named after the MonoVertex, so it can be accessed at `https://{monoVertexName}.{namespace}.svc:8443/vertices/{monoVertexName}` within the cluster by default.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: simple-mono-vertex
+spec:
+  source:
+  http:
+    service: true
+  sink:
+    log: {}
+```
+
+### LoadBalancer Service or Ingress
+
+To create a 'LoadBalancer' type Service, or a 'NodePort' one for Ingress, you need to do it yourself. Use 'selector' like the following in the Service:
+
+```yaml
+numaflow.numaproj.io/mono-vertex-name: simple-mono-vertex # mono vertex name
+```
+### Port-forwarding
+
+To test an HTTP source in a MonoVertex, you can do it from your local through port-forwarding.
+
+
+```sh
+kubectl port-forward pod ${pod-name} 8443
+curl -kq -X POST -d "hello world" https://localhost:8443/vertices/simple-mono-vertex
+```
