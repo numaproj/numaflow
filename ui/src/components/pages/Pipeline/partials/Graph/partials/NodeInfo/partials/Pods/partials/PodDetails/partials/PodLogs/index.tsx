@@ -26,6 +26,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
 import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import Download from "@mui/icons-material/Download";
@@ -124,14 +125,14 @@ export function PodLogs({
     setTailMenuAnchor(null);
   }, [namespaceId, podName, containerName]);
 
-  // Close the tail menu when resuming live (selector becomes disabled).
+  // Close the tail menu when resuming live.
   useEffect(() => {
     if (!paused) {
       setTailMenuAnchor(null);
     }
   }, [paused]);
 
-  const { logs, previousLogs, loadedCount } = usePodLogStream({
+  const { logs, previousLogs } = usePodLogStream({
     namespaceId,
     podName,
     containerName,
@@ -285,12 +286,21 @@ export function PodLogs({
     [tailSelectorDisabled]
   );
 
+  const handleTogglePreviousLogs = useCallback(() => {
+    setShowPreviousLogs((prev) => !prev);
+  }, []);
+
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
   const tailSelectorTooltip = showPreviousLogs
     ? "Unavailable while viewing terminated logs"
     : paused
       ? "Choose how many recent log lines to show"
       : "Choose window size (pauses live stream)";
+  const statusBanner = showPreviousLogs
+    ? { testId: "previous-container-banner", label: "Previous container" }
+    : paused
+      ? { testId: "logs-paused-banner", label: "Logs paused" }
+      : null;
 
   return (
     <Box className="PodLogs-root">
@@ -307,12 +317,14 @@ export function PodLogs({
             </span>
           </div>
           <div className="PodLogs-header-right">
-            <span
-              className="PodLogs-loaded-count"
-              data-testid="log-loaded-count"
-            >
-              {loadedCount.toLocaleString()} loaded
-            </span>
+            {statusBanner ? (
+              <span
+                className="PodLogs-status-banner"
+                data-testid={statusBanner.testId}
+              >
+                {statusBanner.label}
+              </span>
+            ) : null}
             <Tooltip
               title={<div className="icon-tooltip">{tailSelectorTooltip}</div>}
               placement="top"
@@ -439,6 +451,18 @@ export function PodLogs({
             {paused ? <PlayArrowIcon /> : <PauseIcon />}
           </ToolbarIconButton>
           <ToolbarIconButton
+            testId="previous-logs"
+            title={
+              showPreviousLogs
+                ? "Show current container logs"
+                : "Show previous terminated container logs"
+            }
+            onClick={handleTogglePreviousLogs}
+            active={showPreviousLogs}
+          >
+            <ChevronLeft />
+          </ToolbarIconButton>
+          <ToolbarIconButton
             testId="color-mode-button"
             title={colorMode === "light" ? "Dark mode" : "Light mode"}
             onClick={handleColorMode}
@@ -500,22 +524,6 @@ export function PodLogs({
               Debug
             </MenuItem>
           </Select>
-        </div>
-        <div className="PodLogs-footer">
-          <FormControlLabel
-            className="PodLogs-checkbox-label"
-            control={
-              <Checkbox
-                data-testid="previous-logs"
-                checked={showPreviousLogs}
-                onChange={(event) =>
-                  setShowPreviousLogs(event.target.checked)
-                }
-                size="small"
-              />
-            }
-            label="Show terminated"
-          />
         </div>
       </div>
       <Box className="PodLogs-list-wrap">

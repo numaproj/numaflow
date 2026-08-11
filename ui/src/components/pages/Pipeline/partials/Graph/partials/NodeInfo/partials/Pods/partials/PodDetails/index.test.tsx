@@ -69,7 +69,7 @@ describe("PodDetail screen", () => {
     );
     expect(screen.getByPlaceholderText("Search logs")).toBeInTheDocument();
     expect(screen.getByLabelText("Negate search")).toBeInTheDocument();
-    expect(screen.getByLabelText("Show terminated")).toBeInTheDocument();
+    expect(screen.getByTestId("previous-logs")).toBeInTheDocument();
     expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
     expect(mockedFetch).toBeCalledTimes(1);
   });

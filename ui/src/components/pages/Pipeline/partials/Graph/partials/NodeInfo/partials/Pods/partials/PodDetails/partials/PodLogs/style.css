@@ -56,14 +56,6 @@
   white-space: nowrap;
 }
 
-.PodLogs-loaded-count {
-  color: #64748b;
-  font-size: 1.2rem;
-  font-weight: 500;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
 .PodLogs-tail-size-group {
   height: 2.8rem;
 }
@@ -92,18 +84,25 @@
   cursor: not-allowed;
 }
 
+.PodLogs-status-banner {
+  display: inline-flex;
+  align-items: center;
+  height: 2.8rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .PodLogs-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.8rem;
-}
-
-.PodLogs-footer {
-  display: flex;
-  justify-content: flex-end;
-  min-height: 2rem;
-  margin-top: 0.6rem;
 }
 
 .PodLogs-search {

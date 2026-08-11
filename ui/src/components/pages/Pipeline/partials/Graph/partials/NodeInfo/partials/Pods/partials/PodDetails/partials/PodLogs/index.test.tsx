@@ -88,7 +88,7 @@ describe("PodLogs", () => {
       "title",
       "simple-mono-vertex-mv-31-abcde/numa"
     );
-    expect(screen.getByTestId("log-loaded-count")).toBeInTheDocument();
+    expect(screen.queryByTestId("log-loaded-count")).not.toBeInTheDocument();
     expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
       "1,000 lines"
     );
@@ -99,8 +99,8 @@ describe("PodLogs", () => {
     expect(screen.getByTestId("color-mode-button")).not.toHaveClass(
       "PodLogs-icon-btn--active"
     );
-    const showTerminated = screen.getByLabelText("Show terminated");
-    expect(showTerminated).not.toBeChecked();
+    const previousLogsButton = screen.getByTestId("previous-logs");
+    expect(previousLogsButton).not.toHaveClass("PodLogs-icon-btn--active");
 
     const searchInput = screen.getByPlaceholderText("Search logs");
     fireEvent.change(searchInput, { target: { value: "load" } });
@@ -129,8 +129,11 @@ describe("PodLogs", () => {
       }),
       ok: true,
     } as any);
-    fireEvent.click(showTerminated);
-    expect(showTerminated).toBeChecked();
+    fireEvent.click(previousLogsButton);
+    expect(previousLogsButton).toHaveClass("PodLogs-icon-btn--active");
+    expect(screen.getByTestId("previous-container-banner")).toHaveTextContent(
+      "Previous container"
+    );
   });
 
   it("Trigger PodLogs parsing error", async () => {
@@ -239,11 +242,8 @@ describe("PodLogs", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
-        "2 loaded"
-      )
-    );
+    await waitFor(() => expect(screen.getByText("line-a")).toBeInTheDocument());
+    expect(screen.queryByTestId("logs-paused-banner")).not.toBeInTheDocument();
     expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
       "1,000 lines"
     );
@@ -268,9 +268,10 @@ describe("PodLogs", () => {
       expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
         "5,000 lines"
       );
-      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
-        "3 loaded"
+      expect(screen.getByTestId("logs-paused-banner")).toHaveTextContent(
+        "Logs paused"
       );
+      expect(screen.getByText("line-1")).toBeInTheDocument();
     });
 
     await act(async () => {
@@ -285,12 +286,11 @@ describe("PodLogs", () => {
       expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
         "1,000 lines"
       );
+      expect(screen.queryByTestId("logs-paused-banner")).not.toBeInTheDocument();
     });
 
     await waitFor(() =>
-      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
-        "1 loaded"
-      )
+      expect(screen.getByText("live-after-play")).toBeInTheDocument()
     );
   });
 
@@ -326,15 +326,12 @@ describe("PodLogs", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
-        "1 loaded"
-      )
-    );
+    await waitFor(() => expect(screen.getByText("line-a")).toBeInTheDocument());
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("pause-button"));
     });
+    expect(screen.getByTestId("logs-paused-banner")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
     await act(async () => {
       fireEvent.click(screen.getByTestId("log-tail-size-5000"));
@@ -361,6 +358,7 @@ describe("PodLogs", () => {
         "1,000 lines"
       );
       expect(screen.getByTestId("log-tail-size-button")).not.toBeDisabled();
+      expect(screen.queryByTestId("logs-paused-banner")).not.toBeInTheDocument();
       expect(String(mockedFetch.mock.calls.at(-1)[0])).toContain(
         "tailLines=1000"
       );
@@ -400,22 +398,23 @@ describe("PodLogs", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId("log-loaded-count")).toHaveTextContent(
-        "1 loaded"
-      )
-    );
+    await waitFor(() => expect(screen.getByText("line-a")).toBeInTheDocument());
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("pause-button"));
     });
 
+    expect(screen.getByTestId("logs-paused-banner")).toBeInTheDocument();
     expect(screen.getByTestId("log-tail-size-button")).not.toBeDisabled();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("previous-logs"));
     });
 
+    expect(screen.getByTestId("previous-container-banner")).toHaveTextContent(
+      "Previous container"
+    );
+    expect(screen.queryByTestId("logs-paused-banner")).not.toBeInTheDocument();
     expect(screen.getByTestId("log-tail-size-button")).toBeDisabled();
     expect(screen.getByTestId("log-tail-size-menu-button")).toBeDisabled();
 
