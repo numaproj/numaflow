@@ -6,6 +6,8 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
@@ -83,6 +85,51 @@ pub(crate) async fn new_sqs_source(
         .vertex_replica(vertex_replica)
         .build(cancel_token)
         .await?)
+}
+
+pub(crate) struct SqsSourceFactory {
+    config: SqsSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    vertex_replica: u16,
+    cancel_token: CancellationToken,
+}
+
+impl SqsSourceFactory {
+    pub(crate) fn new(
+        config: SqsSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        vertex_replica: u16,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            timeout,
+            vertex_replica,
+            cancel_token,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for SqsSourceFactory {
+    fn name(&self) -> &'static str {
+        "SQS"
+    }
+
+    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
+        let source = new_sqs_source(
+            self.config.clone(),
+            self.batch_size,
+            self.timeout,
+            self.vertex_replica,
+            self.cancel_token.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl source::SourceReader for SqsSource {
@@ -473,13 +520,7 @@ pub mod tests {
                             .build()
                             .unwrap(),
                     )
-                    .failed(
-                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
-                            .id("") // Empty string ID (minimal valid value)
-                            .code("") // Empty string code (minimal valid value)
-                            .build()
-                            .unwrap(),
-                    )
+                    .set_failed(Some(vec![]))
                     .build()
                     .unwrap()
             })

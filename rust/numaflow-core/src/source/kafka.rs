@@ -10,6 +10,8 @@ use crate::error::Error;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 impl TryFrom<KafkaMessage> for Message {
     type Error = Error;
@@ -78,6 +80,47 @@ pub(crate) async fn new_kafka_source(
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<KafkaSource> {
     Ok(KafkaSource::connect(cfg, batch_size, timeout, cancel_token).await?)
+}
+
+pub(crate) struct KafkaSourceFactory {
+    config: KafkaSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    cancel_token: CancellationToken,
+}
+
+impl KafkaSourceFactory {
+    pub(crate) fn new(
+        config: KafkaSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            timeout,
+            cancel_token,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for KafkaSourceFactory {
+    fn name(&self) -> &'static str {
+        "Kafka"
+    }
+
+    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
+        let source = new_kafka_source(
+            self.config.clone(),
+            self.batch_size,
+            self.timeout,
+            self.cancel_token.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl source::SourceReader for KafkaSource {

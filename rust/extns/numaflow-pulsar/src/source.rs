@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
@@ -7,14 +8,14 @@ use pulsar::Authentication;
 use pulsar::{Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor, proto::MessageIdData};
 use tokio::time::Instant;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{Mutex, mpsc, oneshot},
     time,
 };
 use tokio_util::sync::CancellationToken;
 
 use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result};
 
@@ -35,6 +36,11 @@ pub struct PulsarSourceConfig {
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
 
     pub auth: Option<PulsarAuth>,
+}
+
+#[derive(Clone, Default)]
+pub struct PulsarSourceState {
+    message_ids: Arc<Mutex<BTreeMap<u64, MessageIdData>>>,
 }
 
 enum ConsumerActorMessage {
@@ -64,7 +70,7 @@ pub struct PulsarMessage {
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
-    message_ids: BTreeMap<u64, MessageIdData>,
+    state: PulsarSourceState,
     max_unack: usize,
     topic: String,
     cancel_token: CancellationToken,
@@ -75,6 +81,7 @@ impl ConsumerReaderActor {
         config: PulsarSourceConfig,
         handler_rx: mpsc::Receiver<ConsumerActorMessage>,
         cancel_token: CancellationToken,
+        state: PulsarSourceState,
     ) -> Result<()> {
         info!(
             addr = &config.pulsar_server_addr,
@@ -131,7 +138,7 @@ impl ConsumerReaderActor {
             let mut consumer_actor = ConsumerReaderActor {
                 consumer,
                 handler_rx,
-                message_ids: BTreeMap::new(),
+                state,
                 max_unack: config.max_unack,
                 topic: config.topic,
                 cancel_token,
@@ -183,8 +190,9 @@ impl ConsumerReaderActor {
             return None;
         }
 
-        if self.message_ids.len() >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
+        let pending = self.state.message_ids.lock().await.len();
+        if pending >= self.max_unack {
+            return Some(Err(Error::AckPendingExceeded(pending)));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -223,7 +231,17 @@ impl ConsumerReaderActor {
                 //FIXME: NACK the message
             };
 
-            self.message_ids.insert(offset, msg.message_id().clone());
+            let mut message_ids = self.state.message_ids.lock().await;
+            if message_ids.contains_key(&offset) {
+                warn!(
+                    offset,
+                    "Skipping redelivered Pulsar message that is already being processed"
+                );
+                continue;
+            }
+            message_ids.insert(offset, msg.message_id().clone());
+            drop(message_ids);
+
             let headers = msg
                 .metadata()
                 .properties
@@ -250,7 +268,7 @@ impl ConsumerReaderActor {
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
         for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
+            let msg_id = self.state.message_ids.lock().await.remove(&offset);
 
             let Some(msg_id) = msg_id else {
                 return Err(Error::UnknownOffset(offset));
@@ -260,7 +278,7 @@ impl ConsumerReaderActor {
                 continue;
             };
             // Insert offset back
-            self.message_ids.insert(offset, msg_id);
+            self.state.message_ids.lock().await.insert(offset, msg_id);
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
@@ -268,7 +286,7 @@ impl ConsumerReaderActor {
 
     async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
         for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
+            let msg_id = self.state.message_ids.lock().await.remove(&offset);
 
             let Some(msg_id) = msg_id else {
                 return Err(Error::UnknownOffset(offset));
@@ -282,10 +300,40 @@ impl ConsumerReaderActor {
                 continue;
             };
             // Insert offset back
-            self.message_ids.insert(offset, msg_id);
+            self.state.message_ids.lock().await.insert(offset, msg_id);
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::PulsarSourceState;
+    use pulsar::proto::MessageIdData;
+
+    #[tokio::test]
+    async fn source_state_preserves_message_ids_across_generations() {
+        let state = PulsarSourceState::default();
+        let next_generation = state.clone();
+        state.message_ids.lock().await.insert(
+            7,
+            MessageIdData {
+                ledger_id: 1,
+                entry_id: 7,
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(
+            next_generation
+                .message_ids
+                .lock()
+                .await
+                .get(&7)
+                .map(|id| id.entry_id),
+            Some(7)
+        );
     }
 }
 
@@ -306,8 +354,27 @@ impl PulsarSource {
         vertex_replica: u16,
         cancel_token: CancellationToken,
     ) -> Result<Self> {
+        Self::new_with_state(
+            config,
+            batch_size,
+            timeout,
+            vertex_replica,
+            cancel_token,
+            PulsarSourceState::default(),
+        )
+        .await
+    }
+
+    pub async fn new_with_state(
+        config: PulsarSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        vertex_replica: u16,
+        cancel_token: CancellationToken,
+        state: PulsarSourceState,
+    ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        ConsumerReaderActor::start(config, rx, cancel_token).await?;
+        ConsumerReaderActor::start(config, rx, cancel_token, state).await?;
         Ok(Self {
             actor_tx: tx,
             batch_size,

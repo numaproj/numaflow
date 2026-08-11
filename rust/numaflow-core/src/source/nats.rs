@@ -6,7 +6,9 @@ use crate::message::{Message, NackOffset};
 use crate::message::{MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
 use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
+use tokio_util::sync::CancellationToken;
 
 use super::SourceAcker;
 
@@ -17,6 +19,47 @@ pub(crate) async fn new_nats_source(
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<NatsSource> {
     Ok(NatsSource::connect(config, batch_size, read_timeout, cancel_token).await?)
+}
+
+pub(crate) struct NatsSourceFactory {
+    config: NatsSourceConfig,
+    batch_size: usize,
+    read_timeout: Duration,
+    cancel_token: CancellationToken,
+}
+
+impl NatsSourceFactory {
+    pub(crate) fn new(
+        config: NatsSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            read_timeout,
+            cancel_token,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for NatsSourceFactory {
+    fn name(&self) -> &'static str {
+        "NATS"
+    }
+
+    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
+        let source = new_nats_source(
+            self.config.clone(),
+            self.batch_size,
+            self.read_timeout,
+            self.cancel_token.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl From<NatsMessage> for Message {

@@ -345,13 +345,31 @@ impl SqsActor {
             );
         }
 
-        if let Err(e) = batch_builder.send().await {
+        let output = batch_builder.send().await.map_err(|e| {
             error!(
                 ?e,
                 queue_url = self.queue_url,
                 "Failed to delete messages from SQS"
             );
-            return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&e))));
+            SqsSourceError::from(Error::Sqs(extract_aws_error(&e)))
+        })?;
+        if !output.failed().is_empty() {
+            let failures = output
+                .failed()
+                .iter()
+                .map(|failure| {
+                    format!(
+                        "id={}, code={}, message={}",
+                        failure.id(),
+                        failure.code(),
+                        failure.message().unwrap_or_default()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(SqsSourceError::from(Error::Other(format!(
+                "SQS failed to delete one or more messages: {failures}"
+            ))));
         }
         Ok(())
     }
@@ -1097,13 +1115,7 @@ mod tests {
                             .build()
                             .unwrap(),
                     )
-                    .failed(
-                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
-                            .id("") // Empty string ID (minimal valid value)
-                            .code("") // Empty string code (minimal valid value)
-                            .build()
-                            .unwrap(),
-                    )
+                    .set_failed(Some(vec![]))
                     .build()
                     .unwrap()
             })

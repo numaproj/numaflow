@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::{Error, NatsAuth, Result, TlsConfig, tls};
@@ -12,7 +13,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant, sleep};
 use tokio_stream::StreamExt;
@@ -177,11 +178,16 @@ enum JetstreamActorMessage {
     },
 }
 
+#[derive(Clone, Default)]
+pub struct JetstreamSourceState {
+    in_progress_messages: Arc<Mutex<HashMap<u64, MessageProcessingTracker>>>,
+}
+
 struct JetstreamActor {
     consumer: Consumer<Config>,
     read_timeout: Duration,
     batch_size: usize,
-    in_progress_messages: HashMap<u64, MessageProcessingTracker>,
+    state: JetstreamSourceState,
     handler_rx: mpsc::Receiver<JetstreamActorMessage>,
     cancel_token: CancellationToken,
 }
@@ -193,6 +199,7 @@ impl JetstreamActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<JetstreamActorMessage>,
         cancel_token: CancellationToken,
+        state: JetstreamSourceState,
     ) -> Result<()> {
         let mut conn_opts = ConnectOptions::new()
             .max_reconnects(None) // unlimited reconnects
@@ -275,7 +282,7 @@ impl JetstreamActor {
                 consumer,
                 read_timeout,
                 batch_size,
-                in_progress_messages: HashMap::new(),
+                state,
                 handler_rx,
                 cancel_token,
             };
@@ -351,7 +358,9 @@ impl JetstreamActor {
                 }
             };
 
-            messages.push(self.process_message(message).await?);
+            if let Some(message) = self.process_message(message).await? {
+                messages.push(message);
+            }
         }
 
         tracing::debug!(msg_count = messages.len(), "Read batch from Jetstream");
@@ -362,7 +371,7 @@ impl JetstreamActor {
         let mut tasks = Vec::with_capacity(offsets.len());
 
         for offset in offsets {
-            let msg_task = self.in_progress_messages.remove(&offset);
+            let msg_task = self.state.in_progress_messages.lock().await.remove(&offset);
             let Some(msg_task) = msg_task else {
                 warn!(offset, "Received ACK request for unknown offset");
                 continue;
@@ -389,7 +398,7 @@ impl JetstreamActor {
         let mut tasks = Vec::with_capacity(offsets.len());
 
         for offset in offsets {
-            let msg_task = self.in_progress_messages.remove(&offset);
+            let msg_task = self.state.in_progress_messages.lock().await.remove(&offset);
             let Some(msg_task) = msg_task else {
                 warn!(offset, "Received NACK request for unknown offset");
                 continue;
@@ -412,13 +421,26 @@ impl JetstreamActor {
         Ok(())
     }
 
-    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
+    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Option<Message>> {
         // we need to clone because the message should be held around for ack
         let message: Message = js_message.clone().try_into().map_err(|e| {
             Error::Jetstream(format!(
                 "converting raw Jetstream message as Numaflow source message: {e:?}"
             ))
         })?;
+        if self
+            .state
+            .in_progress_messages
+            .lock()
+            .await
+            .contains_key(&message.stream_sequence)
+        {
+            warn!(
+                stream_sequence = message.stream_sequence,
+                "Skipping redelivered Jetstream message that is already being processed"
+            );
+            return Ok(None);
+        }
 
         // we need to start WIP ack because some processing can be quite slow and we have to avoid
         // redelivery.
@@ -426,10 +448,13 @@ impl JetstreamActor {
         let message_tracker =
             MessageProcessingTracker::start(js_message, tick_interval, self.cancel_token.clone())
                 .await;
-        self.in_progress_messages
+        self.state
+            .in_progress_messages
+            .lock()
+            .await
             .insert(message.stream_sequence, message_tracker);
 
-        Ok(message)
+        Ok(Some(message))
     }
 
     pub async fn pending_messages(&mut self) -> Result<Option<usize>> {
@@ -455,8 +480,25 @@ impl JetstreamSource {
         read_timeout: Duration,
         cancel_token: CancellationToken,
     ) -> Result<Self> {
+        Self::connect_with_state(
+            config,
+            batch_size,
+            read_timeout,
+            cancel_token,
+            JetstreamSourceState::default(),
+        )
+        .await
+    }
+
+    pub async fn connect_with_state(
+        config: JetstreamSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+        cancel_token: CancellationToken,
+        state: JetstreamSourceState,
+    ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        JetstreamActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
+        JetstreamActor::start(config, batch_size, read_timeout, rx, cancel_token, state).await?;
         Ok(Self { actor_tx: tx })
     }
 
@@ -654,6 +696,17 @@ mod tests {
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
     use std::time::Duration;
+
+    #[test]
+    fn source_state_preserves_wip_map_across_generations() {
+        let state = JetstreamSourceState::default();
+        let next_generation = state.clone();
+
+        assert!(Arc::ptr_eq(
+            &state.in_progress_messages,
+            &next_generation.in_progress_messages
+        ));
+    }
 
     async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
         let client = async_nats::connect("localhost").await.unwrap();
