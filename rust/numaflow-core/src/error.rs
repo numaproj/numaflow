@@ -46,6 +46,17 @@ pub enum Error {
     #[error("UDF redrive - {0}")]
     UdfRedrive(Box<tonic::Status>),
 
+    /// A built-in source backend failed and the original operation should be retried after the
+    /// source supervisor recreates its client or consumer.
+    #[error(
+        "Built-in source redrive - source={source_name}, operation={operation}, error={message}"
+    )]
+    SourceRedrive {
+        source_name: String,
+        operation: &'static str,
+        message: String,
+    },
+
     #[error("Config Error - {0}")]
     Config(String),
 
