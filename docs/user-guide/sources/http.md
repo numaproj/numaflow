@@ -1,6 +1,6 @@
 # HTTP Source
 
-HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI `/vertices/{vertexName}`.
+HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled`.
 
 A plain HTTP (non-TLS) server can also be enabled by explicitly setting `ports.http`. By default, only HTTPS is exposed. When `ports.http` is set, both HTTPS and HTTP endpoints are exposed.
 
