@@ -5256,16 +5256,21 @@
 
 <h1 id="fallback-sink">Fallback Sink<a class="headerlink" href="#fallback-sink" title="Permanent link">&para;</a></h1>
 <p>A <code>Fallback</code> Sink functions as a <code>Dead Letter Queue (DLQ)</code> Sink.
-It can be configured to serve as a backup sink when the primary sink fails processing messages. </p>
+It can be configured to serve as a backup sink when the primary sink fails to process messages. </p>
 <h2 id="the-use-case">The Use Case<a class="headerlink" href="#the-use-case" title="Permanent link">&para;</a></h2>
 <p>Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.</p>
-<p>In a pipeline without fallback sinks, if a sink fails to process certain messages, 
-the failed messages, by default, can get retried indefinitely, 
-causing back pressures propagated all the way back to the source vertex.
-Eventually, the pipeline will be blocked, and no new messages will be processed.
-A fallback sink can be set up to prevent this from happening, by storing the failed messages in a separate sink.</p>
+<p>It lets you define a DLQ associated with a given user-defined sink (hereafter referred to as the <em>primary sink</em>). 
+If a message cannot be processed in the primary sink, the message can be moved to the fallback sink to be reprocessed later 
+(for example, by a separate pipeline/MonoVertex). </p>
 <h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
-<p>A fallback sink can only be configured when the primary sink is a user-defined sink.</p>
+<ul>
+<li>A fallback sink can only be configured when the primary sink is a user-defined sink (this is because builtin sinks will not know what tags to use and whether those will be honored).</li>
+<li>A message routed to the fallback sink continues the lifecycle it began in the primary sink.</li>
+<li>e.g., a message that arrived at the primary sink and was routed to the fallback sink
+    is not considered processed until its fate is decided in the fallback sink (success/fail).</li>
+<li>This matters for a non-streaming MonoVertex, where the next batch is not read until
+    the current batch finishes processing.</li>
+</ul>
 <h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">&para;</a></h2>
 <p>To configure a fallback sink,
 changes need to be made on both the pipeline specification and the user-defined sink implementation.</p>
