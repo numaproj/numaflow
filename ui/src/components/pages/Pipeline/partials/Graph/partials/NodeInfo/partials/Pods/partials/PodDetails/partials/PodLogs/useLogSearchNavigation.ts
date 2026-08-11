@@ -56,21 +56,6 @@ export function useLogSearchNavigation({
     return previousMatch - 1;
   }, [enabled, matchCount, currentMatch]);
 
-  const focusLine = useCallback(
-    (line: string): number | null => {
-      if (!enabled || !matchCount) {
-        return null;
-      }
-      const index = orderedLogs.indexOf(line);
-      if (index < 0) {
-        return null;
-      }
-      setCurrentMatch(index + 1);
-      return index;
-    },
-    [enabled, matchCount, orderedLogs]
-  );
-
   return {
     enabled,
     matchCount,
@@ -78,6 +63,5 @@ export function useLogSearchNavigation({
     activeIndex: currentMatch > 0 ? currentMatch - 1 : null,
     goNext,
     goPrev,
-    focusLine,
   };
 }

@@ -144,7 +144,7 @@ export function PodLogs({
     tailLines,
   });
 
-  const tailSelectorDisabled = !paused;
+  const tailSelectorDisabled = showPreviousLogs;
 
   const filteredLogs = useMemo(() => {
     const source = showPreviousLogs ? previousLogs : logs;
@@ -260,10 +260,20 @@ export function PodLogs({
     setLevelFilter(e.target.value);
   }, []);
 
-  const handleSelectTailLines = useCallback((size: number) => {
-    setTailMenuAnchor(null);
-    setTailLines((current) => (current === size ? current : size));
-  }, []);
+  const handleSelectTailLines = useCallback(
+    (size: number) => {
+      setTailMenuAnchor(null);
+      if (size === tailLines) {
+        return;
+      }
+      setTailLines(size);
+      // Changing window size always shows a frozen absolute snapshot.
+      if (!paused) {
+        setPaused(true);
+      }
+    },
+    [paused, tailLines]
+  );
 
   const handleOpenTailMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -276,9 +286,11 @@ export function PodLogs({
   );
 
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
-  const tailSelectorTooltip = tailSelectorDisabled
-    ? "Pause to change window size"
-    : "Choose how many recent log lines to show";
+  const tailSelectorTooltip = showPreviousLogs
+    ? "Unavailable while viewing terminated logs"
+    : paused
+      ? "Choose how many recent log lines to show"
+      : "Choose window size (pauses live stream)";
 
   return (
     <Box className="PodLogs-root">
@@ -308,14 +320,14 @@ export function PodLogs({
             >
               <span data-testid="log-tail-size-control">
                 <ButtonGroup
-                  className="PodLogs-load-older-group"
+                  className="PodLogs-tail-size-group"
                   variant="outlined"
                   size="small"
                   disabled={tailSelectorDisabled}
                 >
                   <Button
                     data-testid="log-tail-size-button"
-                    className="PodLogs-load-older-main"
+                    className="PodLogs-tail-size-main"
                     disabled={tailSelectorDisabled}
                     onClick={handleOpenTailMenu}
                   >
@@ -323,7 +335,7 @@ export function PodLogs({
                   </Button>
                   <Button
                     data-testid="log-tail-size-menu-button"
-                    className="PodLogs-load-older-menu-btn"
+                    className="PodLogs-tail-size-menu-btn"
                     aria-label="Choose how many recent log lines to show"
                     disabled={tailSelectorDisabled}
                     onClick={handleOpenTailMenu}

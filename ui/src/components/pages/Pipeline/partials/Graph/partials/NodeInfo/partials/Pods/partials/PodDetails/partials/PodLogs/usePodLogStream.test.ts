@@ -427,6 +427,49 @@ describe("usePodLogStream lifecycle", () => {
     expect(result.current.logs).toEqual(["frozen-a", "frozen-b"]);
   });
 
+  it("fetches a snapshot when pausing with a new tailLines in one update", async () => {
+    const { handles } = installFetchMock();
+
+    const { result, rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("old-a\nold-b\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(2));
+
+    // Mirrors UI auto-pause: set paused + new window size together.
+    rerender({ ...defaultParams, paused: true, tailLines: 5000 });
+
+    await waitFor(() =>
+      expect(handles.some((h) => h.url.includes("follow=false"))).toBe(true)
+    );
+
+    const snapshot = handles.find((h) => h.url.includes("follow=false"))!;
+    expect(snapshot.url).toContain("tailLines=5000");
+
+    await act(async () => {
+      snapshot.resolveFetch();
+      await Promise.resolve();
+      snapshot.pushText("snap-1\nsnap-2\nsnap-3\n");
+      snapshot.close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual(["snap-1", "snap-2", "snap-3"]);
+      expect(result.current.loadedCount).toBe(3);
+    });
+  });
+
   it("fetches follow=false when tailLines changes while paused", async () => {
     const { handles } = installFetchMock();
 
@@ -510,5 +553,92 @@ describe("usePodLogStream lifecycle", () => {
         false
       );
     });
+  });
+
+  it("clears loading when a paused snapshot closes with no lines", async () => {
+    const { handles } = installFetchMock();
+
+    const { result, rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("old-a\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+
+    rerender({ ...defaultParams, paused: true });
+    await waitFor(() => expect(handles[0].signal.aborted).toBe(true));
+
+    rerender({ ...defaultParams, paused: true, tailLines: 5000 });
+
+    await waitFor(() =>
+      expect(handles.some((h) => h.url.includes("follow=false"))).toBe(true)
+    );
+
+    const snapshot = handles.find((h) => h.url.includes("follow=false"))!;
+
+    await act(async () => {
+      snapshot.resolveFetch();
+      await Promise.resolve();
+      snapshot.close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual([]);
+      expect(result.current.loadedCount).toBe(0);
+    });
+  });
+
+  it("does not fetch a live snapshot when tailLines changes while showing previous logs", async () => {
+    const { handles } = installFetchMock();
+
+    const { rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: defaultParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("live-1\n");
+      await Promise.resolve();
+    });
+
+    rerender({ ...defaultParams, paused: true });
+    await waitFor(() => expect(handles[0].signal.aborted).toBe(true));
+
+    const fetchCountAfterPause = handles.length;
+
+    rerender({
+      ...defaultParams,
+      paused: true,
+      showPreviousLogs: true,
+      tailLines: 5000,
+    });
+
+    await waitFor(() =>
+      expect(
+        handles.some(
+          (h) => h.url.includes("previous=true") && h.url.includes("tailLines=5000")
+        )
+      ).toBe(true)
+    );
+
+    expect(
+      handles
+        .slice(fetchCountAfterPause)
+        .filter((h) => h.url.includes("follow=false") && !h.url.includes("previous=true"))
+    ).toHaveLength(0);
   });
 });

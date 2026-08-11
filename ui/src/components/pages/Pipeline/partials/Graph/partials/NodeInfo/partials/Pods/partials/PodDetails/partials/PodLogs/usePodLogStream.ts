@@ -47,6 +47,10 @@ export function countLoadedLogs(lines: string[]): number {
   return lines.filter((line) => line !== LOADING_LOGS).length;
 }
 
+function clearLoadingPlaceholder(lines: string[]): string[] {
+  return lines.filter((line) => line !== LOADING_LOGS);
+}
+
 function cancelReader(
   reader: ReadableStreamDefaultReader<string> | undefined
 ): void {
@@ -115,6 +119,8 @@ export function usePodLogStream({
   const snapshotGenerationRef = useRef(0);
   const prevGenerationRef = useRef(0);
   const skipPausedSnapshotRef = useRef(true);
+  // Tail size while last live; used so auto-pause+size-change still snapshots.
+  const lastLiveTailLinesRef = useRef(tailLines);
   const tailLinesRef = useRef(tailLines);
   tailLinesRef.current = tailLines;
 
@@ -226,15 +232,23 @@ export function usePodLogStream({
   ]);
 
   // While paused: freeze on enter; refetch absolute window (follow=false) when
-  // tailLines changes. Abort on play so a stale snapshot cannot race live.
+  // tailLines changes (including auto-pause + size change). Abort on play so a
+  // stale snapshot cannot race live. Skip while viewing terminated logs.
   useEffect(() => {
-    if (!paused) {
-      skipPausedSnapshotRef.current = true;
+    if (!paused || showPreviousLogs) {
+      if (!paused) {
+        skipPausedSnapshotRef.current = true;
+        lastLiveTailLinesRef.current = tailLines;
+      }
       return;
     }
     if (skipPausedSnapshotRef.current) {
       skipPausedSnapshotRef.current = false;
-      return;
+      // Pure pause: keep the frozen live buffer. Auto-pause with a new window
+      // size falls through and fetches follow=false.
+      if (tailLines === lastLiveTailLinesRef.current) {
+        return;
+      }
     }
 
     const controller = new AbortController();
@@ -262,7 +276,8 @@ export function usePodLogStream({
         ) {
           return;
         }
-        if (!response?.body) {
+        if (!response?.ok || !response.body) {
+          setLogs((current) => clearLoadingPlaceholder(current));
           return;
         }
         const reader = response.body
@@ -301,9 +316,22 @@ export function usePodLogStream({
             });
           }
         }
+
+        if (
+          !controller.signal.aborted &&
+          generation === snapshotGenerationRef.current
+        ) {
+          setLogs((current) => {
+            const next = clearLoadingPlaceholder(current);
+            return next.length ? next : [];
+          });
+        }
       } catch (err) {
         if (!isAbortError(err)) {
           console.error(err);
+          if (generation === snapshotGenerationRef.current) {
+            setLogs((current) => clearLoadingPlaceholder(current));
+          }
         }
       }
     };
@@ -323,6 +351,7 @@ export function usePodLogStream({
     };
   }, [
     paused,
+    showPreviousLogs,
     tailLines,
     namespaceId,
     podName,

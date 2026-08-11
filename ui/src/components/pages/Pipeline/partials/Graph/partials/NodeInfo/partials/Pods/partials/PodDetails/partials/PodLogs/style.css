@@ -64,19 +64,11 @@
   white-space: nowrap;
 }
 
-.PodLogs-end-history {
-  color: #94a3b8;
-  font-size: 1.2rem;
-  font-weight: 500;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.PodLogs-load-older-group {
+.PodLogs-tail-size-group {
   height: 2.8rem;
 }
 
-.PodLogs-load-older-main {
+.PodLogs-tail-size-main {
   text-transform: none !important;
   font-size: 1.2rem !important;
   font-weight: 600 !important;
@@ -85,17 +77,17 @@
   color: #036b8f !important;
 }
 
-.PodLogs-load-older-menu-btn {
+.PodLogs-tail-size-menu-btn {
   min-width: 2.8rem !important;
   padding: 0 !important;
   border-color: #cbd5e1 !important;
   color: #036b8f !important;
 }
 
-.PodLogs-load-older-group.Mui-disabled .PodLogs-load-older-main,
-.PodLogs-load-older-group.Mui-disabled .PodLogs-load-older-menu-btn,
-.PodLogs-load-older-main.Mui-disabled,
-.PodLogs-load-older-menu-btn.Mui-disabled {
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-main,
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-menu-btn,
+.PodLogs-tail-size-main.Mui-disabled,
+.PodLogs-tail-size-menu-btn.Mui-disabled {
   color: #94a3b8 !important;
   cursor: not-allowed;
 }
