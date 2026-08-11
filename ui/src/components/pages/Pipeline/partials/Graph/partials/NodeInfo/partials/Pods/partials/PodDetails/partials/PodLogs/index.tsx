@@ -145,8 +145,6 @@ export function PodLogs({
     tailLines,
   });
 
-  const tailSelectorDisabled = showPreviousLogs;
-
   const filteredLogs = useMemo(() => {
     const source = showPreviousLogs ? previousLogs : logs;
     return filterLogs(source, search, negateSearch);
@@ -268,31 +266,36 @@ export function PodLogs({
         return;
       }
       setTailLines(size);
-      // Changing window size always shows a frozen absolute snapshot.
-      if (!paused) {
+      // Current logs: changing window size freezes to an absolute snapshot.
+      // Previous logs: only update tailLines; the previous effect refetches.
+      if (!showPreviousLogs && !paused) {
         setPaused(true);
       }
     },
-    [paused, tailLines]
+    [paused, showPreviousLogs, tailLines]
   );
 
   const handleOpenTailMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
-      if (tailSelectorDisabled) {
-        return;
-      }
       setTailMenuAnchor(event.currentTarget);
     },
-    [tailSelectorDisabled]
+    []
   );
 
   const handleTogglePreviousLogs = useCallback(() => {
-    setShowPreviousLogs((prev) => !prev);
+    setShowPreviousLogs((prev) => {
+      // Leaving previous/terminated: resume current logs with the default window.
+      if (prev) {
+        setTailLines(DEFAULT_LOG_TAIL_SIZE);
+        setPaused(false);
+      }
+      return !prev;
+    });
   }, []);
 
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
   const tailSelectorTooltip = showPreviousLogs
-    ? "Unavailable while viewing terminated logs"
+    ? "Choose how many previous log lines to show"
     : paused
       ? "Choose how many recent log lines to show"
       : "Choose window size (pauses live stream)";
@@ -335,12 +338,10 @@ export function PodLogs({
                   className="PodLogs-tail-size-group"
                   variant="outlined"
                   size="small"
-                  disabled={tailSelectorDisabled}
                 >
                   <Button
                     data-testid="log-tail-size-button"
                     className="PodLogs-tail-size-main"
-                    disabled={tailSelectorDisabled}
                     onClick={handleOpenTailMenu}
                   >
                     {`${tailLines.toLocaleString()} lines`}
@@ -349,7 +350,6 @@ export function PodLogs({
                     data-testid="log-tail-size-menu-button"
                     className="PodLogs-tail-size-menu-btn"
                     aria-label="Choose how many recent log lines to show"
-                    disabled={tailSelectorDisabled}
                     onClick={handleOpenTailMenu}
                   >
                     <ArrowDropDownIcon fontSize="small" />

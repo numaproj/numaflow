@@ -369,23 +369,41 @@ describe("PodLogs", () => {
     });
   });
 
-  it("disables the tail selector while viewing terminated logs", async () => {
+  it("applies N-lines to previous container logs without a live snapshot", async () => {
     const openBody = () =>
       new ReadableStream({
         start(controller) {
           controller.enqueue(Buffer.from("line-a\n"));
         },
       });
-    const previousBody = new ReadableStream({
-      start(controller) {
-        controller.enqueue(Buffer.from("prev-1\n"));
-      },
-    });
+    const previousBody = () =>
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from("prev-1\n"));
+          controller.close();
+        },
+      });
+    const previousLargerBody = () =>
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from("prev-big-1\nprev-big-2\n"));
+          controller.close();
+        },
+      });
+
+    const liveResumeBody = () =>
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from("live-again\n"));
+        },
+      });
 
     const mockedFetch = jest
       .fn()
       .mockResolvedValueOnce({ ok: true, body: openBody() } as any)
-      .mockResolvedValueOnce({ ok: true, body: previousBody } as any);
+      .mockResolvedValueOnce({ ok: true, body: previousBody() } as any)
+      .mockResolvedValueOnce({ ok: true, body: previousLargerBody() } as any)
+      .mockResolvedValueOnce({ ok: true, body: liveResumeBody() } as any);
     (global as any).fetch = mockedFetch;
 
     await act(async () => {
@@ -401,24 +419,68 @@ describe("PodLogs", () => {
     await waitFor(() => expect(screen.getByText("line-a")).toBeInTheDocument());
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("pause-button"));
+      fireEvent.click(screen.getByTestId("previous-logs"));
     });
 
-    expect(screen.getByTestId("logs-paused-banner")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("previous-container-banner")).toHaveTextContent(
+        "Previous container"
+      );
+      expect(screen.getByText("prev-1")).toBeInTheDocument();
+    });
+
     expect(screen.getByTestId("log-tail-size-button")).not.toBeDisabled();
+    expect(screen.getByTestId("log-tail-size-menu-button")).not.toBeDisabled();
+
+    const fetchCountAfterPrevious = mockedFetch.mock.calls.length;
+    expect(
+      String(mockedFetch.mock.calls[fetchCountAfterPrevious - 1][0])
+    ).toContain("previous=true");
+    expect(
+      String(mockedFetch.mock.calls[fetchCountAfterPrevious - 1][0])
+    ).toContain("follow=false");
+
+    fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("log-tail-size-5000"));
+    });
+
+    await waitFor(() => {
+      expect(mockedFetch.mock.calls.length).toBeGreaterThan(
+        fetchCountAfterPrevious
+      );
+      const lastUrl = String(mockedFetch.mock.calls.at(-1)[0]);
+      expect(lastUrl).toContain("previous=true");
+      expect(lastUrl).toContain("tailLines=5000");
+      expect(lastUrl).toContain("follow=false");
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "5,000 lines"
+      );
+      expect(screen.getByText("prev-big-1")).toBeInTheDocument();
+    });
+
+    const liveOnlySnapshots = mockedFetch.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      return url.includes("follow=false") && !url.includes("previous=true");
+    });
+    expect(liveOnlySnapshots).toHaveLength(0);
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("previous-logs"));
     });
 
-    expect(screen.getByTestId("previous-container-banner")).toHaveTextContent(
-      "Previous container"
-    );
-    expect(screen.queryByTestId("logs-paused-banner")).not.toBeInTheDocument();
-    expect(screen.getByTestId("log-tail-size-button")).toBeDisabled();
-    expect(screen.getByTestId("log-tail-size-menu-button")).toBeDisabled();
-
-    fireEvent.click(screen.getByTestId("log-tail-size-menu-button"));
-    expect(screen.queryByTestId("log-tail-size-5000")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("previous-container-banner")
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+        "1,000 lines"
+      );
+      const lastUrl = String(mockedFetch.mock.calls.at(-1)[0]);
+      expect(lastUrl).toContain("tailLines=1000");
+      expect(lastUrl).toContain("follow=true");
+      expect(lastUrl).not.toContain("previous=true");
+      expect(screen.getByText("live-again")).toBeInTheDocument();
+    });
   });
 });

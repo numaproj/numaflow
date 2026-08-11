@@ -131,8 +131,9 @@ export function usePodLogStream({
   }, [namespaceId, podName, containerName]);
 
   // Live follow stream. Restarts when tailLines or parse options change.
+  // Skip while viewing previous/terminated logs so N-lines only refetches previous.
   useEffect(() => {
-    if (paused) {
+    if (paused || showPreviousLogs) {
       return;
     }
 
@@ -224,6 +225,7 @@ export function usePodLogStream({
     podName,
     containerName,
     paused,
+    showPreviousLogs,
     host,
     enableTimestamp,
     levelFilter,
@@ -384,6 +386,7 @@ export function usePodLogStream({
             podName,
             containerName,
             previous: true,
+            follow: false,
             tailLines,
           }),
           { signal: controller.signal }
@@ -394,7 +397,7 @@ export function usePodLogStream({
         ) {
           return;
         }
-        if (!response?.body) {
+        if (!response?.ok || !response.body) {
           return;
         }
         const prevReader = response.body

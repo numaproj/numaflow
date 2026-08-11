@@ -193,6 +193,22 @@ describe("buildPodLogsUrl", () => {
       "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=false&tailLines=1500"
     );
   });
+
+  it("supports previous absolute window with follow=false", () => {
+    expect(
+      buildPodLogsUrl({
+        host: "",
+        namespaceId: "ns",
+        podName: "pod-a",
+        containerName: "numa",
+        previous: true,
+        follow: false,
+        tailLines: 5000,
+      })
+    ).toBe(
+      "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=false&tailLines=5000&previous=true"
+    );
+  });
 });
 
 describe("appendCapped", () => {
@@ -598,10 +614,10 @@ describe("usePodLogStream lifecycle", () => {
     });
   });
 
-  it("does not fetch a live snapshot when tailLines changes while showing previous logs", async () => {
+  it("refetches previous logs with follow=false when tailLines changes and skips live snapshot", async () => {
     const { handles } = installFetchMock();
 
-    const { rerender } = renderHook(
+    const { result, rerender } = renderHook(
       (props: UsePodLogStreamParams) => usePodLogStream(props),
       { initialProps: defaultParams }
     );
@@ -624,21 +640,79 @@ describe("usePodLogStream lifecycle", () => {
       ...defaultParams,
       paused: true,
       showPreviousLogs: true,
+      tailLines: 1000,
+    });
+
+    await waitFor(() =>
+      expect(
+        handles.some(
+          (h) =>
+            h.url.includes("previous=true") &&
+            h.url.includes("follow=false") &&
+            h.url.includes("tailLines=1000")
+        )
+      ).toBe(true)
+    );
+
+    const firstPrevious = handles.find(
+      (h) =>
+        h.url.includes("previous=true") && h.url.includes("tailLines=1000")
+    )!;
+
+    await act(async () => {
+      firstPrevious.resolveFetch();
+      await Promise.resolve();
+      firstPrevious.pushText("prev-old\n");
+      firstPrevious.close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(result.current.previousLogs).toEqual(["prev-old"])
+    );
+
+    rerender({
+      ...defaultParams,
+      paused: true,
+      showPreviousLogs: true,
       tailLines: 5000,
     });
 
     await waitFor(() =>
       expect(
         handles.some(
-          (h) => h.url.includes("previous=true") && h.url.includes("tailLines=5000")
+          (h) =>
+            h.url.includes("previous=true") &&
+            h.url.includes("follow=false") &&
+            h.url.includes("tailLines=5000")
         )
       ).toBe(true)
     );
 
+    const previousAt5000 = handles.find(
+      (h) =>
+        h.url.includes("previous=true") && h.url.includes("tailLines=5000")
+    )!;
+
+    await act(async () => {
+      previousAt5000.resolveFetch();
+      await Promise.resolve();
+      previousAt5000.pushText("prev-1\nprev-2\n");
+      previousAt5000.close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.previousLogs).toEqual(["prev-1", "prev-2"]);
+      expect(result.current.loadedCount).toBe(2);
+    });
+
     expect(
       handles
         .slice(fetchCountAfterPause)
-        .filter((h) => h.url.includes("follow=false") && !h.url.includes("previous=true"))
+        .filter(
+          (h) => h.url.includes("follow=false") && !h.url.includes("previous=true")
+        )
     ).toHaveLength(0);
   });
 });
