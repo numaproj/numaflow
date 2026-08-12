@@ -567,7 +567,7 @@ mod tests {
             Err(Error::Config("missing secret".into())),
             Ok(FakeBackend::healthy()),
         ]));
-        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -585,7 +585,7 @@ mod tests {
             Ok(failed_backend),
             Ok(FakeBackend::healthy()),
         ]));
-        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -603,7 +603,7 @@ mod tests {
             Ok(failed_backend),
             Ok(FakeBackend::healthy()),
         ]));
-        let (mut source, _temp_dir) = test_source(factory.clone(), CancellationToken::new());
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
         let error = source.ack(vec![]).await.unwrap_err();
         assert!(matches!(

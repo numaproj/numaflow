@@ -24,15 +24,7 @@ use crate::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
-#[cfg(test)]
-use numaflow_kafka::source::KafkaSource;
-#[cfg(test)]
-use numaflow_nats::jetstream::JetstreamSource;
-#[cfg(test)]
-use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
-#[cfg(test)]
-use numaflow_pulsar::source::PulsarSource;
 #[cfg(test)]
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
@@ -149,17 +141,10 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     #[cfg(test)]
-    Pulsar(PulsarSource),
-    #[cfg(test)]
+    #[allow(dead_code)] // constructed in source::sqs::tests::test_sqs_source_e2e
     Sqs(SqsSource),
     #[cfg(test)]
-    Jetstream(JetstreamSource),
-    #[cfg(test)]
-    Kafka(KafkaSource),
-    #[cfg(test)]
     Http(CoreHttpSource),
-    #[cfg(test)]
-    Nats(NatsSource),
 }
 
 enum ActorMessage {
@@ -344,18 +329,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 });
             }
             #[cfg(test)]
-            SourceType::Pulsar(pulsar_source) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(
-                        receiver,
-                        pulsar_source.clone(),
-                        pulsar_source.clone(),
-                        pulsar_source,
-                    );
-                    actor.run().await;
-                });
-            }
-            #[cfg(test)]
             SourceType::Sqs(sqs_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
@@ -364,28 +337,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         sqs_source.clone(),
                         sqs_source,
                     );
-                    actor.run().await;
-                });
-            }
-            #[cfg(test)]
-            SourceType::Jetstream(jetstream) => {
-                tokio::spawn(async move {
-                    let actor =
-                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
-                    actor.run().await;
-                });
-            }
-            #[cfg(test)]
-            SourceType::Nats(nats) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
-                    actor.run().await;
-                });
-            }
-            #[cfg(test)]
-            SourceType::Kafka(kafka) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
                     actor.run().await;
                 });
             }

@@ -610,7 +610,10 @@ mod tests {
             .collect();
         assert_eq!(files.len(), 1);
 
-        let file_content = fs::read(files[0].path()).unwrap();
+        let file = files
+            .first()
+            .expect("expected one persisted runtime error file");
+        let file_content = fs::read(file.path()).unwrap();
         let entry = RuntimeErrorEntry::try_from(file_content.as_slice()).unwrap();
         assert_eq!(entry.container, "numa");
         assert_eq!(entry.code, "Source");
