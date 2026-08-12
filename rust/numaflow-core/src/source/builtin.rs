@@ -470,6 +470,7 @@ mod tests {
     struct FakeBackend {
         read_error: Option<Error>,
         ack_error: Option<Error>,
+        nack_error: Option<Error>,
         pending: Option<usize>,
         partitions: SourcePartitions,
     }
@@ -479,6 +480,7 @@ mod tests {
             Self {
                 read_error: None,
                 ack_error: None,
+                nack_error: None,
                 pending: Some(12),
                 partitions: SourcePartitions::new(vec![1, 2], Some(2)),
             }
@@ -496,7 +498,7 @@ mod tests {
         }
 
         async fn nack(&mut self, _offsets: Vec<NackOffset>) -> Result<()> {
-            Ok(())
+            self.nack_error.take().map_or(Ok(()), Err)
         }
 
         async fn pending(&mut self) -> Result<Option<usize>> {
@@ -559,6 +561,25 @@ mod tests {
             temp_dir.path().to_str().expect("temp path").to_string(),
         );
         (source, temp_dir)
+    }
+
+    fn runtime_error_files(temp_dir: &tempfile::TempDir) -> Vec<std::path::PathBuf> {
+        let dir = temp_dir.path().join("numa");
+        if !dir.exists() {
+            return vec![];
+        }
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+            .collect()
+    }
+
+    fn failed_read_backend(message: &str) -> FakeBackend {
+        let mut backend = FakeBackend::healthy();
+        backend.read_error = Some(Error::Source(message.into()));
+        backend
     }
 
     #[tokio::test]
@@ -639,5 +660,77 @@ mod tests {
         let mut source = BuiltinSource::new(factory, cancel_token);
 
         assert!(source.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn health_transitions_through_degraded_and_recovers() {
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(failed_read_backend("broker disconnected")),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.health().await, BuiltinSourceHealth::Starting);
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Ready);
+    }
+
+    #[tokio::test]
+    async fn nack_failure_requests_redrive_then_succeeds_after_recreation() {
+        let mut failed_backend = FakeBackend::healthy();
+        failed_backend.nack_error = Some(Error::Source("nack rejected".into()));
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(failed_backend),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        let error = source.nack(vec![]).await.unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                operation: "nack",
+                ..
+            }
+        ));
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        source.nack(vec![]).await.unwrap();
+        assert!(source.is_ready().await);
+    }
+
+    #[tokio::test]
+    async fn repeated_same_failure_before_backoff_persists_one_runtime_error() {
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(failed_read_backend("broker disconnected")),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
+
+        // Backoff has not elapsed yet, so the supervisor should not report again.
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn changed_failure_persists_a_new_runtime_error() {
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(failed_read_backend("broker disconnected")),
+            Ok(failed_read_backend("authorization failed")),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
+
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(runtime_error_files(&temp_dir).len(), 2);
     }
 }

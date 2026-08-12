@@ -162,4 +162,44 @@ mod tests {
             "NonRetryable".to_string()
         );
     }
+
+    #[test]
+    fn record_failure_persists_and_deduplicates_files() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let path = temp_dir.path().to_str().expect("temp path").to_string();
+        let mut tracker = SourceRuntimeErrorTracker::with_runtime_error_path(path);
+        let error = Error::Source("broker disconnected".into());
+
+        tracker.record_failure("kafka", "read", &error);
+        tracker.record_failure("kafka", "read", &error);
+
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
+    }
+
+    #[test]
+    fn record_recovery_allows_persisting_the_same_failure_again() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let path = temp_dir.path().to_str().expect("temp path").to_string();
+        let mut tracker = SourceRuntimeErrorTracker::with_runtime_error_path(path);
+        let error = Error::Source("broker disconnected".into());
+
+        tracker.record_failure("kafka", "read", &error);
+        tracker.record_recovery("kafka");
+        tracker.record_failure("kafka", "read", &error);
+
+        assert_eq!(runtime_error_files(&temp_dir).len(), 2);
+    }
+
+    fn runtime_error_files(temp_dir: &tempfile::TempDir) -> Vec<std::path::PathBuf> {
+        let dir = temp_dir.path().join("numa");
+        if !dir.exists() {
+            return vec![];
+        }
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+            .collect()
+    }
 }
