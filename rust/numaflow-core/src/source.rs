@@ -73,7 +73,7 @@ pub(crate) mod sqs;
 pub(crate) mod builtin;
 pub(crate) mod http;
 pub(crate) mod kafka;
-pub(crate) mod source_runtime_error;
+pub(crate) mod runtime_error;
 #[cfg(test)]
 pub(crate) mod test_utils;
 

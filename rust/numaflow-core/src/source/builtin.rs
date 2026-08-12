@@ -1,3 +1,9 @@
+//! Resilience wrapper for built-in sources (Kafka, Pulsar, SQS, NATS, HTTP).
+//!
+//! When a source client fails, [`BuiltinSource`] recreates it with backoff instead of
+//! crashing `numa`. In-flight ack state is preserved by each source adapter; this module
+//! owns retry timing, health/readiness, and runtime-error reporting.
+
 use std::fmt;
 use std::sync::Arc;
 
@@ -10,15 +16,17 @@ use tracing::{info, warn};
 use crate::error::{Error, Result};
 use crate::message::{Message, NackOffset, Offset};
 use crate::reader::LagReader;
-use crate::source::source_runtime_error::SourceRuntimeErrorTracker;
+use crate::source::runtime_error::SourceRuntimeErrorTracker;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 
+// Cap read-side wait so the forwarder is not blocked for the full backoff.
 const READ_RETRY_WAIT_CAP: Duration = Duration::from_millis(100);
 
-/// A single, replaceable generation of a built-in source.
+/// One live connection to an external source (e.g. a Kafka consumer or Pulsar client).
 ///
-/// Implementations own the client or consumer for one generation. Delivery state that must
-/// survive recreation belongs to the factory or another shared owner, not this backend.
+/// The supervisor can discard and recreate this when operations fail. Anything that must
+/// survive a reconnect—message IDs, receipt handles, WIP trackers—should live in the
+/// factory or shared adapter state, not inside this backend.
 #[async_trait]
 pub(crate) trait BuiltinSourceBackend: Send {
     async fn read(&mut self) -> Option<Result<Vec<Message>>>;
@@ -28,6 +36,9 @@ pub(crate) trait BuiltinSourceBackend: Send {
     async fn partitions(&mut self) -> Result<SourcePartitions>;
 }
 
+/// Adapts an existing source type (Kafka, Pulsar, …) to [`BuiltinSourceBackend`].
+///
+/// This avoids duplicating read/ack/nack wiring in every built-in adapter.
 pub(crate) struct SourceBackend<T>(T);
 
 impl<T> SourceBackend<T> {
@@ -62,23 +73,28 @@ where
     }
 }
 
-/// Builds replaceable generations of a built-in source from retained configuration.
+/// Creates a fresh [`BuiltinSourceBackend`] from saved configuration.
 ///
-/// Configuration parsing, secret loading and client construction are intentionally part of
-/// `build`, so every such failure follows the same retry path.
+/// Parsing config, loading secrets, and opening the client all happen in [`build`].
+/// If any step fails, the supervisor retries later with backoff—`numa` does not exit.
 #[async_trait]
 pub(crate) trait BuiltinSourceFactory: Send + Sync {
     fn name(&self) -> &'static str;
     async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>>;
 }
 
+/// Health of a built-in source from the supervisor's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuiltinSourceHealth {
+    /// Initial startup; backend not ready yet.
     Starting,
+    /// Backend is connected and operations succeed.
     Ready,
+    /// Backend failed or is being recreated; source is not ready but `numa` keeps running.
     Degraded,
 }
 
+/// Controls how long the supervisor waits between rebuild attempts.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BuiltinSourceRetryConfig {
     pub(crate) initial_backoff: Duration,
@@ -96,6 +112,8 @@ impl Default for BuiltinSourceRetryConfig {
     }
 }
 
+/// Mutable supervisor state: active backend, retry schedule, cached lag/partitions,
+/// and runtime-error deduplication.
 struct SupervisorState {
     backend: Option<Box<dyn BuiltinSourceBackend>>,
     health: BuiltinSourceHealth,
@@ -106,11 +124,16 @@ struct SupervisorState {
     runtime_error_tracker: SourceRuntimeErrorTracker,
 }
 
-/// Keeps a built-in source alive while its replaceable backend is unavailable.
+/// Resilient wrapper around built-in sources.
 ///
-/// The supervisor never exposes read, lag, or partition failures to the forwarder. Ack and nack
-/// failures are surfaced as [`Error::SourceRedrive`] so the existing offset retry loops retain and
-/// retry the original disposition without cancelling `numa`.
+/// On failure, recreates the underlying client with exponential backoff and keeps
+/// `numa` alive. Behavior by operation:
+///
+/// - **read** — returns an empty batch while recovering (forwarder keeps polling)
+/// - **ack / nack** — returns [`Error::SourceRedrive`] so offsets are retried later
+/// - **pending / partitions** — returns the last known good value while degraded
+///
+/// Readiness ([`is_ready`]) is false while degraded; liveness is unaffected.
 #[derive(Clone)]
 pub(crate) struct BuiltinSource {
     factory: Arc<dyn BuiltinSourceFactory>,
@@ -215,7 +238,7 @@ impl BuiltinSource {
             operation,
             ?error,
             retry_in_ms = state.retry_backoff.as_millis(),
-            "Built-in source operation failed; scheduling backend recreation"
+            "Built-in source operation failed; will recreate the source client after backoff"
         );
         state.backend = None;
         state.health = BuiltinSourceHealth::Degraded;
@@ -255,7 +278,7 @@ impl BuiltinSource {
                         .record_recovery(self.factory.name());
                     info!(
                         source = self.factory.name(),
-                        "Built-in source backend recreated"
+                        "Source client reconnected successfully"
                     );
                 }
                 Ok(())
