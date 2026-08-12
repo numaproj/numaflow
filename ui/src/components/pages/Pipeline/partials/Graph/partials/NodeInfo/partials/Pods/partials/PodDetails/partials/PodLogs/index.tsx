@@ -2,6 +2,7 @@
 // @ts-nocheck
 import {
   ChangeEvent,
+  MouseEvent,
   ReactNode,
   useCallback,
   useContext,
@@ -14,6 +15,9 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Menu from "@mui/material/Menu";
+import Button from "@mui/material/Button";
+import ButtonGroup from "@mui/material/ButtonGroup";
 import InputBase from "@mui/material/InputBase";
 import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -21,6 +25,8 @@ import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
 import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import Download from "@mui/icons-material/Download";
@@ -34,6 +40,7 @@ import Checkbox from "@mui/material/Checkbox";
 import { PodLogsProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
+import { DEFAULT_LOG_TAIL_SIZE, LOG_TAIL_SIZES } from "./constants";
 import { filterLogs } from "./filterLogs";
 import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
 import { useLogSearchNavigation } from "./useLogSearchNavigation";
@@ -105,12 +112,25 @@ export function PodLogs({
   const [enableTimestamp, setEnableTimestamp] = useState<boolean>(false);
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
+  const [tailLines, setTailLines] = useState(DEFAULT_LOG_TAIL_SIZE);
+  const [tailMenuAnchor, setTailMenuAnchor] = useState<null | HTMLElement>(
+    null
+  );
   const { host } = useContext<AppContextProps>(AppContext);
 
-  // Restart streaming if the source changes while paused
+  // New container/pod: resume live with the default tail window.
   useEffect(() => {
     setPaused(false);
+    setTailLines(DEFAULT_LOG_TAIL_SIZE);
+    setTailMenuAnchor(null);
   }, [namespaceId, podName, containerName]);
+
+  // Close the tail menu when resuming live.
+  useEffect(() => {
+    if (!paused) {
+      setTailMenuAnchor(null);
+    }
+  }, [paused]);
 
   const { logs, previousLogs } = usePodLogStream({
     namespaceId,
@@ -122,6 +142,7 @@ export function PodLogs({
     enableTimestamp,
     levelFilter,
     showPreviousLogs,
+    tailLines,
   });
 
   const filteredLogs = useMemo(() => {
@@ -146,7 +167,7 @@ export function PodLogs({
     orderedLogs,
     search,
     negateSearch,
-    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}`,
+    resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}-${tailLines}`,
   });
 
   const handleSearchChange = useCallback(
@@ -194,8 +215,14 @@ export function PodLogs({
   }, []);
 
   const handlePause = useCallback(() => {
-    setPaused((prev) => !prev);
-  }, []);
+    if (paused) {
+      // Resuming live: always restart with the default tail window.
+      setTailLines(DEFAULT_LOG_TAIL_SIZE);
+      setPaused(false);
+      return;
+    }
+    setPaused(true);
+  }, [paused]);
 
   const handleColorMode = useCallback(() => {
     setColorMode(colorMode === "light" ? "dark" : "light");
@@ -232,20 +259,122 @@ export function PodLogs({
     setLevelFilter(e.target.value);
   }, []);
 
+  const handleSelectTailLines = useCallback(
+    (size: number) => {
+      setTailMenuAnchor(null);
+      if (size === tailLines) {
+        return;
+      }
+      setTailLines(size);
+      // Current logs: changing window size freezes to an absolute snapshot.
+      // Previous logs: only update tailLines; the previous effect refetches.
+      if (!showPreviousLogs && !paused) {
+        setPaused(true);
+      }
+    },
+    [paused, showPreviousLogs, tailLines]
+  );
+
+  const handleOpenTailMenu = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      setTailMenuAnchor(event.currentTarget);
+    },
+    []
+  );
+
+  const handleTogglePreviousLogs = useCallback(() => {
+    setShowPreviousLogs((prev) => {
+      // Leaving previous/terminated: resume current logs with the default window.
+      if (prev) {
+        setTailLines(DEFAULT_LOG_TAIL_SIZE);
+        setPaused(false);
+      }
+      return !prev;
+    });
+  }, []);
+
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
+  const tailSelectorTooltip = showPreviousLogs
+    ? "Choose how many previous log lines to show"
+    : paused
+      ? "Choose how many recent log lines to show"
+      : "Choose window size (pauses live stream)";
+  const statusBanner = showPreviousLogs
+    ? { testId: "previous-container-banner", label: "Previous container" }
+    : paused
+      ? { testId: "logs-paused-banner", label: "Logs paused" }
+      : null;
 
   return (
     <Box className="PodLogs-root">
       <div className="PodLogs-toolbar">
         <div className="PodLogs-header">
-          <span className="PodLogs-title">Container Logs</span>
-          <span
-            className="PodLogs-source-badge"
-            title={`${podName}/${containerName}`}
-            data-testid="log-source-badge"
-          >
-            {logSourceLabel}
-          </span>
+          <div className="PodLogs-header-left">
+            <span className="PodLogs-title">Container Logs</span>
+            <span
+              className="PodLogs-source-badge"
+              title={`${podName}/${containerName}`}
+              data-testid="log-source-badge"
+            >
+              {logSourceLabel}
+            </span>
+          </div>
+          <div className="PodLogs-header-right">
+            {statusBanner ? (
+              <span
+                className="PodLogs-status-banner"
+                data-testid={statusBanner.testId}
+              >
+                {statusBanner.label}
+              </span>
+            ) : null}
+            <Tooltip
+              title={<div className="icon-tooltip">{tailSelectorTooltip}</div>}
+              placement="top"
+              arrow
+            >
+              <span data-testid="log-tail-size-control">
+                <ButtonGroup
+                  className="PodLogs-tail-size-group"
+                  variant="outlined"
+                  size="small"
+                >
+                  <Button
+                    data-testid="log-tail-size-button"
+                    className="PodLogs-tail-size-main"
+                    onClick={handleOpenTailMenu}
+                  >
+                    {`${tailLines.toLocaleString()} lines`}
+                  </Button>
+                  <Button
+                    data-testid="log-tail-size-menu-button"
+                    className="PodLogs-tail-size-menu-btn"
+                    aria-label="Choose how many recent log lines to show"
+                    onClick={handleOpenTailMenu}
+                  >
+                    <ArrowDropDownIcon fontSize="small" />
+                  </Button>
+                </ButtonGroup>
+              </span>
+            </Tooltip>
+            <Menu
+              anchorEl={tailMenuAnchor}
+              open={Boolean(tailMenuAnchor)}
+              onClose={() => setTailMenuAnchor(null)}
+              data-testid="log-tail-size-menu"
+            >
+              {LOG_TAIL_SIZES.map((size) => (
+                <MenuItem
+                  key={size}
+                  data-testid={`log-tail-size-${size}`}
+                  selected={size === tailLines}
+                  onClick={() => handleSelectTailLines(size)}
+                >
+                  {`${size.toLocaleString()} lines`}
+                </MenuItem>
+              ))}
+            </Menu>
+          </div>
         </div>
         <div className="PodLogs-controls">
           <div className="PodLogs-search">
@@ -322,6 +451,18 @@ export function PodLogs({
             {paused ? <PlayArrowIcon /> : <PauseIcon />}
           </ToolbarIconButton>
           <ToolbarIconButton
+            testId="previous-logs"
+            title={
+              showPreviousLogs
+                ? "Show current container logs"
+                : "Show previous terminated container logs"
+            }
+            onClick={handleTogglePreviousLogs}
+            active={showPreviousLogs}
+          >
+            <ChevronLeft />
+          </ToolbarIconButton>
+          <ToolbarIconButton
             testId="color-mode-button"
             title={colorMode === "light" ? "Dark mode" : "Light mode"}
             onClick={handleColorMode}
@@ -383,22 +524,6 @@ export function PodLogs({
               Debug
             </MenuItem>
           </Select>
-        </div>
-        <div className="PodLogs-footer">
-          <FormControlLabel
-            className="PodLogs-checkbox-label"
-            control={
-              <Checkbox
-                data-testid="previous-logs"
-                checked={showPreviousLogs}
-                onChange={(event) =>
-                  setShowPreviousLogs(event.target.checked)
-                }
-                size="small"
-              />
-            }
-            label="Show terminated"
-          />
         </div>
       </div>
       <Box className="PodLogs-list-wrap">

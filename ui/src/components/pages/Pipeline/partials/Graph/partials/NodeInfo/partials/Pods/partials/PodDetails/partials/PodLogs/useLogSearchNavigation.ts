@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getLogSearchMatchInfo } from "./matchLogSearch";
 
 type UseLogSearchNavigationArgs = {
@@ -35,7 +35,7 @@ export function useLogSearchNavigation({
     });
   }, [enabled, matchCount]);
 
-  const goNext = (): number | null => {
+  const goNext = useCallback((): number | null => {
     if (!enabled || !matchCount) {
       return null;
     }
@@ -43,9 +43,9 @@ export function useLogSearchNavigation({
     const nextMatch = currentMatch >= matchCount ? 1 : currentMatch + 1;
     setCurrentMatch(nextMatch);
     return nextMatch - 1;
-  };
+  }, [enabled, matchCount, currentMatch]);
 
-  const goPrev = (): number | null => {
+  const goPrev = useCallback((): number | null => {
     if (!enabled || !matchCount) {
       return null;
     }
@@ -54,7 +54,7 @@ export function useLogSearchNavigation({
       currentMatch <= 1 ? matchCount : currentMatch - 1;
     setCurrentMatch(previousMatch);
     return previousMatch - 1;
-  };
+  }, [enabled, matchCount, currentMatch]);
 
   return {
     enabled,
