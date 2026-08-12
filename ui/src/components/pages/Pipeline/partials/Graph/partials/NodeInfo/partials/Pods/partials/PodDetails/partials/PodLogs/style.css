@@ -14,10 +14,27 @@
 
 .PodLogs-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1.2rem;
   margin-bottom: 1rem;
+}
+
+.PodLogs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  min-width: 0;
+}
+
+.PodLogs-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-left: auto;
 }
 
 .PodLogs-title {
@@ -28,8 +45,6 @@
 }
 
 .PodLogs-source-badge {
-  max-width: 45%;
-  overflow: hidden;
   padding: 0.5rem 1.2rem;
   border-radius: 999px;
   background: #f0f9ff;
@@ -38,7 +53,48 @@
   font-size: 1.2rem;
   font-weight: 700;
   line-height: 1.4;
-  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PodLogs-tail-size-group {
+  height: 2.8rem;
+}
+
+.PodLogs-tail-size-main {
+  text-transform: none !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  padding: 0 1rem !important;
+  border-color: #cbd5e1 !important;
+  color: #036b8f !important;
+}
+
+.PodLogs-tail-size-menu-btn {
+  min-width: 2.8rem !important;
+  padding: 0 !important;
+  border-color: #cbd5e1 !important;
+  color: #036b8f !important;
+}
+
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-main,
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-menu-btn,
+.PodLogs-tail-size-main.Mui-disabled,
+.PodLogs-tail-size-menu-btn.Mui-disabled {
+  color: #94a3b8 !important;
+  cursor: not-allowed;
+}
+
+.PodLogs-status-banner {
+  display: inline-flex;
+  align-items: center;
+  height: 2.8rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
 }
 
@@ -47,13 +103,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.8rem;
-}
-
-.PodLogs-footer {
-  display: flex;
-  justify-content: flex-end;
-  min-height: 2rem;
-  margin-top: 0.6rem;
 }
 
 .PodLogs-search {
@@ -273,10 +322,6 @@
 }
 
 @media (max-width: 720px) {
-  .PodLogs-source-badge {
-    max-width: 60%;
-  }
-
   .PodLogs-search {
     width: min(22.4rem, 100%);
   }
