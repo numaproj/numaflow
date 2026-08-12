@@ -5260,8 +5260,8 @@ It can be configured to serve as a backup sink when the primary sink fails to pr
 <h2 id="the-use-case">The Use Case<a class="headerlink" href="#the-use-case" title="Permanent link">&para;</a></h2>
 <p>Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.</p>
 <p>It lets you define a DLQ associated with a given user-defined sink (hereafter referred to as the <em>primary sink</em>). 
-If a message cannot be processed in the primary sink, the message can be moved to the fallback sink to be reprocessed later 
-(for example, by a separate pipeline/MonoVertex). </p>
+If a message cannot be processed in the primary sink, the message can be moved to the fallback sink which in turn 
+can send the message to a DLQ. The messages in the DLQ can later be processed by a separate Pipeline/MonoVertex. </p>
 <h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A fallback sink can only be configured when the primary sink is a user-defined sink (this is because builtin sinks will not know what tags to use and whether those will be honored).</li>
