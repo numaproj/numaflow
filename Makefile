@@ -353,7 +353,7 @@ ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
 	brew install lychee
 else
-	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.19.1/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
+	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
 endif
 endif
 
