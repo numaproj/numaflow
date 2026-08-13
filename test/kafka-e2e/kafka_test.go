@@ -20,10 +20,16 @@ package kafka_e2e
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,12 +51,44 @@ const (
 	kafkaSourceVertex                = "input"
 	kafkaRecoveryConfig              = "socket.timeout.ms: 3000\nsession.timeout.ms: 10000\nheartbeat.interval.ms: 3000\nreconnect.backoff.ms: 100"
 	kafkaRebalanceLog                = "Pre rebalance Revoke"
-	recoverableKafkaReadLog          = "Recoverable Kafka read error; returning partial or empty batch"
+	builtinSourceOperationFailedLog  = "Built-in source operation failed; will recreate the source client after backoff"
+	builtinSourceDegradedLog         = "Built-in source entered degraded state"
+	builtinSourceReconnectedLog      = "Source client reconnected successfully"
+	builtinKafkaRuntimeErrorLog      = `"Built-in Kafka source read failed"`
 	fatalSourceForwarderLog          = "Error running pipeline"
-	nonRetryableSourceAckLog         = "Non retryable error while invoking ack"
 	kafkaRecoveryAssertionTimeout    = 90 * time.Second
 	kafkaNegativeLogAssertionTimeout = 5 * time.Second
+	kafkaRuntimeErrorLocalPort       = 8951
 )
+
+var kafkaRuntimeErrorHTTPClient = &http.Client{
+	Timeout:   5 * time.Second,
+	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+}
+
+func kafkaRuntimeErrorsContain(baseURL, path, expected string) bool {
+	url := baseURL + path
+	resp, err := kafkaRuntimeErrorHTTPClient.Get(url)
+	if err != nil {
+		log.Printf("GET %s failed: %v, retrying.\n", url, err)
+		return false
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("GET %s returned %s, body: %s, retrying.\n", url, resp.Status, body)
+		return false
+	}
+	if readErr != nil {
+		log.Printf("GET %s body read failed: %v, retrying.\n", url, readErr)
+		return false
+	}
+	if !strings.Contains(string(body), expected) {
+		log.Printf("GET %s does not contain %q yet, body: %s, retrying.\n", url, expected, body)
+		return false
+	}
+	return true
+}
 
 func kafkaSourceRedisPipeline(name, topic, consumerGroup, sinkHash string) *dfv1.Pipeline {
 	return &dfv1.Pipeline{
@@ -261,12 +299,6 @@ func (ks *KafkaSuite) TestKafkaRebalanceDoesNotRestartNuma() {
 			fatalSourceForwarderLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
-		).
-		VertexPodLogNotContains(
-			kafkaSourceVertex,
-			nonRetryableSourceAckLog,
-			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
-			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
 		)
 }
 
@@ -288,34 +320,86 @@ func (ks *KafkaSuite) TestKafkaBrokerInterruptionDoesNotRestartNuma() {
 	ks.EqualValues(0, snapshot.NumaRestartCount, "numa should not restart before broker interruption")
 
 	ks.Require().NoError(fixtures.RestartKafkaBroker(2 * time.Minute))
-	fixtures.ResetKafkaClients()
 
 	w.Expect().
 		VertexPodLogContains(
 			kafkaSourceVertex,
-			recoverableKafkaReadLog,
+			builtinSourceOperationFailedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			builtinSourceDegradedLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
 		).
 		VertexNumaStable(snapshot, kafkaSourceVertex)
+
+	fixtures.ResetKafkaClients()
 
 	recoveryMarker := fmt.Sprintf("broker-recovered-%s", inputTopic)
 	fixtures.SendMessage(inputTopic, recoveryMarker, recoveryMarker, 0)
 	w.Expect().
 		RedisSinkContains(sinkHash, recoveryMarker).
 		VertexNumaStable(snapshot, kafkaSourceVertex).
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			builtinSourceReconnectedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
 		VertexPodLogNotContains(
 			kafkaSourceVertex,
 			fatalSourceForwarderLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
-		).
-		VertexPodLogNotContains(
-			kafkaSourceVertex,
-			nonRetryableSourceAckLog,
-			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
-			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
 		)
+}
+
+func (ks *KafkaSuite) TestKafkaBrokerInterruptionReportsRuntimeError() {
+	inputTopic := ks.createKafkaTopic(1)
+	consumerGroup := fmt.Sprintf("kafka-runtime-error-%s", inputTopic)
+	sinkHash := fmt.Sprintf("kafka-runtime-error-%s", inputTopic)
+	pipeline := kafkaSourceRedisPipeline("kafka-broker-runtime-error", inputTopic, consumerGroup, sinkHash)
+
+	w := ks.Given().WithPipeline(pipeline).When().CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	w.Expect().VertexPodsRunning()
+
+	warmupMarker := fmt.Sprintf("runtime-warmup-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, warmupMarker, warmupMarker, 0)
+	w.Expect().RedisSinkContains(sinkHash, warmupMarker)
+
+	snapshot := w.Expect().VertexPodRuntimeSnapshot(kafkaSourceVertex)
+	defer w.VertexPodPortForward(kafkaSourceVertex, kafkaRuntimeErrorLocalPort, dfv1.VertexRuntimePort).
+		TerminateAllPodPortForwards()
+
+	ks.Require().NoError(fixtures.RestartKafkaBroker(2 * time.Minute))
+
+	assert.Eventually(ks.T(), func() bool {
+		return kafkaRuntimeErrorsContain(
+			fmt.Sprintf("https://localhost:%d", kafkaRuntimeErrorLocalPort),
+			"/runtime/errors",
+			`"container":"numa"`,
+		)
+	}, kafkaRecoveryAssertionTimeout, time.Second, "numa runtime error not reported during broker outage")
+
+	assert.Eventually(ks.T(), func() bool {
+		return kafkaRuntimeErrorsContain(
+			fmt.Sprintf("https://localhost:%d", kafkaRuntimeErrorLocalPort),
+			"/runtime/errors",
+			builtinKafkaRuntimeErrorLog,
+		)
+	}, kafkaRecoveryAssertionTimeout, time.Second, "built-in kafka runtime error not reported during broker outage")
+
+	fixtures.ResetKafkaClients()
+
+	recoveryMarker := fmt.Sprintf("runtime-recovered-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, recoveryMarker, recoveryMarker, 0)
+	w.Expect().
+		RedisSinkContains(sinkHash, recoveryMarker).
+		VertexNumaStable(snapshot, kafkaSourceVertex)
 }
 
 func TestKafkaSuite(t *testing.T) {

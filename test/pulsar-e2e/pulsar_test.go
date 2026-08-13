@@ -38,9 +38,10 @@ import (
 
 const (
 	pulsarSourceVertex                = "input"
-	pulsarAckPendingLog               = "Pulsar ack pending limit reached; returning empty batch"
+	builtinSourceOperationFailedLog   = "Built-in source operation failed; will recreate the source client after backoff"
+	builtinSourceDegradedLog          = "Built-in source entered degraded state"
+	builtinSourceReconnectedLog       = "Source client reconnected successfully"
 	fatalSourceForwarderLog           = "Error running pipeline"
-	nonRetryableSourceAckLog          = "Non retryable error while invoking ack"
 	pulsarRecoveryAssertionTimeout    = 90 * time.Second
 	pulsarNegativeLogAssertionTimeout = 5 * time.Second
 )
@@ -129,6 +130,22 @@ func (ps *PulsarSuite) TestPulsarBrokerInterruptionDoesNotRestartNuma() {
 	ps.EqualValues(0, snapshot.NumaRestartCount, "numa should not restart before broker restart")
 
 	ps.Require().NoError(fixtures.RestartPulsarBroker(3 * time.Minute))
+
+	w.Expect().
+		VertexPodLogContains(
+			pulsarSourceVertex,
+			builtinSourceOperationFailedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarRecoveryAssertionTimeout),
+		).
+		VertexPodLogContains(
+			pulsarSourceVertex,
+			builtinSourceDegradedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarRecoveryAssertionTimeout),
+		).
+		VertexNumaStable(snapshot, pulsarSourceVertex)
+
 	fixtures.ResetPulsarClients()
 
 	recoveryMarker := fmt.Sprintf("restart-recovered-%s", subscription)
@@ -136,15 +153,15 @@ func (ps *PulsarSuite) TestPulsarBrokerInterruptionDoesNotRestartNuma() {
 	w.Expect().
 		RedisSinkContains(sinkHash, recoveryMarker).
 		VertexNumaStable(snapshot, pulsarSourceVertex).
-		VertexPodLogNotContains(
+		VertexPodLogContains(
 			pulsarSourceVertex,
-			fatalSourceForwarderLog,
+			builtinSourceReconnectedLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
-			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarRecoveryAssertionTimeout),
 		).
 		VertexPodLogNotContains(
 			pulsarSourceVertex,
-			nonRetryableSourceAckLog,
+			fatalSourceForwarderLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
 		)
@@ -192,7 +209,13 @@ func (ps *PulsarSuite) TestPulsarAckPendingDoesNotRestartNuma() {
 	w.Expect().
 		VertexPodLogContains(
 			pulsarSourceVertex,
-			pulsarAckPendingLog,
+			builtinSourceOperationFailedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(pulsarRecoveryAssertionTimeout),
+		).
+		VertexPodLogContains(
+			pulsarSourceVertex,
+			builtinSourceDegradedLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(pulsarRecoveryAssertionTimeout),
 		).
@@ -207,12 +230,6 @@ func (ps *PulsarSuite) TestPulsarAckPendingDoesNotRestartNuma() {
 		VertexPodLogNotContains(
 			pulsarSourceVertex,
 			fatalSourceForwarderLog,
-			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
-			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
-		).
-		VertexPodLogNotContains(
-			pulsarSourceVertex,
-			nonRetryableSourceAckLog,
 			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
 			fixtures.PodLogCheckOptionWithTimeout(pulsarNegativeLogAssertionTimeout),
 		)
