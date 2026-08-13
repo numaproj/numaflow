@@ -1,12 +1,12 @@
 # HTTP Source
 
-HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled`.
+HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled.
 
 A plain HTTP (non-TLS) server can also be enabled by explicitly setting `ports.http`. By default, only HTTPS is exposed. When `ports.http` is set, both HTTPS and HTTP endpoints are exposed.
 
 ## Spec
 
-Minimal spec for an http source which exposes a https endpoint for access on port 8443:
+Minimal spec for an HTTP source which exposes an HTTPS endpoint for access on port 8443:
 
 ```yaml
 source:
@@ -184,7 +184,7 @@ numaflow.numaproj.io/vertex-name: in # vertex name
 
 ## MonoVertex
 
-The HTTP Source can also be used in a MonoVertex, which is useful when you just need to read from the HTTP Source and write to a Sink (optionally with a Transformer or Map UDF), without needing the full Pipeline semantics. The `source.http` spec is identical to the one used in a Pipeline; the difference is in the Service name, endpoint URI, and selector, since a MonoVertex has only one Vertex.
+The HTTP Source can also be used in a [MonoVertex](../../getting-started/monovertex.md), which is useful when you just need to read from the HTTP Source and write to a Sink (optionally with a Transformer or Map UDF), without needing the full Pipeline semantics. The `source.http` spec is identical to the one used in a Pipeline; the difference is in the Service name, endpoint URI, and selector, since a MonoVertex has only one Vertex.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
