@@ -369,5 +369,4 @@ mod tests {
         );
         assert!(factory.build().await.is_err());
     }
-
 }

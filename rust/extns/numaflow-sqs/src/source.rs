@@ -1173,7 +1173,6 @@ mod tests {
             })
     }
 
-
     #[test(tokio::test)]
     async fn test_sqssource_ack_batch_partial_failure() {
         let queue_url_output = get_queue_url_output();
@@ -1232,7 +1231,12 @@ mod tests {
         let offset = "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q";
         let result = source.ack_offsets(vec![Bytes::from(offset)]).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("failed to delete one or more messages"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("failed to delete one or more messages")
+        );
     }
     fn get_queue_url_output() -> Rule {
         mock!(aws_sdk_sqs::Client::get_queue_url)

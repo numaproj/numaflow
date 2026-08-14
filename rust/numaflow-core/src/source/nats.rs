@@ -290,5 +290,4 @@ mod tests {
         let mut backend = factory.build().await.expect("factory build");
         assert!(backend.read().await.is_some());
     }
-
 }

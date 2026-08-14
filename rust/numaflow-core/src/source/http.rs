@@ -174,11 +174,11 @@ impl source::LagReader for CoreHttpSource {
 mod tests {
     use super::*;
     use crate::source::{LagReader, SourceAcker, SourceReader};
-    use numaflow_http::HttpSourceConfigBuilder;
     use chrono::Utc;
     use hyper::{Method, Request};
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
+    use numaflow_http::HttpSourceConfigBuilder;
     use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
     use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
     use rustls::{DigitallySignedStruct, SignatureScheme};
@@ -379,5 +379,4 @@ mod tests {
         assert_eq!(BuiltinSourceFactory::name(&factory), "HTTP");
         assert!(factory.build().await.is_ok());
     }
-
 }

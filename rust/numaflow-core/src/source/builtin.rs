@@ -556,7 +556,6 @@ mod tests {
         }
     }
 
-
     struct SlowFactory {
         build_count: AtomicUsize,
     }
@@ -861,9 +860,8 @@ mod tests {
     #[tokio::test]
     async fn source_name_delegates_to_factory() {
         let factory = Arc::new(FakeFactory::new(vec![Ok(FakeBackend::healthy())]));
-        let source = BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
+        let source =
+            BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
         assert_eq!(SourceReader::name(&source), "fake");
     }
-
-
 }

@@ -600,7 +600,6 @@ pub mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod factory_tests {
     use super::*;

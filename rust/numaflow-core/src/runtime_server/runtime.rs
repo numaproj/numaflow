@@ -509,7 +509,9 @@ fn process_file_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime_server::config::{DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH, RuntimeInfoConfig};
+    use crate::runtime_server::config::{
+        DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH, RuntimeInfoConfig,
+    };
     use crate::runtime_server::error::Result;
     use std::fs;
     use std::io::Write;
@@ -585,7 +587,6 @@ mod tests {
             entry.timestamp
         );
     }
-
 
     #[test]
     fn test_persist_runtime_error_public_wrapper() {
