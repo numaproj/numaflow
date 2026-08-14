@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -1045,3 +1048,92 @@ func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
 	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
 	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
 }
+
+func mustHashPodSpec(t *testing.T, ps *corev1.PodSpec) string {
+	b, err := json.Marshal(ps)
+	assert.NoError(t, err)
+	hash := sha256.Sum256(b)
+	return hex.EncodeToString(hash[:])
+}
+
+func TestVertexGetPodSpec_ScaleNormalization(t *testing.T) {
+	req := GetVertexPodSpecReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	baseVertex := testSrcVertex.DeepCopy()
+	baseVertex.Spec.Scale = Scale{
+		Min:             ptr.To(int32(1)),
+		Max:             ptr.To(int32(5)),
+		Disabled:        false,
+		LookbackSeconds: ptr.To(uint32(60)),
+	}
+
+	basePodSpec, err := baseVertex.GetPodSpec(req)
+	assert.NoError(t, err)
+	baseHash := mustHashPodSpec(t, basePodSpec)
+
+	t.Run("scale.min change does NOT change pod spec hash", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.Scale.Min = ptr.To(int32(10))
+		ps, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, baseHash, mustHashPodSpec(t, ps))
+	})
+
+	t.Run("scale.max change does NOT change pod spec hash", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.Scale.Max = ptr.To(int32(20))
+		ps, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, baseHash, mustHashPodSpec(t, ps))
+	})
+
+	t.Run("scale.disabled change does NOT change pod spec hash", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.Scale.Disabled = true
+		ps, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, baseHash, mustHashPodSpec(t, ps))
+	})
+
+	t.Run("scale.lookbackSeconds change DOES change pod spec hash", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.Scale.LookbackSeconds = ptr.To(uint32(120))
+		ps, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, baseHash, mustHashPodSpec(t, ps))
+	})
+
+	t.Run("unrelated field change DOES change pod spec hash", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.ContainerTemplate = &ContainerTemplate{
+			ImagePullPolicy: corev1.PullAlways,
+		}
+		ps, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, baseHash, mustHashPodSpec(t, ps))
+	})
+
+	t.Run("GetPodSpec does NOT mutate original Vertex.Spec.Scale", func(t *testing.T) {
+		v := baseVertex.DeepCopy()
+		v.Spec.Scale = Scale{
+			Min:             ptr.To(int32(2)),
+			Max:             ptr.To(int32(8)),
+			Disabled:        true,
+			LookbackSeconds: ptr.To(uint32(45)),
+		}
+		_, err := v.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.NotNil(t, v.Spec.Scale.Min)
+		assert.Equal(t, int32(2), *v.Spec.Scale.Min)
+		assert.NotNil(t, v.Spec.Scale.Max)
+		assert.Equal(t, int32(8), *v.Spec.Scale.Max)
+		assert.True(t, v.Spec.Scale.Disabled)
+		assert.NotNil(t, v.Spec.Scale.LookbackSeconds)
+		assert.Equal(t, uint32(45), *v.Spec.Scale.LookbackSeconds)
+	})
+}
+
