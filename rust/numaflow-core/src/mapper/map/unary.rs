@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::config::components::sink::OnFailureStrategy;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
+use crate::shared::retry::{RetryController, RetryStep};
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, mpsc, oneshot};
@@ -21,9 +21,9 @@ use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
-    grpc_error_to_redrive, init_retry_backoff, map_redrive_error, reconnect_mapper_client,
-    update_udf_drop_metric, update_udf_error_metric, update_udf_read_metric,
-    update_udf_write_metric, wait_before_map_redrive,
+    grpc_error_to_redrive, map_redrive_error, reconnect_mapper_client, update_udf_drop_metric,
+    update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
+    wait_before_map_redrive,
 };
 
 /// Type alias for the response - raw results from the UDF
@@ -79,9 +79,7 @@ impl MapUnaryTask {
         // parent_info contains offset, so we don't need to clone it separately
         let parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let (retry_strategy, mut opt_backoff) = init_retry_backoff(&self.shared_ctx.retry_config);
-
-        let mut retry_attempt: u64 = 0;
+        let mut retry = RetryController::new(&self.shared_ctx.retry_config);
 
         let mut mapped_messages = {
             // RAII map span: ends when this scope exits.
@@ -110,65 +108,36 @@ impl MapUnaryTask {
                         }
 
                         if mapped_messages.iter().any(|msg| msg.failed()) {
-                            // Apply retry strategy if configured, otherwise retry forever,
-                            // similar to sink/transformer when no retry strategy is set.
-                            if let Some(ref mut backoff_iter) = opt_backoff {
-                                match backoff_iter.next() {
-                                    Some(delay) => {
-                                        retry_attempt += 1;
-                                        warn!(?retry_attempt, offset = ?parent_info.offset, "Retrying map UDF");
-                                        // abort the wait promptly on shutdown so a long retry interval
-                                        // cannot stall the graceful-shutdown window.
-                                        tokio::select! {
-                                            _ = tokio::time::sleep(delay) => {}
-                                            _ = self.shared_ctx.hard_shutdown_token.cancelled() => {
-                                                mark_failed!(self.msg_handle, "map UDF retry wait cancelled", None);
-                                                return;
-                                            }
-                                        }
-                                    }
-                                    None => {
-                                        // retries exhausted, handle the message based on the strategy
-                                        match retry_strategy {
-                                            // backoff iter is only configured when retry strategy is
-                                            // configured, thus we should not reach this condition.
-                                            None => unreachable!(
-                                                "Retry strategy missing at runtime when it was initially configured"
-                                            ),
-                                            // fallback strategy is invalid for map (no fallback sink),
-                                            // should've been caught during spec validation.
-                                            Some(OnFailureStrategy::Fallback) => panic!(
-                                                "Invalid fallback failure strategy configuration detected at runtime"
-                                            ),
-                                            // if strategy is drop, drop the message and move on.
-                                            Some(OnFailureStrategy::Drop) => {
-                                                warn!(
-                                                    retry_attempts = ?retry_attempt,
-                                                    offset = ?parent_info.offset,
-                                                    "Retries exhausted, dropping message."
-                                                );
-                                                update_udf_drop_metric(
-                                                    self.shared_ctx.is_mono_vertex,
-                                                );
-                                                mark_success!(self.msg_handle);
-                                                return;
-                                            }
-                                            // retries exhausted under the retry strategy: give up so
-                                            // the message is nacked.
-                                            Some(OnFailureStrategy::Retry) => {
-                                                let e =
-                                                    Error::Mapper("Retries exhausted".to_string());
-                                                mark_failed!(self.msg_handle, &e, None);
-                                                let _ = self.shared_ctx.error_tx.send(e).await;
-                                                return;
-                                            }
-                                        }
-                                    }
+                            match retry.next_step(&self.shared_ctx.hard_shutdown_token).await {
+                                // Retry the UDF: after the backoff wait, or immediately when no
+                                // retry config is set (retry forever, no backoff).
+                                RetryStep::Again => continue,
+                                RetryStep::Cancelled => {
+                                    mark_failed!(
+                                        self.msg_handle,
+                                        "map UDF retry wait cancelled",
+                                        None
+                                    );
+                                    return;
+                                }
+                                // Retries exhausted under `onFailure: drop` — drop and ack.
+                                RetryStep::Drop => {
+                                    warn!(
+                                        offset = ?parent_info.offset,
+                                        "Retries exhausted, dropping message."
+                                    );
+                                    update_udf_drop_metric(self.shared_ctx.is_mono_vertex);
+                                    mark_success!(self.msg_handle);
+                                    return;
+                                }
+                                // Retries exhausted under `onFailure: retry` — nack.
+                                RetryStep::Nack => {
+                                    let e = Error::Mapper("Retries exhausted".to_string());
+                                    mark_failed!(self.msg_handle, &e, None);
+                                    let _ = self.shared_ctx.error_tx.send(e).await;
+                                    return;
                                 }
                             }
-                            // Loop back and retry the UDF call: either after sleeping above, or
-                            // immediately when no retry config is set (retry forever, no backoff).
-                            continue;
                         }
 
                         break mapped_messages;

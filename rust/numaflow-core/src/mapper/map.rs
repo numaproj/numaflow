@@ -14,7 +14,6 @@ use crate::shared::grpc::{
     DEFAULT_RECONNECT_INTERVAL, UdfReconnectConfig, create_mapper_client, prost_timestamp_from_utc,
 };
 use crate::tracker::Tracker;
-use backoff::strategy::exponential::Exponential;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{Semaphore, mpsc};
@@ -30,7 +29,7 @@ pub(super) mod batch;
 pub(super) mod stream;
 pub(super) mod unary;
 
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::components::sink::RetryConfig;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -697,25 +696,6 @@ async fn create_response_stream(
     }
 
     Ok(resp_stream)
-}
-
-fn init_retry_backoff(
-    retry_config: &Option<RetryConfig>,
-) -> (Option<OnFailureStrategy>, Option<Exponential>) {
-    let retry_strategy = retry_config
-        .as_ref()
-        .map(|rc| rc.sink_retry_on_fail_strategy.clone());
-    let opt_backoff = retry_config.as_ref().map(|rc| {
-        Exponential::from_millis(
-            rc.sink_initial_retry_interval_in_ms,
-            rc.sink_max_retry_interval_in_ms,
-            rc.sink_retry_factor,
-            rc.sink_retry_jitter,
-            Some(rc.sink_max_retry_attempts),
-        )
-    });
-
-    (retry_strategy, opt_backoff)
 }
 
 #[cfg(test)]

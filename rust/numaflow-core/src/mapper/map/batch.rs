@@ -1,16 +1,17 @@
 use super::{
     ParentMessageInfo, UserDefinedMessage, create_response_stream, grpc_error_to_redrive,
-    init_retry_backoff, map_redrive_error, reconnect_mapper_client, update_udf_drop_metric_by_n,
+    map_redrive_error, reconnect_mapper_client, update_udf_drop_metric_by_n,
     update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
     update_udf_write_metric,
 };
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::components::sink::RetryConfig;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
+use crate::shared::retry::{RetryController, RetryStep};
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_failed_batch, mark_success, mark_success_batch};
 use bytes::Bytes;
@@ -89,8 +90,7 @@ impl MapBatchTask {
             otel::TraceStage::Map,
         );
 
-        let (retry_strategy, mut opt_backoff) = init_retry_backoff(&self.retry_config);
-        let mut retry_attempt = 0;
+        let mut retry = RetryController::new(&self.retry_config);
 
         let mut next_retry_handles = self.msg_handles;
         let mut retry_handles = vec![];
@@ -218,55 +218,29 @@ impl MapBatchTask {
                 break;
             }
 
-            if let Some(ref mut backoff_iter) = opt_backoff {
-                match backoff_iter.next() {
-                    Some(delay) => {
-                        retry_attempt += 1;
-                        warn!(?retry_attempt, "Retrying map UDF");
-                        // abort the wait promptly on shutdown so a long retry interval
-                        // cannot stall the graceful-shutdown window.
-                        tokio::select! {
-                            _ = tokio::time::sleep(delay) => {}
-                            _ = self.cln_token.cancelled() => {
-                                mark_failed_batch!(next_retry_handles, "map UDF retry wait cancelled");
-                                break;
-                            }
-                        }
-                    }
-                    None => {
-                        // retries exhausted, handle the message based on the strategy
-                        match retry_strategy {
-                            // backoff iter is only configured when retry strategy is
-                            // configured, thus we should not reach this condition.
-                            None => unreachable!(
-                                "Retry strategy missing at runtime when it was initially configured"
-                            ),
-                            // fallback strategy is invalid for map (no fallback sink),
-                            // should've been caught during spec validation.
-                            Some(OnFailureStrategy::Fallback) => panic!(
-                                "Invalid fallback failure strategy configuration detected at runtime"
-                            ),
-                            // if strategy is drop, drop the message and move on.
-                            Some(OnFailureStrategy::Drop) => {
-                                warn!(
-                                    retry_attempts = ?retry_attempt,
-                                    "Retries exhausted, dropping messages."
-                                );
-                                update_udf_drop_metric_by_n(
-                                    self.is_mono_vertex,
-                                    next_retry_handles.len() as u64,
-                                );
-                                mark_success_batch!(next_retry_handles);
-                            }
-                            // retries exhausted under the retry strategy
-                            Some(OnFailureStrategy::Retry) => {
-                                let e = Error::Mapper("Retries exhausted".to_string());
-                                mark_failed_batch!(next_retry_handles, &e);
-                            }
-                        }
-                        // No more retries remaining
-                        break;
-                    }
+            match retry.next_step(&self.cln_token).await {
+                // Retry the still-failing subset again — after the backoff wait, or immediately
+                // when no retry config is set (retry forever, no backoff).
+                RetryStep::Again => {}
+                RetryStep::Cancelled => {
+                    mark_failed_batch!(next_retry_handles, "map UDF retry wait cancelled");
+                    break;
+                }
+                // Retries exhausted under `onFailure: drop` — drop and ack the subset.
+                RetryStep::Drop => {
+                    warn!("Retries exhausted, dropping messages.");
+                    update_udf_drop_metric_by_n(
+                        self.is_mono_vertex,
+                        next_retry_handles.len() as u64,
+                    );
+                    mark_success_batch!(next_retry_handles);
+                    break;
+                }
+                // Retries exhausted under `onFailure: retry` — nack the subset.
+                RetryStep::Nack => {
+                    let e = Error::Mapper("Retries exhausted".to_string());
+                    mark_failed_batch!(next_retry_handles, &e);
+                    break;
                 }
             }
         }
