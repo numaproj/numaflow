@@ -174,6 +174,7 @@ impl source::LagReader for CoreHttpSource {
 mod tests {
     use super::*;
     use crate::source::{LagReader, SourceAcker, SourceReader};
+    use numaflow_http::HttpSourceConfigBuilder;
     use chrono::Utc;
     use hyper::{Method, Request};
     use hyper_util::client::legacy::Client;
@@ -365,4 +366,18 @@ mod tests {
 
         request_handle.await.unwrap();
     }
+
+    #[tokio::test]
+    async fn http_source_factory_name_and_build() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let config = HttpSourceConfigBuilder::new("test").addr(addr).build();
+        let factory = HttpSourceFactory::new(config, 1, CancellationToken::new()).await;
+        assert_eq!(BuiltinSourceFactory::name(&factory), "HTTP");
+        assert!(factory.build().await.is_ok());
+    }
+
 }

@@ -76,6 +76,10 @@ struct ConsumerReaderActor {
     cancel_token: CancellationToken,
 }
 
+fn ack_pending_limit_reached(pending: usize, max_unack: usize) -> Option<Error> {
+    (pending >= max_unack).then(|| Error::AckPendingExceeded(pending))
+}
+
 impl ConsumerReaderActor {
     async fn start(
         config: PulsarSourceConfig,
@@ -191,8 +195,8 @@ impl ConsumerReaderActor {
         }
 
         let pending = self.state.message_ids.lock().await.len();
-        if pending >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(pending)));
+        if let Some(error) = ack_pending_limit_reached(pending, self.max_unack) {
+            return Some(Err(error));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -309,8 +313,17 @@ impl ConsumerReaderActor {
 
 #[cfg(test)]
 mod state_tests {
-    use super::PulsarSourceState;
+    use super::{Error, PulsarSourceState, ack_pending_limit_reached};
     use pulsar::proto::MessageIdData;
+
+    #[test]
+    fn ack_pending_limit_reached_when_at_capacity() {
+        assert!(matches!(
+            ack_pending_limit_reached(5, 5),
+            Some(Error::AckPendingExceeded(5))
+        ));
+        assert!(ack_pending_limit_reached(4, 5).is_none());
+    }
 
     #[tokio::test]
     async fn source_state_preserves_message_ids_across_generations() {

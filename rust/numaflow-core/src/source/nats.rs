@@ -255,4 +255,40 @@ mod tests {
         let result = source.ack(vec![]).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn nats_source_factory_name() {
+        let factory = NatsSourceFactory::new(
+            NatsSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                subject: "test.subject".into(),
+                queue: "test-queue".into(),
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "NATS");
+    }
+
+    #[tokio::test]
+    async fn nats_source_factory_build_starts_actor() {
+        let factory = NatsSourceFactory::new(
+            NatsSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                subject: "test.subject".into(),
+                queue: "test-queue".into(),
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        let mut backend = factory.build().await.expect("factory build");
+        assert!(backend.read().await.is_some());
+    }
+
 }

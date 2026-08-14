@@ -1173,6 +1173,67 @@ mod tests {
             })
     }
 
+
+    #[test(tokio::test)]
+    async fn test_sqssource_ack_batch_partial_failure() {
+        let queue_url_output = get_queue_url_output();
+        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message_batch)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::delete_message_batch::DeleteMessageBatchOutput::builder()
+                    .successful(
+                        aws_sdk_sqs::types::DeleteMessageBatchResultEntry::builder()
+                            .id("1")
+                            .build()
+                            .unwrap(),
+                    )
+                    .failed(
+                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
+                            .id("1")
+                            .code("InternalError")
+                            .message("delete failed")
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap()
+            });
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&delete_message_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
+            assume_role_config: None,
+        })
+        .batch_size(1)
+        .timeout(Duration::from_secs(0))
+        .client(sqs_mock_client)
+        .build(CancellationToken::new())
+        .await
+        .unwrap();
+
+        let offset = "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q";
+        let result = source.ack_offsets(vec![Bytes::from(offset)]).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("failed to delete one or more messages"));
+    }
     fn get_queue_url_output() -> Rule {
         mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")

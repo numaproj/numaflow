@@ -331,4 +331,43 @@ mod tests {
             "Pending messages should be 0 after acking all messages"
         );
     }
+
+    #[tokio::test]
+    async fn jetstream_source_factory_name() {
+        let factory = JetstreamSourceFactory::new(
+            JetstreamSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                stream: "test-stream".into(),
+                consumer: "test-consumer".into(),
+                deliver_policy: ConsumerDeliverPolicy::NEW,
+                filter_subjects: vec![],
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "Jetstream");
+    }
+
+    #[tokio::test]
+    async fn jetstream_source_factory_build_fails_with_unreachable_server() {
+        let factory = JetstreamSourceFactory::new(
+            JetstreamSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                stream: "test-stream".into(),
+                consumer: "test-consumer".into(),
+                deliver_policy: ConsumerDeliverPolicy::NEW,
+                filter_subjects: vec![],
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert!(factory.build().await.is_err());
+    }
+
 }

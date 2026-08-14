@@ -469,20 +469,26 @@ mod tests {
 
     struct FakeBackend {
         read_error: Option<Error>,
+        read_returns_none: bool,
         ack_error: Option<Error>,
         nack_error: Option<Error>,
         pending: Option<usize>,
+        pending_error: Option<Error>,
         partitions: SourcePartitions,
+        partitions_error: Option<Error>,
     }
 
     impl FakeBackend {
         fn healthy() -> Self {
             Self {
                 read_error: None,
+                read_returns_none: false,
                 ack_error: None,
                 nack_error: None,
                 pending: Some(12),
+                pending_error: None,
                 partitions: SourcePartitions::new(vec![1, 2], Some(2)),
+                partitions_error: None,
             }
         }
     }
@@ -490,6 +496,9 @@ mod tests {
     #[async_trait]
     impl BuiltinSourceBackend for FakeBackend {
         async fn read(&mut self) -> Option<Result<Vec<Message>>> {
+            if self.read_returns_none {
+                return None;
+            }
             Some(self.read_error.take().map_or_else(|| Ok(vec![]), Err))
         }
 
@@ -502,10 +511,16 @@ mod tests {
         }
 
         async fn pending(&mut self) -> Result<Option<usize>> {
+            if let Some(error) = self.pending_error.take() {
+                return Err(error);
+            }
             Ok(self.pending)
         }
 
         async fn partitions(&mut self) -> Result<SourcePartitions> {
+            if let Some(error) = self.partitions_error.take() {
+                return Err(error);
+            }
             Ok(self.partitions.clone())
         }
     }
@@ -538,6 +553,24 @@ mod tests {
                 .pop_front()
                 .expect("unexpected build attempt")
                 .map(|backend| Box::new(backend) as Box<dyn BuiltinSourceBackend>)
+        }
+    }
+
+
+    struct SlowFactory {
+        build_count: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl BuiltinSourceFactory for SlowFactory {
+        fn name(&self) -> &'static str {
+            "slow"
+        }
+
+        async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
+            self.build_count.fetch_add(1, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            Ok(Box::new(FakeBackend::healthy()))
         }
     }
 
@@ -733,4 +766,104 @@ mod tests {
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(runtime_error_files(&temp_dir).len(), 2);
     }
+
+    #[tokio::test]
+    async fn build_timeout_marks_degraded_without_panicking() {
+        let factory = Arc::new(SlowFactory {
+            build_count: AtomicUsize::new(0),
+        });
+        let mut config = retry_config();
+        config.build_timeout = Duration::from_millis(20);
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let mut source = BuiltinSource::with_runtime_error_path(
+            factory,
+            CancellationToken::new(),
+            config,
+            temp_dir.path().to_str().expect("temp path").to_string(),
+        );
+
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+    }
+
+    #[tokio::test]
+    async fn stream_closed_recreates_backend_and_returns_empty_batch() {
+        let mut closed_backend = FakeBackend::healthy();
+        closed_backend.read_returns_none = true;
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(closed_backend),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert!(source.is_ready().await);
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn pending_failure_marks_degraded() {
+        let mut failing = FakeBackend::healthy();
+        failing.pending_error = Some(Error::Source("lag query failed".into()));
+        let factory = Arc::new(FakeFactory::new(vec![Ok(failing)]));
+        let (mut source, _temp_dir) = test_source(factory, CancellationToken::new());
+
+        assert_eq!(source.pending().await.unwrap(), None);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+    }
+
+    #[tokio::test]
+    async fn pending_after_success_returns_cached_value_when_later_query_fails() {
+        let mut read_failed = FakeBackend::healthy();
+        read_failed.read_error = Some(Error::Source("read failed".into()));
+        let mut pending_failed = FakeBackend::healthy();
+        pending_failed.pending_error = Some(Error::Source("lag query failed".into()));
+        let factory = Arc::new(FakeFactory::new(vec![Ok(read_failed), Ok(pending_failed)]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.pending().await.unwrap(), Some(12));
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.pending().await.unwrap(), Some(12));
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+    }
+
+    #[tokio::test]
+    async fn partitions_failure_marks_degraded_and_returns_cached_partitions() {
+        let mut failing = FakeBackend::healthy();
+        failing.partitions_error = Some(Error::Source("metadata unavailable".into()));
+        let factory = Arc::new(FakeFactory::new(vec![Ok(failing)]));
+        let (mut source, _temp_dir) = test_source(factory, CancellationToken::new());
+
+        let partitions = source.partitions().await.unwrap();
+        assert!(partitions.active_partitions.is_empty());
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+    }
+
+    #[tokio::test]
+    async fn pending_while_backend_unavailable_returns_last_cached_value() {
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(FakeBackend::healthy()),
+            Err(Error::Config("still starting".into())),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        assert_eq!(source.pending().await.unwrap(), Some(12));
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(source.pending().await.unwrap(), Some(12));
+    }
+
+    #[tokio::test]
+    async fn source_name_delegates_to_factory() {
+        let factory = Arc::new(FakeFactory::new(vec![Ok(FakeBackend::healthy())]));
+        let source = BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
+        assert_eq!(SourceReader::name(&source), "fake");
+    }
+
+
 }

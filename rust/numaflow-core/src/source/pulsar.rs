@@ -260,4 +260,44 @@ mod tests {
 
         Ok(())
     }
+    #[tokio::test]
+    async fn pulsar_source_factory_name() {
+        let factory = PulsarSourceFactory::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: "not-a-valid-pulsar-url".into(),
+                topic: "persistent://public/default/test".into(),
+                consumer_name: "test-consumer".into(),
+                subscription: "test-sub".into(),
+                max_unack: 10,
+                dead_letter_policy: None,
+                auth: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "Pulsar");
+    }
+
+    #[tokio::test]
+    async fn pulsar_source_factory_build_fails_with_invalid_server() {
+        let factory = PulsarSourceFactory::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: "not-a-valid-pulsar-url".into(),
+                topic: "persistent://public/default/test".into(),
+                consumer_name: "test-consumer".into(),
+                subscription: "test-sub".into(),
+                max_unack: 10,
+                dead_letter_policy: None,
+                auth: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert!(factory.build().await.is_err());
+    }
+
 }

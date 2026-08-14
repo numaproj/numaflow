@@ -391,4 +391,49 @@ mod tests {
             "Pending messages should be 0 after acking all messages"
         );
     }
+
+    #[tokio::test]
+    async fn kafka_source_factory_name() {
+        let factory = KafkaSourceFactory::new(
+            KafkaSourceConfig {
+                brokers: vec!["127.0.0.1:1".into()],
+                topics: vec!["test-topic".into()],
+                consumer_group: "test-group".into(),
+                auth: None,
+                tls: None,
+                kafka_raw_config: HashMap::from([(
+                    "socket.timeout.ms".to_string(),
+                    "100".to_string(),
+                )]),
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "Kafka");
+    }
+
+    #[tokio::test]
+    async fn kafka_source_factory_build_fails_with_unreachable_broker() {
+        let factory = KafkaSourceFactory::new(
+            KafkaSourceConfig {
+                brokers: vec!["127.0.0.1:1".into()],
+                topics: vec!["test-topic".into()],
+                consumer_group: "test-group".into(),
+                auth: None,
+                tls: None,
+                kafka_raw_config: HashMap::from([(
+                    "socket.timeout.ms".to_string(),
+                    "100".to_string(),
+                )]),
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        let result = tokio::time::timeout(Duration::from_secs(5), factory.build()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
+    }
+
 }

@@ -599,3 +599,57 @@ pub mod tests {
         )
     }
 }
+
+
+#[cfg(test)]
+mod factory_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sqs_source_factory_name() {
+        let factory = SqsSourceFactory::new(
+            SqsSourceConfig {
+                region: "us-west-2",
+                queue_name: "missing-queue",
+                queue_owner_aws_account_id: "123456789012",
+                visibility_timeout: None,
+                max_number_of_messages: None,
+                wait_time_seconds: None,
+                endpoint_url: Some("http://127.0.0.1:1".into()),
+                attribute_names: vec![],
+                message_attribute_names: vec![],
+                assume_role_config: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "SQS");
+    }
+
+    #[tokio::test]
+    async fn sqs_source_factory_build_fails_with_unreachable_endpoint() {
+        let factory = SqsSourceFactory::new(
+            SqsSourceConfig {
+                region: "us-west-2",
+                queue_name: "missing-queue",
+                queue_owner_aws_account_id: "123456789012",
+                visibility_timeout: None,
+                max_number_of_messages: None,
+                wait_time_seconds: None,
+                endpoint_url: Some("http://127.0.0.1:1".into()),
+                attribute_names: vec![],
+                message_attribute_names: vec![],
+                assume_role_config: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        let result = tokio::time::timeout(Duration::from_secs(5), factory.build()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
+    }
+}
