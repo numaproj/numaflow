@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulsar
+spec:
+  ports:
+    - name: broker
+      port: 6650
+      targetPort: broker
+    - name: admin
+      port: 8080
+      targetPort: admin
+  selector:
+    app: pulsar
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pulsar
+spec:
+  serviceName: pulsar
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pulsar
+  template:
+    metadata:
+      labels:
+        app: pulsar
+    spec:
+      containers:
+        - name: pulsar
+          image: apachepulsar/pulsar:4.0.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - exec bin/pulsar standalone
+          env:
+            - name: PULSAR_MEM
+              value: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=512m
+          ports:
+            - name: broker
+              containerPort: 6650
+            - name: admin
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /admin/v2/brokers/health
+              port: admin
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /pulsar/data
+      volumes:
+        - name: data
+          emptyDir: {}

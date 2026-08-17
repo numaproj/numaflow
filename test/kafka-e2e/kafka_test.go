@@ -19,23 +19,122 @@ limitations under the License.
 package kafka_e2e
 
 import (
+	"context"
+	"crypto/tls"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
+//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker redpanda --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
-// Wait for zookeeper to come up
-//go:generate sleep 60
+//go:generate kubectl -n numaflow-system rollout status statefulset/redpanda --timeout=2m
+//go:generate kubectl -n numaflow-system exec redpanda-0 -- rpk cluster health --watch --exit-when-healthy
 
 type KafkaSuite struct {
 	fixtures.E2ESuite
+}
+
+const (
+	kafkaSourceVertex                = "input"
+	kafkaRecoveryConfig              = "socket.timeout.ms: 3000\nsession.timeout.ms: 10000\nheartbeat.interval.ms: 3000\nreconnect.backoff.ms: 100"
+	kafkaRebalanceLog                = "Pre rebalance Revoke"
+	builtinSourceOperationFailedLog  = "Built-in source operation failed; will recreate the source client after backoff"
+	builtinSourceDegradedLog         = "Built-in source entered degraded state"
+	builtinSourceReconnectedLog      = "Source client reconnected successfully"
+	builtinKafkaRuntimeErrorLog      = `"Built-in Kafka source read failed"`
+	fatalSourceForwarderLog          = "Error running pipeline"
+	kafkaRecoveryAssertionTimeout    = 90 * time.Second
+	kafkaNegativeLogAssertionTimeout = 5 * time.Second
+	kafkaRuntimeErrorLocalPort       = 8951
+)
+
+var kafkaRuntimeErrorHTTPClient = &http.Client{
+	Timeout:   5 * time.Second,
+	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+}
+
+func kafkaRuntimeErrorsContain(baseURL, path, expected string) bool {
+	url := baseURL + path
+	resp, err := kafkaRuntimeErrorHTTPClient.Get(url)
+	if err != nil {
+		log.Printf("GET %s failed: %v, retrying.\n", url, err)
+		return false
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("GET %s returned %s, body: %s, retrying.\n", url, resp.Status, body)
+		return false
+	}
+	if readErr != nil {
+		log.Printf("GET %s body read failed: %v, retrying.\n", url, readErr)
+		return false
+	}
+	if !strings.Contains(string(body), expected) {
+		log.Printf("GET %s does not contain %q yet, body: %s, retrying.\n", url, expected, body)
+		return false
+	}
+	return true
+}
+
+func kafkaSourceRedisPipeline(name, topic, consumerGroup, sinkHash string) *dfv1.Pipeline {
+	return &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: kafkaSourceVertex,
+					Source: &dfv1.Source{
+						Kafka: &dfv1.KafkaSource{
+							Brokers:           []string{"kafka:9092"},
+							Topic:             topic,
+							ConsumerGroupName: consumerGroup,
+							Config:            kafkaRecoveryConfig,
+						},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{
+						AbstractSink: dfv1.AbstractSink{
+							UDSink: &dfv1.UDSink{
+								Container: &dfv1.Container{
+									Image: "quay.io/numaio/numaflow-go/redis-sink:stable",
+									Env: []corev1.EnvVar{
+										{Name: "SINK_HASH_KEY", Value: sinkHash},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			Edges: []dfv1.Edge{{From: kafkaSourceVertex, To: "output"}},
+		},
+	}
+}
+
+func (ks *KafkaSuite) createKafkaTopic(partitions int32) string {
+	ks.T().Helper()
+	topic := fixtures.GenerateKafkaTopicName()
+	fixtures.CreateKafkaTopic(topic, partitions)
+	ks.T().Cleanup(func() {
+		fixtures.DeleteKafkaTopic(topic)
+	})
+	return topic
 }
 
 func (ks *KafkaSuite) TestKafkaSourceSink() {
@@ -89,6 +188,218 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 	fixtures.ExpectKafkaTopicCount(outputTopic, 100, 20*time.Second)
 	fixtures.DeleteKafkaTopic(outputTopic)
 	fixtures.DeleteKafkaTopic(inputTopic)
+}
+
+func (ks *KafkaSuite) TestKafkaRebalanceDoesNotRestartNuma() {
+	const (
+		partitions   = 4
+		churnCycles  = 3
+		messageCount = 2000
+	)
+	inputTopic := ks.createKafkaTopic(partitions)
+	consumerGroup := fmt.Sprintf("kafka-rebalance-%s", inputTopic)
+	sinkHash := fmt.Sprintf("kafka-rebalance-%s", inputTopic)
+
+	pipelineA := kafkaSourceRedisPipeline("kafka-rebalance-a", inputTopic, consumerGroup, sinkHash)
+	replicas := int32(1)
+	pipelineA.Spec.Vertices[0].Scale = dfv1.Scale{Min: &replicas, Max: &replicas}
+	bufferMaxLength := uint64(20)
+	pipelineA.Spec.Vertices[1].Limits = &dfv1.VertexLimits{BufferMaxLength: &bufferMaxLength}
+	wA := ks.Given().WithPipeline(pipelineA).When().CreatePipelineAndWait()
+	defer wA.DeletePipelineAndWait()
+	wA.Expect().VertexPodsRunning()
+	snapshotA := wA.Expect().VertexPodRuntimeSnapshot(kafkaSourceVertex)
+	ks.EqualValues(0, snapshotA.NumaRestartCount, "numa should not restart while starting pipeline A")
+
+	for partition := 0; partition < partitions; partition++ {
+		fixtures.SendMessage(inputTopic, fmt.Sprintf("warmup-%d", partition), fmt.Sprintf("warmup-%d", partition), partition)
+	}
+	wA.Expect().RedisSinkContains(sinkHash, "warmup-0")
+
+	scaleOutput := func(replicas int) {
+		ks.T().Helper()
+		wA.Exec(
+			"/bin/sh",
+			[]string{
+				"-c",
+				fmt.Sprintf(
+					"kubectl scale vtx %s-output --replicas=%d -n %s",
+					pipelineA.Name,
+					replicas,
+					fixtures.Namespace,
+				),
+			},
+			fixtures.CheckVertexScaled,
+		)
+		wA.Expect().VertexSizeScaledTo("output", replicas)
+	}
+	scaleOutput(0)
+
+	pumpCtx, cancelPump := context.WithCancel(context.Background())
+	pumpDone := fixtures.PumpKafkaTopicPartitionsAsync(
+		pumpCtx,
+		inputTopic,
+		messageCount,
+		partitions,
+		time.Millisecond,
+		10,
+	)
+	pumpFinished := false
+	defer func() {
+		cancelPump()
+		if !pumpFinished {
+			<-pumpDone
+		}
+	}()
+
+	for cycle := 0; cycle < churnCycles; cycle++ {
+		pipelineB := kafkaSourceRedisPipeline(
+			fmt.Sprintf("kafka-rebalance-b-%d", cycle),
+			inputTopic,
+			consumerGroup,
+			sinkHash,
+		)
+		wB := ks.Given().WithPipeline(pipelineB).When().CreatePipelineAndWait()
+		wB.Expect().VertexPodsRunning()
+		snapshotB := wB.Expect().VertexPodRuntimeSnapshot(kafkaSourceVertex)
+		ks.EqualValues(0, snapshotB.NumaRestartCount, "numa should not restart while joining the consumer group")
+
+		time.Sleep(2 * time.Second)
+		wA.Expect().VertexNumaStable(snapshotA, kafkaSourceVertex)
+		wB.Expect().VertexNumaStable(snapshotB, kafkaSourceVertex)
+		wB.DeletePipelineAndWait()
+	}
+
+	scaleOutput(1)
+
+	select {
+	case err := <-pumpDone:
+		pumpFinished = true
+		ks.Require().NoError(err)
+	case <-time.After(2 * time.Minute):
+		ks.T().Fatal("timed out waiting for Kafka message pump")
+	}
+
+	wA.Expect().
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			kafkaRebalanceLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
+		VertexNumaStable(snapshotA, kafkaSourceVertex)
+
+	recoveryMarker := fmt.Sprintf("rebalance-recovered-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, recoveryMarker, recoveryMarker, 0)
+	wA.Expect().
+		RedisSinkContains(sinkHash, recoveryMarker).
+		VertexNumaStable(snapshotA, kafkaSourceVertex).
+		VertexPodLogNotContains(
+			kafkaSourceVertex,
+			fatalSourceForwarderLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
+		)
+}
+
+func (ks *KafkaSuite) TestKafkaBrokerInterruptionDoesNotRestartNuma() {
+	inputTopic := ks.createKafkaTopic(1)
+	consumerGroup := fmt.Sprintf("kafka-outage-%s", inputTopic)
+	sinkHash := fmt.Sprintf("kafka-outage-%s", inputTopic)
+	pipeline := kafkaSourceRedisPipeline("kafka-broker-interruption", inputTopic, consumerGroup, sinkHash)
+
+	w := ks.Given().WithPipeline(pipeline).When().CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	w.Expect().VertexPodsRunning()
+
+	warmupMarker := fmt.Sprintf("broker-warmup-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, warmupMarker, warmupMarker, 0)
+	w.Expect().RedisSinkContains(sinkHash, warmupMarker)
+
+	snapshot := w.Expect().VertexPodRuntimeSnapshot(kafkaSourceVertex)
+	ks.EqualValues(0, snapshot.NumaRestartCount, "numa should not restart before broker interruption")
+
+	ks.Require().NoError(fixtures.RestartKafkaBroker(2 * time.Minute))
+
+	w.Expect().
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			builtinSourceOperationFailedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			builtinSourceDegradedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
+		VertexNumaStable(snapshot, kafkaSourceVertex)
+
+	fixtures.ResetKafkaClients()
+
+	recoveryMarker := fmt.Sprintf("broker-recovered-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, recoveryMarker, recoveryMarker, 0)
+	w.Expect().
+		RedisSinkContains(sinkHash, recoveryMarker).
+		VertexNumaStable(snapshot, kafkaSourceVertex).
+		VertexPodLogContains(
+			kafkaSourceVertex,
+			builtinSourceReconnectedLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaRecoveryAssertionTimeout),
+		).
+		VertexPodLogNotContains(
+			kafkaSourceVertex,
+			fatalSourceForwarderLog,
+			fixtures.PodLogCheckOptionWithContainer(dfv1.CtrMain),
+			fixtures.PodLogCheckOptionWithTimeout(kafkaNegativeLogAssertionTimeout),
+		)
+}
+
+func (ks *KafkaSuite) TestKafkaBrokerInterruptionReportsRuntimeError() {
+	inputTopic := ks.createKafkaTopic(1)
+	consumerGroup := fmt.Sprintf("kafka-runtime-error-%s", inputTopic)
+	sinkHash := fmt.Sprintf("kafka-runtime-error-%s", inputTopic)
+	pipeline := kafkaSourceRedisPipeline("kafka-broker-runtime-error", inputTopic, consumerGroup, sinkHash)
+
+	w := ks.Given().WithPipeline(pipeline).When().CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	w.Expect().VertexPodsRunning()
+
+	warmupMarker := fmt.Sprintf("runtime-warmup-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, warmupMarker, warmupMarker, 0)
+	w.Expect().RedisSinkContains(sinkHash, warmupMarker)
+
+	snapshot := w.Expect().VertexPodRuntimeSnapshot(kafkaSourceVertex)
+	defer w.VertexPodPortForward(kafkaSourceVertex, kafkaRuntimeErrorLocalPort, dfv1.VertexRuntimePort).
+		TerminateAllPodPortForwards()
+
+	ks.Require().NoError(fixtures.RestartKafkaBroker(2 * time.Minute))
+
+	assert.Eventually(ks.T(), func() bool {
+		return kafkaRuntimeErrorsContain(
+			fmt.Sprintf("https://localhost:%d", kafkaRuntimeErrorLocalPort),
+			"/runtime/errors",
+			`"container":"numa"`,
+		)
+	}, kafkaRecoveryAssertionTimeout, time.Second, "numa runtime error not reported during broker outage")
+
+	assert.Eventually(ks.T(), func() bool {
+		return kafkaRuntimeErrorsContain(
+			fmt.Sprintf("https://localhost:%d", kafkaRuntimeErrorLocalPort),
+			"/runtime/errors",
+			builtinKafkaRuntimeErrorLog,
+		)
+	}, kafkaRecoveryAssertionTimeout, time.Second, "built-in kafka runtime error not reported during broker outage")
+
+	fixtures.ResetKafkaClients()
+
+	recoveryMarker := fmt.Sprintf("runtime-recovered-%s", inputTopic)
+	fixtures.SendMessage(inputTopic, recoveryMarker, recoveryMarker, 0)
+	w.Expect().
+		RedisSinkContains(sinkHash, recoveryMarker).
+		VertexNumaStable(snapshot, kafkaSourceVertex)
 }
 
 func TestKafkaSuite(t *testing.T) {

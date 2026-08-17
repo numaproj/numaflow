@@ -30,6 +30,13 @@ func main() {
 	http.HandleFunc("/kafka/count-topic", kafkaController.CountTopicHandler)
 	http.HandleFunc("/kafka/produce-topic", kafkaController.ProduceTopicHandler)
 	http.HandleFunc("/kafka/pump-topic", kafkaController.PumpTopicHandler)
+	http.HandleFunc("/kafka/reset", kafkaController.ResetHandler)
+
+	// initialize Pulsar handlers
+	pulsarController := NewPulsarController()
+	http.HandleFunc("/pulsar/produce-topic", pulsarController.ProduceTopicHandler)
+	http.HandleFunc("/pulsar/pump-topic", pulsarController.PumpTopicHandler)
+	http.HandleFunc("/pulsar/reset", pulsarController.ResetHandler)
 
 	// initialize Redis handlers
 	redisController := NewRedisController()
@@ -55,6 +62,7 @@ func main() {
 
 	// close all controllers
 	kafkaController.Close()
+	pulsarController.Close()
 	redisController.Close()
 	httpController.Close()
 	natsController.Close()
