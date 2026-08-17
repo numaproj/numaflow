@@ -51,6 +51,40 @@ func getContainerStatus(phase string) corev1.ContainerStatus {
 // fakePod returns a fake pod with the given pipeline name, vertex name, namespace and phase.
 func fakePod(pipelineName string, vertexName string, namespace string, phase string) *corev1.Pod {
 	containerStatus := getContainerStatus(phase)
+	podPhase := corev1.PodRunning
+	var containerStatuses []corev1.ContainerStatus
+	var initContainerStatuses []corev1.ContainerStatus
+	switch phase {
+	case "pending":
+		// Pending/unschedulable pods often have empty container statuses.
+		podPhase = corev1.PodPending
+	case "waiting":
+		containerStatuses = []corev1.ContainerStatus{containerStatus}
+		initContainerStatuses = []corev1.ContainerStatus{
+			{
+				Name:  "init",
+				Ready: true,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 0,
+					},
+				},
+			},
+		}
+	default:
+		containerStatuses = []corev1.ContainerStatus{containerStatus}
+		initContainerStatuses = []corev1.ContainerStatus{
+			{
+				Name:  "init",
+				Ready: true,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 0,
+					},
+				},
+			},
+		}
+	}
 	pod := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
@@ -72,20 +106,20 @@ func fakePod(pipelineName string, vertexName string, namespace string, phase str
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase:             corev1.PodPhase("Running"),
-			ContainerStatuses: []corev1.ContainerStatus{containerStatus},
-			InitContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name:  "init",
-					Ready: true,
-					State: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{
-							ExitCode: 0,
-						},
-					},
-				},
-			},
+			Phase:                podPhase,
+			ContainerStatuses:    containerStatuses,
+			InitContainerStatuses: initContainerStatuses,
 		},
+	}
+	if phase == "pending" {
+		pod.Status.Conditions = []corev1.PodCondition{
+			{
+				Type:    corev1.PodScheduled,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Unschedulable",
+				Message: "0/1 nodes are available: 1 Insufficient cpu.",
+			},
+		}
 	}
 	return pod
 }
@@ -157,6 +191,8 @@ func fakeVertex(name string, phase dfv1.VertexPhase) *dfv1.Vertex {
 			Phase:           phase,
 			Replicas:        1,
 			DesiredReplicas: 1,
+			// Match desired by default so Running-phase health tests exercise pod checks.
+			ReadyReplicas: 1,
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas: ptr.To[int32](1),

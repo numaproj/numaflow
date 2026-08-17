@@ -32,6 +32,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 	t.Run("Test Vertex status as true", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
 				},
@@ -51,6 +52,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		pods := corev1.PodList{
 			Items: []corev1.Pod{
 				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 					}},
@@ -77,6 +79,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 	t.Run("Test Vertex status as true with non-recent restart", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
@@ -100,6 +103,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 	t.Run("Test Vertex status as false with recent restart", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name:  "numa",
@@ -122,6 +126,54 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
 		assert.True(t, transient)
+	})
+
+	t.Run("Pending pod with empty containerStatuses is unhealthy", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "pending-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodPending", reason)
+		assert.Contains(t, message, "Pending")
+		assert.False(t, transient)
+	})
+
+	t.Run("Pending unschedulable pod includes PodScheduled message", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:    corev1.PodScheduled,
+						Status:  corev1.ConditionFalse,
+						Reason:  "Unschedulable",
+						Message: "0/1 nodes are available: 1 Insufficient cpu.",
+					},
+				},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodUnschedulable", reason)
+		assert.Contains(t, message, "Insufficient cpu")
+		assert.False(t, transient)
+	})
+
+	t.Run("Failed pod is unhealthy", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "failed-pod"}, Status: corev1.PodStatus{
+				Phase:   corev1.PodFailed,
+				Message: "Pod failed for testing",
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodFailed", reason)
+		assert.Contains(t, message, "Pod failed for testing")
+		assert.False(t, transient)
 	})
 
 	t.Run("Test skip terminating pod with DeletionTimestamp set", func(t *testing.T) {
@@ -165,8 +217,8 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		}}
 		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.False(t, done)
-		assert.Equal(t, "PodError", reason)
-		assert.Equal(t, `Pod failed-pod: container "numa" Error`, message)
+		assert.Equal(t, "PodFailed", reason)
+		assert.Contains(t, message, "Failed")
 	})
 
 	t.Run("Test unhealthy pod is still detected among terminating pods", func(t *testing.T) {

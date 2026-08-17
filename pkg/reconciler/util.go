@@ -55,6 +55,26 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string,
 		return true, "", "", false
 	}
 
+	// Treat Failed/Unknown/Pending phases as unhealthy before inspecting containers.
+	// Pending/unschedulable pods often have empty containerStatuses.
+	switch pod.Status.Phase {
+	case corev1.PodFailed:
+		msg := pod.Status.Message
+		if msg == "" {
+			msg = "Pod is in Failed phase"
+		}
+		return false, "Failed", msg, false
+	case corev1.PodUnknown:
+		msg := pod.Status.Message
+		if msg == "" {
+			msg = "Pod is in Unknown phase"
+		}
+		return false, "Unknown", msg, false
+	case corev1.PodPending:
+		reason, msg := pendingPodReasonAndMessage(pod)
+		return false, reason, msg, false
+	}
+
 	// check both container and initContainer statuses
 	healthy, reason, message, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)
 	if !healthy {
@@ -67,6 +87,28 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string,
 
 	return true, "", "", false
 
+}
+
+// pendingPodReasonAndMessage returns a short reason and operator-visible message for a Pending pod.
+func pendingPodReasonAndMessage(pod *corev1.Pod) (string, string) {
+	// Prefer PodScheduled condition message (e.g. Insufficient cpu) for operator-visible status.
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
+			msg := c.Message
+			if msg == "" {
+				msg = "Pod is unschedulable"
+			}
+			if c.Reason == "Unschedulable" || c.Reason == "" {
+				return "Unschedulable", msg
+			}
+			return c.Reason, msg
+		}
+	}
+	msg := pod.Status.Message
+	if msg == "" {
+		msg = "Pod is in Pending phase"
+	}
+	return "Pending", msg
 }
 
 // checkContainerStatuses inspects a set of container statuses and, when any are unhealthy,

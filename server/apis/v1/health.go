@@ -8,6 +8,7 @@ import (
 
 	evictCache "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -184,6 +185,15 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 		}, nil
 	}
 
+	// When the vertex phase is Running, require ready replicas to match desired.
+	if vertex.Status.DesiredReplicas > 0 && vertex.Status.ReadyReplicas < vertex.Status.DesiredReplicas {
+		return false, &resourceHealthResponse{
+			Message: fmt.Sprintf("Vertex %q has %d ready replicas, expected %d",
+				vertex.Name, vertex.Status.ReadyReplicas, vertex.Status.DesiredReplicas),
+			Code: "V9",
+		}, nil
+	}
+
 	// Get all the pods for the given vertex
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName,
@@ -197,6 +207,29 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 	}
 	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in a healthy state
 	for _, pod := range pods.Items {
+		// Skip pods that are terminating or already completed (same as controller health checks).
+		if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
+			continue
+		}
+		// Non-Running pods (e.g. Pending with empty ContainerStatuses) are unhealthy.
+		if pod.Status.Phase != corev1.PodRunning {
+			msg := pod.Status.Message
+			if msg == "" {
+				for _, c := range pod.Status.Conditions {
+					if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse && c.Message != "" {
+						msg = c.Message
+						break
+					}
+				}
+			}
+			if msg == "" {
+				msg = fmt.Sprintf("pod is in %s phase", pod.Status.Phase)
+			}
+			return false, &resourceHealthResponse{
+				Message: fmt.Sprintf("Pod %q is not running: %s", pod.Name, msg),
+				Code:    "V3",
+			}, nil
+		}
 		// Iterate over all the containers in the pod
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			// if the container is not in running state, return false
