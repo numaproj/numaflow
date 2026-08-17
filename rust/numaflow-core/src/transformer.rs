@@ -120,54 +120,26 @@ impl Transformer {
         transform_handle: mpsc::Sender<TransformerActorMessage>,
         read_msg: Message,
         hard_shutdown_token: CancellationToken,
-        mut retry: RetryController,
-        drop_count: Arc<AtomicUsize>,
     ) -> Result<Vec<Message>> {
-        let response = loop {
-            let (sender, receiver) = oneshot::channel();
-            let msg = TransformerActorMessage {
-                message: read_msg.clone(),
-                respond_to: sender,
-            };
+        let (sender, receiver) = oneshot::channel();
+        let msg = TransformerActorMessage {
+            message: read_msg.clone(),
+            respond_to: sender,
+        };
 
-            // invoke transformer
-            transform_handle.send(msg).await.map_err(|e| {
-                Error::Transformer(format!("failed to send message to server: {e}"))
-            })?;
+        // invoke transformer
+        transform_handle
+            .send(msg)
+            .await
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {e}")))?;
 
-            // wait for the response
-            let response = tokio::select! {
-                _ = hard_shutdown_token.cancelled() => {
-                    return Err(Error::Transformer("Operation cancelled".to_string()));
-                }
-                response = receiver => {
-                    response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {e}")))??
-                }
-            };
-
-            if response.iter().any(|msg| msg.failed()) {
-                match retry.next_step(&hard_shutdown_token).await {
-                    // Retry the transformer: after the backoff wait, or immediately when no retry config
-                    // is set (retry forever, no backoff), similar to the sink.
-                    RetryStep::Again => {}
-                    // On cancellation, give up so the message is nacked.
-                    RetryStep::Cancelled => {
-                        return Err(Error::Transformer("Operation cancelled".to_string()));
-                    }
-                    // Retries exhausted under `onFailure: drop` — drop the message.
-                    RetryStep::Drop => {
-                        warn!("Retries exhausted, dropping message.");
-                        drop_count.fetch_add(1, Ordering::Relaxed);
-                        // Return early to avoid tripping the EOT empty-response check below.
-                        return Ok(vec![]);
-                    }
-                    // Retries exhausted under `onFailure: retry` — give up so the message is nacked.
-                    RetryStep::Nack => {
-                        return Err(Error::Transformer("Retries exhausted".to_string()));
-                    }
-                }
-            } else {
-                break response;
+        // wait for the response
+        let response = tokio::select! {
+            _ = hard_shutdown_token.cancelled() => {
+                return Err(Error::Transformer("Operation cancelled".to_string()));
+            }
+            response = receiver => {
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {e}")))??
             }
         };
 
@@ -247,7 +219,7 @@ impl Transformer {
             let read_msg = msg_handle.message().clone();
             let source_transform_parent = dispatch_parent_contexts
                 .and_then(|parent_contexts| parent_contexts.get(&read_msg.offset).cloned());
-            let retry_controller = retry_controller.clone();
+            let mut retry_controller = retry_controller.clone();
             let drop_count_cln = Arc::clone(&dropped_message_count);
 
             async move {
@@ -262,12 +234,38 @@ impl Transformer {
                         transform_handle.clone(),
                         read_msg.clone(),
                         hard_shutdown_token.clone(),
-                        retry_controller.clone(),
-                        Arc::clone(&drop_count_cln),
                     )
                     .await
                     {
-                        Ok(messages) => break messages,
+                        Ok(messages) => {
+                            if messages.iter().any(|msg| msg.failed()) {
+                                match retry_controller.next_step(&hard_shutdown_token).await {
+                                    // Retry the transformer: after the backoff wait, or immediately when no retry config
+                                    // is set (retry forever, no backoff), similar to the sink.
+                                    RetryStep::Again => {}
+                                    // On cancellation, give up so the message is nacked.
+                                    RetryStep::Cancelled => {
+                                        return Err(Error::Transformer(
+                                            "Operation cancelled".to_string(),
+                                        ));
+                                    }
+                                    // Retries exhausted under `onFailure: drop` — drop the message.
+                                    RetryStep::Drop => {
+                                        warn!("Retries exhausted, dropping message.");
+                                        drop_count_cln.fetch_add(1, Ordering::Relaxed);
+                                        break vec![];
+                                    }
+                                    // Retries exhausted under `onFailure: retry` — give up so the message is nacked.
+                                    RetryStep::Nack => {
+                                        return Err(Error::Transformer(
+                                            "Retries exhausted".to_string(),
+                                        ));
+                                    }
+                                }
+                            } else {
+                                break messages;
+                            }
+                        }
                         Err(Error::UdfRedrive(e)) => {
                             error!(?e, ?offset, "transformer stream redrive requested");
                         }
@@ -518,8 +516,6 @@ mod tests {
             transformer.sender.clone(),
             message,
             CancellationToken::new(),
-            RetryController::new(&None),
-            Arc::new(AtomicUsize::new(0)),
         )
         .await;
 
