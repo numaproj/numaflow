@@ -5193,7 +5193,7 @@
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_DEBUG</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="kt">!!str</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="kt">!!str</span><span class="w"> </span><span class="s">"true"</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
@@ -5215,7 +5215,7 @@ For example:</p>
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_DEBUG</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="kt">!!str</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="kt">!!str</span><span class="w"> </span><span class="s">"true"</span>
 </code></pre></div>
 <h2 id="profiling">Profiling<a class="headerlink" href="#profiling" title="Permanent link">&para;</a></h2>
 <p>If your pipeline is running with <code>NUMAFLOW_DEBUG</code> then <code>pprof</code> is enabled in the Vertex Pod. You
@@ -5227,7 +5227,7 @@ kubectl<span class="w"> </span>port-forward<span class="w"> </span>simple-pipeli
 go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-http<span class="w"> </span>localhost:8081<span class="w"> </span>https+insecure://localhost:2469/debug/pprof/heap
 </code></pre></div>
 <p><code>Tracing</code> is also available with commands below.</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># Add optional &quot;&amp;seconds=n&quot; to specify the duration.</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># Add optional "&amp;seconds=n" to specify the duration.</span>
 curl<span class="w"> </span>-skq<span class="w"> </span>https://localhost:2469/debug/pprof/trace?debug<span class="o">=</span><span class="m">1</span><span class="w"> </span>-o<span class="w"> </span>trace.out
 
 go<span class="w"> </span>tool<span class="w"> </span>trace<span class="w"> </span>-http<span class="w"> </span>localhost:8082<span class="w"> </span>trace.out

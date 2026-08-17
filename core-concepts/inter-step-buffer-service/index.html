@@ -5468,7 +5468,7 @@ like below.</p>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use "latest" but a specific version in your real deployment</span>
 </code></pre></div>
 <p><code>InterStepBufferService</code> is a namespaced object. It can be used by all the
 Pipelines in the same namespace. By default, Pipeline objects look for an
@@ -5481,7 +5481,7 @@ same name in the Pipeline spec.</p>
 <span class="nt">metadata</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
 <span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="c1"># Optional, if not specified, defaults to &quot;default&quot;</span>
+<span class="w">  </span><span class="c1"># Optional, if not specified, defaults to "default"</span>
 <span class="w">  </span><span class="nt">interStepBufferServiceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">different-name</span>
 </code></pre></div>
 <p>To query <code>Inter-Step Buffer Service</code> objects with <code>kubectl</code>:</p>
@@ -5512,7 +5512,7 @@ which gives the total number of nodes.</p>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use "latest" but a specific version in your real deployment</span>
 <span class="w">    </span><span class="nt">persistence</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span>
 <span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOncePod</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span>
@@ -5568,12 +5568,12 @@ availability.</p>
   defined in the ConfigMap <code>numaflow-controller-config</code>.</p>
 <p>A sample JetStream configuration:</p>
 <div class="highlight"><pre><span></span><code># https://docs.nats.io/reference/config/max_payload
-# Only &quot;max_payload&quot; is supported for configuration in this section.
+# Only "max_payload" is supported for configuration in this section.
 # Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
 max_payload: 1048576
 #
 # https://docs.nats.io/reference/config/jetstream
-# Only configure &quot;max_memory_store&quot; or &quot;max_file_store&quot; in this section, do not set &quot;store_dir&quot; as it has been hardcoded.
+# Only configure "max_memory_store" or "max_file_store" in this section, do not set "store_dir" as it has been hardcoded.
 #
 # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
 max_memory_store: -1

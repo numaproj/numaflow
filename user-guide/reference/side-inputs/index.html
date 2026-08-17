@@ -5250,13 +5250,13 @@ Multiple side inputs are supported as well.</p>
 <span class="w">      </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sideinputs-s3-image:v1</span>
 <span class="w">      </span><span class="nt">trigger</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">*/15</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+<span class="w">        </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">"0</span><span class="nv"> </span><span class="s">*/15</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*"</span>
 <span class="w">        </span><span class="c1"># timezone: America/Los_Angeles</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis</span>
 <span class="w">      </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sideinputs-redis-image:v1</span>
 <span class="w">      </span><span class="nt">trigger</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">*/15</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+<span class="w">        </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">"0</span><span class="nv"> </span><span class="s">*/15</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*"</span>
 <span class="w">        </span><span class="c1"># timezone: America/Los_Angeles</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
@@ -5285,17 +5285,17 @@ Side Inputs Update.</p>
 <span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">Message</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">t</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
 <span class="w">    </span><span class="c1">// val is the side input message value. This would be the value that the side input vertex receives.</span>
-<span class="w">    </span><span class="nx">val</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">&quot;an example: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">string</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nx">String</span><span class="p">())</span>
+<span class="w">    </span><span class="nx">val</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">"an example: "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="kt">string</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nx">String</span><span class="p">())</span>
 <span class="w">    </span><span class="c1">// randomly drop side input message. Note that the side input message is not retried.</span>
 <span class="w">    </span><span class="c1">// NoBroadcastMessage() is used to drop the message and not to</span>
 <span class="w">    </span><span class="c1">// broadcast it to other side input vertices.</span>
-<span class="w">    </span><span class="nx">counter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="nx">counter</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">10</span>
+<span class="w">    </span><span class="nx">counter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">counter</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">10</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">counter</span><span class="o">%</span><span class="mi">2</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">NoBroadcastMessage</span><span class="p">()</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="c1">// BroadcastMessage() is used to broadcast the message with the given value to other side input vertices.</span>
 <span class="w">    </span><span class="c1">// val must be converted to []byte.</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">BroadcastMessage</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">val</span><span class="p">))</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">BroadcastMessage</span><span class="p">([]</span><span class="kt">byte</span><span class="p">(</span><span class="nx">val</span><span class="p">))</span>
 <span class="p">}</span>
 </code></pre></div>
 <a href="https://github.com/numaproj/numaflow-go/blob/main/examples/sideinput/simple_sideinput/main.go">View full example on GitHub</a></p>
@@ -5306,17 +5306,17 @@ Side Inputs Update.</p>
         <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">=</span> <span class="mi">0</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">retrieve_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Called every time the side input is triggered.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">time_now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
-        <span class="n">val</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;an example: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">time_now</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"an example: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">time_now</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span>
 
         <span class="c1"># broadcast every other time</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Response</span><span class="o">.</span><span class="n">no_broadcast_message</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">Response</span><span class="o">.</span><span class="n">broadcast_message</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">Response</span><span class="o">.</span><span class="n">broadcast_message</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
 </code></pre></div>
 <a href="https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py">View full example on GitHub</a></p>
 </div>
@@ -5339,10 +5339,10 @@ Side Inputs Update.</p>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
 <span class="w">            </span><span class="n">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsonMapper</span><span class="p">.</span><span class="na">writeValueAsBytes</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
-<span class="w">            </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Broadcasting side input message: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="p">(</span><span class="n">val</span><span class="p">));</span>
+<span class="w">            </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Broadcasting side input message: {}"</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="p">(</span><span class="n">val</span><span class="p">));</span>
 <span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">Message</span><span class="p">.</span><span class="na">createBroadcastMessage</span><span class="p">(</span><span class="n">val</span><span class="p">);</span>
 <span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">JsonProcessingException</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">            </span><span class="n">log</span><span class="p">.</span><span class="na">error</span><span class="p">(</span><span class="s">&quot;Failed to serialize config: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="na">getMessage</span><span class="p">());</span>
+<span class="w">            </span><span class="n">log</span><span class="p">.</span><span class="na">error</span><span class="p">(</span><span class="s">"Failed to serialize config: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="na">getMessage</span><span class="p">());</span>
 <span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">Message</span><span class="p">.</span><span class="na">createNoBroadcastMessage</span><span class="p">();</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>
@@ -5368,8 +5368,8 @@ Side Inputs Update.</p>
 <span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">retrieve_sideinput</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">u8</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">current_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SystemTime</span><span class="p">::</span><span class="n">now</span><span class="p">()</span>
 <span class="w">            </span><span class="p">.</span><span class="n">duration_since</span><span class="p">(</span><span class="n">UNIX_EPOCH</span><span class="p">)</span>
-<span class="w">            </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&quot;Time went backwards&quot;</span><span class="p">);</span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">format!</span><span class="p">(</span><span class="s">&quot;an example: {:?}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">current_time</span><span class="p">);</span>
+<span class="w">            </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">"Time went backwards"</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">format!</span><span class="p">(</span><span class="s">"an example: {:?}"</span><span class="p">,</span><span class="w"> </span><span class="n">current_time</span><span class="p">);</span>
 
 <span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">counter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">counter</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span>
 <span class="w">        </span><span class="o">*</span><span class="n">counter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">counter</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
@@ -5387,7 +5387,7 @@ Side Inputs Update.</p>
 </div>
 <p>After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.</p>
 <div class="highlight"><pre><span></span><code><span class="c1">// BroadcastMessage() is used to broadcast the message with the given value.</span>
-<span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">BroadcastMessage</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">val</span><span class="p">))</span>
+<span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">BroadcastMessage</span><span class="p">([]</span><span class="kt">byte</span><span class="p">(</span><span class="nx">val</span><span class="p">))</span>
 </code></pre></div>
 <p>In some cased the user may want to drop the message and not to broadcast the side input value further.</p>
 <div class="highlight"><pre><span></span><code><span class="c1">// NoBroadcastMessage() is used to drop the message and not to broadcast it further</span>
@@ -5399,8 +5399,8 @@ updated side inputs in their User-defined Source/Function/Sink
 in order to apply the new changes into the data process.</p>
 <p>For each side input there will be a file with the given path and after any update to the side input value the file will be updated.</p>
 <p>The directory is fixed and can be accessed through a sideinput constant and the file name is the name of the side input.</p>
-<div class="highlight"><pre><span></span><code><span class="nx">sideinput</span><span class="p">.</span><span class="nx">DirPath</span><span class="w"> </span><span class="o">-</span><span class="p">&gt;</span><span class="w"> </span><span class="s">&quot;/var/numaflow/side-inputs&quot;</span>
-<span class="nx">sideInputFileName</span><span class="w"> </span><span class="o">-</span><span class="p">&gt;</span><span class="w"> </span><span class="s">&quot;/var/numaflow/side-inputs/sideInputName&quot;</span>
+<div class="highlight"><pre><span></span><code><span class="nx">sideinput</span><span class="p">.</span><span class="nx">DirPath</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="s">"/var/numaflow/side-inputs"</span>
+<span class="nx">sideInputFileName</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="s">"/var/numaflow/side-inputs/sideInputName"</span>
 </code></pre></div>
 <p>Here are some examples of watching the side input filesystem for changes in
 <a href="https://github.com/numaproj/numaflow-go/blob/main/examples/sideinput/simple_sideinput/udf/main.go">Golang</a>,

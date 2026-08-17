@@ -5371,11 +5371,11 @@
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://otel-collector.observability.svc.cluster.local:4317&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"http://otel-collector.observability.svc.cluster.local:4317"</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parentbased_traceidratio&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"parentbased_traceidratio"</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER_ARG</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.001&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"0.001"</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">source</span><span class="p">:</span>
@@ -5409,9 +5409,9 @@
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://otel-collector.observability.svc.cluster.local:4317&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"http://otel-collector.observability.svc.cluster.local:4317"</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_SERVICE_NAME</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-my-pipeline-in&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"numaflow-my-pipeline-in"</span>
 <span class="w">      </span><span class="nt">source</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
@@ -5420,9 +5420,9 @@
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://otel-collector.observability.svc.cluster.local:4317&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"http://otel-collector.observability.svc.cluster.local:4317"</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_SERVICE_NAME</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-my-pipeline-cat&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"numaflow-my-pipeline-cat"</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/map-cat:stable</span>
@@ -5430,9 +5430,9 @@
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://otel-collector.observability.svc.cluster.local:4317&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"http://otel-collector.observability.svc.cluster.local:4317"</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_SERVICE_NAME</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-my-pipeline-out&quot;</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"numaflow-my-pipeline-out"</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
 <span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
@@ -5449,11 +5449,11 @@
 <div class="highlight"><pre><span></span><code><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</span>
-<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://otel-collector.observability.svc.cluster.local:4317&quot;</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"http://otel-collector.observability.svc.cluster.local:4317"</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER</span>
-<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parentbased_traceidratio&quot;</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"parentbased_traceidratio"</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER_ARG</span>
-<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.01&quot;</span><span class="w"> </span><span class="c1"># 1%</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"0.01"</span><span class="w"> </span><span class="c1"># 1%</span>
 </code></pre></div>
 <p>The <code>parentbased_*</code> samplers only make a fresh decision for root spans, which are traces that start in this process. For spans with a remote parent, such as spans received through <code>traceparent</code> from an upstream service, Numaflow honors the parent's sampling flag. This is the recommended default because it preserves cross-service trace consistency.</p>
 <p>Supported sampler values:</p>
@@ -5502,17 +5502,17 @@
 <div class="highlight"><pre><span></span><code><span class="c1"># Drop all traces unconditionally, including child spans with a sampled remote parent.</span>
 <span class="c1"># To also disable SDK overhead, unset OTLP endpoints or set OTEL_SDK_DISABLED=true.</span>
 <span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER</span>
-<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;always_off&quot;</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"always_off"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><span class="c1"># Sample about 10% of root traces.</span>
 <span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER</span>
-<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parentbased_traceidratio&quot;</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"parentbased_traceidratio"</span>
 <span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER_ARG</span>
-<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.1&quot;</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><span class="c1"># Export every trace. Use carefully on high-throughput pipelines.</span>
 <span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OTEL_TRACES_SAMPLER</span>
-<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parentbased_always_on&quot;</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"parentbased_always_on"</span>
 </code></pre></div>
 <h2 id="span-hierarchy">Span Hierarchy<a class="headerlink" href="#span-hierarchy" title="Permanent link">&para;</a></h2>
 <p>Numaflow emits one trace per source message. Each vertex pod contributes spans under a <code>numaflow.vertex.process</code> lifecycle span. The lifecycle span closes when the message is acked.</p>

@@ -5228,34 +5228,34 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<span class="w">    </span><span class="s">&quot;context&quot;</span>
-<span class="w">    </span><span class="s">&quot;encoding/json&quot;</span>
-<span class="w">    </span><span class="s">&quot;log&quot;</span>
-<span class="w">    </span><span class="s">&quot;time&quot;</span>
+<span class="w">    </span><span class="s">"context"</span>
+<span class="w">    </span><span class="s">"encoding/json"</span>
+<span class="w">    </span><span class="s">"log"</span>
+<span class="w">    </span><span class="s">"time"</span>
 
-<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/sourcetransformer&quot;</span>
+<span class="w">    </span><span class="s">"github.com/numaproj/numaflow-go/pkg/sourcetransformer"</span>
 <span class="p">)</span>
 
 <span class="kd">func</span><span class="w"> </span><span class="nx">transform</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="cm">/*</span>
-<span class="cm">        Input messages are in JSON format. Sample: {&quot;timestamp&quot;: &quot;1673239888&quot;, &quot;filterOut&quot;: &quot;true&quot;}.</span>
-<span class="cm">        Field &quot;timestamp&quot; shows the real event time of the message, in the format of epoch.</span>
-<span class="cm">        Field &quot;filterOut&quot; indicates whether the message should be filtered out, in the format of boolean.</span>
+<span class="cm">        Input messages are in JSON format. Sample: {"timestamp": "1673239888", "filterOut": "true"}.</span>
+<span class="cm">        Field "timestamp" shows the real event time of the message, in the format of epoch.</span>
+<span class="cm">        Field "filterOut" indicates whether the message should be filtered out, in the format of boolean.</span>
 <span class="cm">    */</span>
-<span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">jsonObject</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kd">interface</span><span class="p">{}</span>
+<span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">jsonObject</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kd">interface</span><span class="p">{}</span>
 <span class="w">    </span><span class="nx">json</span><span class="p">.</span><span class="nx">Unmarshal</span><span class="p">(</span><span class="nx">data</span><span class="p">.</span><span class="nx">Value</span><span class="p">(),</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">jsonObject</span><span class="p">)</span>
 
 <span class="w">    </span><span class="c1">// event time assignment</span>
 <span class="w">    </span><span class="nx">eventTime</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span>
 <span class="w">    </span><span class="c1">// if timestamp field exists, extract event time from payload.</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">ts</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">jsonObject</span><span class="p">[</span><span class="s">&quot;timestamp&quot;</span><span class="p">];</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nx">eventTime</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Unix</span><span class="p">(</span><span class="nb">int64</span><span class="p">(</span><span class="nx">ts</span><span class="p">.(</span><span class="kt">float64</span><span class="p">)),</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">ts</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">jsonObject</span><span class="p">[</span><span class="s">"timestamp"</span><span class="p">];</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">eventTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Unix</span><span class="p">(</span><span class="kt">int64</span><span class="p">(</span><span class="nx">ts</span><span class="p">.(</span><span class="kt">float64</span><span class="p">)),</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
 <span class="w">    </span><span class="p">}</span>
 
 <span class="w">    </span><span class="c1">// data filtering</span>
 <span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">filterOut</span><span class="w"> </span><span class="kt">bool</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">f</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">jsonObject</span><span class="p">[</span><span class="s">&quot;filterOut&quot;</span><span class="p">];</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nx">filterOut</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">f</span><span class="p">.(</span><span class="kt">bool</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">f</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">jsonObject</span><span class="p">[</span><span class="s">"filterOut"</span><span class="p">];</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">filterOut</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">f</span><span class="p">.(</span><span class="kt">bool</span><span class="p">)</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">filterOut</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">MessageToDrop</span><span class="p">(</span><span class="nx">eventTime</span><span class="p">))</span>
@@ -5267,7 +5267,7 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">SourceTransformFunc</span><span class="p">(</span><span class="nx">transform</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Panic</span><span class="p">(</span><span class="s">&quot;Failed to start source transform server: &quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Panic</span><span class="p">(</span><span class="s">"Failed to start source transform server: "</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
@@ -5281,21 +5281,21 @@ In the example, the transformer extracts event times from <code>timestamp</code>
     <span class="n">messages</span> <span class="o">=</span> <span class="n">Messages</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="n">event_time</span> <span class="o">&lt;</span> <span class="n">january_first_2022</span><span class="p">:</span>
-        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got event time:</span><span class="si">%s</span><span class="s2">, it is before 2022, so dropping&quot;</span><span class="p">,</span> <span class="n">event_time</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Got event time:</span><span class="si">%s</span><span class="s2">, it is before 2022, so dropping"</span><span class="p">,</span> <span class="n">event_time</span><span class="p">)</span>
         <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Message</span><span class="o">.</span><span class="n">to_drop</span><span class="p">(</span><span class="n">event_time</span><span class="p">))</span>
     <span class="k">elif</span> <span class="n">event_time</span> <span class="o">&lt;</span> <span class="n">january_first_2023</span><span class="p">:</span>
         <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;Got event time:</span><span class="si">%s</span><span class="s2">, it is within year 2022, so forwarding to within_year_2022&quot;</span><span class="p">,</span>
+            <span class="s2">"Got event time:</span><span class="si">%s</span><span class="s2">, it is within year 2022, so forwarding to within_year_2022"</span><span class="p">,</span>
             <span class="n">event_time</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="n">Message</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">val</span><span class="p">,</span> <span class="n">event_time</span><span class="o">=</span><span class="n">january_first_2022</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;within_year_2022&quot;</span><span class="p">])</span>
+            <span class="n">Message</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">val</span><span class="p">,</span> <span class="n">event_time</span><span class="o">=</span><span class="n">january_first_2022</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"within_year_2022"</span><span class="p">])</span>
         <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;Got event time:</span><span class="si">%s</span><span class="s2">, it is after year 2022, so forwarding to after_year_2022&quot;</span><span class="p">,</span> <span class="n">event_time</span>
+            <span class="s2">"Got event time:</span><span class="si">%s</span><span class="s2">, it is after year 2022, so forwarding to after_year_2022"</span><span class="p">,</span> <span class="n">event_time</span>
         <span class="p">)</span>
-        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Message</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">val</span><span class="p">,</span> <span class="n">event_time</span><span class="o">=</span><span class="n">january_first_2023</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;after_year_2022&quot;</span><span class="p">]))</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Message</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">val</span><span class="p">,</span> <span class="n">event_time</span><span class="o">=</span><span class="n">january_first_2023</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"after_year_2022"</span><span class="p">]))</span>
 
     <span class="k">return</span> <span class="n">messages</span>
 </code></pre></div>
@@ -5305,12 +5305,12 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <p><div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<span class="w">    </span><span class="s">&quot;context&quot;</span>
-<span class="w">    </span><span class="s">&quot;log&quot;</span>
+<span class="w">    </span><span class="s">"context"</span>
+<span class="w">    </span><span class="s">"log"</span>
 
-<span class="w">    </span><span class="s">&quot;event_time_filter/impl&quot;</span>
+<span class="w">    </span><span class="s">"event_time_filter/impl"</span>
 
-<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/sourcetransformer&quot;</span>
+<span class="w">    </span><span class="s">"github.com/numaproj/numaflow-go/pkg/sourcetransformer"</span>
 <span class="p">)</span>
 
 <span class="kd">func</span><span class="w"> </span><span class="nx">transform</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
@@ -5320,7 +5320,7 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">sourcetransformer</span><span class="p">.</span><span class="nx">SourceTransformFunc</span><span class="p">(</span><span class="nx">transform</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Panic</span><span class="p">(</span><span class="s">&quot;Failed to start source transform server: &quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Panic</span><span class="p">(</span><span class="s">"Failed to start source transform server: "</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
@@ -5333,12 +5333,12 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 
 <span class="w">    </span><span class="c1">// Get event time override (optional)</span>
 <span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">event_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="n">event_time</span><span class="p">();</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;ts&quot;</span><span class="p">).</span><span class="n">and_then</span><span class="p">(</span><span class="o">|</span><span class="n">v</span><span class="o">|</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_i64</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">"ts"</span><span class="p">).</span><span class="n">and_then</span><span class="p">(</span><span class="o">|</span><span class="n">v</span><span class="o">|</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_i64</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">event_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="p">::</span><span class="n">time</span><span class="p">::</span><span class="n">UNIX_EPOCH</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">std</span><span class="p">::</span><span class="n">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">::</span><span class="n">from_secs</span><span class="p">(</span><span class="n">ts</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u64</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
 
 <span class="w">    </span><span class="c1">// Filter out messages</span>
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">should_drop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;drop&quot;</span><span class="p">).</span><span class="n">and_then</span><span class="p">(</span><span class="o">|</span><span class="n">v</span><span class="o">|</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_bool</span><span class="p">()).</span><span class="n">unwrap_or</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">should_drop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">"drop"</span><span class="p">).</span><span class="n">and_then</span><span class="p">(</span><span class="o">|</span><span class="n">v</span><span class="o">|</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_bool</span><span class="p">()).</span><span class="n">unwrap_or</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">should_drop</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">MessagesBuilder</span><span class="p">::</span><span class="n">default</span><span class="p">().</span><span class="n">append</span><span class="p">(</span><span class="n">MessageT</span><span class="p">::</span><span class="n">to_drop</span><span class="p">(</span><span class="n">event_time</span><span class="p">))</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
@@ -5379,7 +5379,7 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <span class="w">                                    </span><span class="n">data</span><span class="p">.</span><span class="na">getValue</span><span class="p">(),</span>
 <span class="w">                                    </span><span class="n">januaryFirst2022</span><span class="p">,</span>
 <span class="w">                                    </span><span class="kc">null</span><span class="p">,</span>
-<span class="w">                                    </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="p">{</span><span class="s">&quot;within_year_2022&quot;</span><span class="p">}))</span>
+<span class="w">                                    </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="p">{</span><span class="s">"within_year_2022"</span><span class="p">}))</span>
 <span class="w">                    </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
 <span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span>
@@ -5388,7 +5388,7 @@ In the example, the transformer extracts event times from <code>timestamp</code>
 <span class="w">                            </span><span class="n">data</span><span class="p">.</span><span class="na">getValue</span><span class="p">(),</span>
 <span class="w">                            </span><span class="n">januaryFirst2023</span><span class="p">,</span>
 <span class="w">                            </span><span class="kc">null</span><span class="p">,</span>
-<span class="w">                            </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="p">{</span><span class="s">&quot;after_year_2022&quot;</span><span class="p">}))</span>
+<span class="w">                            </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="p">{</span><span class="s">"after_year_2022"</span><span class="p">}))</span>
 <span class="w">                    </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>

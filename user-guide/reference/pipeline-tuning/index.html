@@ -5337,9 +5337,9 @@ processing cycle.</p>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/map-cat:stable</span><span class="w"> </span><span class="c1"># A UDF which simply cats the message</span>
 <span class="w">          </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
 <span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;100&quot;</span>
-<span class="w">        </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;30000&quot; for the buffers owned by this vertex</span>
-<span class="w">        </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">70</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;85&quot; for the buffers owned by this vertex</span>
+<span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w"> </span><span class="c1"># It overrides the default limit "100"</span>
+<span class="w">        </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w"> </span><span class="c1"># It overrides the default limit "30000" for the buffers owned by this vertex</span>
+<span class="w">        </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">70</span><span class="w"> </span><span class="c1"># It overrides the default limit "85" for the buffers owned by this vertex</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
@@ -5394,7 +5394,7 @@ processing cycle.</p>
 <span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_READ_AHEAD</span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="w"> </span><span class="c1"># turn read-ahead off for this Map vertex</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"false"</span><span class="w"> </span><span class="c1"># turn read-ahead off for this Map vertex</span>
 </code></pre></div>
 <h3 id="strictly-sequential-processing">Strictly sequential processing<a class="headerlink" href="#strictly-sequential-processing" title="Permanent link">&para;</a></h3>
 <p>To force a vertex to process one message at a time in the order it was read, set:</p>

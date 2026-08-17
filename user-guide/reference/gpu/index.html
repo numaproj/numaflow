@@ -5310,7 +5310,7 @@ See the <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/compute-s
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-vertex</span>
 <span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">   </span><span class="c1"># Replace with your annotation key and value</span>
+<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span><span class="w">   </span><span class="c1"># Replace with your annotation key and value</span>
 <span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ml-image:latest</span>
@@ -5333,9 +5333,9 @@ For GPUs, Kubernetes requires that <code>requests</code> and <code>limits</code>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-vertex</span>
 <span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">  </span><span class="c1"># Example annotation, use only if required by your cluster</span>
+<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span><span class="w">  </span><span class="c1"># Example annotation, use only if required by your cluster</span>
 <span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">nvidia.com/gpu.present</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">       </span><span class="c1"># Replace with your cluster&#39;s GPU node label</span>
+<span class="w">      </span><span class="nt">nvidia.com/gpu.present</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span><span class="w">       </span><span class="c1"># Replace with your cluster's GPU node label</span>
 <span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ml-image:latest</span>

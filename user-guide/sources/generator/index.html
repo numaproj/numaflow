@@ -5255,12 +5255,12 @@ messages. We mainly use generator for load testing and integration testing of Nu
 <li><code>padding</code> - Random bytes to make the message size to the approximate desired size</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1673239888-0&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1673239888</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;padding&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span>
+<span class="w">  </span><span class="nt">"data"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1673239888-0"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="mi">1673239888</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"padding"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span>
 <span class="w">  </span><span class="p">},</span>
-<span class="w">  </span><span class="nt">&quot;createdts&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1673239888</span>
+<span class="w">  </span><span class="nt">"createdts"</span><span class="p">:</span><span class="w"> </span><span class="mi">1673239888</span>
 <span class="p">}</span>
 </code></pre></div>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
@@ -5305,7 +5305,7 @@ the generator.</p>
       duration: 1s
       # Base64 encoding of data to send. Can be example serialized packet to
       # run through user pipeline to exercise particular capability or path through pipeline
-      valueBlob: &quot;InlvdXIgc3BlY2lmaWMgZGF0YSI=&quot;
+      valueBlob: "InlvdXIgc3BlY2lmaWMgZGF0YSI="
       # Note: msgSize and value will be ignored if valueBlob is set
 </code></pre></div>
 

@@ -5256,7 +5256,7 @@ kind<span class="w"> </span><span class="nb">export</span><span class="w"> </spa
 Without the <a href="https://github.com/kubernetes-sigs/metrics-server">metrics-server</a>, we will not be able to see the pods in
 the UI.</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;add&quot;,&quot;path&quot;:&quot;/spec/template/spec/containers/0/args/-&quot;,&quot;value&quot;:&quot;--kubelet-insecure-tls&quot;}]&#39;</span>
+kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">'[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'</span>
 </code></pre></div>
 <h3 id="useful-commands">Useful Commands<a class="headerlink" href="#useful-commands" title="Permanent link">&para;</a></h3>
 <ul>

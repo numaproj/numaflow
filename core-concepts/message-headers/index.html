@@ -5279,14 +5279,14 @@ Message headers are immutable and cannot be manipulated through the SDKs.</p>
 <p><strong>Go SDK</strong><br />
     The <code>datum</code> object provides a <code>map[string]string</code> of all headers:
     <div class="highlight"><pre><span></span><code><span class="nx">headers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Headers</span><span class="p">()</span>
-<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;X-My-Header&quot;</span><span class="p">])</span>
+<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">headers</span><span class="p">[</span><span class="s">"X-My-Header"</span><span class="p">])</span>
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Python SDK</strong><br />
     The <code>datum</code> object exposes headers as a dictionary:
     <div class="highlight"><pre><span></span><code><span class="n">headers</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">headers</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;X-My-Header&quot;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"X-My-Header"</span><span class="p">))</span>
 </code></pre></div></p>
 </li>
 </ul>
@@ -5344,7 +5344,7 @@ Message headers are immutable and cannot be manipulated through the SDKs.</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/<span class="si">${</span><span class="nv">pod</span><span class="p">-name</span><span class="si">}</span><span class="w"> </span><span class="m">8443</span>:8443
 </code></pre></div>
 <p>Then, send the request:</p>
-<p><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-My-Header: test-value&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span>https://localhost:8443/vertices/in
+<p><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-My-Header: test-value"</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">"hello"</span><span class="w"> </span>https://localhost:8443/vertices/in
 </code></pre></div>
 In your UDF, <code>X-My-Header</code> will be available as a message header.</p>
 

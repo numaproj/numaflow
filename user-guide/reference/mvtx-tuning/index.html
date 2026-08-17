@@ -5227,7 +5227,7 @@ processing the data, and writing to a sink. There are some parameters can be adj
 <span class="w">  </span><span class="nt">containerTemplate</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_READ_AHEAD</span>
-<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 </code></pre></div>
 <p>With read-ahead enabled the upper bound on in-flight messages becomes <strong><code>min(concurrency, readBatchSize)</code></strong>.</p>
 <h3 id="strictly-sequential-processing">Strictly sequential processing<a class="headerlink" href="#strictly-sequential-processing" title="Permanent link">&para;</a></h3>

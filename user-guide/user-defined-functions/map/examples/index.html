@@ -5298,8 +5298,8 @@ isbsvc-default-js-2<span class="w">                          </span><span class=
 starting from 60000. Please refer to the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP
 source.
 An example will be as follows,</p>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
-curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;10&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">"x-numaflow-event-time: 60000"</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">"5"</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">"x-numaflow-event-time: 60000"</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">"10"</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <hr />
 <h2 id="creating-a-simple-map-pipeline">Creating a Simple Map Pipeline<a class="headerlink" href="#creating-a-simple-map-pipeline" title="Permanent link">&para;</a></h2>
@@ -5328,10 +5328,10 @@ isbsvc-default-js-2<span class="w">                </span><span class="m">3</spa
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>port-forward<span class="w"> </span>even-odd-in-0-xxxx<span class="w"> </span><span class="m">8444</span>:8443
 
 <span class="c1"># Post data to the HTTP endpoint</span>
-curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;101&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
-curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;102&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
-curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;103&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
-curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;104&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">"101"</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">"102"</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">"103"</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">"104"</span><span class="w"> </span>https://localhost:8444/vertices/in
 </code></pre></div>
 <p>Now you can watch the log for the <code>even</code> and <code>odd</code> vertices by running the commands below.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Watch the log for the even vertex</span>

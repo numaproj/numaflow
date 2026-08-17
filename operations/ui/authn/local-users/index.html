@@ -5561,7 +5561,7 @@ It is recommended to use <code>admin</code> user for initial configuration then 
 <h2 id="accessing-with-admin-user">Accessing with admin user<a class="headerlink" href="#accessing-with-admin-user" title="Permanent link">&para;</a></h2>
 <p>A built-in <code>admin</code> user comes with a randomly generated password that is stored in <code>numaflow-server-secrets</code> Secret:</p>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>numaflow-server-secrets<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.admin\.initial-password}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>--decode
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>numaflow-server-secrets<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.admin\.initial-password}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>--decode
 </code></pre></div>
 <p>Use the <code>admin</code> username and password obtained above to log in to the UI.</p>
 <h2 id="creating-users">Creating Users<a class="headerlink" href="#creating-users" title="Permanent link">&para;</a></h2>
@@ -5573,14 +5573,14 @@ kind:<span class="w"> </span>ConfigMap
 metadata:
 <span class="w">  </span>name:<span class="w"> </span>numaflow-server-local-user-config
 data:
-<span class="w">  </span><span class="c1"># Format: {username}.enabled: &quot;true&quot;</span>
-<span class="w">  </span>bob.enabled:<span class="w"> </span><span class="s2">&quot;true&quot;</span>
+<span class="w">  </span><span class="c1"># Format: {username}.enabled: "true"</span>
+<span class="w">  </span>bob.enabled:<span class="w"> </span><span class="s2">"true"</span>
 </code></pre></div>
 <h3 id="2-generating-the-password">2. Generating the password<a class="headerlink" href="#2-generating-the-password" title="Permanent link">&para;</a></h3>
 <p>When adding new users, it is necessary to generate a bcrypt hash of their password:</p>
 <h3 id="example_2">Example<a class="headerlink" href="#example_2" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># Format: htpasswd -bnBC 10 &quot;&quot; &lt;password&gt; | tr -d &#39;:\n&#39;</span>
-htpasswd<span class="w"> </span>-bnBC<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="w"> </span>password<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">&#39;:\n&#39;</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># Format: htpasswd -bnBC 10 "" &lt;password&gt; | tr -d ':\n'</span>
+htpasswd<span class="w"> </span>-bnBC<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="s2">""</span><span class="w"> </span>password<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">':\n'</span>
 </code></pre></div>
 <h3 id="3-adding-the-password-for-the-username">3. Adding the password for the username<a class="headerlink" href="#3-adding-the-password-for-the-username" title="Permanent link">&para;</a></h3>
 <p>To add the password generated above for the respective user, you can update the <code>numaflow-server-secrets</code> Secret:</p>
@@ -5607,18 +5607,18 @@ kind:<span class="w"> </span>ConfigMap
 metadata:
 <span class="w">  </span>name:<span class="w"> </span>numaflow-server-local-user-config
 data:
-<span class="w">  </span><span class="c1"># Set the value to &quot;false&quot; to disable the user.</span>
-<span class="w">  </span>bob.enabled:<span class="w"> </span><span class="s2">&quot;false&quot;</span>
+<span class="w">  </span><span class="c1"># Set the value to "false" to disable the user.</span>
+<span class="w">  </span>bob.enabled:<span class="w"> </span><span class="s2">"false"</span>
 </code></pre></div>
 <h2 id="deleting-users">Deleting Users<a class="headerlink" href="#deleting-users" title="Permanent link">&para;</a></h2>
 <p>Users can be deleted by removing the corresponding entries:</p>
 <h3 id="1-numaflow-server-local-user-config-configmap">1. <code>numaflow-server-local-user-config</code> ConfigMap<a class="headerlink" href="#1-numaflow-server-local-user-config-configmap" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Format: {username}.enabled: null</span>
-kubectl<span class="w"> </span>patch<span class="w"> </span>configmap<span class="w"> </span>&lt;configmap-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;data&quot;: {&quot;bob.enabled&quot;: null}}&#39;</span><span class="w"> </span>--type<span class="w"> </span>merge
+kubectl<span class="w"> </span>patch<span class="w"> </span>configmap<span class="w"> </span>&lt;configmap-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"data": {"bob.enabled": null}}'</span><span class="w"> </span>--type<span class="w"> </span>merge
 </code></pre></div>
 <h3 id="2-numaflow-server-secrets-secret">2. <code>numaflow-server-secrets</code> Secret<a class="headerlink" href="#2-numaflow-server-secrets-secret" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Format: {username}.password: null</span>
-kubectl<span class="w"> </span>patch<span class="w"> </span>secret<span class="w"> </span>&lt;secret-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;data&quot;: {&quot;bob.password&quot;: null}}&#39;</span><span class="w"> </span>--type<span class="w"> </span>merge
+kubectl<span class="w"> </span>patch<span class="w"> </span>secret<span class="w"> </span>&lt;secret-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"data": {"bob.password": null}}'</span><span class="w"> </span>--type<span class="w"> </span>merge
 </code></pre></div>
 
 

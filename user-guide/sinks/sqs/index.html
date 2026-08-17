@@ -5306,11 +5306,11 @@
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqs-output</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-queue-name&quot;</span><span class="w">              </span><span class="c1"># Required: Name of your SQS queue</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span><span class="w">                    </span><span class="c1"># Required: AWS region</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span><span class="w">    </span><span class="c1"># Required: AWS account ID</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"your-queue-name"</span><span class="w">              </span><span class="c1"># Required: Name of your SQS queue</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-west-2"</span><span class="w">                    </span><span class="c1"># Required: AWS region</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span><span class="w">    </span><span class="c1"># Required: AWS account ID</span>
 <span class="w">          </span><span class="nt">assumeRole</span><span class="p">:</span><span class="w">                               </span><span class="c1"># Optional: For cross-account access</span>
-<span class="w">            </span><span class="nt">roleArn</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;arn:aws:iam::123456789012:role/CrossAccount-Role&quot;</span>
+<span class="w">            </span><span class="nt">roleArn</span><span class="p">:</span><span class="w"> </span><span class="s">"arn:aws:iam::123456789012:role/CrossAccount-Role"</span>
 </code></pre></div>
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
 <p>See <a href="../../sources/sqs/#configuring-credentials-to-access-aws">SQS Source - Configuring Credentials</a> for authentication options including AWS credentials secrets and IAM roles.</p>
@@ -5352,18 +5352,18 @@
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">source</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;source-queue.fifo&quot;</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"source-queue.fifo"</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span>
 <span class="w">          </span><span class="nt">attributeNames</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MessageGroupId</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MessageDeduplicationId</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;destination-queue.fifo&quot;</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"destination-queue.fifo"</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span>
 <span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
@@ -5388,17 +5388,17 @@
             <span class="n">keys</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span>
             <span class="n">tags</span><span class="o">=</span><span class="p">[],</span>
             <span class="n">metadata</span><span class="o">=</span><span class="p">{</span>
-                <span class="s2">&quot;sqs&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;MessageGroupId&quot;</span><span class="p">:</span> <span class="s2">&quot;order-processing&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;MessageDeduplicationId&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dedup-</span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;DelaySeconds&quot;</span><span class="p">:</span> <span class="s2">&quot;10&quot;</span>
+                <span class="s2">"sqs"</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"MessageGroupId"</span><span class="p">:</span> <span class="s2">"order-processing"</span><span class="p">,</span>
+                    <span class="s2">"MessageDeduplicationId"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"dedup-</span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                    <span class="s2">"DelaySeconds"</span><span class="p">:</span> <span class="s2">"10"</span>
                 <span class="p">}</span>
             <span class="p">}</span>
         <span class="p">)</span>
     <span class="p">)</span>
     <span class="k">return</span> <span class="n">messages</span>
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">grpc_server</span> <span class="o">=</span> <span class="n">Mapper</span><span class="p">(</span><span class="n">handler</span><span class="o">=</span><span class="n">my_handler</span><span class="p">)</span>
     <span class="n">grpc_server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
 </code></pre></div>
@@ -5407,10 +5407,10 @@
 <div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<span class="w">    </span><span class="s">&quot;context&quot;</span>
-<span class="w">    </span><span class="s">&quot;log&quot;</span>
+<span class="w">    </span><span class="s">"context"</span>
+<span class="w">    </span><span class="s">"log"</span>
 
-<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/mapper&quot;</span>
+<span class="w">    </span><span class="s">"github.com/numaproj/numaflow-go/pkg/mapper"</span>
 <span class="p">)</span>
 
 <span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
@@ -5422,11 +5422,11 @@
 <span class="w">        </span><span class="nx">Append</span><span class="p">(</span>
 <span class="w">            </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">(</span><span class="nx">payload</span><span class="p">).</span>
 <span class="w">                </span><span class="nx">WithKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">).</span>
-<span class="w">                </span><span class="nx">WithMetadata</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{</span>
-<span class="w">                    </span><span class="s">&quot;sqs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">                        </span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">:</span><span class="w">        </span><span class="s">&quot;order-processing&quot;</span><span class="p">,</span>
-<span class="w">                        </span><span class="s">&quot;MessageDeduplicationId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;dedup-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">string</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()),</span>
-<span class="w">                        </span><span class="s">&quot;DelaySeconds&quot;</span><span class="p">:</span><span class="w">          </span><span class="s">&quot;10&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">WithMetadata</span><span class="p">(</span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{</span>
+<span class="w">                    </span><span class="s">"sqs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="s">"MessageGroupId"</span><span class="p">:</span><span class="w">        </span><span class="s">"order-processing"</span><span class="p">,</span>
+<span class="w">                        </span><span class="s">"MessageDeduplicationId"</span><span class="p">:</span><span class="w"> </span><span class="s">"dedup-"</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="kt">string</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()),</span>
+<span class="w">                        </span><span class="s">"DelaySeconds"</span><span class="p">:</span><span class="w">          </span><span class="s">"10"</span><span class="p">,</span>
 <span class="w">                    </span><span class="p">},</span>
 <span class="w">                </span><span class="p">}),</span>
 <span class="w">        </span><span class="p">).</span>
@@ -5458,10 +5458,10 @@
 <span class="w">        </span><span class="c1">// Set SQS-specific metadata</span>
 <span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">metadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
 <span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sqsMetadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
-<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;order-processing&quot;</span><span class="p">);</span>
-<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;MessageDeduplicationId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;dedup-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">());</span>
-<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;DelaySeconds&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;10&quot;</span><span class="p">);</span>
-<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;sqs&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">sqsMetadata</span><span class="p">);</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">"MessageGroupId"</span><span class="p">,</span><span class="w"> </span><span class="s">"order-processing"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">"MessageDeduplicationId"</span><span class="p">,</span><span class="w"> </span><span class="s">"dedup-"</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">());</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">"DelaySeconds"</span><span class="p">,</span><span class="w"> </span><span class="s">"10"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">"sqs"</span><span class="p">,</span><span class="w"> </span><span class="n">sqsMetadata</span><span class="p">);</span>
 
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
 <span class="w">                </span><span class="p">.</span><span class="na">addMessage</span><span class="p">(</span>
@@ -5500,9 +5500,9 @@
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;output-queue&quot;</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"output-queue"</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span>
 <span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>

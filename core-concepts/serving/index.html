@@ -5416,13 +5416,13 @@ SDK equivalent) in your sink code.</p>
 <h4 id="example-go-sdk">Example (Go SDK)<a class="headerlink" href="#example-go-sdk" title="Permanent link">&para;</a></h4>
 <p><div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">serveSink</span><span class="w"> </span><span class="kd">struct</span><span class="p">{}</span>
 
-<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">serveSink</span><span class="p">)</span><span class="w"> </span><span class="nx">Sink</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Responses</span><span class="w"> </span><span class="p">{</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">serveSink</span><span class="p">)</span><span class="w"> </span><span class="nx">Sink</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="kt">chan</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Responses</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">result</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponsesBuilder</span><span class="p">()</span>
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="nx">id</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()</span><span class="w"> </span><span class="c1">// Original Request ID</span>
 <span class="w">        </span><span class="nx">val</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()</span><span class="w"> </span><span class="c1">// Final payload from pipeline</span>
-<span class="w">        </span><span class="c1">// Use ResponseServe to mark &#39;val&#39; as the result for &#39;id&#39;</span>
-<span class="w">        </span><span class="nx">result</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">result</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponseServe</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">val</span><span class="p">))</span>
+<span class="w">        </span><span class="c1">// Use ResponseServe to mark 'val' as the result for 'id'</span>
+<span class="w">        </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">result</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponseServe</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">val</span><span class="p">))</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span>
 <span class="p">}</span>
@@ -5443,25 +5443,25 @@ A complete example can be found <a href="https://github.com/numaproj/numaflow-go
 <li>
 <p><strong>Submit data synchronously:</strong></p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-XPOST<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;X-Numaflow-Id: job-456&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;content-type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--data<span class="w"> </span><span class="s1">&#39;{&quot;value&quot;:123}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'X-Numaflow-Id: job-456'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'content-type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'Authorization: Bearer &lt;your-token-if-auth-enabled&gt;'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data<span class="w"> </span><span class="s1">'{"value":123}'</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/sync
 </code></pre></div>
 </li>
 <li>
 <p><strong>Fetch results later:</strong></p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'Authorization: Bearer &lt;your-token-if-auth-enabled&gt;'</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/fetch?id<span class="o">=</span>job-456
 </code></pre></div>
 </li>
 <li>
 <p><strong>Stream results using SSE:</strong></p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-N<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;X-Numaflow-Id: stream-789&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'X-Numaflow-Id: stream-789'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">'Authorization: Bearer &lt;your-token-if-auth-enabled&gt;'</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/sse?id<span class="o">=</span>stream-789
 <span class="c1"># Client receives events as results become available</span>
 </code></pre></div>

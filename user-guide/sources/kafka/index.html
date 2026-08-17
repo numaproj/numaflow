@@ -5454,8 +5454,8 @@ Secret name and key, not the credential value. Numaflow mounts the Secret into t
 source reads and trims the selected value at startup.</p>
 <p>For example, create PLAIN credentials with:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>kafka-plain-auth<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span><span class="s1">&#39;&lt;username&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span><span class="s1">&#39;&lt;password&gt;&#39;</span>
+<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span><span class="s1">'&lt;username&gt;'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span><span class="s1">'&lt;password&gt;'</span>
 </code></pre></div>
 <h4 id="plain">PLAIN<a class="headerlink" href="#plain" title="Permanent link">&para;</a></h4>
 <p>Use <code>PLAIN</code> when your Kafka cluster expects a username and password.</p>
@@ -5567,8 +5567,8 @@ request.timeout.ms=20000
 bootstrap.servers=&lt;BOOSTRAP_BROKER_LIST&gt;
 retry.backoff.ms=500
 sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username=&quot;&lt;CLUSTER_API_KEY&gt;&quot; \
-   password=&quot;&lt;CLUSTER_API_SECRET&gt;&quot;;
+   username="&lt;CLUSTER_API_KEY&gt;" \
+   password="&lt;CLUSTER_API_SECRET&gt;";
 security.protocol=SASL_SSL
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>request.timeout.ms=20000

@@ -5483,8 +5483,8 @@
 <h3 id="creating-aws-credentials-secret">Creating AWS Credentials Secret<a class="headerlink" href="#creating-aws-credentials-secret" title="Permanent link">&para;</a></h3>
 <p>First, we need to create a Kubernetes secret to store AWS credentials securely and encode AWS Credentials.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Encode your AWS credentials (replace with your actual credentials)</span>
-<span class="nv">ACCESS_KEY_ID</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;your-aws-access-key-id&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span>
-<span class="nv">SECRET_ACCESS_KEY</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;your-aws-secret-access-key&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span>
+<span class="nv">ACCESS_KEY_ID</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"your-aws-access-key-id"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span>
+<span class="nv">SECRET_ACCESS_KEY</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"your-aws-secret-access-key"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span>
 
 kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>aws-secret<span class="w"> </span><span class="se">\</span>
 --from-literal<span class="w"> </span>access-key-id<span class="o">=</span><span class="si">${</span><span class="nv">ACCESS_KEY_ID</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
@@ -5507,9 +5507,9 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">source</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-queue-name&quot;</span><span class="w">        </span><span class="c1"># Required: Name of your SQS queue</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-aws-region&quot;</span><span class="w">        </span><span class="c1"># Required: AWS region where queue is located</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span><span class="w"> </span><span class="c1"># Required: AWS account ID of the queue owner</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"your-queue-name"</span><span class="w">        </span><span class="c1"># Required: Name of your SQS queue</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"your-aws-region"</span><span class="w">        </span><span class="c1"># Required: AWS region where queue is located</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span><span class="w"> </span><span class="c1"># Required: AWS account ID of the queue owner</span>
 <span class="w">          </span><span class="c1"># Optional configurations</span>
 <span class="w">          </span><span class="nt">maxNumberOfMessages</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">             </span><span class="c1"># Max messages per poll (1-10)</span>
 <span class="w">          </span><span class="nt">visibilityTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span><span class="w">              </span><span class="c1"># Visibility timeout in seconds</span>
@@ -5539,9 +5539,9 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <span class="w">        </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">      </span><span class="nt">source</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;queue-name&quot;</span>
-<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
-<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span><span class="w"> </span><span class="c1"># Required: AWS account ID of the queue owner</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"queue-name"</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"123456789012"</span><span class="w"> </span><span class="c1"># Required: AWS account ID of the queue owner</span>
 <span class="w">          </span><span class="c1"># Optional configurations</span>
 <span class="w">          </span><span class="nt">maxNumberOfMessages</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">            </span><span class="c1"># Max messages per poll (1-10)</span>
 <span class="w">          </span><span class="nt">visibilityTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span><span class="w">              </span><span class="c1"># Visibility timeout in seconds</span>
@@ -5579,8 +5579,8 @@ kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> <
 <div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">handler</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// Access system attributes via headers</span>
 <span class="w">    </span><span class="nx">headers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Headers</span><span class="p">()</span>
-<span class="w">    </span><span class="nx">sentTimestamp</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;SentTimestamp&quot;</span><span class="p">]</span>
-<span class="w">    </span><span class="nx">messageGroupId</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="nx">sentTimestamp</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">"SentTimestamp"</span><span class="p">]</span>
+<span class="w">    </span><span class="nx">messageGroupId</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">"MessageGroupId"</span><span class="p">]</span>
 
 <span class="w">    </span><span class="c1">// Process message...</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">datum</span><span class="p">.</span><span class="nx">Value</span><span class="p">())</span>
@@ -5590,8 +5590,8 @@ kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> <
 <div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span><span class="n">keys</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">datum</span><span class="p">:</span> <span class="n">Datum</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Messages</span><span class="p">:</span>
     <span class="c1"># Access system attributes via headers</span>
     <span class="n">headers</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">headers</span>
-    <span class="n">sent_timestamp</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;SentTimestamp&quot;</span><span class="p">)</span>
-    <span class="n">message_group_id</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;MessageGroupId&quot;</span><span class="p">)</span>
+    <span class="n">sent_timestamp</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"SentTimestamp"</span><span class="p">)</span>
+    <span class="n">message_group_id</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"MessageGroupId"</span><span class="p">)</span>
 
     <span class="c1"># Process message...</span>
     <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="p">(</span><span class="n">datum</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>

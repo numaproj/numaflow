@@ -5486,7 +5486,7 @@ time duration will be considered as data on-time. This means the watermark propa
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">watermark</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, defaults to false.</span>
-<span class="w">    </span><span class="nt">maxDelay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span><span class="w"> </span><span class="c1"># Optional, defaults to &quot;0s&quot;.</span>
+<span class="w">    </span><span class="nt">maxDelay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span><span class="w"> </span><span class="c1"># Optional, defaults to "0s".</span>
 </code></pre></div>
 <h2 id="watermark-api">Watermark API<a class="headerlink" href="#watermark-api" title="Permanent link">&para;</a></h2>
 <p>When processing data in <a href="../../user-guide/user-defined-functions/user-defined-functions/">user-defined functions</a>, you can get the current watermark through
@@ -5494,9 +5494,9 @@ an API. Watermark API is supported in all our client SDKs.</p>
 <h3 id="example-golang">Example Golang<a class="headerlink" href="#example-golang" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1">// Go</span>
 <span class="kd">func</span><span class="w"> </span><span class="nx">mapFn</span><span class="p">(</span><span class="nx">context</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span>
-<span class="w">    </span><span class="o">...</span><span class="w"> </span><span class="o">...</span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span>
+<span class="w">    </span><span class="p">...</span><span class="w"> </span><span class="p">...</span>
 <span class="p">}</span>
 </code></pre></div>
 

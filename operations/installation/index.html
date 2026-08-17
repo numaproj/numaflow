@@ -5263,7 +5263,7 @@
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># Whether to run in namespaced scope, defaults to false.</span>
-<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 </code></pre></div>
 <p>Another approach to do namespace scoped installation is to add an argument <code>--namespaced</code> to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployments. This approach takes precedence over the ConfigMap approach.</p>
 <div class="highlight"><pre><span></span><code>      - args:
@@ -5294,8 +5294,8 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># Whether to run the controller and the UX server in namespaced scope, defaults to false.</span>
-<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-<span class="w">  </span><span class="c1"># The namespace that the controller and UX server watch when &quot;namespaced&quot; is true, defaults to the installation namespace.</span>
+<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+<span class="w">  </span><span class="c1"># The namespace that the controller and UX server watch when "namespaced" is true, defaults to the installation namespace.</span>
 <span class="w">  </span><span class="nt">managed.namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-system</span>
 </code></pre></div>
 <p>Similarly, another approach is to add <code>--managed-namespace</code> and the specific namespace to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployment arguments. This approach takes precedence over the ConfigMap approach.</p>
@@ -5334,7 +5334,7 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># Whether to disable leader election for the controller, defaults to false</span>
-<span class="w">  </span><span class="nt">controller.leader.election.disabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">  </span><span class="nt">controller.leader.election.disabled</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 </code></pre></div>
 <p>If HA is turned off, the controller deployment should not run with multiple replicas.</p>
 <h2 id="multiple-controllers">Multiple Controllers<a class="headerlink" href="#multiple-controllers" title="Permanent link">&para;</a></h2>
@@ -5345,15 +5345,15 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<span class="w">    </span><span class="no"># Within a cluster, setting &quot;instance&quot; can be used to run N Numaflow controllers. </span>
-<span class="w">    </span><span class="no"># If configured, the controller will only watch the objects having an annotation with the key &quot;numaflow.numaproj.io/instance&quot; and the corresponding value.</span>
+<span class="w">    </span><span class="no"># Within a cluster, setting "instance" can be used to run N Numaflow controllers. </span>
+<span class="w">    </span><span class="no"># If configured, the controller will only watch the objects having an annotation with the key "numaflow.numaproj.io/instance" and the corresponding value.</span>
 <span class="w">    </span><span class="no"># If not configured (or empty string), the controller will watch all objects.</span>
-<span class="w">    </span><span class="no">instance: &quot;&quot;</span>
+<span class="w">    </span><span class="no">instance: ""</span>
 <span class="w">    </span><span class="no">defaults:</span>
 <span class="w">      </span><span class="no">containerResources: |</span>
 <span class="w">        </span><span class="no">requests:</span>
-<span class="w">          </span><span class="no">memory: &quot;128Mi&quot;</span>
-<span class="w">          </span><span class="no">cpu: &quot;100m&quot;</span>
+<span class="w">          </span><span class="no">memory: "128Mi"</span>
+<span class="w">          </span><span class="no">cpu: "100m"</span>
 <span class="w">    </span><span class="no">isbsvc: </span>
 <span class="w">      </span><span class="no">...</span>
 </code></pre></div>

@@ -5466,22 +5466,22 @@ combined with windowing strategies).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Go</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Rust</label><label for="__tabbed_1_4">Java</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">Accumulator</span><span class="p">(</span><span class="nx">in</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nx">out</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nb">make</span><span class="p">(</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">Accumulator</span><span class="p">(</span><span class="nx">in</span><span class="w"> </span><span class="o">&lt;-</span><span class="kt">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;-</span><span class="kt">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">out</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nb">make</span><span class="p">(</span><span class="kt">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span>
 <span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">defer</span><span class="w"> </span><span class="nb">close</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
 <span class="w">        </span><span class="kd">var</span><span class="w"> </span><span class="nx">state</span><span class="w"> </span><span class="p">[]</span><span class="nx">Datum</span>
 <span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">in</span><span class="w"> </span><span class="p">{</span>
 <span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="nx">WatermarkProgressed</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">                </span><span class="nx">sort</span><span class="p">.</span><span class="nx">Slice</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
-<span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">a</span><span class="p">].</span><span class="nx">Timestamp</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">b</span><span class="p">].</span><span class="nx">Timestamp</span>
+<span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">a</span><span class="p">].</span><span class="nx">Timestamp</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">b</span><span class="p">].</span><span class="nx">Timestamp</span>
 <span class="w">                </span><span class="p">})</span>
 <span class="w">                </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">state</span><span class="w"> </span><span class="p">{</span>
 <span class="w">                    </span><span class="nx">out</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">d</span>
 <span class="w">                </span><span class="p">}</span>
-<span class="w">                </span><span class="nx">state</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">                </span><span class="nx">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">nil</span>
 <span class="w">            </span><span class="p">}</span>
-<span class="w">            </span><span class="nx">state</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">i</span><span class="p">)</span>
+<span class="w">            </span><span class="nx">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">i</span><span class="p">)</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}()</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">out</span>
@@ -5490,10 +5490,10 @@ combined with windowing strategies).</p>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">Accumulator</span><span class="p">(</span><span class="n">input_stream</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Processes an input stream of Datum objects, maintaining an ordered state.</span>
 <span class="sd">    Emits elements when the watermark progresses.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">state</span> <span class="o">=</span> <span class="n">OrderedList</span><span class="p">()</span>
     <span class="n">output_stream</span> <span class="o">=</span> <span class="p">[]</span>
 
@@ -5712,23 +5712,23 @@ Accumulator window to join and sort two HTTP sources:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:4"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><input id="__tabbed_2_4" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Go</label><label for="__tabbed_2_2">Python</label><label for="__tabbed_2_3">Rust</label><label for="__tabbed_2_4">Java</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p><div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">streamSorter</span><span class="p">)</span><span class="w"> </span><span class="nx">Accumulate</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">input</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Datum</span><span class="p">,</span><span class="w"> </span><span class="nx">output</span><span class="w"> </span><span class="kd">chan</span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<p><div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">streamSorter</span><span class="p">)</span><span class="w"> </span><span class="nx">Accumulate</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">input</span><span class="w"> </span><span class="o">&lt;-</span><span class="kt">chan</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Datum</span><span class="p">,</span><span class="w"> </span><span class="nx">output</span><span class="w"> </span><span class="kt">chan</span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">select</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">():</span>
-<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Exiting the Accumulator&quot;</span><span class="p">)</span>
+<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"Exiting the Accumulator"</span><span class="p">)</span>
 <span class="w">            </span><span class="k">return</span>
 <span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="nx">datum</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&lt;-</span><span class="nx">input</span><span class="p">:</span>
 <span class="w">            </span><span class="c1">// this case happens due to timeout</span>
-<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">!</span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
-<span class="w">                </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Input channel closed&quot;</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"Input channel closed"</span><span class="p">)</span>
 <span class="w">                </span><span class="k">return</span>
 <span class="w">            </span><span class="p">}</span>
-<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Received datum with event time: &quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">().</span><span class="nx">UnixMilli</span><span class="p">())</span>
+<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"Received datum with event time: "</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">().</span><span class="nx">UnixMilli</span><span class="p">())</span>
 
-<span class="w">            </span><span class="c1">// watermark has moved, let&#39;s flush</span>
+<span class="w">            </span><span class="c1">// watermark has moved, let's flush</span>
 <span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">().</span><span class="nx">After</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">latestWm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">                </span><span class="nx">s</span><span class="p">.</span><span class="nx">latestWm</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span>
+<span class="w">                </span><span class="nx">s</span><span class="p">.</span><span class="nx">latestWm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span>
 <span class="w">                </span><span class="nx">s</span><span class="p">.</span><span class="nx">flushBuffer</span><span class="p">(</span><span class="nx">output</span><span class="p">)</span>
 <span class="w">            </span><span class="p">}</span>
 
@@ -5743,7 +5743,7 @@ Accumulator window to join and sort two HTTP sources:</p>
 <div class="tabbed-block">
 <p><div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">StreamSorter</span><span class="p">(</span><span class="n">Accumulator</span><span class="p">):</span>
   <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;StreamSorter initialized&quot;</span><span class="p">)</span>
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"StreamSorter initialized"</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">sorted_buffer</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Datum</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 
@@ -5752,23 +5752,23 @@ Accumulator window to join and sort two HTTP sources:</p>
       <span class="n">datums</span><span class="p">:</span> <span class="n">AsyncIterable</span><span class="p">[</span><span class="n">Datum</span><span class="p">],</span>
       <span class="n">output</span><span class="p">:</span> <span class="n">NonBlockingIterator</span><span class="p">,</span>
   <span class="p">):</span>
-      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;StreamSorter handler started&quot;</span><span class="p">)</span>
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"StreamSorter handler started"</span><span class="p">)</span>
       <span class="k">async</span> <span class="k">for</span> <span class="n">datum</span> <span class="ow">in</span> <span class="n">datums</span><span class="p">:</span>
           <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-              <span class="sa">f</span><span class="s2">&quot;Received datum with event time: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">event_time</span><span class="si">}</span><span class="s2">, &quot;</span>
-              <span class="sa">f</span><span class="s2">&quot;Current latest watermark: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">, &quot;</span>
-              <span class="sa">f</span><span class="s2">&quot;Datum watermark: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">watermark</span><span class="si">}</span><span class="s2">&quot;</span>
+              <span class="sa">f</span><span class="s2">"Received datum with event time: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">event_time</span><span class="si">}</span><span class="s2">, "</span>
+              <span class="sa">f</span><span class="s2">"Current latest watermark: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">, "</span>
+              <span class="sa">f</span><span class="s2">"Datum watermark: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">watermark</span><span class="si">}</span><span class="s2">"</span>
           <span class="p">)</span>
 
           <span class="c1"># If watermark has moved forward</span>
           <span class="k">if</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span> <span class="ow">and</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="p">:</span>
               <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span>
-              <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Watermark updated: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+              <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Watermark updated: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
               <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffer</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
 
           <span class="bp">self</span><span class="o">.</span><span class="n">insert_sorted</span><span class="p">(</span><span class="n">datum</span><span class="p">)</span>
 
-      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Timeout reached&quot;</span><span class="p">)</span>
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Timeout reached"</span><span class="p">)</span>
       <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffer</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">flush_all</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 <a href="https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19">View the full example on numaflow-python Github</a></p>
@@ -5794,7 +5794,7 @@ Accumulator window to join and sort two HTTP sources:</p>
 <span class="w">  </span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">StreamSorterFactory</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">AccumulatorFactory</span><span class="o">&lt;</span><span class="n">StreamSorterFactory</span><span class="p">.</span><span class="na">StreamSorter</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
 
 <span class="w">      </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
-<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Starting stream sorter server..&quot;</span><span class="p">);</span>
+<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Starting stream sorter server.."</span><span class="p">);</span>
 <span class="w">          </span><span class="n">Server</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Server</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">StreamSorterFactory</span><span class="p">());</span>
 
 <span class="w">          </span><span class="c1">// Start the server</span>
@@ -5802,7 +5802,7 @@ Accumulator window to join and sort two HTTP sources:</p>
 
 <span class="w">          </span><span class="c1">// wait for the server to shut down</span>
 <span class="w">          </span><span class="n">server</span><span class="p">.</span><span class="na">awaitTermination</span><span class="p">();</span>
-<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Stream sorter server exited..&quot;</span><span class="p">);</span>
+<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Stream sorter server exited.."</span><span class="p">);</span>
 <span class="w">      </span><span class="p">}</span>
 
 <span class="w">      </span><span class="nd">@Override</span>
@@ -5818,7 +5818,7 @@ Accumulator window to join and sort two HTTP sources:</p>
 
 <span class="w">          </span><span class="nd">@Override</span>
 <span class="w">          </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">processMessage</span><span class="p">(</span><span class="n">Datum</span><span class="w"> </span><span class="n">datum</span><span class="p">,</span><span class="w"> </span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Received datum with event time: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">toString</span><span class="p">());</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Received datum with event time: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">toString</span><span class="p">());</span>
 <span class="w">              </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">datum</span><span class="p">.</span><span class="na">getWatermark</span><span class="p">().</span><span class="na">isAfter</span><span class="p">(</span><span class="n">latestWm</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">                  </span><span class="n">latestWm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getWatermark</span><span class="p">();</span>
 <span class="w">                  </span><span class="n">flushBuffer</span><span class="p">(</span><span class="n">outputStream</span><span class="p">);</span>
@@ -5828,12 +5828,12 @@ Accumulator window to join and sort two HTTP sources:</p>
 
 <span class="w">          </span><span class="nd">@Override</span>
 <span class="w">          </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">handleEndOfStream</span><span class="p">(</span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStreamObserver</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Eof received, flushing sortedBuffer: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Eof received, flushing sortedBuffer: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
 <span class="w">              </span><span class="n">flushBuffer</span><span class="p">(</span><span class="n">outputStreamObserver</span><span class="p">);</span>
 <span class="w">          </span><span class="p">}</span>
 
 <span class="w">          </span><span class="kd">private</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">flushBuffer</span><span class="p">(</span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Watermark updated, flushing sortedBuffer: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Watermark updated, flushing sortedBuffer: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
 <span class="w">              </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">sortedBuffer</span><span class="p">.</span><span class="na">isEmpty</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">sortedBuffer</span>
 <span class="w">                      </span><span class="p">.</span><span class="na">first</span><span class="p">()</span>
 <span class="w">                      </span><span class="p">.</span><span class="na">getEventTime</span><span class="p">()</span>
@@ -5841,7 +5841,7 @@ Accumulator window to join and sort two HTTP sources:</p>
 <span class="w">                  </span><span class="n">Datum</span><span class="w"> </span><span class="n">datum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sortedBuffer</span><span class="p">.</span><span class="na">pollFirst</span><span class="p">();</span>
 <span class="w">                  </span><span class="k">assert</span><span class="w"> </span><span class="n">datum</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
 <span class="w">                  </span><span class="n">outputStream</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Message</span><span class="p">(</span><span class="n">datum</span><span class="p">));</span>
-<span class="w">                  </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Sent datum with event time: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getEventTime</span><span class="p">().</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">                  </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">"Sent datum with event time: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getEventTime</span><span class="p">().</span><span class="na">toEpochMilli</span><span class="p">());</span>
 <span class="w">              </span><span class="p">}</span>
 <span class="w">          </span><span class="p">}</span>
 <span class="w">      </span><span class="p">}</span>
