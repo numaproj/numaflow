@@ -14072,6 +14072,12 @@ Description
 <td>
 
 <em>(Optional)</em>
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures.
+</p>
+
 </td>
 
 </tr>

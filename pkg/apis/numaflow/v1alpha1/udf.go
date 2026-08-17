@@ -29,8 +29,9 @@ type UDF struct {
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
 	// +optional
 	GroupBy *GroupBy `json:"groupBy" protobuf:"bytes,3,opt,name=groupBy"`
+	// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
 	// +optional
-	RetryStrategy *RetryStrategy `json:"retryStrategy,omitempty" protobuf:"bytes,4,opt,name=retryStrategy"`
+	RetryStrategy RetryStrategy `json:"retryStrategy,omitempty" protobuf:"bytes,4,opt,name=retryStrategy"`
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
