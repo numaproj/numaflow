@@ -170,6 +170,21 @@ export function Pods(props: PodsProps) {
     setSelectedContainer(containerName);
   }, []);
 
+  const handleFocusPodChange = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
+      if (!newValue || !pods) {
+        return;
+      }
+      const nextPod = pods.find((pod) => pod.name === newValue);
+      if (!nextPod) {
+        return;
+      }
+      setSelectedPod(nextPod);
+      setSelectedContainer(nextPod.containers?.[0]);
+    },
+    [pods]
+  );
+
   const containerSelector = useMemo(() => {
     return (
       <Box sx={{ display: "flex", width: "100%" }}>
@@ -185,7 +200,93 @@ export function Pods(props: PodsProps) {
         </Box>
       </Box>
     );
-  }, [selectedPod, selectedContainer]);
+  }, [selectedPod, selectedContainer, handleContainerClick]);
+
+  const defaultProps = useMemo(() => {
+    return {
+      options: pods?.map((pod) => pod.name) as string[],
+      getOptionLabel: (option: string) => option,
+    };
+  }, [pods]);
+
+  const focusControls = useMemo(() => {
+    if (!pods || !selectedPod) {
+      return null;
+    }
+    return (
+      <>
+        <Box className="PodLogs-focus-context-pod">
+          <span className="PodLogs-focus-context-label">Pod</span>
+          <Autocomplete
+            {...defaultProps}
+            disableClearable
+            id="focus-pod-select"
+            data-testid="logs-focus-pod-select"
+            ListboxProps={{
+              sx: {
+                fontSize: "1.2rem",
+                // Cap height so a large pod fleet scrolls instead of filling the dialog.
+                maxHeight: "24rem",
+                overflow: "auto",
+              },
+            }}
+            componentsProps={{
+              popper: {
+                sx: { zIndex: (theme) => theme.zIndex.modal + 4 },
+              },
+            }}
+            sx={{
+              width: "100%",
+              minWidth: 0,
+              "& .MuiOutlinedInput-root": {
+                height: "3.2rem",
+                fontSize: "1.2rem",
+                paddingTop: 0,
+                paddingBottom: 0,
+              },
+              "& .MuiAutocomplete-input": {
+                textOverflow: "ellipsis",
+              },
+            }}
+            autoHighlight
+            onChange={handleFocusPodChange}
+            value={selectedPod.name}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                size="small"
+                title={selectedPod.name}
+                inputProps={{
+                  ...params.inputProps,
+                  "aria-label": "Select pod",
+                  autoComplete: "new-password",
+                  style: { fontSize: "1.2rem" },
+                }}
+              />
+            )}
+          />
+        </Box>
+        <Box className="PodLogs-focus-context-container">
+          <span className="PodLogs-focus-context-label">Container</span>
+          <Box data-testid="logs-focus-containers">
+            <Containers
+              pod={selectedPod}
+              containerName={selectedContainer}
+              handleContainerClick={handleContainerClick}
+            />
+          </Box>
+        </Box>
+      </>
+    );
+  }, [
+    pods,
+    selectedPod,
+    selectedContainer,
+    defaultProps,
+    handleFocusPodChange,
+    handleContainerClick,
+  ]);
 
   const podDetail = useMemo(() => {
     return (
@@ -200,10 +301,19 @@ export function Pods(props: PodsProps) {
           containerName={selectedContainer}
           pod={selectedPod}
           vertexId={vertexId}
+          focusControls={focusControls}
         />
       </Box>
     );
-  }, [namespaceId, pipelineId, type, selectedContainer, selectedPod, vertexId]);
+  }, [
+    namespaceId,
+    pipelineId,
+    type,
+    selectedContainer,
+    selectedPod,
+    vertexId,
+    focusControls,
+  ]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
@@ -215,13 +325,6 @@ export function Pods(props: PodsProps) {
     },
     [pods]
   );
-
-  const defaultProps = useMemo(() => {
-    return {
-      options: pods?.map((pod) => pod.name) as string[],
-      getOptionLabel: (option: string) => option,
-    };
-  }, [pods]);
 
   const podSearchDetails = (
     <Box

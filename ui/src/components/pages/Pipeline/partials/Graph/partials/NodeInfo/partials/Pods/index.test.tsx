@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useEffect } from "react";
 import { Pods } from "./index";
 import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/podsViewFetch";
 import {
@@ -140,6 +141,106 @@ describe("Pods", () => {
     });
     expect(mockedFetch).toBeCalledTimes(7);
   });
+
+  it("shows pod and container selectors only inside focus mode", async () => {
+    mockedUsePodsViewFetch.mockImplementation(
+      (
+        _namespaceId,
+        _pipelineId,
+        _vertexId,
+        _selectedPod,
+        _type,
+        setSelectedPod,
+        setSelectedContainer
+      ) => {
+        useEffect(() => {
+          setSelectedPod(pods[0]);
+          setSelectedContainer(pods[0].containers[0]);
+        }, [setSelectedPod, setSelectedContainer]);
+        return {
+          pods,
+          podsDetails,
+          podsErr: undefined,
+          podsDetailsErr: undefined,
+          loading: false,
+        };
+      }
+    );
+
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            Buffer.from(
+              `{"level":"info","ts":"2023-09-04T11:50:19.712416709Z","logger":"numaflow.Source-processor","caller":"publish/publisher.go:180","msg":"focus-select-line","pipeline":"simple-pipeline","vertex":"infer"}`
+            )
+          );
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      render(
+        <Pods
+          namespaceId={"numaflow-system"}
+          pipelineId={"simple-pipeline"}
+          vertexId={"infer"}
+          type={"pipeline"}
+        />
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("focus-logs-button")).toBeInTheDocument()
+    );
+    expect(screen.queryByTestId("logs-focus-context")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("logs-focus-containers")).not.toBeInTheDocument();
+    expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
+      "infer-0/numa"
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("focus-logs-button"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByTestId("logs-focus-context")).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId("logs-focus-containers")
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId("logs-focus-pod-select")
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByTestId("simple-pipeline-infer-0-xah5w-udf")
+      );
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("log-source-badge")).toHaveTextContent(
+        "infer-0/udf"
+      );
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("logs-focus-context")).not.toBeInTheDocument();
+    expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
+      "infer-0/udf"
+    );
+  });
+
   it("pods error screen - api errors", async () => {
     mockedUsePodsViewFetch.mockReturnValue({
       pods: pods,
