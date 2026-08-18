@@ -2245,7 +2245,6 @@ message UDF {
   // +optional
   optional GroupBy groupBy = 3;
 
-  // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
   // +optional
   optional RetryStrategy retryStrategy = 4;
 }

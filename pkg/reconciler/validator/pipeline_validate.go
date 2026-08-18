@@ -297,8 +297,10 @@ func validateMapUDF(udf dfv1.UDF) error {
 		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
 
-	if err := hasValidNonSinkRetryStrategy(udf.RetryStrategy); err != nil {
-		return err
+	if udf.RetryStrategy != nil {
+		if err := hasValidNonSinkRetryStrategy(*udf.RetryStrategy); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -311,7 +313,7 @@ func validateReduceUDF(udf dfv1.UDF) error {
 		}
 	}
 
-	if udf.RetryStrategy != (dfv1.RetryStrategy{}) {
+	if udf.RetryStrategy != nil {
 		return fmt.Errorf("invalid udf spec, retryStrategy not supported for reduce udf")
 	}
 

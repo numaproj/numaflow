@@ -3483,7 +3483,11 @@ func (in *UDF) DeepCopyInto(out *UDF) {
 		*out = new(GroupBy)
 		(*in).DeepCopyInto(*out)
 	}
-	in.RetryStrategy.DeepCopyInto(&out.RetryStrategy)
+	if in.RetryStrategy != nil {
+		in, out := &in.RetryStrategy, &out.RetryStrategy
+		*out = new(RetryStrategy)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

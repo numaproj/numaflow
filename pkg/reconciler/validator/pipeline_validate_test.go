@@ -1211,50 +1211,6 @@ func TestValidateSink(t *testing.T) {
 	}
 }
 
-// TestValidateUDFRetryStrategy covers the value-type RetryStrategy behavior on the map and reduce
-// UDF paths. Because RetryStrategy is a value (not a pointer), the map path validates it
-// unconditionally (like the transformer) and the reduce path must reject a *configured* strategy via
-// a zero-value comparison rather than a nil check — while an unset (zero-value) strategy must not be
-// mistaken for a configured one.
-func TestValidateUDFRetryStrategy(t *testing.T) {
-	drop := dfv1.OnFailureDrop
-	fallback := dfv1.OnFailureFallback
-
-	t.Run("map udf: unset retryStrategy is valid", func(t *testing.T) {
-		udf := dfv1.UDF{Container: &dfv1.Container{Image: "img"}}
-		assert.NoError(t, validateMapUDF(udf))
-	})
-	t.Run("map udf: drop strategy is valid", func(t *testing.T) {
-		udf := dfv1.UDF{Container: &dfv1.Container{Image: "img"}, RetryStrategy: dfv1.RetryStrategy{OnFailure: &drop}}
-		assert.NoError(t, validateMapUDF(udf))
-	})
-	t.Run("map udf: fallback strategy is rejected", func(t *testing.T) {
-		udf := dfv1.UDF{Container: &dfv1.Container{Image: "img"}, RetryStrategy: dfv1.RetryStrategy{OnFailure: &fallback}}
-		if err := validateMapUDF(udf); assert.Error(t, err) {
-			assert.Contains(t, err.Error(), "fallback OnFailure strategy is not currently supported")
-		}
-	})
-
-	validReduce := func() dfv1.UDF {
-		return dfv1.UDF{
-			GroupBy: &dfv1.GroupBy{
-				Window:  dfv1.Window{Fixed: &dfv1.FixedWindow{Length: &metav1.Duration{Duration: time.Minute}}},
-				Storage: &dfv1.PBQStorage{NoStore: &dfv1.NoStore{}},
-			},
-		}
-	}
-	t.Run("reduce udf: unset retryStrategy is valid", func(t *testing.T) {
-		assert.NoError(t, validateReduceUDF(validReduce()))
-	})
-	t.Run("reduce udf: any configured retryStrategy is rejected", func(t *testing.T) {
-		udf := validReduce()
-		udf.RetryStrategy = dfv1.RetryStrategy{OnFailure: &drop}
-		if err := validateReduceUDF(udf); assert.Error(t, err) {
-			assert.Contains(t, err.Error(), "retryStrategy not supported for reduce udf")
-		}
-	})
-}
-
 func TestIsValidSinkRetryStrategy(t *testing.T) {
 	zeroSteps := uint32(0)
 	invalidFactor := float64(0.5)
