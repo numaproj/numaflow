@@ -106,8 +106,8 @@ func fakePod(pipelineName string, vertexName string, namespace string, phase str
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase:                podPhase,
-			ContainerStatuses:    containerStatuses,
+			Phase:                 podPhase,
+			ContainerStatuses:     containerStatuses,
 			InitContainerStatuses: initContainerStatuses,
 		},
 	}
