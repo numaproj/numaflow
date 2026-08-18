@@ -630,8 +630,10 @@ func validateTransformer(udTransformer *dfv1.UDTransformer) error {
 			return fmt.Errorf("invalid source transformer, specify a customized image")
 		}
 
-		if err := hasValidNonSinkRetryStrategy(transformer.RetryStrategy); err != nil {
-			return err
+		if transformer.RetryStrategy != nil {
+			if err := hasValidNonSinkRetryStrategy(*transformer.RetryStrategy); err != nil {
+				return err
+			}
 		}
 	}
 

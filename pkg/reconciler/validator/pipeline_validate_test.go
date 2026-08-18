@@ -1211,6 +1211,32 @@ func TestValidateSink(t *testing.T) {
 	}
 }
 
+// TestValidateTransformerRetryStrategy covers the pointer-typed RetryStrategy on the source
+// transformer: the validator must nil-guard the optional field (never deref a nil pointer), accept
+// an unset or valid strategy, and reject the unsupported fallback strategy for a non-sink component.
+func TestValidateTransformerRetryStrategy(t *testing.T) {
+	drop := dfv1.OnFailureDrop
+	fallback := dfv1.OnFailureFallback
+
+	t.Run("nil transformer is valid", func(t *testing.T) {
+		assert.NoError(t, validateTransformer(nil))
+	})
+	t.Run("unset retryStrategy is valid", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}}
+		assert.NoError(t, validateTransformer(tr))
+	})
+	t.Run("drop strategy is valid", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}, RetryStrategy: &dfv1.RetryStrategy{OnFailure: &drop}}
+		assert.NoError(t, validateTransformer(tr))
+	})
+	t.Run("fallback strategy is rejected", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}, RetryStrategy: &dfv1.RetryStrategy{OnFailure: &fallback}}
+		if err := validateTransformer(tr); assert.Error(t, err) {
+			assert.Contains(t, err.Error(), "fallback OnFailure strategy is not currently supported")
+		}
+	})
+}
+
 func TestIsValidSinkRetryStrategy(t *testing.T) {
 	zeroSteps := uint32(0)
 	invalidFactor := float64(0.5)
