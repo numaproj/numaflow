@@ -559,6 +559,72 @@ describe("PodLogs", () => {
     expect(mockedFetch).toBeCalledTimes(1);
   });
 
+  it("restores saved scroll offset when toggling Focus logs", async () => {
+    const lines = Array.from({ length: 40 }, (_, i) =>
+      JSON.stringify({
+        level: "info",
+        msg: `scroll-line-${i}`,
+      })
+    ).join("\n");
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from(lines));
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-in-0-abcde"}
+        />
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("log-virtual-list")).toBeInTheDocument();
+    });
+
+    const listBefore = screen.getByTestId("log-virtual-list") as HTMLElement;
+    Object.defineProperty(listBefore, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 220,
+    });
+    fireEvent.scroll(listBefore);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("focus-logs-button"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    const listInDialog = within(dialog).getByTestId(
+      "log-virtual-list"
+    ) as HTMLElement;
+
+    await waitFor(() => {
+      // Restored offset should be applied after remount into the dialog.
+      expect(listInDialog.scrollTop).toBe(220);
+    });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("log-virtual-list").scrollTop).toBe(220);
+    });
+  });
+
   it("shows the N-lines menu above the focused dialog and keeps focusControls focus-only", async () => {
     const mRes = {
       body: new ReadableStream({

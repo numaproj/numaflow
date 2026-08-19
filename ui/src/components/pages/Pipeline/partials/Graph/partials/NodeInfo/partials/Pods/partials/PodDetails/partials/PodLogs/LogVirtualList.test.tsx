@@ -112,6 +112,8 @@ describe("LogVirtualList", () => {
     expect(activeRow.className).toContain("PodLogs-row--active");
     expect(ref.current).not.toBeNull();
     expect(() => ref.current?.scrollToIndex(1)).not.toThrow();
+    expect(typeof ref.current?.getScrollOffset()).toBe("number");
+    expect(() => ref.current?.scrollToOffset(80)).not.toThrow();
   });
 
   it("renders the complete raw log line without field trimming", () => {

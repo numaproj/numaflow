@@ -228,6 +228,22 @@ describe("Pods", () => {
     });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
+    // Switching pods keeps the previously selected container when present.
+    const podInput = within(dialog).getByLabelText("Select pod");
+    await act(async () => {
+      fireEvent.change(podInput, {
+        target: { value: "simple-pipeline-infer-1-xah5w" },
+      });
+      fireEvent.keyDown(podInput, { key: "ArrowDown" });
+      fireEvent.keyDown(podInput, { key: "Enter" });
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("log-source-badge")).toHaveTextContent(
+        "infer-1/udf"
+      );
+    });
+
     await act(async () => {
       fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
     });
@@ -237,7 +253,7 @@ describe("Pods", () => {
     });
     expect(screen.queryByTestId("logs-focus-context")).not.toBeInTheDocument();
     expect(screen.getByTestId("log-source-badge")).toHaveTextContent(
-      "infer-0/udf"
+      "infer-1/udf"
     );
   });
 

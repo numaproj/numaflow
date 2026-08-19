@@ -30,6 +30,27 @@ import {
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
 
+/** API order puts Always-restart init (user/UD) containers first, then main. */
+function getDefaultContainerName(pod: Pod | undefined): string | undefined {
+  return pod?.containers?.[0];
+}
+
+function resolveContainerForPod(
+  pod: Pod | undefined,
+  preferredContainer: string | undefined
+): string | undefined {
+  if (!pod) {
+    return undefined;
+  }
+  if (
+    preferredContainer &&
+    pod.containers?.includes(preferredContainer)
+  ) {
+    return preferredContainer;
+  }
+  return getDefaultContainerName(pod);
+}
+
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
@@ -162,8 +183,9 @@ export function Pods(props: PodsProps) {
   }, [podsDetailsErr]);
 
   const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
-    setSelectedPod(p?.data?.pod);
-    setSelectedContainer(p?.data?.pod?.containers[0]);
+    const nextPod = p?.data?.pod;
+    setSelectedPod(nextPod);
+    setSelectedContainer(getDefaultContainerName(nextPod));
   }, []);
 
   const handleContainerClick = useCallback((containerName: string) => {
@@ -180,7 +202,7 @@ export function Pods(props: PodsProps) {
         return;
       }
       setSelectedPod(nextPod);
-      setSelectedContainer(nextPod.containers?.[0]);
+      setSelectedContainer((prev) => resolveContainerForPod(nextPod, prev));
     },
     [pods]
   );
@@ -202,9 +224,9 @@ export function Pods(props: PodsProps) {
     );
   }, [selectedPod, selectedContainer, handleContainerClick]);
 
-  const defaultProps = useMemo(() => {
+  const podAutocompleteProps = useMemo(() => {
     return {
-      options: pods?.map((pod) => pod.name) as string[],
+      options: pods?.map((pod) => pod.name) ?? [],
       getOptionLabel: (option: string) => option,
     };
   }, [pods]);
@@ -218,7 +240,7 @@ export function Pods(props: PodsProps) {
         <Box className="PodLogs-focus-context-pod">
           <span className="PodLogs-focus-context-label">Pod</span>
           <Autocomplete
-            {...defaultProps}
+            {...podAutocompleteProps}
             disableClearable
             id="focus-pod-select"
             data-testid="logs-focus-pod-select"
@@ -283,7 +305,7 @@ export function Pods(props: PodsProps) {
     pods,
     selectedPod,
     selectedContainer,
-    defaultProps,
+    podAutocompleteProps,
     handleFocusPodChange,
     handleContainerClick,
   ]);
@@ -341,7 +363,7 @@ export function Pods(props: PodsProps) {
         <Box>
           {pods && selectedPod && (
             <Autocomplete
-              {...defaultProps}
+              {...podAutocompleteProps}
               disablePortal
               disableClearable
               id="pod-select"

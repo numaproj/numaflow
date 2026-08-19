@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -162,6 +163,8 @@ export function PodLogs({
     [filteredLogs, logsOrder]
   );
   const logVirtualListRef = useRef<LogVirtualListHandle>(null);
+  // Preserve scroll across Focus open/close remounts of LogVirtualList.
+  const scrollOffsetRef = useRef(0);
   const {
     enabled: searchNavigationEnabled,
     matchCount,
@@ -175,6 +178,20 @@ export function PodLogs({
     negateSearch,
     resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}-${tailLines}`,
   });
+
+  useLayoutEffect(() => {
+    const offset = scrollOffsetRef.current;
+    if (offset <= 0) {
+      return;
+    }
+    const restore = () => {
+      logVirtualListRef.current?.scrollToOffset(offset);
+    };
+    restore();
+    // Remounted list may not have a measured scroll element on the first paint.
+    const frame = requestAnimationFrame(restore);
+    return () => cancelAnimationFrame(frame);
+  }, [focused]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -342,10 +359,14 @@ export function PodLogs({
   }, []);
 
   const handleOpenFocus = useCallback(() => {
+    scrollOffsetRef.current =
+      logVirtualListRef.current?.getScrollOffset() ?? 0;
     setFocused(true);
   }, []);
 
   const handleCloseFocus = useCallback(() => {
+    scrollOffsetRef.current =
+      logVirtualListRef.current?.getScrollOffset() ?? 0;
     setFocused(false);
   }, []);
 
