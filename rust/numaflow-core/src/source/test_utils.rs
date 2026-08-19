@@ -73,6 +73,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                         cln_token.clone(),
                         crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
                     ),
+                    None,
                 )
                 .await
                 .expect("failed to create source transformer");
