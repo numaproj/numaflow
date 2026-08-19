@@ -1,5 +1,5 @@
 use numaflow_nats::jetstream::{
-    JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
+    JetstreamSource, JetstreamSourceConfig, JetstreamSourceState, Message as JetstreamMessage,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,6 +9,7 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
 use crate::{Error, Result, message::Message};
 
 use super::SourceAcker;
@@ -48,6 +49,7 @@ impl From<numaflow_nats::Error> for Error {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
@@ -55,6 +57,50 @@ pub(crate) async fn new_jetstream_source(
     cancel_token: CancellationToken,
 ) -> Result<JetstreamSource> {
     Ok(JetstreamSource::connect(cfg, batch_size, timeout, cancel_token).await?)
+}
+
+pub(crate) struct JetstreamSourceFactory {
+    config: JetstreamSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    cancel_token: CancellationToken,
+    state: JetstreamSourceState,
+}
+
+impl JetstreamSourceFactory {
+    pub(crate) fn new(
+        config: JetstreamSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            timeout,
+            cancel_token,
+            state: JetstreamSourceState::default(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for JetstreamSourceFactory {
+    fn name(&self) -> &'static str {
+        "Jetstream"
+    }
+
+    async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
+        let source = JetstreamSource::connect_with_state(
+            self.config.clone(),
+            self.batch_size,
+            self.timeout,
+            self.cancel_token.clone(),
+            self.state.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl SourceReader for JetstreamSource {
@@ -284,5 +330,43 @@ mod tests {
             Some(0),
             "Pending messages should be 0 after acking all messages"
         );
+    }
+
+    #[tokio::test]
+    async fn jetstream_source_factory_name() {
+        let factory = JetstreamSourceFactory::new(
+            JetstreamSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                stream: "test-stream".into(),
+                consumer: "test-consumer".into(),
+                deliver_policy: ConsumerDeliverPolicy::NEW,
+                filter_subjects: vec![],
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "Jetstream");
+    }
+
+    #[tokio::test]
+    async fn jetstream_source_factory_build_fails_with_unreachable_server() {
+        let factory = JetstreamSourceFactory::new(
+            JetstreamSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                stream: "test-stream".into(),
+                consumer: "test-consumer".into(),
+                deliver_policy: ConsumerDeliverPolicy::NEW,
+                filter_subjects: vec![],
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        assert!(factory.build().await.is_err());
     }
 }

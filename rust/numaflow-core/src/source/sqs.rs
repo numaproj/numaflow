@@ -6,6 +6,8 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
@@ -83,6 +85,51 @@ pub(crate) async fn new_sqs_source(
         .vertex_replica(vertex_replica)
         .build(cancel_token)
         .await?)
+}
+
+pub(crate) struct SqsSourceFactory {
+    config: SqsSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    vertex_replica: u16,
+    cancel_token: CancellationToken,
+}
+
+impl SqsSourceFactory {
+    pub(crate) fn new(
+        config: SqsSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        vertex_replica: u16,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            timeout,
+            vertex_replica,
+            cancel_token,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for SqsSourceFactory {
+    fn name(&self) -> &'static str {
+        "SQS"
+    }
+
+    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
+        let source = new_sqs_source(
+            self.config.clone(),
+            self.batch_size,
+            self.timeout,
+            self.vertex_replica,
+            self.cancel_token.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl source::SourceReader for SqsSource {
@@ -478,13 +525,7 @@ pub mod tests {
                             .build()
                             .unwrap(),
                     )
-                    .failed(
-                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
-                            .id("") // Empty string ID (minimal valid value)
-                            .code("") // Empty string code (minimal valid value)
-                            .build()
-                            .unwrap(),
-                    )
+                    .set_failed(Some(vec![]))
                     .build()
                     .unwrap()
             })
@@ -563,5 +604,58 @@ pub mod tests {
             None,
             "",
         )
+    }
+}
+
+#[cfg(test)]
+mod factory_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sqs_source_factory_name() {
+        let factory = SqsSourceFactory::new(
+            SqsSourceConfig {
+                region: "us-west-2",
+                queue_name: "missing-queue",
+                queue_owner_aws_account_id: "123456789012",
+                visibility_timeout: None,
+                max_number_of_messages: None,
+                wait_time_seconds: None,
+                endpoint_url: Some("http://127.0.0.1:1".into()),
+                attribute_names: vec![],
+                message_attribute_names: vec![],
+                assume_role_config: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "SQS");
+    }
+
+    #[tokio::test]
+    async fn sqs_source_factory_build_fails_with_unreachable_endpoint() {
+        let factory = SqsSourceFactory::new(
+            SqsSourceConfig {
+                region: "us-west-2",
+                queue_name: "missing-queue",
+                queue_owner_aws_account_id: "123456789012",
+                visibility_timeout: None,
+                max_number_of_messages: None,
+                wait_time_seconds: None,
+                endpoint_url: Some("http://127.0.0.1:1".into()),
+                attribute_names: vec![],
+                message_attribute_names: vec![],
+                assume_role_config: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        let result = tokio::time::timeout(Duration::from_secs(5), factory.build()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
     }
 }

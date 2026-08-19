@@ -15,6 +15,7 @@ use crate::metrics::{
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
+#[cfg(test)]
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -23,11 +24,8 @@ use crate::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
-use numaflow_kafka::source::KafkaSource;
-use numaflow_nats::jetstream::JetstreamSource;
-use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pulsar::source::PulsarSource;
+#[cfg(test)]
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::collections::HashMap;
@@ -64,8 +62,10 @@ pub(crate) mod nats;
 
 pub(crate) mod sqs;
 
+pub(crate) mod builtin;
 pub(crate) mod http;
 pub(crate) mod kafka;
+pub(crate) mod runtime_error;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
@@ -129,6 +129,7 @@ pub(crate) trait LocalSourceAcker {
 }
 
 pub(crate) enum SourceType {
+    Builtin(builtin::BuiltinSource),
     UserDefinedSource(
         Box<user_defined::UserDefinedSourceRead>,
         Box<user_defined::UserDefinedSourceAck>,
@@ -139,12 +140,11 @@ pub(crate) enum SourceType {
         generator::GeneratorAck,
         generator::GeneratorLagReader,
     ),
-    Pulsar(PulsarSource),
+    #[cfg(test)]
+    #[allow(dead_code)] // constructed in source::sqs::tests::test_sqs_source_e2e
     Sqs(SqsSource),
-    Jetstream(JetstreamSource),
-    Kafka(KafkaSource),
+    #[cfg(test)]
     Http(CoreHttpSource),
-    Nats(NatsSource),
 }
 
 enum ActorMessage {
@@ -235,6 +235,12 @@ where
     }
 }
 
+#[derive(Clone)]
+enum SourceHealthChecker {
+    Builtin(builtin::BuiltinSource),
+    UserDefined(SourceClient<Channel>),
+}
+
 /// Source is used to read, ack, and get the pending messages count from the source.
 /// Source is responsible for invoking the transformer.
 ///
@@ -260,7 +266,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
-    health_checker: Option<SourceClient<Channel>>,
+    health_checker: Option<SourceHealthChecker>,
     rate_limiter: Option<C::RateLimiter>,
 }
 
@@ -302,8 +308,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
         match src_type {
+            SourceType::Builtin(source) => {
+                health_checker = Some(SourceHealthChecker::Builtin(source.clone()));
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, source.clone(), source.clone(), source);
+                    actor.run().await;
+                });
+            }
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
-                health_checker = Some(reader.get_source_client());
+                health_checker = Some(SourceHealthChecker::UserDefined(reader.get_source_client()));
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
@@ -315,17 +328,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     actor.run().await;
                 });
             }
-            SourceType::Pulsar(pulsar_source) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(
-                        receiver,
-                        pulsar_source.clone(),
-                        pulsar_source.clone(),
-                        pulsar_source,
-                    );
-                    actor.run().await;
-                });
-            }
+            #[cfg(test)]
             SourceType::Sqs(sqs_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
@@ -337,25 +340,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     actor.run().await;
                 });
             }
-            SourceType::Jetstream(jetstream) => {
-                tokio::spawn(async move {
-                    let actor =
-                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
-                    actor.run().await;
-                });
-            }
-            SourceType::Nats(nats) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
-                    actor.run().await;
-                });
-            }
-            SourceType::Kafka(kafka) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
-                    actor.run().await;
-                });
-            }
+            #[cfg(test)]
             SourceType::Http(http_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
@@ -928,7 +913,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         )
                         .await;
                         if let Err(e) = result {
-                            if matches!(e, Error::UdfRedrive(_)) {
+                            if matches!(e, Error::UdfRedrive(_) | Error::SourceRedrive { .. }) {
                                 // The source ack path failed before numa could confirm the ack.
                                 // Do not synthesize a nack here because the original disposition
                                 // may have been Ack after successful downstream processing.
@@ -1441,17 +1426,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     pub(crate) async fn ready(&mut self) -> bool {
-        let source_ready = if let Some(client) = &mut self.health_checker {
-            let request = tonic::Request::new(());
-            match client.is_ready(request).await {
-                Ok(response) => response.into_inner().ready,
-                Err(e) => {
-                    error!("Source is not ready: {:?}", e);
-                    false
+        let source_ready = match &mut self.health_checker {
+            Some(SourceHealthChecker::Builtin(source)) => source.is_ready().await,
+            Some(SourceHealthChecker::UserDefined(client)) => {
+                let request = tonic::Request::new(());
+                match client.is_ready(request).await {
+                    Ok(response) => response.into_inner().ready,
+                    Err(e) => {
+                        error!("Source is not ready: {:?}", e);
+                        false
+                    }
                 }
             }
-        } else {
-            true
+            None => true,
         };
 
         let transformer_ready = if let Some(client) = &mut self.transformer {

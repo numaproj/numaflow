@@ -1,13 +1,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
+use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig, PulsarSourceState};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
@@ -53,6 +55,7 @@ impl From<numaflow_pulsar::Error> for Error {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn new_pulsar_source(
     cfg: PulsarSourceConfig,
     batch_size: usize,
@@ -61,6 +64,54 @@ pub(crate) async fn new_pulsar_source(
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<PulsarSource> {
     Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica, cancel_token).await?)
+}
+
+pub(crate) struct PulsarSourceFactory {
+    config: PulsarSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    vertex_replica: u16,
+    cancel_token: CancellationToken,
+    state: PulsarSourceState,
+}
+
+impl PulsarSourceFactory {
+    pub(crate) fn new(
+        config: PulsarSourceConfig,
+        batch_size: usize,
+        timeout: Duration,
+        vertex_replica: u16,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        Self {
+            config,
+            batch_size,
+            timeout,
+            vertex_replica,
+            cancel_token,
+            state: PulsarSourceState::default(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BuiltinSourceFactory for PulsarSourceFactory {
+    fn name(&self) -> &'static str {
+        "Pulsar"
+    }
+
+    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
+        let source = PulsarSource::new_with_state(
+            self.config.clone(),
+            self.batch_size,
+            self.timeout,
+            self.vertex_replica,
+            self.cancel_token.clone(),
+            self.state.clone(),
+        )
+        .await?;
+        Ok(Box::new(SourceBackend::new(source)))
+    }
 }
 
 impl source::SourceReader for PulsarSource {
@@ -208,5 +259,44 @@ mod tests {
         pulsar.ack(offsets).await?;
 
         Ok(())
+    }
+    #[tokio::test]
+    async fn pulsar_source_factory_name() {
+        let factory = PulsarSourceFactory::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: "not-a-valid-pulsar-url".into(),
+                topic: "persistent://public/default/test".into(),
+                consumer_name: "test-consumer".into(),
+                subscription: "test-sub".into(),
+                max_unack: 10,
+                dead_letter_policy: None,
+                auth: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert_eq!(BuiltinSourceFactory::name(&factory), "Pulsar");
+    }
+
+    #[tokio::test]
+    async fn pulsar_source_factory_build_fails_with_invalid_server() {
+        let factory = PulsarSourceFactory::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: "not-a-valid-pulsar-url".into(),
+                topic: "persistent://public/default/test".into(),
+                consumer_name: "test-consumer".into(),
+                subscription: "test-sub".into(),
+                max_unack: 10,
+                dead_letter_policy: None,
+                auth: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        assert!(factory.build().await.is_err());
     }
 }

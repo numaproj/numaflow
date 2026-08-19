@@ -119,6 +119,86 @@ impl From<RuntimeErrorEntry> for String {
     }
 }
 
+/// Generic runtime error payload for non-gRPC built-in source failures.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeErrorReport {
+    pub(crate) container: String,
+    pub(crate) code: String,
+    pub(crate) message: String,
+    pub(crate) details: String,
+}
+
+/// Persists a structured runtime error under the configured application-errors directory.
+pub fn persist_runtime_error(report: RuntimeErrorReport) {
+    persist_runtime_error_to_file(
+        RuntimeInfoConfig::default().app_error_path,
+        RuntimeInfoConfig::default().max_error_files_per_container,
+        report,
+    );
+}
+
+pub(crate) fn persist_runtime_error_to_file(
+    application_error_path: String,
+    max_error_files_per_container: usize,
+    report: RuntimeErrorReport,
+) {
+    let timestamp_seconds = Utc::now().timestamp();
+    write_runtime_error_entry(
+        &application_error_path,
+        max_error_files_per_container,
+        RuntimeErrorEntry {
+            container: report.container,
+            timestamp: timestamp_seconds,
+            code: report.code,
+            message: report.message,
+            details: report.details,
+        },
+    );
+}
+
+fn write_runtime_error_entry(
+    application_error_path: &str,
+    max_error_files_per_container: usize,
+    runtime_error_entry: RuntimeErrorEntry,
+) {
+    let container_name = runtime_error_entry.container.clone();
+    let dir_path = Path::new(application_error_path).join(&container_name);
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    builder.mode(0o777);
+    if let Err(e) = builder.create(&dir_path)
+        && e.kind() != ErrorKind::AlreadyExists
+    {
+        panic!("Failed to create application errors directory: {e:?}");
+    }
+
+    let now = Utc::now();
+    let timestamp_seconds = runtime_error_entry.timestamp;
+    let timestamp_nanos = now
+        .timestamp_nanos_opt()
+        .unwrap_or_else(|| timestamp_seconds.saturating_mul(1_000_000_000));
+    let sequence = PERSIST_ERROR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let json_str: String = runtime_error_entry.into();
+
+    // The temp and final filenames share the same unique tuple, so concurrent writers never share
+    // a temp path and readers only see complete JSON files.
+    let temp_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.tmp"));
+    let final_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.json"));
+
+    let mut temp_file =
+        File::create(&temp_file_path).expect("Failed to create temp application errors file");
+    temp_file
+        .write_all(json_str.as_bytes())
+        .expect("Failed to write to temp application error file");
+
+    let _guard = PERSIST_ERROR_LOCK
+        .lock()
+        .expect("application error persist lock poisoned");
+    fs::rename(&temp_file_path, &final_file_path)
+        .expect("Failed to rename temp file to final file name");
+    prune_error_files(&dir_path, max_error_files_per_container);
+}
+
 /// Persists a gRPC error as a JSON file in the appropriate container directory.
 /// It organizes error files in a directory structure based on container names and ensures that the
 /// number of error files per container (files may be written from udf) does not exceed a specified
@@ -188,44 +268,14 @@ pub(crate) fn persist_application_error_to_file_with_container(
     } else {
         extract_container_name(grpc_status.message())
     };
-    let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
-    let mut builder = fs::DirBuilder::new();
-    builder.recursive(true);
-    builder.mode(0o777);
-    if let Err(e) = builder.create(&dir_path)
-        && e.kind() != ErrorKind::AlreadyExists
-    {
-        panic!("Failed to create application errors directory: {e:?}");
-    }
-
-    let now = Utc::now();
-    let timestamp_seconds = now.timestamp();
-    let timestamp_nanos = now
-        .timestamp_nanos_opt()
-        .unwrap_or_else(|| timestamp_seconds.saturating_mul(1_000_000_000));
-    let sequence = PERSIST_ERROR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-
+    let timestamp_seconds = Utc::now().timestamp();
     let runtime_error_entry =
         RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp_seconds));
-    let json_str: String = runtime_error_entry.into();
-
-    // The temp and final filenames share the same unique tuple, so concurrent writers never share
-    // a temp path and readers only see complete JSON files.
-    let temp_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.tmp"));
-    let final_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.json"));
-
-    let mut temp_file =
-        File::create(&temp_file_path).expect("Failed to create temp application errors file");
-    temp_file
-        .write_all(json_str.as_bytes())
-        .expect("Failed to write to temp application error file");
-
-    let _guard = PERSIST_ERROR_LOCK
-        .lock()
-        .expect("application error persist lock poisoned");
-    fs::rename(&temp_file_path, &final_file_path)
-        .expect("Failed to rename temp file to final file name");
-    prune_error_files(&dir_path, max_error_files_per_container);
+    write_runtime_error_entry(
+        &application_error_path,
+        max_error_files_per_container,
+        runtime_error_entry,
+    );
 }
 
 /// A structure used to represent API responses containing runtime error entries.
@@ -459,6 +509,9 @@ fn process_file_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime_server::config::{
+        DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH, RuntimeInfoConfig,
+    };
     use crate::runtime_server::error::Result;
     use std::fs;
     use std::io::Write;
@@ -533,6 +586,71 @@ mod tests {
             "persisted timestamp should be Unix seconds, got {}",
             entry.timestamp
         );
+    }
+
+    #[test]
+    fn test_persist_runtime_error_public_wrapper() {
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+        let report = RuntimeErrorReport {
+            container: "numa".to_string(),
+            code: "Source".to_string(),
+            message: "Built-in Kafka source read failed: broker disconnected".to_string(),
+            details: "source=Kafka, operation=read".to_string(),
+        };
+
+        persist_runtime_error_to_file(application_error_path.clone(), 5, report.clone());
+
+        let dir_path = Path::new(&application_error_path).join("numa");
+        assert!(dir_path.exists());
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 1);
+
+        // The public wrapper uses the default runtime path; verify it delegates to the same shape.
+        assert_eq!(report.container, "numa");
+        assert_eq!(
+            RuntimeInfoConfig::default().app_error_path,
+            DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string()
+        );
+    }
+    #[test]
+    fn test_persist_runtime_error_to_file() {
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+        let before = Utc::now().timestamp();
+
+        persist_runtime_error_to_file(
+            application_error_path.clone(),
+            5,
+            RuntimeErrorReport {
+                container: "numa".to_string(),
+                code: "Source".to_string(),
+                message: "Built-in kafka source read failed: broker disconnected".to_string(),
+                details: "source=kafka, operation=read, error=broker disconnected".to_string(),
+            },
+        );
+
+        let dir_path = Path::new(&application_error_path).join("numa");
+        assert!(dir_path.exists());
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 1);
+
+        let file = files
+            .first()
+            .expect("expected one persisted runtime error file");
+        let file_content = fs::read(file.path()).unwrap();
+        let entry = RuntimeErrorEntry::try_from(file_content.as_slice()).unwrap();
+        assert_eq!(entry.container, "numa");
+        assert_eq!(entry.code, "Source");
+        assert!(entry.message.contains("kafka"));
+        assert!(entry.details.contains("operation=read"));
+        assert!((before..=Utc::now().timestamp()).contains(&entry.timestamp));
     }
 
     #[test]

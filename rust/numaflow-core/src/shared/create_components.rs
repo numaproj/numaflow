@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::components::reduce::UnalignedWindowType;
@@ -24,13 +25,14 @@ use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::user_defined::ReconnectConfig as SinkReconnectConfig;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
+use crate::source::builtin::BuiltinSource;
 use crate::source::generator::new_generator;
-use crate::source::http::CoreHttpSource;
-use crate::source::jetstream::new_jetstream_source;
-use crate::source::kafka::new_kafka_source;
-use crate::source::nats::new_nats_source;
-use crate::source::pulsar::new_pulsar_source;
-use crate::source::sqs::new_sqs_source;
+use crate::source::http::HttpSourceFactory;
+use crate::source::jetstream::JetstreamSourceFactory;
+use crate::source::kafka::KafkaSourceFactory;
+use crate::source::nats::NatsSourceFactory;
+use crate::source::pulsar::PulsarSourceFactory;
+use crate::source::sqs::SqsSourceFactory;
 use crate::source::user_defined::{ReconnectConfig as SourceReconnectConfig, new_source};
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
@@ -468,18 +470,17 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Pulsar(pulsar_config) => {
-            let pulsar = new_pulsar_source(
+            let factory = Arc::new(PulsarSourceFactory::new(
                 pulsar_config.clone(),
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
                 cln_token.clone(),
-            )
-            .await?;
+            ));
             Ok(crate::source::Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Pulsar(pulsar),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
@@ -491,18 +492,17 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Sqs(sqs_source_config) => {
-            let sqs = new_sqs_source(
+            let factory = Arc::new(SqsSourceFactory::new(
                 sqs_source_config.clone(),
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
                 cln_token.clone(),
-            )
-            .await?;
+            ));
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Sqs(sqs),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
@@ -514,17 +514,16 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Jetstream(jetstream_config) => {
-            let jetstream = new_jetstream_source(
+            let factory = Arc::new(JetstreamSourceFactory::new(
                 jetstream_config.clone(),
                 batch_size,
                 read_timeout,
                 cln_token.clone(),
-            )
-            .await?;
+            ));
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Jetstream(jetstream),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
@@ -536,17 +535,16 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Nats(nats_config) => {
-            let nats = new_nats_source(
+            let factory = Arc::new(NatsSourceFactory::new(
                 nats_config.clone(),
                 batch_size,
                 read_timeout,
                 cln_token.clone(),
-            )
-            .await?;
+            ));
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Nats(nats),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
@@ -558,13 +556,16 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Kafka(kafka_config) => {
-            let config = *kafka_config.clone();
-            let kafka =
-                new_kafka_source(config, batch_size, read_timeout, cln_token.clone()).await?;
+            let factory = Arc::new(KafkaSourceFactory::new(
+                *kafka_config.clone(),
+                batch_size,
+                read_timeout,
+                cln_token.clone(),
+            ));
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Kafka(kafka),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
@@ -576,13 +577,14 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Http(http_source_config) => {
-            let http_source =
-                numaflow_http::HttpSourceHandle::new(http_source_config.clone(), cln_token.clone())
-                    .await;
+            let factory = Arc::new(
+                HttpSourceFactory::new(http_source_config.clone(), batch_size, cln_token.clone())
+                    .await,
+            );
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
+                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
                 tracker,
                 source_config.read_ahead,
                 transformer,
