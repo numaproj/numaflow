@@ -159,8 +159,7 @@ func checkVertexLevelHealth(h *handler, ns string,
 // isVertexHealthy is used to check if the vertex is healthy or not
 // It checks for the following:
 // 1) If the vertex is in running state
-// 2) the number of replicas running in the vertex
-// are equal to the number of desired replicas and the pods are in running state
+// 2) the number of ready replicas is equal to the number of desired replicas
 // 3) If all the containers in the pod are in running state
 // if any of the above conditions are not met, the vertex is unhealthy
 // Based on the above conditions, it returns the status code and message
@@ -184,6 +183,20 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 		}, nil
 	}
 
+	// When the vertex phase is Running, require ready replicas to match desired.
+	if vertex.Status.DesiredReplicas > 0 && vertex.Status.ReadyReplicas < vertex.Status.DesiredReplicas {
+		message := fmt.Sprintf("Vertex %q has %d ready replicas, expected %d",
+			vertex.Name, vertex.Status.ReadyReplicas, vertex.Status.DesiredReplicas)
+		if condition := vertex.Status.GetCondition(dfv1.VertexConditionPodsHealthy); condition != nil &&
+			condition.Status == metav1.ConditionFalse && condition.Message != "" {
+			message = condition.Message
+		}
+		return false, &resourceHealthResponse{
+			Message: message,
+			Code:    "V9",
+		}, nil
+	}
+
 	// Get all the pods for the given vertex
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName,
@@ -195,6 +208,7 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			Code:    "V6",
 		}, err
 	}
+
 	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in a healthy state
 	for _, pod := range pods.Items {
 		// Iterate over all the containers in the pod

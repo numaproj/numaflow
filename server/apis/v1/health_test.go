@@ -164,4 +164,25 @@ func TestIsVertexHealthy(t *testing.T) {
 		// Refer: pkg/shared/health-status-code
 		assert.Equal(t, "V9", r.Code)
 	})
+
+	t.Run("test running vertex with insufficient ready replicas", func(t *testing.T) {
+		pipeline := fakePipeline()
+		vertexName := "test-vertex"
+		vertex := fakeVertex(vertexName, dfv1.VertexPhaseRunning)
+		vertex.Status.ReadyReplicas = 0
+		vertex.Status.DesiredReplicas = 1
+		vertex.Status.MarkPodNotHealthy("PodUnschedulable",
+			`Pod test-pod cannot be scheduled: 0/1 nodes are available: 1 Insufficient cpu.`)
+
+		h := &handler{
+			kubeClient:     fakeKubeClient,
+			numaflowClient: &fakeNumaClient,
+		}
+		healthy, r, err := isVertexHealthy(h, testNamespace, pipeline.GetName(), vertex, vertexName)
+		assert.NoError(t, err)
+		assert.False(t, healthy)
+		assert.Equal(t, "V9", r.Code)
+		assert.Contains(t, r.Message, "Insufficient cpu")
+	})
+
 }

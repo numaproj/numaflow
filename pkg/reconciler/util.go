@@ -43,6 +43,35 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 	return true, "Running", "All pods are healthy", false
 }
 
+// CheckPodsStatusWithReadiness requires both the existing pod diagnostics and
+// the desired number of Ready pods to pass before reporting health.
+func CheckPodsStatusWithReadiness(pods *corev1.PodList, desiredReplicas int) (healthy bool, reason string, message string, transientUnhealthy bool) {
+	healthy, reason, message, transientUnhealthy = CheckPodsStatus(pods)
+	if !healthy {
+		return healthy, reason, message, transientUnhealthy
+	}
+
+	readyPods := NumOfReadyPods(*pods)
+	if readyPods < desiredReplicas {
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodPending {
+				continue
+			}
+			podReason, details := pendingPodReasonAndMessage(pod)
+			if podReason == "Unschedulable" {
+				return false, "Pod" + podReason,
+					fmt.Sprintf("Pod %s cannot be scheduled: %s", pod.Name, details), false
+			}
+			return false, "Pod" + podReason,
+				fmt.Sprintf("Pod %s: %s", pod.Name, details), false
+		}
+		return false, "InsufficientReadyPods",
+			fmt.Sprintf("%d/%d pods are ready", readyPods, desiredReplicas), false
+	}
+	return healthy, reason, message, transientUnhealthy
+}
+
 // Check if a pod is healthy. If it's unhealthy, also tell if it's transient or not.
 // The reason of transient unhealthy status is because of the logic of checking RecentRestart,
 // which would not end up with another reconciliation when it reaches the time limit,
@@ -67,6 +96,38 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string,
 
 	return true, "", "", false
 
+}
+
+// pendingPodReasonAndMessage returns a short reason and operator-visible message for a Pending pod.
+func pendingPodReasonAndMessage(pod *corev1.Pod) (string, string) {
+	// Prefer PodScheduled condition message (e.g. Insufficient cpu) for operator-visible status.
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
+			msg := summarizeSchedulingMessage(c.Message)
+			if msg == "" {
+				msg = "Pod is unschedulable"
+			}
+			if c.Reason == "Unschedulable" || c.Reason == "" {
+				return "Unschedulable", msg
+			}
+			return c.Reason, msg
+		}
+	}
+	msg := pod.Status.Message
+	if msg == "" {
+		msg = "Pod is in Pending phase"
+	}
+	return "Pending", msg
+}
+
+// summarizeSchedulingMessage keeps the useful first sentence from Kubernetes'
+// verbose scheduler message. Full scheduling details remain available in Events.
+func summarizeSchedulingMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if first, _, found := strings.Cut(message, "."); found {
+		return first + "."
+	}
+	return message
 }
 
 // checkContainerStatuses inspects a set of container statuses and, when any are unhealthy,
@@ -149,7 +210,9 @@ func NumOfReadyPods(pods corev1.PodList) int {
 }
 
 func IsPodReady(pod corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodRunning {
+	if pod.DeletionTimestamp != nil ||
+		pod.Status.Phase != corev1.PodRunning ||
+		len(pod.Status.ContainerStatuses) == 0 {
 		return false
 	}
 	for _, c := range pod.Status.ContainerStatuses {

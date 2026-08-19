@@ -633,7 +633,7 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 		readyPods = int(monoVtx.Status.Replicas)
 	}
 	monoVtx.Status.ReadyReplicas = uint32(readyPods)
-	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(&podList); healthy {
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatusWithReadiness(&podList, int(monoVtx.Status.DesiredReplicas)); healthy {
 		monoVtx.Status.MarkPodHealthy(reason, msg)
 	} else {
 		monoVtx.Status.MarkPodNotHealthy(reason, msg)

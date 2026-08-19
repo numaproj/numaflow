@@ -72,7 +72,7 @@ func fakePod(pipelineName string, vertexName string, namespace string, phase str
 			},
 		},
 		Status: corev1.PodStatus{
-			Phase:             corev1.PodPhase("Running"),
+			Phase:             corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{containerStatus},
 			InitContainerStatuses: []corev1.ContainerStatus{
 				{
@@ -157,6 +157,8 @@ func fakeVertex(name string, phase dfv1.VertexPhase) *dfv1.Vertex {
 			Phase:           phase,
 			Replicas:        1,
 			DesiredReplicas: 1,
+			// Match desired by default so Running-phase health tests exercise pod checks.
+			ReadyReplicas: 1,
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas: ptr.To[int32](1),
