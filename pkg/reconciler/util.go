@@ -59,6 +59,10 @@ func CheckPodsStatusWithReadiness(pods *corev1.PodList, desiredReplicas int) (he
 				continue
 			}
 			podReason, details := pendingPodReasonAndMessage(pod)
+			if podReason == "Unschedulable" {
+				return false, "Pod" + podReason,
+					fmt.Sprintf("Pod %s cannot be scheduled: %s", pod.Name, details), false
+			}
 			return false, "Pod" + podReason,
 				fmt.Sprintf("Pod %s: %s", pod.Name, details), false
 		}
@@ -99,7 +103,7 @@ func pendingPodReasonAndMessage(pod *corev1.Pod) (string, string) {
 	// Prefer PodScheduled condition message (e.g. Insufficient cpu) for operator-visible status.
 	for _, c := range pod.Status.Conditions {
 		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
-			msg := c.Message
+			msg := summarizeSchedulingMessage(c.Message)
 			if msg == "" {
 				msg = "Pod is unschedulable"
 			}
@@ -114,6 +118,16 @@ func pendingPodReasonAndMessage(pod *corev1.Pod) (string, string) {
 		msg = "Pod is in Pending phase"
 	}
 	return "Pending", msg
+}
+
+// summarizeSchedulingMessage keeps the useful first sentence from Kubernetes'
+// verbose scheduler message. Full scheduling details remain available in Events.
+func summarizeSchedulingMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if first, _, found := strings.Cut(message, "."); found {
+		return first + "."
+	}
+	return message
 }
 
 // checkContainerStatuses inspects a set of container statuses and, when any are unhealthy,

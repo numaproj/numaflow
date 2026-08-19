@@ -172,7 +172,7 @@ func TestIsVertexHealthy(t *testing.T) {
 		vertex.Status.ReadyReplicas = 0
 		vertex.Status.DesiredReplicas = 1
 		vertex.Status.MarkPodNotHealthy("PodUnschedulable",
-			`Pod test-pod: 0/1 nodes are available: 1 Insufficient cpu.`)
+			`Pod test-pod cannot be scheduled: 0/1 nodes are available: 1 Insufficient cpu.`)
 
 		h := &handler{
 			kubeClient:     fakeKubeClient,

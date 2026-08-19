@@ -191,7 +191,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 						Type:    corev1.PodScheduled,
 						Status:  corev1.ConditionFalse,
 						Reason:  "Unschedulable",
-						Message: "0/1 nodes are available: 1 Insufficient cpu.",
+						Message: "0/1 nodes are available: 1 Insufficient cpu. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
 					},
 				},
 			}},
@@ -199,7 +199,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
 		assert.False(t, done)
 		assert.Equal(t, "PodUnschedulable", reason)
-		assert.Contains(t, message, "Insufficient cpu")
+		assert.Equal(t, "Pod unschedulable-pod cannot be scheduled: 0/1 nodes are available: 1 Insufficient cpu.", message)
 		assert.False(t, transient)
 	})
 
@@ -350,6 +350,36 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		assert.False(t, done)
 		assert.False(t, transient)
 	})
+}
+
+func TestSummarizeSchedulingMessage(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  string
+		expected string
+	}{
+		{
+			name:     "verbose scheduler message",
+			message:  "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available.",
+			expected: "0/1 nodes are available: 1 Insufficient cpu.",
+		},
+		{
+			name:     "message without sentence delimiter",
+			message:  "Pod is unschedulable",
+			expected: "Pod is unschedulable",
+		},
+		{
+			name:     "empty message",
+			message:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, summarizeSchedulingMessage(tt.message))
+		})
+	}
 }
 
 func TestCheckPodsStatusFailureDetail(t *testing.T) {
