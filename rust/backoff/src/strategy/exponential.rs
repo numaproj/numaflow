@@ -27,6 +27,7 @@ use rand::Rng;
 /// // Third retry: ~400ms (with jitter)
 /// let delay3 = backoff.next();
 /// ```
+#[derive(Clone)]
 pub struct Exponential {
     /// The base retry interval (starting point).
     base_interval: Duration,

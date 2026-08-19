@@ -322,6 +322,7 @@ pub(crate) async fn create_transformer(
                 transformer_grpc_client.clone(),
                 tracker,
                 reconnect_config,
+                transformer_config.retry_config.map(|c| *c),
             )
             .await?,
         ));
@@ -381,6 +382,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        config.retry_config,
                     )
                     .await?)
                 }
@@ -421,6 +423,7 @@ pub(crate) async fn create_mapper(
                         map_grpc_client.clone(),
                         tracker,
                         Some(reconnect_config),
+                        config.retry_config,
                     )
                     .await?)
                 }

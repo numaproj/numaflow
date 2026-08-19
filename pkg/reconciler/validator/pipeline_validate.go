@@ -296,6 +296,13 @@ func validateMapUDF(udf dfv1.UDF) error {
 	if udf.Container == nil || udf.Container.Image == "" {
 		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
+
+	if udf.RetryStrategy != nil {
+		if err := hasValidNonSinkRetryStrategy(*udf.RetryStrategy); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -304,6 +311,10 @@ func validateReduceUDF(udf dfv1.UDF) error {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")
 		}
+	}
+
+	if udf.RetryStrategy != nil {
+		return fmt.Errorf("invalid udf spec, retryStrategy not supported for reduce udf")
 	}
 
 	f := udf.GroupBy.Window.Fixed
@@ -590,10 +601,8 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 }
 
 func validateSource(source dfv1.Source) error {
-	if transformer := source.UDTransformer; transformer != nil {
-		if transformer.Container == nil || transformer.Container.Image == "" {
-			return fmt.Errorf("invalid source transformer, specify a customized image")
-		}
+	if err := validateTransformer(source.UDTransformer); err != nil {
+		return err
 	}
 	// TODO: add more validations for each source type
 	if source.UDSource != nil {
@@ -609,6 +618,22 @@ func validateSource(source dfv1.Source) error {
 	if source.Sqs != nil {
 		if err := validateSQSSource(*source.Sqs); err != nil {
 			return fmt.Errorf("invalid SQS source: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func validateTransformer(udTransformer *dfv1.UDTransformer) error {
+	if transformer := udTransformer; transformer != nil {
+		if transformer.Container == nil || transformer.Container.Image == "" {
+			return fmt.Errorf("invalid source transformer, specify a customized image")
+		}
+
+		if transformer.RetryStrategy != nil {
+			if err := hasValidNonSinkRetryStrategy(*transformer.RetryStrategy); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -642,26 +667,52 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
 	}
 
-	if s.RetryStrategy.BackOff != nil {
+	if err := hasValidBackOff(s.RetryStrategy.BackOff); err != nil {
+		return err
+	}
+
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
+}
+
+// hasValidNonSinkRetryStrategy checks if the provided RetryStrategy is valid for non-sink components.
+func hasValidNonSinkRetryStrategy(retryStrategy dfv1.RetryStrategy) error {
+	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
+	// we return an error
+	if retryStrategy.OnFailure != nil && *retryStrategy.OnFailure == dfv1.OnFailureFallback {
+		return fmt.Errorf("given fallback OnFailure strategy is not currently supported")
+	}
+
+	if err := hasValidBackOff(retryStrategy.BackOff); err != nil {
+		return err
+	}
+
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
+}
+
+// hasValidBackOff checks if the provided backoff in the retry strategy is valid
+func hasValidBackOff(backOff *dfv1.Backoff) error {
+	if backOff != nil {
 		// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
-		if s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+		if backOff.Steps != nil && *backOff.Steps == 0 {
 			return fmt.Errorf("steps in backoff strategy cannot be 0")
 		}
 		// If factor is provided in the strategy it should be greater than or equal to 1
-		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor < 1 {
+		if backOff.Factor != nil && *backOff.Factor < 1 {
 			return fmt.Errorf("factor in backoff strategy cannot be less than 1")
 		}
 
 		// If cap and interval are provided, cap must be greater than or equal to interval
-		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval != nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < s.RetryStrategy.BackOff.Interval.Duration {
+		if backOff.Cap != nil && backOff.Interval != nil {
+			if backOff.Cap.Duration < backOff.Interval.Duration {
 				return fmt.Errorf("cap in backoff strategy cannot be less than interval")
 			}
 		}
 
 		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
-		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < dfv1.DefaultRetryInterval {
+		if backOff.Cap != nil && backOff.Interval == nil {
+			if backOff.Cap.Duration < dfv1.DefaultRetryInterval {
 				return fmt.Errorf("cap in backoff strategy cannot be less than default interval value, if interval is not provided")
 			}
 		}
@@ -669,11 +720,11 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 		// If jitter is provided, it should be greater than or equal to 0 and less than 1
 		// Jitter is typically used to introduce small random variations to avoid synchronized retries
 		// A jitter value less than 1 ensures that the delay remains within a reasonable range around the base delay.
-		if s.RetryStrategy.BackOff.Jitter != nil && (*s.RetryStrategy.BackOff.Jitter < 0 || *s.RetryStrategy.BackOff.Jitter >= 1) {
+		if backOff.Jitter != nil && (*backOff.Jitter < 0 || *backOff.Jitter >= 1) {
 			return fmt.Errorf("jitter in backoff strategy should be between 0 and 1")
 		}
 	}
-	// If no errors are found, the function returns nil indicating the validation passed.
+
 	return nil
 }
 

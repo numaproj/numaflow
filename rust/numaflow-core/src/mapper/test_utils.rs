@@ -57,6 +57,7 @@ impl MapperTestHandle {
             client,
             tracker.clone(),
             Some(map_reconnect_config(&server_handle)),
+            None,
         )
         .await
         .expect("failed to create mapper");
@@ -104,6 +105,7 @@ impl MapperTestHandle {
             client,
             tracker.clone(),
             Some(map_reconnect_config(&server_handle)),
+            None,
         )
         .await
         .expect("failed to create batch mapper");
@@ -151,6 +153,7 @@ impl MapperTestHandle {
             client,
             tracker.clone(),
             Some(map_reconnect_config(&server_handle)),
+            None,
         )
         .await
         .expect("failed to create map streamer");
