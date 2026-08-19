@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -20,6 +21,8 @@ import Button from "@mui/material/Button";
 import ButtonGroup from "@mui/material/ButtonGroup";
 import InputBase from "@mui/material/InputBase";
 import IconButton from "@mui/material/IconButton";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
 import ClearIcon from "@mui/icons-material/Clear";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -31,6 +34,8 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import Download from "@mui/icons-material/Download";
 import WrapTextIcon from "@mui/icons-material/WrapText";
+import OpenInFull from "@mui/icons-material/OpenInFull";
+import CloseFullscreen from "@mui/icons-material/CloseFullscreen";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { ClockIcon } from "@mui/x-date-pickers";
@@ -102,6 +107,7 @@ export function PodLogs({
   podName,
   containerName,
   type,
+  focusControls,
 }: PodLogsProps) {
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
@@ -116,6 +122,7 @@ export function PodLogs({
   const [tailMenuAnchor, setTailMenuAnchor] = useState<null | HTMLElement>(
     null
   );
+  const [focused, setFocused] = useState(false);
   const { host } = useContext<AppContextProps>(AppContext);
 
   // New container/pod: resume live with the default tail window.
@@ -156,6 +163,8 @@ export function PodLogs({
     [filteredLogs, logsOrder]
   );
   const logVirtualListRef = useRef<LogVirtualListHandle>(null);
+  // Preserve scroll across Focus open/close remounts of LogVirtualList.
+  const scrollOffsetRef = useRef(0);
   const {
     enabled: searchNavigationEnabled,
     matchCount,
@@ -169,6 +178,20 @@ export function PodLogs({
     negateSearch,
     resetKey: `${namespaceId}-${podName}-${containerName}-${showPreviousLogs}-${logsOrder}-${search}-${negateSearch}-${tailLines}`,
   });
+
+  useLayoutEffect(() => {
+    const offset = scrollOffsetRef.current;
+    if (offset <= 0) {
+      return;
+    }
+    const restore = () => {
+      logVirtualListRef.current?.scrollToOffset(offset);
+    };
+    restore();
+    // Remounted list may not have a measured scroll element on the first paint.
+    const frame = requestAnimationFrame(restore);
+    return () => cancelAnimationFrame(frame);
+  }, [focused]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -198,9 +221,51 @@ export function PodLogs({
       }
 
       event.preventDefault();
+      event.stopPropagation();
       handleSearchNavigation(event.shiftKey ? goPrev : goNext);
     },
     [goNext, goPrev, handleSearchNavigation]
+  );
+
+  // Capture Enter/Shift+Enter for match navigation so it is not consumed by
+  // toolbar Buttons (e.g. the N-lines selector) when focus is elsewhere in
+  // the focused Dialog. Skip other text fields (pod Autocomplete, etc.).
+  const handleLogsKeyDownCapture = useCallback(
+    (event) => {
+      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+        return;
+      }
+      if (!searchNavigationEnabled) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (
+        target.closest(".PodLogs-focus-context-pod") ||
+        target.closest(".PodLogs-level-select") ||
+        target.closest(".MuiMenu-root") ||
+        target.closest('[role="listbox"]')
+      ) {
+        return;
+      }
+
+      const isLogSearch = Boolean(target.closest(".PodLogs-search"));
+      const tag = target.tagName;
+      const isOtherTextInput =
+        (tag === "INPUT" || tag === "TEXTAREA") && !isLogSearch;
+      if (isOtherTextInput) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      handleSearchNavigation(event.shiftKey ? goPrev : goNext);
+    },
+    [searchNavigationEnabled, goNext, goPrev, handleSearchNavigation]
   );
 
   const handleNegateSearchChange = useCallback(
@@ -293,6 +358,18 @@ export function PodLogs({
     });
   }, []);
 
+  const handleOpenFocus = useCallback(() => {
+    scrollOffsetRef.current =
+      logVirtualListRef.current?.getScrollOffset() ?? 0;
+    setFocused(true);
+  }, []);
+
+  const handleCloseFocus = useCallback(() => {
+    scrollOffsetRef.current =
+      logVirtualListRef.current?.getScrollOffset() ?? 0;
+    setFocused(false);
+  }, []);
+
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
   const tailSelectorTooltip = showPreviousLogs
     ? "Choose how many previous log lines to show"
@@ -305,8 +382,10 @@ export function PodLogs({
       ? { testId: "logs-paused-banner", label: "Logs paused" }
       : null;
 
-  return (
-    <Box className="PodLogs-root">
+  // Single viewer tree: rendered in the sidebar or (when focused) inside the Dialog.
+  // Do not mount a second PodLogs — that would open a second /logs stream.
+  const logsViewer = (
+    <Box className="PodLogs-root" onKeyDownCapture={handleLogsKeyDownCapture}>
       <div className="PodLogs-toolbar">
         <div className="PodLogs-header">
           <div className="PodLogs-header-left">
@@ -340,6 +419,7 @@ export function PodLogs({
                   size="small"
                 >
                   <Button
+                    type="button"
                     data-testid="log-tail-size-button"
                     className="PodLogs-tail-size-main"
                     onClick={handleOpenTailMenu}
@@ -347,6 +427,7 @@ export function PodLogs({
                     {`${tailLines.toLocaleString()} lines`}
                   </Button>
                   <Button
+                    type="button"
                     data-testid="log-tail-size-menu-button"
                     className="PodLogs-tail-size-menu-btn"
                     aria-label="Choose how many recent log lines to show"
@@ -362,6 +443,8 @@ export function PodLogs({
               open={Boolean(tailMenuAnchor)}
               onClose={() => setTailMenuAnchor(null)}
               data-testid="log-tail-size-menu"
+              // Above Focus logs Dialog (modal + 2); keep selectable in focus mode.
+              sx={{ zIndex: (theme) => theme.zIndex.modal + 4 }}
             >
               {LOG_TAIL_SIZES.map((size) => (
                 <MenuItem
@@ -374,6 +457,14 @@ export function PodLogs({
                 </MenuItem>
               ))}
             </Menu>
+            <ToolbarIconButton
+              testId="focus-logs-button"
+              title={focused ? "Exit focus" : "Open a larger log view"}
+              onClick={focused ? handleCloseFocus : handleOpenFocus}
+              active={focused}
+            >
+              {focused ? <CloseFullscreen /> : <OpenInFull />}
+            </ToolbarIconButton>
           </div>
         </div>
         <div className="PodLogs-controls">
@@ -507,6 +598,14 @@ export function PodLogs({
             className="PodLogs-level-select"
             sx={{ minWidth: "11rem" }}
             size="small"
+            data-testid="log-level-select"
+            MenuProps={{
+              // Above Focus logs Dialog (modal + 2); keep options visible in focus mode.
+              sx: { zIndex: (theme) => theme.zIndex.modal + 4 },
+              PaperProps: {
+                "data-testid": "log-level-menu",
+              },
+            }}
           >
             <MenuItem sx={{ fontSize: "1.2rem" }} value={"all"}>
               All levels
@@ -538,5 +637,54 @@ export function PodLogs({
         />
       </Box>
     </Box>
+  );
+
+  return (
+    <>
+      {focused ? (
+        <Box
+          className="PodLogs-focus-placeholder"
+          data-testid="logs-focus-placeholder"
+        >
+          Logs are open in the focused view
+        </Box>
+      ) : (
+        logsViewer
+      )}
+      <Dialog
+        open={focused}
+        onClose={handleCloseFocus}
+        fullWidth
+        maxWidth={false}
+        className="PodLogs-focus-dialog"
+        aria-labelledby="pod-logs-focus-title"
+        // Allow nested Select/Menu/Autocomplete popovers to take focus and
+        // paint above this Dialog while Focus logs is open.
+        disableEnforceFocus
+        BackdropProps={{
+          "data-testid": "logs-focus-backdrop",
+        }}
+        PaperProps={{
+          className: "PodLogs-focus-dialog-paper",
+          "data-testid": "logs-focus-dialog",
+        }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+      >
+        <DialogContent className="PodLogs-focus-dialog-content">
+          <span id="pod-logs-focus-title" className="PodLogs-sr-only">
+            Container Logs
+          </span>
+          {focused && focusControls ? (
+            <Box
+              className="PodLogs-focus-context"
+              data-testid="logs-focus-context"
+            >
+              {focusControls}
+            </Box>
+          ) : null}
+          {focused ? logsViewer : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

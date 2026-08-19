@@ -30,6 +30,27 @@ import {
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
 
+/** API order puts Always-restart init (user/UD) containers first, then main. */
+function getDefaultContainerName(pod: Pod | undefined): string | undefined {
+  return pod?.containers?.[0];
+}
+
+function resolveContainerForPod(
+  pod: Pod | undefined,
+  preferredContainer: string | undefined
+): string | undefined {
+  if (!pod) {
+    return undefined;
+  }
+  if (
+    preferredContainer &&
+    pod.containers?.includes(preferredContainer)
+  ) {
+    return preferredContainer;
+  }
+  return getDefaultContainerName(pod);
+}
+
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
@@ -162,13 +183,29 @@ export function Pods(props: PodsProps) {
   }, [podsDetailsErr]);
 
   const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
-    setSelectedPod(p?.data?.pod);
-    setSelectedContainer(p?.data?.pod?.containers[0]);
+    const nextPod = p?.data?.pod;
+    setSelectedPod(nextPod);
+    setSelectedContainer(getDefaultContainerName(nextPod));
   }, []);
 
   const handleContainerClick = useCallback((containerName: string) => {
     setSelectedContainer(containerName);
   }, []);
+
+  const handleFocusPodChange = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
+      if (!newValue || !pods) {
+        return;
+      }
+      const nextPod = pods.find((pod) => pod.name === newValue);
+      if (!nextPod) {
+        return;
+      }
+      setSelectedPod(nextPod);
+      setSelectedContainer((prev) => resolveContainerForPod(nextPod, prev));
+    },
+    [pods]
+  );
 
   const containerSelector = useMemo(() => {
     return (
@@ -185,7 +222,93 @@ export function Pods(props: PodsProps) {
         </Box>
       </Box>
     );
-  }, [selectedPod, selectedContainer]);
+  }, [selectedPod, selectedContainer, handleContainerClick]);
+
+  const podAutocompleteProps = useMemo(() => {
+    return {
+      options: pods?.map((pod) => pod.name) ?? [],
+      getOptionLabel: (option: string) => option,
+    };
+  }, [pods]);
+
+  const focusControls = useMemo(() => {
+    if (!pods || !selectedPod) {
+      return null;
+    }
+    return (
+      <>
+        <Box className="PodLogs-focus-context-pod">
+          <span className="PodLogs-focus-context-label">Pod</span>
+          <Autocomplete
+            {...podAutocompleteProps}
+            disableClearable
+            id="focus-pod-select"
+            data-testid="logs-focus-pod-select"
+            ListboxProps={{
+              sx: {
+                fontSize: "1.2rem",
+                // Cap height so a large pod fleet scrolls instead of filling the dialog.
+                maxHeight: "24rem",
+                overflow: "auto",
+              },
+            }}
+            componentsProps={{
+              popper: {
+                sx: { zIndex: (theme) => theme.zIndex.modal + 4 },
+              },
+            }}
+            sx={{
+              width: "100%",
+              minWidth: 0,
+              "& .MuiOutlinedInput-root": {
+                height: "3.2rem",
+                fontSize: "1.2rem",
+                paddingTop: 0,
+                paddingBottom: 0,
+              },
+              "& .MuiAutocomplete-input": {
+                textOverflow: "ellipsis",
+              },
+            }}
+            autoHighlight
+            onChange={handleFocusPodChange}
+            value={selectedPod.name}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                size="small"
+                title={selectedPod.name}
+                inputProps={{
+                  ...params.inputProps,
+                  "aria-label": "Select pod",
+                  autoComplete: "new-password",
+                  style: { fontSize: "1.2rem" },
+                }}
+              />
+            )}
+          />
+        </Box>
+        <Box className="PodLogs-focus-context-container">
+          <span className="PodLogs-focus-context-label">Container</span>
+          <Box data-testid="logs-focus-containers">
+            <Containers
+              pod={selectedPod}
+              containerName={selectedContainer}
+              handleContainerClick={handleContainerClick}
+            />
+          </Box>
+        </Box>
+      </>
+    );
+  }, [
+    pods,
+    selectedPod,
+    selectedContainer,
+    podAutocompleteProps,
+    handleFocusPodChange,
+    handleContainerClick,
+  ]);
 
   const podDetail = useMemo(() => {
     return (
@@ -200,10 +323,19 @@ export function Pods(props: PodsProps) {
           containerName={selectedContainer}
           pod={selectedPod}
           vertexId={vertexId}
+          focusControls={focusControls}
         />
       </Box>
     );
-  }, [namespaceId, pipelineId, type, selectedContainer, selectedPod, vertexId]);
+  }, [
+    namespaceId,
+    pipelineId,
+    type,
+    selectedContainer,
+    selectedPod,
+    vertexId,
+    focusControls,
+  ]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
@@ -215,13 +347,6 @@ export function Pods(props: PodsProps) {
     },
     [pods]
   );
-
-  const defaultProps = useMemo(() => {
-    return {
-      options: pods?.map((pod) => pod.name) as string[],
-      getOptionLabel: (option: string) => option,
-    };
-  }, [pods]);
 
   const podSearchDetails = (
     <Box
@@ -238,7 +363,7 @@ export function Pods(props: PodsProps) {
         <Box>
           {pods && selectedPod && (
             <Autocomplete
-              {...defaultProps}
+              {...podAutocompleteProps}
               disablePortal
               disableClearable
               id="pod-select"
