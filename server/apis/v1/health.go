@@ -8,7 +8,6 @@ import (
 
 	evictCache "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -160,8 +159,7 @@ func checkVertexLevelHealth(h *handler, ns string,
 // isVertexHealthy is used to check if the vertex is healthy or not
 // It checks for the following:
 // 1) If the vertex is in running state
-// 2) the number of replicas running in the vertex
-// are equal to the number of desired replicas and the pods are in running state
+// 2) the number of ready replicas is equal to the number of desired replicas
 // 3) If all the containers in the pod are in running state
 // if any of the above conditions are not met, the vertex is unhealthy
 // Based on the above conditions, it returns the status code and message
@@ -187,10 +185,15 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 
 	// When the vertex phase is Running, require ready replicas to match desired.
 	if vertex.Status.DesiredReplicas > 0 && vertex.Status.ReadyReplicas < vertex.Status.DesiredReplicas {
+		message := fmt.Sprintf("Vertex %q has %d ready replicas, expected %d",
+			vertex.Name, vertex.Status.ReadyReplicas, vertex.Status.DesiredReplicas)
+		if condition := vertex.Status.GetCondition(dfv1.VertexConditionPodsHealthy); condition != nil &&
+			condition.Status == metav1.ConditionFalse && condition.Message != "" {
+			message = condition.Message
+		}
 		return false, &resourceHealthResponse{
-			Message: fmt.Sprintf("Vertex %q has %d ready replicas, expected %d",
-				vertex.Name, vertex.Status.ReadyReplicas, vertex.Status.DesiredReplicas),
-			Code: "V9",
+			Message: message,
+			Code:    "V9",
 		}, nil
 	}
 
@@ -205,31 +208,9 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			Code:    "V6",
 		}, err
 	}
+
 	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in a healthy state
 	for _, pod := range pods.Items {
-		// Skip pods that are terminating or already completed (same as controller health checks).
-		if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
-			continue
-		}
-		// Non-Running pods (e.g. Pending with empty ContainerStatuses) are unhealthy.
-		if pod.Status.Phase != corev1.PodRunning {
-			msg := pod.Status.Message
-			if msg == "" {
-				for _, c := range pod.Status.Conditions {
-					if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse && c.Message != "" {
-						msg = c.Message
-						break
-					}
-				}
-			}
-			if msg == "" {
-				msg = fmt.Sprintf("pod is in %s phase", pod.Status.Phase)
-			}
-			return false, &resourceHealthResponse{
-				Message: fmt.Sprintf("Pod %q is not running: %s", pod.Name, msg),
-				Code:    "V3",
-			}, nil
-		}
 		// Iterate over all the containers in the pod
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			// if the container is not in running state, return false

@@ -43,6 +43,31 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 	return true, "Running", "All pods are healthy", false
 }
 
+// CheckPodsStatusWithReadiness requires both the existing pod diagnostics and
+// the desired number of Ready pods to pass before reporting health.
+func CheckPodsStatusWithReadiness(pods *corev1.PodList, desiredReplicas int) (healthy bool, reason string, message string, transientUnhealthy bool) {
+	healthy, reason, message, transientUnhealthy = CheckPodsStatus(pods)
+	if !healthy {
+		return healthy, reason, message, transientUnhealthy
+	}
+
+	readyPods := NumOfReadyPods(*pods)
+	if readyPods < desiredReplicas {
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodPending {
+				continue
+			}
+			podReason, details := pendingPodReasonAndMessage(pod)
+			return false, "Pod" + podReason,
+				fmt.Sprintf("Pod %s: %s", pod.Name, details), false
+		}
+		return false, "InsufficientReadyPods",
+			fmt.Sprintf("%d/%d pods are ready", readyPods, desiredReplicas), false
+	}
+	return healthy, reason, message, transientUnhealthy
+}
+
 // Check if a pod is healthy. If it's unhealthy, also tell if it's transient or not.
 // The reason of transient unhealthy status is because of the logic of checking RecentRestart,
 // which would not end up with another reconciliation when it reaches the time limit,
@@ -53,26 +78,6 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string,
 	// Skip pods that are terminating or already completed
 	if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
 		return true, "", "", false
-	}
-
-	// Treat Failed/Unknown/Pending phases as unhealthy before inspecting containers.
-	// Pending/unschedulable pods often have empty containerStatuses.
-	switch pod.Status.Phase {
-	case corev1.PodFailed:
-		msg := pod.Status.Message
-		if msg == "" {
-			msg = "Pod is in Failed phase"
-		}
-		return false, "Failed", msg, false
-	case corev1.PodUnknown:
-		msg := pod.Status.Message
-		if msg == "" {
-			msg = "Pod is in Unknown phase"
-		}
-		return false, "Unknown", msg, false
-	case corev1.PodPending:
-		reason, msg := pendingPodReasonAndMessage(pod)
-		return false, reason, msg, false
 	}
 
 	// check both container and initContainer statuses
@@ -191,7 +196,9 @@ func NumOfReadyPods(pods corev1.PodList) int {
 }
 
 func IsPodReady(pod corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodRunning {
+	if pod.DeletionTimestamp != nil ||
+		pod.Status.Phase != corev1.PodRunning ||
+		len(pod.Status.ContainerStatuses) == 0 {
 		return false
 	}
 	for _, c := range pod.Status.ContainerStatuses {
