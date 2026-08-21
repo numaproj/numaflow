@@ -2224,6 +2224,13 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports"),
 						},
 					},
+					"endpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Endpoint at which the http source will be available. By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

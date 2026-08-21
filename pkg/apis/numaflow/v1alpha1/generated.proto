@@ -726,6 +726,11 @@ message HTTPSource {
   // To enable plain HTTP, set ports.http explicitly.
   // +optional
   optional Ports ports = 3;
+
+  // Endpoint at which the http source will be available.
+  // By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`
+  // +optional
+  optional string endpoint = 4;
 }
 
 message IdleSource {

@@ -621,6 +621,39 @@ func validateSource(source dfv1.Source) error {
 		}
 	}
 
+	// HTTP source validation
+	if source.HTTP != nil {
+		if err := validateHTTPSource(*source.HTTP); err != nil {
+			return fmt.Errorf("invalid HTTP source: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// httpEndpointRegex matches a valid HTTP source endpoint: one or more path
+// segments of URL-safe characters separated by single slashes, with no leading
+// or trailing slash. This rejects empty values, leading slashes (which would
+// produce an unreachable "/vertices//..." route), and path-parameter syntax
+// such as "{id}" or ":id" that would panic the Axum router at pod startup.
+var httpEndpointRegex = regexp.MustCompile(`^[A-Za-z0-9\-._~]+(/[A-Za-z0-9\-._~]+)*$`)
+
+// validateHTTPSource validates the HTTP source configuration. The endpoint, when
+// set, is served under the "/vertices/" prefix by the runtime, so it must be a
+// clean relative path. An invalid value would otherwise be accepted at admission
+// and then crash-loop the source pod when the router is built.
+func validateHTTPSource(http dfv1.HTTPSource) error {
+	if http.Endpoint == "" {
+		return nil
+	}
+	if !httpEndpointRegex.MatchString(http.Endpoint) {
+		return fmt.Errorf("invalid endpoint %q, must be one or more '/'-separated path segments using characters [A-Za-z0-9-._~], with no leading or trailing slash", http.Endpoint)
+	}
+	for seg := range strings.SplitSeq(http.Endpoint, "/") {
+		if seg == "." || seg == ".." {
+			return fmt.Errorf("invalid endpoint %q, path segments '.' and '..' are not allowed", http.Endpoint)
+		}
+	}
 	return nil
 }
 

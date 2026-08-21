@@ -389,6 +389,10 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
             }
         }
 
+        if let Some(endpoint) = value.endpoint {
+            http_config = http_config.endpoint(Box::leak(endpoint.into_boxed_str()));
+        }
+
         if let Some(auth) = value.auth {
             let auth = auth.token.unwrap();
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {

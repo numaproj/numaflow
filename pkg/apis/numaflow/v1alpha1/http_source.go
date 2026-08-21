@@ -28,6 +28,10 @@ type HTTPSource struct {
 	// To enable plain HTTP, set ports.http explicitly.
 	// +optional
 	Ports *Ports `json:"ports,omitempty" protobuf:"bytes,3,opt,name=ports"`
+	// Endpoint at which the http source will be available.
+	// By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`
+	// +optional
+	Endpoint string `json:"endpoint,omitempty" protobuf:"bytes,4,opt,name=endpoint"`
 }
 
 // GetHTTPSPort returns the configured HTTPS port, or the default VertexHTTPSPort (8443).
