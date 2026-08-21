@@ -136,22 +136,20 @@ impl source::SourceAcker for SqsSource {
                 )));
             };
 
-            let visibility_timeout = nack
-            .option
-            .and_then(|opts| opts.delay)
-            .map(|delay_ms| {
-                let visibility_timeout = delay_ms.div_ceil(1000) as i32;
+            // Without an explicit delay there is no visibility timeout to change, so skip
+            // calling the SQS API for this offset entirely
+            let Some(delay_ms) = nack.option.and_then(|opts| opts.delay) else {
+                continue;
+            };
 
-                if delay_ms % 1000 != 0 {
-                    tracing::warn!(
-                        requested_delay_ms = delay_ms,
-                        visibility_timeout_secs = visibility_timeout,
-                        "SQS visibility timeout only supports whole seconds; rounding requested delay up"
-                    );
-                }
-
-                visibility_timeout
-            });
+            let visibility_timeout = delay_ms.div_ceil(1000) as i32;
+            if delay_ms % 1000 != 0 {
+                tracing::warn!(
+                    requested_delay_ms = delay_ms,
+                    visibility_timeout_secs = visibility_timeout,
+                    "SQS visibility timeout only supports whole seconds; rounding requested delay up"
+                );
+            }
 
             sqs_offsets.push(SqsNack {
                 receipt_handle: string_offset.offset,
@@ -292,7 +290,14 @@ pub mod tests {
             let mut responses = Vec::new();
             while let Some(datum) = input.recv().await {
                 if self.first.swap(false, Ordering::SeqCst) {
-                    responses.push(sink::Response::nack(datum.id, None));
+                    // Nack with an explicit delay so the source changes the message's visibility timeout
+                    responses.push(sink::Response::nack(
+                        datum.id,
+                        Some(numaflow::shared::NackOptions {
+                            delay: Some(30_000),
+                            ..Default::default()
+                        }),
+                    ));
                 } else {
                     responses.push(sink::Response::ok(datum.id));
                 }
@@ -489,6 +494,8 @@ pub mod tests {
         .match_requests(|inp| {
             inp.queue_url().unwrap()
                 == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+                // The nack carried a 30_000ms delay, which must be sent as a 30s visibility timeout.
+                && inp.visibility_timeout() == Some(30)
         })
         .then_output(|| {
             aws_sdk_sqs::operation::change_message_visibility::ChangeMessageVisibilityOutput::builder()

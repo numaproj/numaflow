@@ -24,6 +24,8 @@ export type LogVirtualListProps = {
 
 export type LogVirtualListHandle = {
   scrollToIndex: (index: number) => void;
+  getScrollOffset: () => number;
+  scrollToOffset: (offset: number) => void;
 };
 
 export const LogVirtualList = forwardRef<
@@ -61,6 +63,17 @@ export const LogVirtualList = forwardRef<
     () => ({
       scrollToIndex: (index: number) => {
         virtualizer.scrollToIndex(index, { align: "center", behavior: "auto" });
+      },
+      getScrollOffset: () =>
+        parentRef.current?.scrollTop ?? virtualizer.scrollOffset ?? 0,
+      scrollToOffset: (offset: number) => {
+        if (parentRef.current) {
+          parentRef.current.scrollTop = offset;
+        }
+        virtualizer.scrollToOffset(offset, {
+          align: "start",
+          behavior: "auto",
+        });
       },
     }),
     [virtualizer]

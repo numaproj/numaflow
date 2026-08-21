@@ -1,77 +1,16 @@
 # HTTP Source
 
-HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI `/vertices/{vertexName}`.
+HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled.
 
 A plain HTTP (non-TLS) server can also be enabled by explicitly setting `ports.http`. By default, only HTTPS is exposed. When `ports.http` is set, both HTTPS and HTTP endpoints are exposed.
 
-A Pipeline with HTTP Source:
+## Spec
+
+Minimal spec for an HTTP source which exposes an HTTPS endpoint for access on port 8443:
 
 ```yaml
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
-metadata:
-  name: http-pipeline
-spec:
-  vertices:
-    - name: in
-      source:
-        http: {}
-    - name: p1
-      udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
-          imagePullPolicy: Always
-    - name: out
-      sink:
-        log: {}
-  edges:
-    - from: in
-      to: p1
-    - from: p1
-      to: out
-```
-
-## Sending Data
-
-Data can be sent to an HTTP source through:
-
-- ClusterIP Service (within the cluster)
-- Ingress or LoadBalancer Service (outside of the cluster)
-- Port-forward (for testing)
-
-### ClusterIP Service
-
-An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified. The service name is in the format `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed at `https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}` within the cluster by default.
-
-```yaml
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
-metadata:
-  name: http-pipeline
-spec:
-  vertices:
-    - name: in
-      source:
-        http:
-          service: true
-```
-
-### LoadBalancer Service or Ingress
-
-To create a `LoadBalancer` type Service, or a `NodePort` one for Ingress, you need to do it yourself. Use `selector` like the following in the Service:
-
-```yaml
-numaflow.numaproj.io/pipeline-name: http-pipeline # pipeline name
-numaflow.numaproj.io/vertex-name: in # vertex name
-```
-
-### Port-forwarding
-
-To test an HTTP source, you can do it from your local through port-forwarding.
-
-```sh
-kubectl port-forward pod ${pod-name} 8443
-curl -kq -X POST -d "hello world" https://localhost:8443/vertices/in
+source:
+  http: {}
 ```
 
 ## Plain HTTP (non-TLS)
@@ -79,19 +18,12 @@ curl -kq -X POST -d "hello world" https://localhost:8443/vertices/in
 By default, the HTTP source only accepts HTTPS traffic and listens on port 8443. To also accept plain HTTP requests, explicitly set `ports.http`. The HTTPS server always starts on `ports.https` (default 8443), and the HTTP server only starts when `ports.http` is set. When enabled, both servers run simultaneously.
 
 ```yaml
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
-metadata:
-  name: http-pipeline
-spec:
-  vertices:
-    - name: in
-      source:
-        http:
-          service: true
-          ports:
-            http: 8090       # enables plain HTTP
-            # https: 8443    # optional, defaults to 8443
+source:
+  http:
+    service: true
+    ports:
+      http: 8090       # enables plain HTTP
+      # https: 8443    # optional, defaults to 8443
 ```
 
 When `service: true` is set alongside `ports.http`, the generated ClusterIP Service will expose both ports:
@@ -104,7 +36,7 @@ When `service: true` is set alongside `ports.http`, the generated ClusterIP Serv
 Sending data over plain HTTP:
 
 ```sh
-curl -X POST -d "hello world" http://http-pipeline-in:8090/vertices/in
+curl -X POST -d "hello world" http://${http-source-host}:8090/vertices/${vertexName}
 ```
 
 > **Note:** Plain HTTP should only be used in trusted network environments (e.g., you have service mesh). Prefer HTTPS whenever possible, as it encrypts data in transit.
@@ -153,7 +85,64 @@ echo -n 'tr3qhs321fjglwf1e2e67dfda4tr' > ./token.txt
 kubectl create secret generic http-source-token --from-file=my-token=./token.txt
 ```
 
-Then add `auth` to the Source Vertex:
+Then add `auth` to the Source spec:
+
+```yaml
+source:
+  http:
+    auth:
+      token:
+        name: http-source-token
+        key: my-token
+```
+
+When the clients post data to the Source, add `Authorization: Bearer tr3qhs321fjglwf1e2e67dfda4tr` to the header, for example:
+
+```sh
+TOKEN="Bearer tr3qhs321fjglwf1e2e67dfda4tr"
+curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" ${http-source-url}
+```
+
+## Health Check
+
+The HTTP Source also has an endpoint `/health` created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.
+
+## Sending Data
+
+Data can be sent to an HTTP source through:
+
+- ClusterIP Service (within the cluster)
+- Ingress or LoadBalancer Service (outside of the cluster)
+- Port-forward (for testing)
+
+### ClusterIP Service
+
+An HTTP Source can generate a `ClusterIP` Service if `service: true` is specified:
+
+```yaml
+source:
+  http:
+    service: true
+```
+
+The Service name and the endpoint URI to send data to differ between Pipeline and MonoVertex — see [Pipeline](#pipeline) and [MonoVertex](#monovertex) below.
+
+### LoadBalancer Service or Ingress
+
+To create a `LoadBalancer` type Service, or a `NodePort` one for Ingress, you need to do it yourself. The `selector` to use in the Service differs between Pipeline and MonoVertex — see [Pipeline](#pipeline) and [MonoVertex](#monovertex) below.
+
+### Port-forwarding
+
+To test an HTTP source, you can do it from your local through port-forwarding.
+
+```sh
+kubectl port-forward pod ${pod-name} 8443
+curl -kq -X POST -d "hello world" https://localhost:8443/vertices/${vertexName}
+```
+
+## Pipeline
+
+A Pipeline with HTTP Source:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -164,21 +153,59 @@ spec:
   vertices:
     - name: in
       source:
-        http:
-          auth:
-            token:
-              name: http-source-token
-              key: my-token
+        http: {}
+    - name: p1
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: p1
+    - from: p1
+      to: out
 ```
 
-When the clients post data to the Source Vertex, add `Authorization: Bearer tr3qhs321fjglwf1e2e67dfda4tr` to the header, for example:
+The Service name is in the format `{pipelineName}-{vertexName}`, so with `service: true` the HTTP Source can be accessed at `https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}` within the cluster by default:
 
 ```sh
-TOKEN="Bearer tr3qhs321fjglwf1e2e67dfda4tr"
-# Post data from a Pod in the same namespace of the cluster
-curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeline-in:8443/vertices/in
+curl -kq -X POST -d "hello world" https://http-pipeline-in:8443/vertices/in
 ```
 
-## Health Check
+For a `LoadBalancer` Service or Ingress, use a `selector` like the following:
 
-The HTTP Source also has an endpoint `/health` created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.
+```yaml
+numaflow.numaproj.io/pipeline-name: http-pipeline # pipeline name
+numaflow.numaproj.io/vertex-name: in # vertex name
+```
+
+## MonoVertex
+
+The HTTP Source can also be used in a [MonoVertex](../../getting-started/monovertex.md), which is useful when you just need to read from the HTTP Source and write to a Sink (optionally with a Transformer or Map UDF), without needing the full Pipeline semantics. The `source.http` spec is identical to the one used in a Pipeline; the difference is in the Service name, endpoint URI, and selector, since a MonoVertex has only one Vertex.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: simple-mono-vertex
+spec:
+  source:
+    http: {}
+  sink:
+    log: {}
+```
+
+Unlike a Pipeline, where the Service name combines the pipeline and vertex names, a MonoVertex's HTTP Source Service is simply named after the MonoVertex. With `service: true`, it can be accessed at `https://{monoVertexName}.{namespace}.svc:8443/vertices/{monoVertexName}` within the cluster by default:
+
+```sh
+curl -kq -X POST -d "hello world" https://simple-mono-vertex:8443/vertices/simple-mono-vertex
+```
+
+For a `LoadBalancer` Service or Ingress, use a `selector` like the following:
+
+```yaml
+numaflow.numaproj.io/mono-vertex-name: simple-mono-vertex # mono vertex name
+```
