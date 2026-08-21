@@ -1155,6 +1155,39 @@ func Test_validateIdleSource(t *testing.T) {
 	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than or equal to incrementBy`)
 }
 
+func Test_validateHTTPSource(t *testing.T) {
+	tests := []struct {
+		name          string
+		endpoint      string
+		expectedError bool
+	}{
+		{name: "empty endpoint uses default, allowed", endpoint: "", expectedError: false},
+		{name: "single segment", endpoint: "ingest", expectedError: false},
+		{name: "multiple segments", endpoint: "api/v1/ingest", expectedError: false},
+		{name: "url-safe characters", endpoint: "my-endpoint_1.0~test", expectedError: false},
+		{name: "leading slash", endpoint: "/ingest", expectedError: true},
+		{name: "trailing slash", endpoint: "ingest/", expectedError: true},
+		{name: "double slash", endpoint: "api//ingest", expectedError: true},
+		{name: "path parameter braces", endpoint: "ingest/{id}", expectedError: true},
+		{name: "path parameter colon", endpoint: "ingest/:id", expectedError: true},
+		{name: "whitespace", endpoint: "my endpoint", expectedError: true},
+		{name: "query character", endpoint: "ingest?x=1", expectedError: true},
+		{name: "dot segment", endpoint: "api/./ingest", expectedError: true},
+		{name: "dotdot segment", endpoint: "api/../ingest", expectedError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHTTPSource(dfv1.HTTPSource{Endpoint: tt.endpoint})
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 // TestValidateSink tests the validateSink function with different sink configurations.
 func TestValidateSink(t *testing.T) {
 	onFailFallback := dfv1.OnFailureFallback

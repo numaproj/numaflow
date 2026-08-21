@@ -20,6 +20,9 @@ limitations under the License.
 pub struct HttpSource {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
     pub auth: Option<Box<crate::models::Authorization>>,
+    /// Endpoint at which the http source will be available. By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`
+    #[serde(rename = "endpoint", skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
     #[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
     pub ports: Option<Box<crate::models::Ports>>,
     /// Whether to create a ClusterIP Service
@@ -31,6 +34,7 @@ impl HttpSource {
     pub fn new() -> HttpSource {
         HttpSource {
             auth: None,
+            endpoint: None,
             ports: None,
             service: None,
         }

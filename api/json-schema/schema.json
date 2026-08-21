@@ -20606,6 +20606,10 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "endpoint": {
+          "description": "Endpoint at which the http source will be available. By default, the endpoint is `vertices/\u003cvertex-name\u003e` or `vertices/\u003cmvtx-name\u003e`",
+          "type": "string"
+        },
         "ports": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ports",
           "description": "Ports to listen on. HTTPS always runs on port 8443 by default. To enable plain HTTP, set ports.http explicitly."

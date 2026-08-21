@@ -5685,6 +5685,8 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      endpoint:
+                        type: string
                       ports:
                         properties:
                           http:

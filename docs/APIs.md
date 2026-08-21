@@ -4443,6 +4443,27 @@ plain HTTP, set ports.http explicitly.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>endpoint</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Endpoint at which the http source will be available. By default, the
+endpoint is <code>vertices/\<vertex-name\></code> or
+<code>vertices/\<mvtx-name\></code>
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
