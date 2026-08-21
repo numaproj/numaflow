@@ -118,6 +118,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/authinfo", handler.AuthInfo)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)
+	// Controller version and scope for the numaflow-controller Deployment in a namespace.
+	r.GET("/namespaces/:namespace/controller-info", handler.GetControllerInfo)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.
 	r.GET("/cluster-summary", handler.GetClusterSummary)
 	// Create a Pipeline.
