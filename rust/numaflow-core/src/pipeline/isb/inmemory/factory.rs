@@ -47,8 +47,7 @@ impl InMemoryFactory {
 
     /// Return `(pending_count, in_flight_count)` for a named buffer, if present.
     ///
-    /// Useful for drain detection by embedders/tests.
-    #[allow(dead_code)]
+    /// Used for drain detection by the `local` facade (and by tests).
     pub(crate) fn buffer_stats(&self, name: &str) -> Option<(usize, usize)> {
         self.buffers
             .lock()
