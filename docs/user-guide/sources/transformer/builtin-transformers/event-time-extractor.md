@@ -8,7 +8,7 @@ A `eventTimeExtractor` built-in transformer extracts event time from the payload
 
 `format` is used to convert the event time in string format to a `time.Time` object.
 
-## Expression (required)
+## Expression (required) {#expression}
 
 Event Time Extractor expression is implemented with `expr` and `sprig` libraries.
 

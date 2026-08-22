@@ -26,7 +26,7 @@ Refer to the [Numaflow Metrics Documentation](../../operations/metrics/metrics.m
 
 ---
 
-### Current Configuration Snippet
+### Current Configuration Snippet {#current-configuration}
 
 Below is a snippet of the default ConfigMap configuration:
 

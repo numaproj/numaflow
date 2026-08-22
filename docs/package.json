@@ -1,0 +1,17 @@
+{
+  "name": "numaflow-docs",
+  "private": true,
+  "scripts": {
+    "docs": "npm run docs:api-reference && docusaurus build --out-dir site",
+    "docs:api-reference": "node hack/build-api-reference-page.js",
+    "docs:serve": "docusaurus serve --dir site",
+    "docs:start": "npm run docs:api-reference && docusaurus start"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "@docusaurus/theme-mermaid": "^3.10.2",
+    "@easyops-cn/docusaurus-search-local": "^0.55.3",
+    "@mermaid-js/layout-elk": "^0.1.9"
+  }
+}

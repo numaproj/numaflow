@@ -27,7 +27,7 @@ The **Pods View** in the Numaflow UI provides a comprehensive overview of the po
 
 ---
 
-### 4. Container Info
+### 4. Container Info {#container-info}
 
 Provides detailed information about the selected container, including:
 
@@ -44,7 +44,7 @@ Provides detailed information about the selected container, including:
 
 ---
 
-### 5. Container Logs
+### 5. Container Logs {#container-logs}
 
 - Quickly access the logs of a specific container within a pod by selecting it.
 - Refer to the [Logs View](./logs.md) section for a detailed explanation of log features.

@@ -16,7 +16,7 @@ Most of the Kunernetes Pod specification fields are supported in the spec of `Pi
 - `dnsConfig`
 - `resourceClaims`
 
-All the fields above are optional, click [here](../../../APIs.md#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate) to see full list of supported fields.
+All the fields above are optional, click [here](/APIs/) to see full list of supported fields.
 
 These fields can be specified in the `Pipeline` spec under:
 
