@@ -8,8 +8,8 @@ It can be configured to serve as a backup sink when the primary sink fails to pr
 Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.
 
 It lets you define a DLQ associated with a given user-defined sink (hereafter referred to as the *primary sink*). 
-If a message cannot be processed in the primary sink, the message can be moved to the fallback sink to be reprocessed later 
-(for example, by a separate pipeline/MonoVertex). 
+If a message cannot be processed in the primary sink, the message can be moved to the fallback sink which in turn 
+can send the message to a DLQ. The messages in the DLQ can later be processed by a separate Pipeline/MonoVertex. 
 
 ## Caveats
 

@@ -19,8 +19,8 @@ use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::{ReducerConfig, StorageConfig};
-use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
+use crate::config::components::sink::{RetryConfig, SinkConfig};
 use crate::config::components::source::SourceConfig;
 use crate::config::components::source::SourceSpec;
 use crate::config::components::source::SourceType;
@@ -133,6 +133,7 @@ pub(crate) mod map {
     };
     use crate::error::Error;
 
+    use crate::config::components::sink::RetryConfig;
     /// re-export MapMode from shared.
     pub use numaflow_shared::server_info::MapMode;
 
@@ -155,6 +156,7 @@ pub(crate) mod map {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    retry_config: udf.retry_strategy.map(RetryConfig::from),
                 }))
             } else {
                 Err(Error::Config("Invalid UDF".to_string()))
@@ -167,6 +169,7 @@ pub(crate) mod map {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+        pub retry_config: Option<RetryConfig>,
     }
 
     impl UserDefinedConfig {
@@ -388,9 +391,13 @@ impl PipelineConfig {
         let (vertex, vertex_type): (VertexConfig, VertexType) = if let Some(source) =
             vertex_obj.spec.source
         {
-            let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
+            let transformer_config = source.transformer.as_ref().map(|t| TransformerConfig {
                 concurrency,
                 transformer_type: TransformerType::UserDefined(Default::default()),
+                retry_config: t
+                    .retry_strategy
+                    .clone()
+                    .map(|retry_strategy| Box::new(RetryConfig::from(retry_strategy))),
             });
 
             let source = SourceSpec::new(pipeline_name.clone(), vertex_name.clone(), source);
@@ -1191,6 +1198,7 @@ mod tests {
                 volume_mounts: None,
             })),
             group_by: None,
+            retry_strategy: None,
         };
 
         let map_type = MapType::try_from(Box::new(udf)).unwrap();
@@ -1248,6 +1256,7 @@ mod tests {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    retry_config: None,
                 }),
             }),
             metrics_config: MetricsConfig::default(),

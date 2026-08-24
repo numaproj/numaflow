@@ -2,17 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{Semaphore, mpsc};
-use tokio::task::JoinHandle;
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tonic::{Request, Streaming};
-use tracing::{error, info, warn};
-
 use crate::config::pipeline::map::MapMode;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
@@ -25,11 +14,22 @@ use crate::shared::grpc::{
     DEFAULT_RECONNECT_INTERVAL, UdfReconnectConfig, create_mapper_client, prost_timestamp_from_utc,
 };
 use crate::tracker::Tracker;
+use chrono::{DateTime, Utc};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use tokio::sync::{Semaphore, mpsc};
+use tokio::task::JoinHandle;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tonic::{Request, Streaming};
+use tracing::{error, info, warn};
 
 pub(super) mod batch;
 pub(super) mod stream;
 pub(super) mod unary;
 
+use crate::config::components::sink::RetryConfig;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -79,6 +79,7 @@ pub(crate) struct MapHandle {
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
     health_checker: Option<MapClient<Channel>>,
+    retry_config: Option<RetryConfig>,
 }
 
 /// Response channel size for streaming map.
@@ -87,6 +88,7 @@ const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
 impl MapHandle {
     /// Creates a new mapper with the given batch size, concurrency, client, and
     /// tracker handle. It creates the appropriate mapper based on the map mode.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         map_mode: MapMode,
         batch_size: usize,
@@ -95,6 +97,7 @@ impl MapHandle {
         concurrency: usize,
         client: MapClient<Channel>,
         tracker: Tracker,
+        retry_config: Option<RetryConfig>,
     ) -> error::Result<Self> {
         Self::new_with_reconnect_config(
             map_mode,
@@ -105,6 +108,7 @@ impl MapHandle {
             client,
             tracker,
             None,
+            retry_config,
         )
         .await
     }
@@ -119,6 +123,7 @@ impl MapHandle {
         client: MapClient<Channel>,
         tracker: Tracker,
         reconnect_config: Option<UdfReconnectConfig>,
+        retry_config: Option<RetryConfig>,
     ) -> error::Result<Self> {
         // Based on the map mode, create the appropriate mapper
         let mapper = match map_mode {
@@ -145,6 +150,7 @@ impl MapHandle {
             final_result: Ok(()),
             shutting_down_on_err: false,
             health_checker: Some(client),
+            retry_config,
         })
     }
 
@@ -209,6 +215,7 @@ impl MapHandle {
                         bypass_router,
                         hard_shutdown_token,
                         is_mono_vertex: is_mono_vertex(),
+                        retry_config: self.retry_config.clone(),
                     });
                     let ctx = ConcurrentMapContext {
                         error_rx,
@@ -225,6 +232,7 @@ impl MapHandle {
                         cln_token: hard_shutdown_token,
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
+                        retry_config: self.retry_config.clone(),
                     };
                     self.process_batch_messages(input_stream, ctx, cln_token)
                         .await;
@@ -378,6 +386,7 @@ impl MapHandle {
                 bypass_router: ctx.bypass_router.clone(),
                 is_mono_vertex,
                 cln_token: ctx.cln_token.clone(),
+                retry_config: ctx.retry_config.clone(),
             })
             .execute()
             .await;
@@ -403,6 +412,7 @@ pub(in crate::mapper) struct SharedMapTaskContext {
     pub bypass_router: Option<MvtxBypassRouter>,
     pub hard_shutdown_token: CancellationToken,
     pub is_mono_vertex: bool,
+    pub retry_config: Option<RetryConfig>,
 }
 
 /// Context for concurrent (unary/stream) map processing.
@@ -419,6 +429,7 @@ struct BatchMapContext {
     cln_token: CancellationToken,
     bypass_router: Option<MvtxBypassRouter>,
     batch_mapper: UserDefinedBatchMap,
+    retry_config: Option<RetryConfig>,
 }
 
 fn update_udf_error_metric(is_mono_vertex: bool) {
@@ -435,6 +446,29 @@ fn update_udf_error_metric(is_mono_vertex: bool) {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
     }
+}
+
+fn update_udf_drop_metric_by_n(is_mono_vertex: bool, n: u64) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .dropped_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .inc_by(n);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc_by(n);
+    }
+}
+
+/// Records a message dropped by the map UDF, whether via an explicit DROP tag (counted downstream
+/// at write time) or because retries were exhausted under `OnFailureStrategy::Drop` (counted here,
+/// since such a message never leaves the mapper).
+fn update_udf_drop_metric(is_mono_vertex: bool) {
+    update_udf_drop_metric_by_n(is_mono_vertex, 1);
 }
 
 pub(in crate::mapper) fn map_redrive_error(status: tonic::Status) -> Error {
@@ -724,6 +758,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -763,6 +798,7 @@ mod tests {
             bypass_router: None,
             hard_shutdown_token: CancellationToken::new(),
             is_mono_vertex: false,
+            retry_config: None,
         });
 
         MapUnaryTask {
@@ -848,6 +884,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -974,6 +1011,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 

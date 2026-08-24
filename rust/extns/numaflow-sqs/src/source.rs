@@ -52,7 +52,7 @@ pub struct SqsSourceConfig {
 #[derive(Debug)]
 pub struct SqsNack {
     pub receipt_handle: Bytes,
-    pub visibility_timeout: Option<i32>,
+    pub visibility_timeout: i32,
 }
 /// Internal message types for the actor implementation.
 ///
@@ -382,15 +382,12 @@ impl SqsActor {
                 SqsSourceError::from(Error::Other("failed to parse receipt handle".to_string()))
             })?;
 
-            let mut request = self
+            let request = self
                 .client
                 .change_message_visibility()
                 .queue_url(&self.queue_url)
-                .receipt_handle(receipt_handle);
-
-            if let Some(timeout) = nack.visibility_timeout {
-                request = request.visibility_timeout(timeout);
-            }
+                .receipt_handle(receipt_handle)
+                .visibility_timeout(nack.visibility_timeout);
 
             if let Err(err) = request.send().await {
                 error!(

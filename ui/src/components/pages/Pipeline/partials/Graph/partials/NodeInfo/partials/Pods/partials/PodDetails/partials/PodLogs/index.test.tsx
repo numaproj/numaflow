@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
 import { PodLogs } from "./index";
@@ -96,6 +96,7 @@ describe("PodLogs", () => {
     expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
       "PodLogs-icon-btn--active"
     );
+    expect(screen.getByTestId("focus-logs-button")).toBeInTheDocument();
     expect(screen.getByTestId("color-mode-button")).not.toHaveClass(
       "PodLogs-icon-btn--active"
     );
@@ -197,6 +198,15 @@ describe("PodLogs", () => {
     expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
     fireEvent.keyDown(searchInput, { key: "Enter", shiftKey: true });
     expect(screen.getByTestId("search-match-count")).toHaveTextContent("2 / 2");
+
+    // Enter must navigate matches even when focus is on the N-lines button,
+    // instead of opening the tail-size dropdown.
+    screen.getByTestId("log-tail-size-button").focus();
+    fireEvent.keyDown(screen.getByTestId("log-tail-size-button"), {
+      key: "Enter",
+    });
+    expect(screen.getByTestId("search-match-count")).toHaveTextContent("1 / 2");
+    expect(screen.queryByTestId("log-tail-size-menu")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("negate-search"));
     expect(screen.queryByTestId("search-match-count")).not.toBeInTheDocument();
@@ -482,5 +492,204 @@ describe("PodLogs", () => {
       expect(lastUrl).not.toContain("previous=true");
       expect(screen.getByText("live-again")).toBeInTheDocument();
     });
+  });
+
+  it("opens and closes the focus logs dialog without a second stream", async () => {
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            Buffer.from(
+              `{"level":"info","ts":"2023-09-04T11:50:19.712416709Z","logger":"numaflow.Source-processor","caller":"publish/publisher.go:180","msg":"focus-dialog-log-line","pipeline":"simple-pipeline","vertex":"in"}`
+            )
+          );
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
+    (global as any).fetch = mockedFetch;
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-in-0-abcde"}
+        />
+      );
+    });
+
+    expect(screen.getByTestId("focus-logs-button")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("logs-focus-placeholder")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("focus-logs-button"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByTestId("logs-focus-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("logs-focus-placeholder")).toHaveTextContent(
+      "Logs are open in the focused view"
+    );
+    expect(
+      within(dialog).getByTestId("log-virtual-list")
+    ).toBeInTheDocument();
+    expect(within(dialog).getByTestId("focus-logs-button")).toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    // Still a single PodLogs instance / stream — no second fetch from opening focus.
+    expect(mockedFetch).toBeCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("logs-focus-placeholder")).not.toBeInTheDocument();
+    expect(screen.getByTestId("log-virtual-list")).toBeInTheDocument();
+    expect(screen.getByTestId("focus-logs-button")).not.toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    expect(mockedFetch).toBeCalledTimes(1);
+  });
+
+  it("restores saved scroll offset when toggling Focus logs", async () => {
+    const lines = Array.from({ length: 40 }, (_, i) =>
+      JSON.stringify({
+        level: "info",
+        msg: `scroll-line-${i}`,
+      })
+    ).join("\n");
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from(lines));
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-in-0-abcde"}
+        />
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("log-virtual-list")).toBeInTheDocument();
+    });
+
+    const listBefore = screen.getByTestId("log-virtual-list") as HTMLElement;
+    Object.defineProperty(listBefore, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 220,
+    });
+    fireEvent.scroll(listBefore);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("focus-logs-button"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    const listInDialog = within(dialog).getByTestId(
+      "log-virtual-list"
+    ) as HTMLElement;
+
+    await waitFor(() => {
+      // Restored offset should be applied after remount into the dialog.
+      expect(listInDialog.scrollTop).toBe(220);
+    });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("log-virtual-list").scrollTop).toBe(220);
+    });
+  });
+
+  it("shows the N-lines menu above the focused dialog and keeps focusControls focus-only", async () => {
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            Buffer.from(
+              `{"level":"info","ts":"2023-09-04T11:50:19.712416709Z","logger":"numaflow.Source-processor","caller":"publish/publisher.go:180","msg":"focus-menu-line","pipeline":"simple-pipeline","vertex":"in"}`
+            )
+          );
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
+    (global as any).fetch = mockedFetch;
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-in-0-abcde"}
+          focusControls={
+            <div data-testid="logs-focus-controls-probe">Focus controls</div>
+          }
+        />
+      );
+    });
+
+    expect(screen.queryByTestId("logs-focus-context")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("logs-focus-controls-probe")
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("focus-logs-button"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByTestId("logs-focus-context")).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId("logs-focus-controls-probe")
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("log-tail-size-menu-button"));
+    });
+
+    expect(await screen.findByTestId("log-tail-size-menu")).toBeVisible();
+    expect(screen.getByTestId("log-tail-size-5000")).toBeInTheDocument();
+    // Level Select menu uses the same elevated z-index as the N-lines menu
+    // so options are not hidden under the Focus dialog.
+    expect(within(dialog).getByTestId("log-level-select")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByTestId("focus-logs-button"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("logs-focus-context")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("logs-focus-controls-probe")
+    ).not.toBeInTheDocument();
   });
 });

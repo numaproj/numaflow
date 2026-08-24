@@ -557,6 +557,7 @@ mod tests {
                     grpc_max_message_size: 4 * 1024 * 1024,
                     socket_path: sock_file.to_str().unwrap().to_string(),
                     server_info_path: server_info_file.to_str().unwrap().to_string(),
+                    retry_config: None,
                 }),
             }),
             vertex_type: VertexType::MapUDF,

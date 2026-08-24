@@ -1,16 +1,19 @@
 use super::{
     ParentMessageInfo, UserDefinedMessage, create_response_stream, grpc_error_to_redrive,
-    map_redrive_error, reconnect_mapper_client, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
+    map_redrive_error, reconnect_mapper_client, update_udf_drop_metric_by_n,
+    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_metric,
 };
+use crate::config::components::sink::RetryConfig;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
+use crate::shared::retry::{RetryController, RetryStep};
 use crate::tracker::Tracker;
-use crate::{mark_failed, mark_success};
+use crate::{mark_failed, mark_failed_batch, mark_success, mark_success_batch};
 use bytes::Bytes;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
@@ -55,6 +58,7 @@ pub(in crate::mapper) struct MapBatchTask {
     pub bypass_router: Option<MvtxBypassRouter>,
     pub is_mono_vertex: bool,
     pub cln_token: CancellationToken,
+    pub retry_config: Option<RetryConfig>,
 }
 
 pub(in crate::mapper) enum BatchMapTaskError {
@@ -69,128 +73,174 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(mut self) -> std::result::Result<(), BatchMapTaskError> {
-        // Store parent message info for each message before sending to UDF
-        let parent_infos: Vec<ParentMessageInfo> = self
-            .msg_handles
-            .iter()
-            .map(|rm| rm.message().into())
-            .collect();
+        // Create per-message map spans via the OTel SDK API.
+        // Each span's parent is that message's `vertex.process` context (from
+        // sys_metadata["tracing"]). We inject the map span context into
+        // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
+        // Lexical scope ends spans after the batch UDF call.
+        //
+        // Invariant: tracing_udf is removed from result messages below; on error, input
+        // messages are dropped, so tracing_udf never propagates further.
+        //
+        // When no OTel layer is registered, `inject_stage_span` returns non-recording spans
+        // and the sys_metadata copy-on-write is skipped — no need to gate this call.
+        let _stage_spans = otel::inject_stage_spans!(
+            self.msg_handles.iter_mut().map(MessageHandle::message_mut),
+            otel::TraceTopology::current(),
+            otel::TraceStage::Map,
+        );
 
-        let results = {
-            // Create per-message map spans via the OTel SDK API.
-            // Each span's parent is that message's `vertex.process` context (from
-            // sys_metadata["tracing"]). We inject the map span context into
-            // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
-            // Lexical scope ends spans after the batch UDF call.
-            //
-            // Invariant: tracing_udf is removed from result messages below; on error, input
-            // messages are dropped, so tracing_udf never propagates further.
-            //
-            // When no OTel layer is registered, `inject_stage_span` returns non-recording spans
-            // and the sys_metadata copy-on-write is skipped — no need to gate this call.
-            let _stage_spans = otel::inject_stage_spans!(
-                self.msg_handles.iter_mut().map(MessageHandle::message_mut),
-                otel::TraceTopology::current(),
-                otel::TraceStage::Map,
-            );
+        let mut retry = RetryController::new(&self.retry_config);
+
+        let mut next_retry_handles = self.msg_handles;
+        let mut retry_handles = vec![];
+
+        // Update read metrics for each request
+        for _ in 0..next_retry_handles.len() {
+            update_udf_read_metric(self.is_mono_vertex);
+        }
+
+        // loop for retry strategy
+        loop {
+            retry_handles = next_retry_handles;
+            next_retry_handles = vec![];
+            // Store parent message info for each message before sending to UDF
+            let parent_infos: Vec<ParentMessageInfo> =
+                retry_handles.iter().map(|rm| rm.message().into()).collect();
 
             // Convert Messages to MapRequests
-            let requests: Vec<MapRequest> = self
-                .msg_handles
+            let requests: Vec<MapRequest> = retry_handles
                 .iter()
                 .map(|rm| rm.message().clone().into())
                 .collect();
 
-            // Update read metrics for each request
-            for _ in &requests {
-                update_udf_read_metric(self.is_mono_vertex);
+            // Call the UDF and get results directly
+            let results = self.mapper.batch(requests, self.cln_token.clone()).await;
+
+            if let Some(error) = results.iter().find_map(|result| match result {
+                Err(Error::UdfRedrive(status)) => Some(Error::UdfRedrive(status.clone())),
+                _ => None,
+            }) {
+                return Err(BatchMapTaskError::Redrive {
+                    error,
+                    msg_handles: retry_handles,
+                });
             }
 
-            // Call the UDF and get results directly
-            self.mapper.batch(requests, self.cln_token).await
-        };
-
-        if let Some(error) = results.iter().find_map(|result| match result {
-            Err(Error::UdfRedrive(status)) => Some(Error::UdfRedrive(status.clone())),
-            _ => None,
-        }) {
-            return Err(BatchMapTaskError::Redrive {
-                error,
-                msg_handles: self.msg_handles,
-            });
-        }
-
-        for (result, (msg_handle, parent_info)) in results
-            .into_iter()
-            .zip(self.msg_handles.into_iter().zip(parent_infos))
-        {
-            match result {
-                Ok(results) => {
-                    // Convert raw results to Messages using parent info.
-                    // Remove tracing_udf from each result (map stage is done).
-                    let mapped_messages: Vec<Message> = results
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, result)| {
-                            let mut mapped_msg: Message =
-                                UserDefinedMessage(result, &parent_info, i as i32).into();
-                            // No-op when no `tracing_udf` was injected (noop tracer path).
-                            mapped_msg.strip_tracing_udf();
-                            mapped_msg
-                        })
-                        .collect();
-
-                    let offset = parent_info.offset.clone();
-
-                    update_udf_write_metric(
-                        self.is_mono_vertex,
-                        &parent_info,
-                        mapped_messages.len() as u64,
-                    );
-
-                    self.tracker
-                        .serving_update(
-                            &offset,
-                            mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                        )
-                        .await
-                        .map_err(BatchMapTaskError::Terminal)?;
-
-                    for mapped_message in mapped_messages {
-                        // Each downstream handle shares the original ack tracking — ACK is
-                        // deferred until all mapped messages are written to ISB/sink.
-                        let downstream_handle = msg_handle.with_message(mapped_message);
-
-                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                        // If not bypassed, it returns Some(downstream_handle) for us to send downstream.
-                        let downstream_handle = if let Some(ref bypass_router) = self.bypass_router
+            for (result, (msg_handle, parent_info)) in results
+                .into_iter()
+                .zip(retry_handles.into_iter().zip(parent_infos))
+            {
+                match result {
+                    Ok(results) => {
+                        if results
+                            .iter()
+                            .enumerate()
+                            .map(|(i, result)| {
+                                UserDefinedMessage(result.clone(), &parent_info, i as i32).into()
+                            })
+                            .any(|msg: Message| msg.failed())
                         {
-                            match bypass_router
-                                .try_bypass(downstream_handle)
-                                .await
-                                .expect("failed to send message to bypass channel")
-                            {
-                                Some(msg) => msg,
-                                None => continue, // Message was bypassed, move to next
-                            }
-                        } else {
-                            downstream_handle
-                        };
+                            next_retry_handles.push(msg_handle);
+                            continue;
+                        }
 
-                        self.output_tx
-                            .send(downstream_handle)
+                        // Convert raw results to Messages using parent info.
+                        // Remove tracing_udf from each result (map stage is done).
+                        let mapped_messages: Vec<Message> = results
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, result)| {
+                                let mut mapped_msg: Message =
+                                    UserDefinedMessage(result, &parent_info, i as i32).into();
+                                // No-op when no `tracing_udf` was injected (noop tracer path).
+                                mapped_msg.strip_tracing_udf();
+                                mapped_msg
+                            })
+                            .collect();
+
+                        let offset = parent_info.offset.clone();
+
+                        update_udf_write_metric(
+                            self.is_mono_vertex,
+                            &parent_info,
+                            mapped_messages.len() as u64,
+                        );
+
+                        self.tracker
+                            .serving_update(
+                                &offset,
+                                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                            )
                             .await
-                            .expect("failed to send response");
-                    }
+                            .map_err(BatchMapTaskError::Terminal)?;
 
-                    // Decrement the original ref_count for this message now that all downstream
-                    // handles have been created and sent.
-                    mark_success!(msg_handle);
+                        for mapped_message in mapped_messages {
+                            // Each downstream handle shares the original ack tracking — ACK is
+                            // deferred until all mapped messages are written to ISB/sink.
+                            let downstream_handle = msg_handle.with_message(mapped_message);
+
+                            // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                            // If not bypassed, it returns Some(downstream_handle) for us to send downstream.
+                            let downstream_handle =
+                                if let Some(ref bypass_router) = self.bypass_router {
+                                    match bypass_router
+                                        .try_bypass(downstream_handle)
+                                        .await
+                                        .expect("failed to send message to bypass channel")
+                                    {
+                                        Some(msg) => msg,
+                                        None => continue, // Message was bypassed, move to next
+                                    }
+                                } else {
+                                    downstream_handle
+                                };
+
+                            self.output_tx
+                                .send(downstream_handle)
+                                .await
+                                .expect("failed to send response");
+                        }
+
+                        // Decrement the original ref_count for this message now that all downstream
+                        // handles have been created and sent.
+                        mark_success!(msg_handle);
+                    }
+                    Err(e) => {
+                        error!(err=?e, "failed to map message");
+                        mark_failed!(msg_handle, &e, None);
+                        return Err(BatchMapTaskError::Terminal(e));
+                    }
                 }
-                Err(e) => {
-                    error!(err=?e, "failed to map message");
-                    mark_failed!(msg_handle, &e, None);
-                    return Err(BatchMapTaskError::Terminal(e));
+            }
+
+            if next_retry_handles.is_empty() {
+                break;
+            }
+
+            match retry.next_step(&self.cln_token).await {
+                // Retry the still-failing subset again — after the backoff wait, or immediately
+                // when no retry config is set (retry forever, no backoff).
+                RetryStep::Again => {}
+                RetryStep::Cancelled => {
+                    mark_failed_batch!(next_retry_handles, "map UDF retry wait cancelled");
+                    break;
+                }
+                // Retries exhausted under `onFailure: drop` — drop and ack the subset.
+                RetryStep::Drop => {
+                    warn!("Retries exhausted, dropping messages.");
+                    update_udf_drop_metric_by_n(
+                        self.is_mono_vertex,
+                        next_retry_handles.len() as u64,
+                    );
+                    mark_success_batch!(next_retry_handles);
+                    break;
+                }
+                // Retries exhausted under `onFailure: retry` — nack the subset.
+                RetryStep::Nack => {
+                    let e = Error::Mapper("Retries exhausted".to_string());
+                    mark_failed_batch!(next_retry_handles, &e);
+                    break;
                 }
             }
         }
@@ -552,15 +602,22 @@ impl UserDefinedBatchMap {
 
 #[cfg(test)]
 mod tests {
+    use super::{BatchMapTaskError, MapBatchTask};
+    use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+    use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
     use crate::mapper::map::batch::{BatchSenderMapState, UserDefinedBatchMap};
+    use crate::message::{Message, MessageHandle, MessageID, Offset, ReadAck, StringOffset};
+    use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
     use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
+    use crate::tracker::Tracker;
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::map::{MapRequest, MapResponse};
     use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
@@ -1195,6 +1252,291 @@ mod tests {
             err.to_string()
                 .contains("batch map reconnect config missing")
         );
+    }
+
+    // ---- retryStrategy tests ----
+
+    /// Batch mapper that fails (via the reserved FAIL tag) the first `fail_first_n` batch calls,
+    /// then succeeds. Exercises the "retry then succeed" path.
+    struct BatchRetryThenSucceed {
+        attempts: AtomicUsize,
+        fail_first_n: usize,
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for BatchRetryThenSucceed {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let fail = self.attempts.fetch_add(1, Ordering::SeqCst) < self.fail_first_n;
+            let mut responses = vec![];
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Some(datum.keys),
+                    value: datum.value,
+                    // must match message.rs FAIL const
+                    tags: fail.then(|| vec!["U+005C__FAIL__".to_string()]),
+                    nack_options: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    /// Batch mapper that always fails (via the reserved FAIL tag).
+    struct BatchAlwaysFail;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for BatchAlwaysFail {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let mut responses = vec![];
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Some(datum.keys),
+                    value: datum.value,
+                    tags: Some(vec!["U+005C__FAIL__".to_string()]),
+                    nack_options: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    fn fast_retry_config(strategy: OnFailureStrategy, max_attempts: u16) -> RetryConfig {
+        RetryConfig {
+            sink_max_retry_attempts: max_attempts,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_retry_factor: 1.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 5,
+            sink_retry_on_fail_strategy: strategy,
+        }
+    }
+
+    fn retry_test_message(id: &str) -> Message {
+        Message {
+            value: b"hello".to_vec().into(),
+            offset: Offset::String(StringOffset::new(id.to_string(), 0)),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: id.to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        }
+    }
+
+    async fn build_batch_client<T>(
+        svc: T,
+    ) -> (
+        UserDefinedBatchMap,
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<()>,
+        TempDir,
+    )
+    where
+        T: batchmap::BatchMapper + Send + Sync + 'static,
+    {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            Server::new(svc)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let client = UserDefinedBatchMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+            None,
+        )
+        .await
+        .unwrap();
+        (client, shutdown_tx, handle, tmp_dir)
+    }
+
+    /// Runs a [MapBatchTask] to completion and returns its result plus the downstream output
+    /// receiver. The task consumes `mapper` (and thus the underlying client), so callers can shut
+    /// the server down immediately after this returns.
+    async fn run_batch_task(
+        mapper: UserDefinedBatchMap,
+        msg_handles: Vec<MessageHandle>,
+        retry_config: Option<RetryConfig>,
+    ) -> (
+        std::result::Result<(), BatchMapTaskError>,
+        mpsc::Receiver<MessageHandle>,
+    ) {
+        let (output_tx, output_rx) = mpsc::channel(16);
+        let result = MapBatchTask {
+            mapper,
+            msg_handles,
+            output_tx,
+            tracker: Tracker::new(None, CancellationToken::new()),
+            bypass_router: None,
+            is_mono_vertex: false,
+            cln_token: CancellationToken::new(),
+            retry_config,
+        }
+        .execute()
+        .await;
+        (result, output_rx)
+    }
+
+    #[tokio::test]
+    async fn batch_retries_then_succeeds() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 2,
+        })
+        .await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Retry, 10)),
+        )
+        .await;
+
+        assert!(result.is_ok(), "batch task should succeed after retries");
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message after retries succeed");
+        assert!(!mapped.message().failed());
+        assert_eq!(mapped.message().value, "hello");
+        // Simulate the downstream ISB writer marking the forwarded copy success.
+        mapped.mark_success();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn batch_retries_without_config_until_success() -> Result<(), Box<dyn Error>> {
+        // With no retry config, a FAIL-tagged response must still be retried (indefinitely,
+        // with no backoff) rather than forwarded as-is.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 3,
+        })
+        .await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(client, vec![msg_handle], None).await;
+
+        assert!(result.is_ok());
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message once the UDF stops failing");
+        assert!(!mapped.message().failed());
+        mapped.mark_success();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn batch_drops_messages_on_retries_exhausted() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchAlwaysFail).await;
+
+        let drop_before = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Drop, 1)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack,
+            "dropped message must be ACK'd"
+        );
+        assert!(
+            output_rx.recv().await.is_none(),
+            "no message should be forwarded downstream"
+        );
+
+        let drop_after = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+        assert_eq!(drop_after, drop_before + 1);
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn batch_retries_exhausted_naks_messages() -> Result<(), Box<dyn Error>> {
+        // Under a finite `Retry` budget (only constructible directly; the spec conversion forces
+        // u16::MAX for onFailure=Retry), batch map NAKs the messages and returns Ok — it does not
+        // surface a terminal error the way the unary/stream paths do.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_batch_client(BatchAlwaysFail).await;
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(retry_test_message("0"), ack_tx);
+        let (result, mut output_rx) = run_batch_task(
+            client,
+            vec![msg_handle],
+            Some(fast_retry_config(OnFailureStrategy::Retry, 1)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert!(
+            output_rx.recv().await.is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Nak(None)
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
     }
 
     #[tokio::test]

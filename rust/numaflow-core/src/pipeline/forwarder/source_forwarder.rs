@@ -886,6 +886,7 @@ mod tests {
                 cln_token.clone(),
                 crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
             ),
+            None,
         )
         .await
         .unwrap();

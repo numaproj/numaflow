@@ -235,6 +235,92 @@
   min-height: 0;
 }
 
+.PodLogs-focus-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 12.8rem;
+  padding: 1.6rem;
+  color: #64748b;
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.PodLogs-focus-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.2rem 2rem;
+  flex-shrink: 0;
+  padding: 0.8rem 1.6rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.PodLogs-focus-context-label {
+  flex-shrink: 0;
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.PodLogs-focus-context-pod {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  width: min(40rem, 45%);
+  flex: 1 1 22rem;
+}
+
+.PodLogs-focus-context-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  flex: 1 1 28rem;
+}
+
+.PodLogs-focus-dialog-paper {
+  width: 90vw !important;
+  max-width: 90vw !important;
+  height: 85vh !important;
+  max-height: 85vh !important;
+  margin: 0 !important;
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.PodLogs-focus-dialog-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.PodLogs-focus-dialog .PodLogs-root {
+  height: 100%;
+  min-height: 0;
+}
+
+.PodLogs-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .PodLogs-virtual-list {
   height: 100%;
   overflow: auto;

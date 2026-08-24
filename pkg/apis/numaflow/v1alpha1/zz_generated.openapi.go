@@ -6362,11 +6362,16 @@ func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"),
 						},
 					},
+					"retryStrategy": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy"},
 	}
 }
 
@@ -6421,11 +6426,17 @@ func schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref common.ReferenceCallbac
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
+					"retryStrategy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy"},
 	}
 }
 

@@ -8,6 +8,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
+  focusControls,
 }: PodDetailProps) {
   if (!pod) return null;
 
@@ -26,6 +27,7 @@ export function PodDetail({
         podName={pod.name}
         containerName={containerName}
         type={type}
+        focusControls={focusControls}
       />
     </Box>
   );

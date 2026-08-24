@@ -10,7 +10,7 @@ use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::sink;
-use crate::config::components::sink::SinkConfig;
+use crate::config::components::sink::{RetryConfig, SinkConfig};
 use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceSpec, SourceType};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
@@ -168,9 +168,13 @@ impl MonovertexConfig {
             .source
             .as_ref()
             .and_then(|source| source.transformer.as_ref())
-            .map(|_| TransformerConfig {
+            .map(|t| TransformerConfig {
                 concurrency,
                 transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
+                retry_config: t
+                    .retry_strategy
+                    .clone()
+                    .map(|strategy| Box::new(RetryConfig::from(strategy))),
             });
 
         let sink = mono_vertex_obj
