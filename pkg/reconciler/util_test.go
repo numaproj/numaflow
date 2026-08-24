@@ -28,28 +28,20 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-func readyContainer(name string) corev1.ContainerStatus {
-	return corev1.ContainerStatus{
-		Name:  name,
-		Ready: true,
-		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
-	}
-}
-
 func TestCheckVertexPodsStatus(t *testing.T) {
 	t.Run("Test Vertex status as true", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
-					readyContainer("numa"),
+					{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
 				},
 				InitContainerStatuses: []corev1.ContainerStatus{
-					{Name: "init", Ready: true, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}},
+					{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}},
 				},
+			},
 			}},
-		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
+		}
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "All pods are healthy", message)
 		assert.Equal(t, "Running", reason)
 		assert.True(t, done)
@@ -59,84 +51,47 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		pods := corev1.PodList{
 			Items: []corev1.Pod{
 				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
-						{Name: "numa", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+						{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 					}},
 				},
 			},
 		}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, transient := CheckPodsStatus(&pods)
 		assert.Equal(t, `Pod test-pod: container "numa" CrashLoopBackOff`, message)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
 		assert.False(t, done)
 		assert.False(t, transient)
 	})
 
-	t.Run("empty pods with desired>0 is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.Equal(t, "0/1 pods are ready", message)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.False(t, done)
-	})
-
-	t.Run("desired zero is healthy without pods", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 0)
-		assert.True(t, done)
-		assert.Equal(t, "NoPodsFound", reason)
+	t.Run("Test Vertex status as false with no pods", func(t *testing.T) {
+		pods := corev1.PodList{
+			Items: []corev1.Pod{},
+		}
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "No Pods found", message)
-	})
-
-	t.Run("Running but not Ready is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "not-ready"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{
-					{Name: "numa", Ready: false, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
-				},
-			}},
-		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.Equal(t, "0/1 pods are ready", message)
-	})
-
-	t.Run("Running without container statuses is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "missing-status"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-			}},
-		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.Equal(t, "0/1 pods are ready", message)
+		assert.Equal(t, "NoPodsFound", reason)
+		assert.True(t, done)
 	})
 
 	t.Run("Test Vertex status as true with non-recent restart", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
-						Name:  "numa",
-						Ready: true,
-						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
 						LastTerminationState: corev1.ContainerState{
 							Terminated: &corev1.ContainerStateTerminated{
-								FinishedAt: metav1.Time{Time: time.Now().Add(-3 * time.Minute)},
-								ExitCode:   137,
-								Reason:     "OOMKilled",
+								FinishedAt: metav1.Time{
+									Time: time.Now().Add(-3 * time.Minute),
+								},
 							},
 						},
 					},
 				}},
 			}},
 		}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "All pods are healthy", message)
 		assert.Equal(t, "Running", reason)
 		assert.True(t, done)
@@ -145,92 +100,31 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 	t.Run("Test Vertex status as false with recent restart", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name:  "numa",
-						Ready: true,
-						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
 						LastTerminationState: corev1.ContainerState{
 							Terminated: &corev1.ContainerStateTerminated{
-								FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
-								Reason:     "OOMKilled",
-								ExitCode:   137,
+								FinishedAt: metav1.Time{
+									Time: time.Now().Add(-1 * time.Minute),
+								},
+								Reason:   "OOMKilled",
+								ExitCode: 137,
 							},
 						},
 					},
 				}},
 			}},
 		}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, transient := CheckPodsStatus(&pods)
 		assert.Equal(t, `Pod test-pod: container "numa" restarted recently: OOMKilled (exit code 137)`, message)
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
 		assert.True(t, transient)
 	})
 
-	t.Run("Pending pod with empty containerStatuses is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "pending-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodPending,
-			}},
-		}}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "PodPending", reason)
-		assert.Equal(t, "Pod pending-pod: Pod is in Pending phase", message)
-		assert.False(t, transient)
-	})
-
-	t.Run("Pending unschedulable pod includes PodScheduled message", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodPending,
-				Conditions: []corev1.PodCondition{
-					{
-						Type:    corev1.PodScheduled,
-						Status:  corev1.ConditionFalse,
-						Reason:  "Unschedulable",
-						Message: "0/1 nodes are available: 1 Insufficient cpu. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
-					},
-				},
-			}},
-		}}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "PodUnschedulable", reason)
-		assert.Equal(t, "Pod unschedulable-pod cannot be scheduled: 0/1 nodes are available: 1 Insufficient cpu.", message)
-		assert.False(t, transient)
-	})
-
-	t.Run("Unknown pod with empty containerStatuses is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "unknown-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodUnknown,
-			}},
-		}}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.Equal(t, "0/1 pods are ready", message)
-		assert.False(t, transient)
-	})
-
-	t.Run("Failed pod is unhealthy", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "failed-pod"}, Status: corev1.PodStatus{
-				Phase:   corev1.PodFailed,
-				Message: "Pod failed for testing",
-			}},
-		}}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.Equal(t, "0/1 pods are ready", message)
-		assert.False(t, transient)
-	})
-
-	t.Run("skip terminating pods when desired is zero", func(t *testing.T) {
+	t.Run("Test skip terminating pod with DeletionTimestamp set", func(t *testing.T) {
 		now := metav1.Now()
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "terminating-pod", DeletionTimestamp: &now}, Status: corev1.PodStatus{
@@ -239,27 +133,13 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			},
 		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 0)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.True(t, done)
 		assert.Equal(t, "Running", reason)
 		assert.Equal(t, "All pods are healthy", message)
 	})
 
-	t.Run("only terminating pods with desired>0 is unhealthy", func(t *testing.T) {
-		now := metav1.Now()
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "terminating-pod", DeletionTimestamp: &now}, Status: corev1.PodStatus{
-				Phase:             corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{readyContainer("numa")},
-			}},
-		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
-		assert.False(t, done)
-		assert.Equal(t, "InsufficientReadyPods", reason)
-		assert.Equal(t, "0/1 pods are ready", message)
-	})
-
-	t.Run("Test skip pod with Succeeded phase when desired zero", func(t *testing.T) {
+	t.Run("Test skip pod with Succeeded phase", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "succeeded-pod"}, Status: corev1.PodStatus{
 				Phase: corev1.PodSucceeded,
@@ -268,7 +148,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			},
 		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 0)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.True(t, done)
 		assert.Equal(t, "Running", reason)
 		assert.Equal(t, "All pods are healthy", message)
@@ -283,7 +163,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			},
 		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.False(t, done)
 		assert.Equal(t, "PodError", reason)
 		assert.Equal(t, `Pod failed-pod: container "numa" Error`, message)
@@ -298,99 +178,102 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			},
 			{ObjectMeta: metav1.ObjectMeta{Name: "unhealthy-pod"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
-					{Name: "numa", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+					{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 				}},
 			},
 		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.False(t, done)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
 		assert.Equal(t, `Pod unhealthy-pod: container "numa" CrashLoopBackOff`, message)
-	})
-
-	t.Run("quorum: enough Ready pods despite extra Pending", func(t *testing.T) {
-		pods := corev1.PodList{Items: []corev1.Pod{
-			{ObjectMeta: metav1.ObjectMeta{Name: "ready-a"}, Status: corev1.PodStatus{
-				Phase:             corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{readyContainer("nats")},
-			}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "ready-b"}, Status: corev1.PodStatus{
-				Phase:             corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{readyContainer("nats")},
-			}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "pending"}, Status: corev1.PodStatus{
-				Phase: corev1.PodPending,
-			}},
-		}}
-		done, reason, message, _ := CheckPodsStatusWithReadiness(&pods, 2)
-		assert.True(t, done)
-		assert.Equal(t, "Running", reason)
-		assert.Equal(t, "All pods are healthy", message)
 	})
 
 	t.Run("Test vertex status as false with failed initContainer", func(t *testing.T) {
 		pods := corev1.PodList{
 			Items: []corev1.Pod{
 				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
-						{Name: "numa", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "PodInitializing"}}},
+						{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
 					},
 					InitContainerStatuses: []corev1.ContainerStatus{
-						{Name: "init", Ready: false, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
+						{Name: "init", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
 					},
-				}},
+				},
+				},
 			},
 		}
-		done, reason, message, transient := CheckPodsStatusWithReadiness(&pods, 1)
+		done, reason, message, transient := CheckPodsStatus(&pods)
 		assert.Equal(t, `Pod test-pod: container "init" Error`, message)
 		assert.Equal(t, "PodError", reason)
 		assert.False(t, done)
 		assert.False(t, transient)
 	})
-}
 
-func TestSummarizeSchedulingMessage(t *testing.T) {
-	tests := []struct {
-		name     string
-		message  string
-		expected string
-	}{
-		{
-			name:     "verbose scheduler message",
-			message:  "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available.",
-			expected: "0/1 nodes are available: 1 Insufficient cpu.",
-		},
-		{
-			name:     "message without sentence delimiter",
-			message:  "Pod is unschedulable",
-			expected: "Pod is unschedulable",
-		},
-		{
-			name:     "empty message",
-			message:  "",
-			expected: "",
-		},
-	}
+	t.Run("Pending Unschedulable is unhealthy", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{{
+					Type:    corev1.PodScheduled,
+					Status:  corev1.ConditionFalse,
+					Reason:  "Unschedulable",
+					Message: "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+				}},
+			}},
+		}}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodUnschedulable", reason)
+		assert.Contains(t, message, "Insufficient cpu")
+		assert.False(t, transient)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, summarizeSchedulingMessage(tt.message))
-		})
-	}
+	t.Run("Pending without scheduling failure is healthy", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			}},
+		}}
+		done, reason, message, _ := CheckPodsStatus(&pods)
+		assert.True(t, done)
+		assert.Equal(t, "Running", reason)
+		assert.Equal(t, "All pods are healthy", message)
+	})
+
+	t.Run("running pod plus Unschedulable sibling is unhealthy", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "running-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: "numa", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				},
+			}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "pending-pod"}, Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{{
+					Type:    corev1.PodScheduled,
+					Status:  corev1.ConditionFalse,
+					Reason:  "Unschedulable",
+					Message: "0/1 nodes are available: 1 Insufficient cpu.",
+				}},
+			}},
+		}}
+		done, reason, message, _ := CheckPodsStatus(&pods)
+		assert.False(t, done)
+		assert.Equal(t, "PodUnschedulable", reason)
+		assert.Contains(t, message, "pending-pod")
+		assert.Contains(t, message, "Insufficient cpu")
+	})
 }
 
 func TestCheckPodsStatusFailureDetail(t *testing.T) {
 	t.Run("OOMKilled surfaced for crash-looping container", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name:  "numa",
-						Ready: false,
 						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "back-off restarting failed container"}},
 						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
 							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
@@ -411,9 +294,8 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 	t.Run("ImagePullBackOff includes waiting message", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				Phase: corev1.PodPending,
 				ContainerStatuses: []corev1.ContainerStatus{
-					{Name: "udf", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff", Message: `Back-off pulling image "bad:img"`}}},
+					{Name: "udf", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff", Message: `Back-off pulling image "bad:img"`}}},
 				},
 			}},
 		}}
@@ -427,10 +309,9 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 	t.Run("aggregates all failed containers in a pod", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
-					{Name: "udf", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}},
-					{Name: "numa", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+					{Name: "udf", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}},
+					{Name: "numa", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
 				},
 			}},
 		}}
@@ -445,11 +326,9 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 	t.Run("recent OOM restart surfaces OOM detail", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name:  "numa",
-						Ready: true,
 						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
 							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
@@ -469,11 +348,9 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 	t.Run("aggregates multiple recently-restarted containers", func(t *testing.T) {
 		pods := corev1.PodList{Items: []corev1.Pod{
 			{ObjectMeta: metav1.ObjectMeta{Name: "mvtx-0"}, Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name:  "numa",
-						Ready: true,
 						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
 							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-30 * time.Second)},
@@ -481,7 +358,6 @@ func TestCheckPodsStatusFailureDetail(t *testing.T) {
 					},
 					{
 						Name:  "udf",
-						Ready: true,
 						State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
 							Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: time.Now().Add(-1 * time.Minute)},

@@ -192,7 +192,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		readyPods = desiredReplicas
 	}
 	vertex.Status.ReadyReplicas = uint32(readyPods)
-	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatusWithReadiness(&podList, desiredReplicas); healthy {
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(&podList); healthy {
 		vertex.Status.MarkPodHealthy(reason, msg)
 	} else {
 		vertex.Status.MarkPodNotHealthy(reason, msg)
