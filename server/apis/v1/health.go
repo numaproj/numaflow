@@ -84,11 +84,8 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 // 3. Paused: The pipeline is paused
 // 4. Unknown: The pipeline is in an unknown state
 // 5. Killed: The pipeline is killed
-// To check for vertex level status we need to check for two things,
-// 1) the number of replicas running in the vertex
-// are equal to the number of desired replicas and the pods are in running state
-// 2) If all the containers in the pod are in running state
-// if any of the above conditions are not met, the vertex is unhealthy
+// To check for vertex level status, isVertexHealthy evaluates each vertex for
+// replica/status issues, the controller's PodsHealthy condition, and pod container health.
 func checkVertexLevelHealth(h *handler, ns string,
 	pipeline string, log *zap.SugaredLogger) (*resourceHealthResponse, error) {
 	// get the pipeline object
@@ -156,14 +153,12 @@ func checkVertexLevelHealth(h *handler, ns string,
 	}, nil
 }
 
-// isVertexHealthy is used to check if the vertex is healthy or not
-// It checks for the following:
-// 1) If the vertex is in running state
-// 2) the number of replicas running in the vertex
-// are equal to the number of desired replicas and the pods are in running state
-// 3) If all the containers in the pod are in running state
-// if any of the above conditions are not met, the vertex is unhealthy
-// Based on the above conditions, it returns the status code and message
+// isVertexHealthy reports whether a vertex is healthy for the health API.
+// For non-Running vertices, it returns unhealthy based on replica counts or the
+// vertex status message. For Running vertices, it returns unhealthy when the
+// controller's PodsHealthy condition is False (for example Pending Unschedulable
+// pods) or any container/init-container is not in a healthy state.
+// Based on the above conditions, it returns the status code and message.
 func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex,
 	vertexName string) (bool, *resourceHealthResponse, error) {
 	// check if the vertex is in running state
