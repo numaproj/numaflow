@@ -7,10 +7,11 @@ use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::{BaseConsumer, CommitMode, Consumer, ConsumerContext, Rebalance};
-use rdkafka::error::KafkaResult;
+use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{Headers, Message};
 use rdkafka::topic_partition_list::TopicPartitionList;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use tracing::{error, info, warn};
@@ -118,6 +119,52 @@ enum KafkaActorMessage {
 
 type NumaflowConsumer = StreamConsumer<KafkaContext>;
 
+fn classify_source_kafka_error(context: &str, error: KafkaError) -> Error {
+    use crate::ConsumerErrorKind;
+    use rdkafka::types::RDKafkaErrorCode::{
+        ClusterAuthorizationFailed, CoordinatorLoadInProgress, CoordinatorNotAvailable,
+        FencedInstanceId, FencedMemberEpoch, GroupAuthorizationFailed, IllegalGeneration,
+        NotCoordinator, RebalanceInProgress, SaslAuthenticationFailed, StaleMemberEpoch,
+        TopicAuthorizationFailed, UnknownMemberId, WaitingForCoordinator,
+    };
+
+    let kind = match error.rdkafka_error_code() {
+        Some(RebalanceInProgress) => Some(ConsumerErrorKind::RebalanceInProgress),
+        Some(
+            CoordinatorLoadInProgress
+            | CoordinatorNotAvailable
+            | NotCoordinator
+            | WaitingForCoordinator,
+        ) => Some(ConsumerErrorKind::CoordinatorUnavailable),
+        Some(UnknownMemberId) => Some(ConsumerErrorKind::UnknownMemberId),
+        Some(IllegalGeneration) => Some(ConsumerErrorKind::IllegalGeneration),
+        Some(FencedInstanceId) => Some(ConsumerErrorKind::FencedInstanceId),
+        Some(FencedMemberEpoch) => Some(ConsumerErrorKind::FencedMemberEpoch),
+        Some(StaleMemberEpoch) => Some(ConsumerErrorKind::StaleMemberEpoch),
+        Some(GroupAuthorizationFailed) => Some(ConsumerErrorKind::GroupAuthorizationFailed),
+        Some(TopicAuthorizationFailed) => Some(ConsumerErrorKind::TopicAuthorizationFailed),
+        Some(ClusterAuthorizationFailed) => Some(ConsumerErrorKind::ClusterAuthorizationFailed),
+        Some(SaslAuthenticationFailed) => Some(ConsumerErrorKind::SaslAuthenticationFailed),
+        _ => None,
+    };
+    if let Some(kind) = kind {
+        return Error::Consumer {
+            kind,
+            message: format!("{context}: {error}"),
+        };
+    }
+    if matches!(
+        &error,
+        KafkaError::ClientConfig(..) | KafkaError::ClientCreation(_) | KafkaError::Subscription(_)
+    ) {
+        return Error::Connection {
+            server: "client configuration".into(),
+            error: format!("{context}: {error}"),
+        };
+    }
+    Error::Kafka(format!("{context}: {error}"))
+}
+
 struct KafkaActor {
     consumer: Arc<NumaflowConsumer>,
     read_timeout: Duration,
@@ -133,6 +180,8 @@ struct KafkaActor {
     topic_partition_offsets: HashMap<String, u32>,
     /// Total number of partitions across all topics (sum).
     total_partitions: u32,
+    /// Set after topic metadata has been fetched successfully.
+    partition_metadata_ready: bool,
     /// Timeout used for calls to broker.
     session_timeout: Duration,
 }
@@ -144,7 +193,7 @@ impl KafkaActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<KafkaActorMessage>,
         cancel_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<JoinHandle<()>> {
         let mut client_config = ClientConfig::new();
         // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
         client_config
@@ -191,50 +240,47 @@ impl KafkaActor {
         let topics: Vec<&str> = config.topics.iter().map(|s| s.as_str()).collect();
         consumer
             .subscribe(&topics)
-            .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {err}")))?;
-
-        // The consumer.subscribe() will not fail even if the credentials are invalid.
-        // To ensure creds/certificates are valid, we make a call to pending_messages() before starting the actor.
-
-        // Build topic partition offsets for global partition ID normalization.
-        let (topic_partition_offsets, total_partitions) =
-            Self::compute_topic_partition_offsets(&consumer, &config.topics)?;
+            .map_err(|err| classify_source_kafka_error("Failed to subscribe to topic", err))?;
 
         let session_timeout = client_config
             .get("session.timeout.ms")
             .and_then(|v| v.parse().ok())
             .map_or(Duration::from_millis(45_000), Duration::from_millis);
 
-        let mut actor = KafkaActor {
+        let actor = KafkaActor {
             consumer,
             read_timeout,
             batch_size,
             topics: config.topics,
             handler_rx,
             cancel_token,
-            topic_partition_offsets,
-            total_partitions,
+            topic_partition_offsets: HashMap::new(),
+            total_partitions: 0,
+            partition_metadata_ready: false,
             session_timeout,
         };
 
-        actor
-            .pending_messages()
-            .await
-            .map_err(|err| Error::Kafka(format!("Failed to get pending messages: {err:?}")))?;
-
-        tokio::spawn(async move {
+        let actor_join = tokio::spawn(async move {
             tracing::info!("Starting Kafka consumer...");
             // This actor terminates when sender end of the handler_rx is closed
             actor.run().await;
         });
 
-        Ok(())
+        Ok(actor_join)
     }
 
     // run method will only return when the sender end of the handler_rx is closed.
     async fn run(mut self) {
-        while let Some(msg) = self.handler_rx.recv().await {
-            self.handle_message(msg).await;
+        loop {
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => return,
+                msg = self.handler_rx.recv() => {
+                    let Some(msg) = msg else {
+                        return;
+                    };
+                    self.handle_message(msg).await;
+                }
+            }
         }
     }
 
@@ -295,6 +341,11 @@ impl KafkaActor {
         if self.cancel_token.is_cancelled() {
             return None;
         }
+        if !self.partition_metadata_ready
+            && let Err(error) = self.refresh_partition_metadata().await
+        {
+            return Some(Err(error));
+        }
 
         let mut messages: Vec<KafkaMessage> = vec![];
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
@@ -334,14 +385,16 @@ impl KafkaActor {
                             // TODO: Check the error when topic doesn't exist
                             continuous_failure_count += 1;
                             if continuous_failure_count > MAX_FAILURE_COUNT {
-                                return Some(Err(Error::Kafka(format!(
-                                    "Failed to read messages after {MAX_FAILURE_COUNT} retries: {e:?}"
-                                ))));
+                                return Some(Err(classify_source_kafka_error(
+                                    &format!(
+                                        "Failed to read messages after {MAX_FAILURE_COUNT} retries"
+                                    ),
+                                    e,
+                                )));
                             }
                             error!(?e, ?retry_sleep, "Failed to read messages, will retry");
-                            last_error = Some(Error::Kafka(format!(
-                                "Failed to read messages: {e:?}"
-                            )));
+                            last_error =
+                                Some(classify_source_kafka_error("Failed to read messages", e));
                             tokio::time::sleep(retry_sleep).await;
                             continue;
                         }
@@ -440,32 +493,10 @@ impl KafkaActor {
                 let Err(commit_error) = consumer.commit(&tpl, CommitMode::Sync) else {
                     return Ok(());
                 };
-                if let Some(code) = commit_error.rdkafka_error_code() {
-                    use rdkafka::types::RDKafkaErrorCode::{
-                        FencedInstanceId, FencedMemberEpoch, GroupAuthorizationFailed,
-                        IllegalGeneration, RebalanceInProgress, StaleMemberEpoch, UnknownMemberId,
-                    };
-                    // Potential non-retryable errors that can happen in ACK https://kafka.apache.org/41/design/protocol/#error-codes
-                    if matches!(
-                        code,
-                        // Consumer group membership errors
-                        UnknownMemberId
-                            | IllegalGeneration
-                            | RebalanceInProgress
-                            | FencedInstanceId
-                            | FencedMemberEpoch
-                            | StaleMemberEpoch
-                            | GroupAuthorizationFailed
-                    ) {
-                        return Err(Error::NonRetryable(format!(
-                            "Non-retryable commit error ({:?}): {}",
-                            code, commit_error
-                        )));
-                    }
-                }
-                Err(Error::Kafka(format!(
-                    "Failed to commit offsets: {commit_error}"
-                )))
+                Err(classify_source_kafka_error(
+                    "Failed to commit offsets",
+                    commit_error,
+                ))
             });
             ack_tasks.push(task);
         }
@@ -492,7 +523,7 @@ impl KafkaActor {
             handles.push(tokio::task::spawn_blocking(move || {
                 let metadata = consumer
                     .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
+                    .map_err(|e| classify_source_kafka_error("Failed to fetch metadata", e))?;
                 let Some(topic_metadata) = metadata.topics().first() else {
                     warn!(topic = topic, "No topic metadata found");
                     return Ok(0);
@@ -502,11 +533,13 @@ impl KafkaActor {
                     let mut tpl = TopicPartitionList::new();
                     tpl.add_partition(&topic, partition as i32);
                     let committed = consumer.committed_offsets(tpl, timeout).map_err(|e| {
-                        Error::Kafka(format!("Failed to get committed offsets: {e}"))
+                        classify_source_kafka_error("Failed to get committed offsets", e)
                     })?;
                     let (low, high) = consumer
                         .fetch_watermarks(&topic, partition as i32, timeout)
-                        .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {e}")))?;
+                        .map_err(|e| {
+                            classify_source_kafka_error("Failed to fetch watermarks", e)
+                        })?;
                     let committed_offset = match committed.elements_for_topic(&topic).first() {
                         Some(element) => match element.offset() {
                             Offset::Offset(offset) => offset,
@@ -554,7 +587,7 @@ impl KafkaActor {
         for topic in &sorted_topics {
             let metadata = consumer
                 .fetch_metadata(Some(topic), timeout)
-                .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
+                .map_err(|e| classify_source_kafka_error("Failed to fetch metadata", e))?;
             let count = metadata
                 .topics()
                 .first()
@@ -573,6 +606,20 @@ impl KafkaActor {
         Ok((offsets, total))
     }
 
+    async fn refresh_partition_metadata(&mut self) -> Result<()> {
+        let consumer = Arc::clone(&self.consumer);
+        let topics = self.topics.clone();
+        let (offsets, total) = tokio::task::spawn_blocking(move || {
+            Self::compute_topic_partition_offsets(&consumer, &topics)
+        })
+        .await
+        .map_err(|e| Error::Other(format!("Tokio task join error: {e}")))??;
+        self.topic_partition_offsets = offsets;
+        self.total_partitions = total;
+        self.partition_metadata_ready = true;
+        Ok(())
+    }
+
     /// Returns partition information including globally normalized active partition IDs
     /// and total partitions across all configured topics.
     ///
@@ -584,20 +631,12 @@ impl KafkaActor {
     async fn partitions_info(&mut self) -> Result<KafkaPartitionsInfo> {
         // Refresh the topic partition offsets from metadata to pick up any
         // partition count changes since startup.
-        let consumer = Arc::clone(&self.consumer);
-        let topics = self.topics.clone();
-        let (offsets, total) = tokio::task::spawn_blocking(move || {
-            Self::compute_topic_partition_offsets(&consumer, &topics)
-        })
-        .await
-        .map_err(|e| Error::Other(format!("Tokio task join error: {e}")))??;
-        self.topic_partition_offsets = offsets;
-        self.total_partitions = total;
+        self.refresh_partition_metadata().await?;
 
         let active_partitions = self
             .consumer
             .assignment()
-            .map_err(|e| Error::Kafka(format!("Failed to get consumer assignment: {e}")))
+            .map_err(|e| classify_source_kafka_error("Failed to get consumer assignment", e))
             .map(|tpl| {
                 tpl.elements()
                     .iter()
@@ -630,7 +669,13 @@ impl KafkaActor {
 
 #[derive(Clone)]
 pub struct KafkaSource {
+    inner: Arc<KafkaSourceInner>,
+}
+
+struct KafkaSourceInner {
     actor_tx: mpsc::Sender<KafkaActorMessage>,
+    cancel_token: CancellationToken,
+    actor_join: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl KafkaSource {
@@ -641,14 +686,28 @@ impl KafkaSource {
         cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        KafkaActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
-        Ok(Self { actor_tx: tx })
+        let generation_token = cancel_token.child_token();
+        let actor_join = KafkaActor::start(
+            config,
+            batch_size,
+            read_timeout,
+            rx,
+            generation_token.clone(),
+        )
+        .await?;
+        Ok(Self {
+            inner: Arc::new(KafkaSourceInner {
+                actor_tx: tx,
+                cancel_token: generation_token,
+                actor_join: Mutex::new(Some(actor_join)),
+            }),
+        })
     }
 
     pub async fn read_messages(&self) -> Option<Result<Vec<KafkaMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::Read { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .unwrap_or_else(|_| Some(Err(Error::Other("Actor task terminated".into()))))
     }
@@ -659,7 +718,7 @@ impl KafkaSource {
             offsets,
             respond_to: tx,
         };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
@@ -667,7 +726,7 @@ impl KafkaSource {
     pub async fn pending_messages(&self) -> Result<Option<usize>> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::Pending { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
@@ -675,9 +734,19 @@ impl KafkaSource {
     pub async fn partitions_info(&self) -> Result<KafkaPartitionsInfo> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::PartitionsInfo { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
+    /// Cancels this consumer generation and waits for its actor (and consumer) to be dropped.
+    pub async fn shutdown(&self) {
+        self.inner.cancel_token.cancel();
+        if let Some(actor_join) = self.inner.actor_join.lock().await.take()
+            && let Err(error) = actor_join.await
+        {
+            tracing::warn!(?error, "Kafka source actor failed while shutting down");
+        }
     }
 }
 
@@ -736,7 +805,83 @@ mod tests {
     use super::*;
     use rdkafka::message::{Header, OwnedHeaders};
     use rdkafka::producer::FutureRecord;
+    use rdkafka::types::RDKafkaErrorCode;
     use tokio::time::Instant;
+
+    #[test]
+    fn classifies_read_side_group_lifecycle_errors() {
+        assert!(matches!(
+            classify_source_kafka_error(
+                "read failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::RebalanceInProgress),
+            ),
+            Error::Consumer {
+                kind: crate::ConsumerErrorKind::RebalanceInProgress,
+                ..
+            }
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "read failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::IllegalGeneration),
+            ),
+            Error::Consumer {
+                kind: crate::ConsumerErrorKind::IllegalGeneration,
+                ..
+            }
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "read failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::GroupAuthorizationFailed),
+            ),
+            Error::Consumer {
+                kind: crate::ConsumerErrorKind::GroupAuthorizationFailed,
+                ..
+            }
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "read failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::SaslAuthenticationFailed),
+            ),
+            Error::Consumer {
+                kind: crate::ConsumerErrorKind::SaslAuthenticationFailed,
+                ..
+            }
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "subscribe failed",
+                KafkaError::Subscription("invalid topic expression".into()),
+            ),
+            Error::Connection { .. }
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "pending failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::OperationTimedOut),
+            ),
+            Error::Kafka(_)
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "commit failed",
+                KafkaError::ConsumerCommit(RDKafkaErrorCode::RequestTimedOut),
+            ),
+            Error::Kafka(_)
+        ));
+        assert!(matches!(
+            classify_source_kafka_error(
+                "read failed",
+                KafkaError::MessageConsumption(RDKafkaErrorCode::NotCoordinator),
+            ),
+            Error::Consumer {
+                kind: crate::ConsumerErrorKind::CoordinatorUnavailable,
+                ..
+            }
+        ));
+    }
 
     #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]

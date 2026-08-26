@@ -299,6 +299,7 @@ pub(crate) struct MonoVtxMetrics {
     // counters
     pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) nack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
@@ -637,6 +638,7 @@ impl MonoVtxMetrics {
         let metrics = Self {
             read_total: Family::<Vec<(String, String)>, Counter>::default(),
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             nack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
@@ -720,6 +722,11 @@ impl MonoVtxMetrics {
             READ_BYTES_TOTAL,
             "A Counter to keep track of the total number of bytes read from the source",
             metrics.read_bytes_total.clone(),
+        );
+        registry.register(
+            READ_ERROR_TOTAL,
+            "A Counter to keep track of source read errors",
+            metrics.read_error_total.clone(),
         );
 
         registry.register(

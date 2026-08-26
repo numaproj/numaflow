@@ -509,9 +509,7 @@ fn process_file_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime_server::config::{
-        DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH, RuntimeInfoConfig,
-    };
+    use crate::runtime_server::config::RuntimeInfoConfig;
     use crate::runtime_server::error::Result;
     use std::fs;
     use std::io::Write;
@@ -588,34 +586,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_persist_runtime_error_public_wrapper() {
-        let temp_dir = tempdir().unwrap();
-        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
-        let report = RuntimeErrorReport {
-            container: "numa".to_string(),
-            code: "Source".to_string(),
-            message: "Built-in Kafka source read failed: broker disconnected".to_string(),
-            details: "source=Kafka, operation=read".to_string(),
-        };
-
-        persist_runtime_error_to_file(application_error_path.clone(), 5, report.clone());
-
-        let dir_path = Path::new(&application_error_path).join("numa");
-        assert!(dir_path.exists());
-        let files: Vec<_> = fs::read_dir(&dir_path)
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .collect();
-        assert_eq!(files.len(), 1);
-
-        // The public wrapper uses the default runtime path; verify it delegates to the same shape.
-        assert_eq!(report.container, "numa");
-        assert_eq!(
-            RuntimeInfoConfig::default().app_error_path,
-            DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string()
-        );
-    }
     #[test]
     fn test_persist_runtime_error_to_file() {
         let temp_dir = tempdir().unwrap();

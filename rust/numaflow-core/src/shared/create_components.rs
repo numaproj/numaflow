@@ -27,12 +27,12 @@ use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::builtin::BuiltinSource;
 use crate::source::generator::new_generator;
-use crate::source::http::HttpSourceFactory;
-use crate::source::jetstream::JetstreamSourceFactory;
-use crate::source::kafka::KafkaSourceFactory;
-use crate::source::nats::NatsSourceFactory;
-use crate::source::pulsar::PulsarSourceFactory;
-use crate::source::sqs::SqsSourceFactory;
+use crate::source::http::CoreHttpSource;
+use crate::source::jetstream::new_jetstream_source_factory;
+use crate::source::kafka::new_kafka_source_factory;
+use crate::source::nats::new_nats_source_factory;
+use crate::source::pulsar::new_pulsar_source_factory;
+use crate::source::sqs::new_sqs_source_factory;
 use crate::source::user_defined::{ReconnectConfig as SourceReconnectConfig, new_source};
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
@@ -470,7 +470,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Pulsar(pulsar_config) => {
-            let factory = Arc::new(PulsarSourceFactory::new(
+            let factory = Arc::new(new_pulsar_source_factory(
                 pulsar_config.clone(),
                 batch_size,
                 read_timeout,
@@ -492,7 +492,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Sqs(sqs_source_config) => {
-            let factory = Arc::new(SqsSourceFactory::new(
+            let factory = Arc::new(new_sqs_source_factory(
                 sqs_source_config.clone(),
                 batch_size,
                 read_timeout,
@@ -514,7 +514,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Jetstream(jetstream_config) => {
-            let factory = Arc::new(JetstreamSourceFactory::new(
+            let factory = Arc::new(new_jetstream_source_factory(
                 jetstream_config.clone(),
                 batch_size,
                 read_timeout,
@@ -535,7 +535,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Nats(nats_config) => {
-            let factory = Arc::new(NatsSourceFactory::new(
+            let factory = Arc::new(new_nats_source_factory(
                 nats_config.clone(),
                 batch_size,
                 read_timeout,
@@ -556,7 +556,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Kafka(kafka_config) => {
-            let factory = Arc::new(KafkaSourceFactory::new(
+            let factory = Arc::new(new_kafka_source_factory(
                 *kafka_config.clone(),
                 batch_size,
                 read_timeout,
@@ -577,14 +577,13 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await)
         }
         SourceType::Http(http_source_config) => {
-            let factory = Arc::new(
-                HttpSourceFactory::new(http_source_config.clone(), batch_size, cln_token.clone())
-                    .await,
-            );
+            let http_source =
+                numaflow_http::HttpSourceHandle::new(http_source_config.clone(), cln_token.clone())
+                    .await;
             Ok(Source::new(
                 batch_size,
                 concurrency,
-                source::SourceType::Builtin(BuiltinSource::new(factory, cln_token.clone())),
+                source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
                 tracker,
                 source_config.read_ahead,
                 transformer,

@@ -76,6 +76,10 @@ struct SourceWatermarkState {
     active_input_partitions: HashMap<u16, bool>,
     /// to reference the active in-flight messages
     tracker: Tracker,
+    /// Whether idle detection may advance source watermarks.
+    source_ready: bool,
+    /// Optional lock-free readiness source used by resilient built-in sources.
+    source_readiness_check: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 }
 
 impl SourceWatermarkState {
@@ -94,7 +98,20 @@ impl SourceWatermarkState {
             source_idle_manager,
             active_input_partitions: HashMap::new(),
             tracker,
+            source_ready: true,
+            source_readiness_check: None,
         }
+    }
+
+    fn refresh_source_ready(&mut self) {
+        let Some(check) = &self.source_readiness_check else {
+            return;
+        };
+        let ready = check();
+        if ready && !self.source_ready {
+            self.source_idle_manager.reset_all();
+        }
+        self.source_ready = ready;
     }
 
     /// Handles generating and publishing source watermark with computation
@@ -116,6 +133,8 @@ impl SourceWatermarkState {
         if partition_to_lowest_event_time.is_empty() {
             return Ok(());
         }
+
+        self.refresh_source_ready();
 
         // Publish the watermark for each partition
         for (partition, event_time) in partition_to_lowest_event_time {
@@ -190,14 +209,20 @@ impl SourceWatermarkState {
         // Process each partition that needs publishing
         for partition in partitions_needing_publish {
             // Check if this partition is truly idle (threshold passed)
-            let is_idle = self.source_idle_manager.is_partition_idle(partition);
+            let is_idle =
+                self.source_ready && self.source_idle_manager.is_partition_idle(partition);
 
             // Compute the watermark value for this partition
-            let wm_value = self.source_idle_manager.compute_watermark(
-                partition,
-                compute_wm.timestamp_millis(),
-                min_inflight_event_time,
-            );
+            let wm_value = if self.source_ready {
+                self.source_idle_manager.compute_watermark(
+                    partition,
+                    compute_wm.timestamp_millis(),
+                    min_inflight_event_time,
+                )
+            } else {
+                self.source_idle_manager
+                    .heartbeat_watermark(partition, compute_wm.timestamp_millis())
+            };
 
             // Publish source watermark for this partition
             self.publisher
@@ -234,7 +259,7 @@ impl SourceWatermarkState {
                         stream,
                         offset,
                         compute_wm.timestamp_millis(),
-                        true,
+                        self.source_ready,
                     )
                     .await;
             }
@@ -251,6 +276,8 @@ impl SourceWatermarkState {
     /// This is called by the background task to handle both source and ISB idle watermark publishing.
     /// Watermarks serve as heartbeats for downstream vertices via KV entry timestamps.
     async fn publish_idle_watermarks(&mut self) -> Result<()> {
+        self.refresh_source_ready();
+
         // First, publish source idle watermark (if source idle manager is configured)
         self.publish_source_idle_watermark().await?;
 
@@ -359,6 +386,15 @@ impl SourceWatermarkHandle {
         if let Err(e) = result {
             warn!(?e, "Failed to generate and publish source watermark");
         }
+    }
+
+    /// Uses a lock-free readiness callback when deciding whether idle watermarks may advance.
+    pub(crate) async fn set_source_readiness_check(
+        &self,
+        check: impl Fn() -> bool + Send + Sync + 'static,
+    ) {
+        let mut state = self.state.lock().await;
+        state.source_readiness_check = Some(Arc::new(check));
     }
 
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.

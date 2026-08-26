@@ -1,9 +1,11 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use tokio_stream::StreamExt;
@@ -63,7 +65,7 @@ impl NatsActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<NatsActorMessage>,
         cancel_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<JoinHandle<()>> {
         let mut conn_opts = ConnectOptions::new()
             .max_reconnects(None) // unlimited reconnects
             .reconnect_delay_callback(|attempts| {
@@ -101,7 +103,7 @@ impl NatsActor {
             })?;
 
         // Spawn the NATS actor
-        tokio::spawn(async move {
+        let actor_join = tokio::spawn(async move {
             let mut actor = NatsActor {
                 sub,
                 read_timeout,
@@ -113,12 +115,20 @@ impl NatsActor {
             actor.run().await;
         });
 
-        Ok(())
+        Ok(actor_join)
     }
 
     async fn run(&mut self) {
-        while let Some(msg) = self.handler_rx.recv().await {
-            self.handle_message(msg).await;
+        loop {
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => return,
+                msg = self.handler_rx.recv() => {
+                    let Some(msg) = msg else {
+                        return;
+                    };
+                    self.handle_message(msg).await;
+                }
+            }
         }
     }
 
@@ -143,6 +153,11 @@ impl NatsActor {
                 }
                 maybe_msg = self.sub.next() => {
                     let Some(msg) = maybe_msg else {
+                        if messages.is_empty() {
+                            return Some(Err(Error::Other(
+                                "NATS subscription stream closed unexpectedly".into(),
+                            )));
+                        }
                         break;
                     };
                     let nats_msg = match NatsMessage::try_from(msg) {
@@ -170,7 +185,13 @@ impl NatsActor {
 
 #[derive(Clone)]
 pub struct NatsSource {
+    inner: Arc<NatsSourceInner>,
+}
+
+struct NatsSourceInner {
     actor_tx: mpsc::Sender<NatsActorMessage>,
+    cancel_token: CancellationToken,
+    actor_join: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl NatsSource {
@@ -181,16 +202,40 @@ impl NatsSource {
         cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        NatsActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
-        Ok(Self { actor_tx: tx })
+        let generation_token = cancel_token.child_token();
+        let actor_join = NatsActor::start(
+            config,
+            batch_size,
+            read_timeout,
+            rx,
+            generation_token.clone(),
+        )
+        .await?;
+        Ok(Self {
+            inner: Arc::new(NatsSourceInner {
+                actor_tx: tx,
+                cancel_token: generation_token,
+                actor_join: Mutex::new(Some(actor_join)),
+            }),
+        })
     }
 
     pub async fn read_messages(&self) -> Option<Result<Vec<NatsMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = NatsActorMessage::Read { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .unwrap_or_else(|_| Some(Err(Error::Other("Actor task terminated".into()))))
+    }
+
+    /// Cancels this subscriber generation and waits for its actor to be dropped.
+    pub async fn shutdown(&self) {
+        self.inner.cancel_token.cancel();
+        if let Some(actor_join) = self.inner.actor_join.lock().await.take()
+            && let Err(error) = actor_join.await
+        {
+            tracing::warn!(?error, "NATS source actor failed while shutting down");
+        }
     }
 }
 

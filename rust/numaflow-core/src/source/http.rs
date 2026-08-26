@@ -5,11 +5,9 @@ use crate::error::Result;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
-use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
 use crate::source::{SourceAcker, SourceReader};
-use numaflow_http::{HttpMessage, HttpSourceConfig, HttpSourceHandle};
+use numaflow_http::HttpMessage;
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 impl From<numaflow_http::Error> for crate::error::Error {
@@ -60,36 +58,6 @@ impl CoreHttpSource {
             batch_size,
             http_source,
         }
-    }
-}
-
-pub(crate) struct HttpSourceFactory {
-    source: CoreHttpSource,
-}
-
-impl HttpSourceFactory {
-    pub(crate) async fn new(
-        config: HttpSourceConfig,
-        batch_size: usize,
-        cancel_token: CancellationToken,
-    ) -> Self {
-        let handle = HttpSourceHandle::new(config, cancel_token).await;
-        Self {
-            source: CoreHttpSource::new(batch_size, handle),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl BuiltinSourceFactory for HttpSourceFactory {
-    fn name(&self) -> &'static str {
-        "HTTP"
-    }
-
-    async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
-        // The HTTP server, request queue, and in-flight response channels are generation-stable.
-        // Rebuilding only replaces the supervisor-facing backend handle.
-        Ok(Box::new(SourceBackend::new(self.source.clone())))
     }
 }
 
@@ -365,18 +333,5 @@ mod tests {
         assert_eq!(pending, None, "HTTP source pending should always be None");
 
         request_handle.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn http_source_factory_name_and_build() {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        drop(listener);
-
-        let config = HttpSourceConfigBuilder::new("test").addr(addr).build();
-        let factory = HttpSourceFactory::new(config, 1, CancellationToken::new()).await;
-        assert_eq!(BuiltinSourceFactory::name(&factory), "HTTP");
-        assert!(factory.build().await.is_ok());
     }
 }

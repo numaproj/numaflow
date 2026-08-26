@@ -6,7 +6,7 @@ use crate::message::{Message, NackOffset};
 use crate::message::{MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
-use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
 use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
 use tokio_util::sync::CancellationToken;
 
@@ -21,45 +21,26 @@ pub(crate) async fn new_nats_source(
     Ok(NatsSource::connect(config, batch_size, read_timeout, cancel_token).await?)
 }
 
-pub(crate) struct NatsSourceFactory {
+pub(crate) fn new_nats_source_factory(
     config: NatsSourceConfig,
     batch_size: usize,
     read_timeout: Duration,
     cancel_token: CancellationToken,
-}
-
-impl NatsSourceFactory {
-    pub(crate) fn new(
-        config: NatsSourceConfig,
-        batch_size: usize,
-        read_timeout: Duration,
-        cancel_token: CancellationToken,
-    ) -> Self {
-        Self {
-            config,
-            batch_size,
-            read_timeout,
-            cancel_token,
+) -> ConnectFactory {
+    ConnectFactory::new("NATS", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        async move {
+            let source = new_nats_source(config, batch_size, read_timeout, cancel_token).await?;
+            let source_to_retire = source.clone();
+            Ok(Box::new(SourceBackend::with_retire(source, move || {
+                let source = source_to_retire.clone();
+                async move {
+                    source.shutdown().await;
+                }
+            })) as Box<dyn BuiltinSourceBackend>)
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl BuiltinSourceFactory for NatsSourceFactory {
-    fn name(&self) -> &'static str {
-        "NATS"
-    }
-
-    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
-        let source = new_nats_source(
-            self.config.clone(),
-            self.batch_size,
-            self.read_timeout,
-            self.cancel_token.clone(),
-        )
-        .await?;
-        Ok(Box::new(SourceBackend::new(source)))
-    }
+    })
 }
 
 impl From<NatsMessage> for Message {
@@ -257,25 +238,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn nats_source_factory_name() {
-        let factory = NatsSourceFactory::new(
-            NatsSourceConfig {
-                addr: "nats://127.0.0.1:1".into(),
-                subject: "test.subject".into(),
-                queue: "test-queue".into(),
-                auth: None,
-                tls: None,
-            },
-            1,
-            Duration::from_millis(100),
-            CancellationToken::new(),
-        );
-        assert_eq!(BuiltinSourceFactory::name(&factory), "NATS");
-    }
-
-    #[tokio::test]
     async fn nats_source_factory_build_starts_actor() {
-        let factory = NatsSourceFactory::new(
+        use crate::source::builtin::BuiltinSourceFactory;
+
+        let factory = new_nats_source_factory(
             NatsSourceConfig {
                 addr: "nats://127.0.0.1:1".into(),
                 subject: "test.subject".into(),

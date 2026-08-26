@@ -4,11 +4,11 @@ use std::time::Duration;
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig, PulsarSourceState};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::error::Error;
+use crate::error::{Error, SourceFailureAction, SourceFailureImpact};
 use crate::message::{IntOffset, Message, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source;
-use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
 use tokio_util::sync::CancellationToken;
 
 impl TryFrom<PulsarMessage> for Message {
@@ -44,9 +44,14 @@ impl From<numaflow_pulsar::Error> for Error {
         match value {
             numaflow_pulsar::Error::Pulsar(e) => Error::Source(e.to_string()),
             numaflow_pulsar::Error::UnknownOffset(_) => Error::Source(value.to_string()),
-            numaflow_pulsar::Error::AckPendingExceeded(pending) => {
-                Error::AckPendingExceeded(pending)
-            }
+            numaflow_pulsar::Error::AckPendingExceeded(pending) => Error::SourceRedrive {
+                source_name: "Pulsar",
+                operation: "read",
+                action: SourceFailureAction::RetrySame,
+                impact: SourceFailureImpact::Benign,
+                code: "pulsar_ack_pending_limit",
+                message: format!("Pulsar ack-pending limit reached: {pending}"),
+            },
             numaflow_pulsar::Error::ActorTaskTerminated(_) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -66,52 +71,37 @@ pub(crate) async fn new_pulsar_source(
     Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica, cancel_token).await?)
 }
 
-pub(crate) struct PulsarSourceFactory {
+pub(crate) fn new_pulsar_source_factory(
     config: PulsarSourceConfig,
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
     cancel_token: CancellationToken,
-    state: PulsarSourceState,
-}
-
-impl PulsarSourceFactory {
-    pub(crate) fn new(
-        config: PulsarSourceConfig,
-        batch_size: usize,
-        timeout: Duration,
-        vertex_replica: u16,
-        cancel_token: CancellationToken,
-    ) -> Self {
-        Self {
-            config,
-            batch_size,
-            timeout,
-            vertex_replica,
-            cancel_token,
-            state: PulsarSourceState::default(),
+) -> ConnectFactory {
+    let state = PulsarSourceState::default();
+    ConnectFactory::new("Pulsar", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        let state = state.clone();
+        async move {
+            let source = PulsarSource::new_with_state(
+                config,
+                batch_size,
+                timeout,
+                vertex_replica,
+                cancel_token,
+                state,
+            )
+            .await?;
+            let source_to_retire = source.clone();
+            Ok(Box::new(SourceBackend::with_retire(source, move || {
+                let source = source_to_retire.clone();
+                async move {
+                    source.shutdown().await;
+                }
+            })) as Box<dyn BuiltinSourceBackend>)
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl BuiltinSourceFactory for PulsarSourceFactory {
-    fn name(&self) -> &'static str {
-        "Pulsar"
-    }
-
-    async fn build(&self) -> crate::Result<Box<dyn BuiltinSourceBackend>> {
-        let source = PulsarSource::new_with_state(
-            self.config.clone(),
-            self.batch_size,
-            self.timeout,
-            self.vertex_replica,
-            self.cancel_token.clone(),
-            self.state.clone(),
-        )
-        .await?;
-        Ok(Box::new(SourceBackend::new(source)))
-    }
+    })
 }
 
 impl source::SourceReader for PulsarSource {
@@ -183,6 +173,25 @@ impl source::SourceAcker for PulsarSource {
 impl source::LagReader for PulsarSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+
+    #[test]
+    fn ack_pending_limit_retries_same_pulsar_generation() {
+        let error: Error = numaflow_pulsar::Error::AckPendingExceeded(10).into();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::RetrySame,
+                impact: SourceFailureImpact::Benign,
+                code: "pulsar_ack_pending_limit",
+                ..
+            }
+        ));
     }
 }
 
@@ -261,28 +270,10 @@ mod tests {
         Ok(())
     }
     #[tokio::test]
-    async fn pulsar_source_factory_name() {
-        let factory = PulsarSourceFactory::new(
-            PulsarSourceConfig {
-                pulsar_server_addr: "not-a-valid-pulsar-url".into(),
-                topic: "persistent://public/default/test".into(),
-                consumer_name: "test-consumer".into(),
-                subscription: "test-sub".into(),
-                max_unack: 10,
-                dead_letter_policy: None,
-                auth: None,
-            },
-            1,
-            Duration::from_millis(100),
-            0,
-            CancellationToken::new(),
-        );
-        assert_eq!(BuiltinSourceFactory::name(&factory), "Pulsar");
-    }
-
-    #[tokio::test]
     async fn pulsar_source_factory_build_fails_with_invalid_server() {
-        let factory = PulsarSourceFactory::new(
+        use crate::source::builtin::BuiltinSourceFactory;
+
+        let factory = new_pulsar_source_factory(
             PulsarSourceConfig {
                 pulsar_server_addr: "not-a-valid-pulsar-url".into(),
                 topic: "persistent://public/default/test".into(),

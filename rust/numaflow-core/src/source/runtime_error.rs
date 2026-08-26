@@ -52,6 +52,16 @@ impl SourceRuntimeErrorTracker {
     ) {
         let signature = failure_signature(source_name, operation, error);
         if !is_new_failure(&self.last_reported_failure, &signature) {
+            if let Some(last) = &mut self.last_reported_failure {
+                last.message = signature.message;
+                warn!(
+                    source = source_name,
+                    operation,
+                    code = %last.code,
+                    error = %last.message,
+                    "Built-in source remains degraded"
+                );
+            }
             return;
         }
 
@@ -99,11 +109,15 @@ fn failure_signature(
     operation: &'static str,
     error: &Error,
 ) -> FailureSignature {
+    let (code, message) = match error {
+        Error::SourceRedrive { code, message, .. } => ((*code).to_string(), message.clone()),
+        _ => (failure_code(error), error.to_string()),
+    };
     FailureSignature {
         source_name: source_name.to_string(),
         operation,
-        code: failure_code(error),
-        message: error.to_string(),
+        code,
+        message,
     }
 }
 
@@ -111,7 +125,11 @@ fn is_new_failure(
     last_reported_failure: &Option<FailureSignature>,
     signature: &FailureSignature,
 ) -> bool {
-    last_reported_failure.as_ref() != Some(signature)
+    last_reported_failure.as_ref().is_none_or(|last| {
+        last.source_name != signature.source_name
+            || last.operation != signature.operation
+            || last.code != signature.code
+    })
 }
 
 fn failure_code(error: &Error) -> String {
@@ -121,11 +139,29 @@ fn failure_code(error: &Error) -> String {
         Error::NonRetryable(_) => "NonRetryable".to_string(),
         Error::Connection(_) => "Connection".to_string(),
         Error::Grpc(status) | Error::UdfRedrive(status) => status.code().to_string(),
-        Error::Shared(err) => format!("Shared({err})"),
+        Error::Shared(_) => "Shared".to_string(),
         Error::Lag(_) => "Lag".to_string(),
         Error::AckPendingExceeded(_) => "AckPendingExceeded".to_string(),
         Error::AckOffsetNotFound(_) => "AckOffsetNotFound".to_string(),
-        other => other.to_string(),
+        Error::SourceRedrive { code, .. } => (*code).to_string(),
+        Error::Metrics(_) => "Metrics".to_string(),
+        Error::Sink(_) => "Sink".to_string(),
+        Error::FbSink(_) => "FallbackSink".to_string(),
+        Error::OsSink(_) => "OnSuccessSink".to_string(),
+        Error::Transformer(_) => "Transformer".to_string(),
+        Error::Mapper(_) => "Mapper".to_string(),
+        Error::Forwarder(_) => "Forwarder".to_string(),
+        Error::BypassRouter(_) => "BypassRouter".to_string(),
+        Error::Proto(_) => "Proto".to_string(),
+        Error::ISB(_) => "ISB".to_string(),
+        Error::ActorPatternRecv(_) => "ActorPatternRecv".to_string(),
+        Error::Tracker(_) => "Tracker".to_string(),
+        Error::DuplicateInflight(_) => "DuplicateInflight".to_string(),
+        Error::Watermark(_) => "Watermark".to_string(),
+        Error::SideInput(_) => "SideInput".to_string(),
+        Error::Reduce(_) => "Reduce".to_string(),
+        Error::Cancelled() => "Cancelled".to_string(),
+        Error::WAL(_) => "WAL".to_string(),
     }
 }
 
@@ -144,6 +180,12 @@ mod tests {
         assert!(is_new_failure(&tracker.last_reported_failure, &first));
         tracker.last_reported_failure = Some(first.clone());
         assert!(!is_new_failure(&tracker.last_reported_failure, &first));
+        let same_code_new_message =
+            failure_signature("kafka", "read", &Error::Source("new request id".into()));
+        assert!(!is_new_failure(
+            &tracker.last_reported_failure,
+            &same_code_new_message
+        ));
         assert!(is_new_failure(&tracker.last_reported_failure, &second));
 
         tracker.record_recovery("kafka");

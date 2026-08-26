@@ -6,6 +6,26 @@ use tonic::Code;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// How a built-in source supervisor should respond to an operation failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceFailureAction {
+    /// Retry the operation against the current client generation.
+    RetrySame,
+    /// Retire the current client and build a new generation.
+    Recreate,
+    /// Stop hot retries and probe recovery on a slow interval.
+    StayDegraded,
+}
+
+/// Whether a source failure should affect readiness and runtime-error reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceFailureImpact {
+    /// Expected protocol churn, such as a Kafka rebalance in progress.
+    Benign,
+    /// An actual source outage which should make the source not ready.
+    Outage,
+}
+
 #[derive(Error, Debug, Clone)]
 pub enum Error {
     #[error("metrics Error - {0}")]
@@ -46,14 +66,16 @@ pub enum Error {
     #[error("UDF redrive - {0}")]
     UdfRedrive(Box<tonic::Status>),
 
-    /// A built-in source backend failed and the original operation should be retried after the
-    /// source supervisor recreates its client or consumer.
+    /// A built-in source operation failed and should be handled by the source supervisor.
     #[error(
-        "Built-in source redrive - source={source_name}, operation={operation}, error={message}"
+        "Built-in source redrive - source={source_name}, operation={operation}, action={action:?}, code={code}, error={message}"
     )]
     SourceRedrive {
-        source_name: String,
+        source_name: &'static str,
         operation: &'static str,
+        action: SourceFailureAction,
+        impact: SourceFailureImpact,
+        code: &'static str,
         message: String,
     },
 

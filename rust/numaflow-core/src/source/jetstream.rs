@@ -6,10 +6,11 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
+use crate::error::{SourceFailureAction, SourceFailureImpact};
 use crate::message::{IntOffset, MessageID, NackOffset, Offset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
-use crate::source::builtin::{BuiltinSourceBackend, BuiltinSourceFactory, SourceBackend};
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
 use crate::{Error, Result, message::Message};
 
 use super::SourceAcker;
@@ -43,9 +44,32 @@ impl From<JetstreamMessage> for Message {
     }
 }
 
+fn nats_error_to_source_redrive(source_name: &'static str, value: numaflow_nats::Error) -> Error {
+    let (action, code) = match &value {
+        numaflow_nats::Error::Connection { .. } => {
+            (SourceFailureAction::StayDegraded, "nats_connection_config")
+        }
+        numaflow_nats::Error::Subscription { .. } => (
+            SourceFailureAction::StayDegraded,
+            "nats_subscription_config",
+        ),
+        numaflow_nats::Error::Jetstream(_) => (SourceFailureAction::Recreate, "jetstream"),
+        numaflow_nats::Error::Nats(_) => (SourceFailureAction::Recreate, "nats"),
+        numaflow_nats::Error::Other(_) => (SourceFailureAction::Recreate, "nats_internal"),
+    };
+    Error::SourceRedrive {
+        source_name,
+        operation: "backend",
+        action,
+        impact: SourceFailureImpact::Outage,
+        code,
+        message: value.to_string(),
+    }
+}
+
 impl From<numaflow_nats::Error> for Error {
     fn from(value: numaflow_nats::Error) -> Self {
-        Self::Source(format!("Jetstream source: {value:?}"))
+        nats_error_to_source_redrive("NATS", value)
     }
 }
 
@@ -56,51 +80,45 @@ pub(crate) async fn new_jetstream_source(
     timeout: Duration,
     cancel_token: CancellationToken,
 ) -> Result<JetstreamSource> {
-    Ok(JetstreamSource::connect(cfg, batch_size, timeout, cancel_token).await?)
+    JetstreamSource::connect(cfg, batch_size, timeout, cancel_token)
+        .await
+        .map_err(|e| nats_error_to_source_redrive("Jetstream", e))
 }
 
-pub(crate) struct JetstreamSourceFactory {
+pub(crate) fn new_jetstream_source_factory(
     config: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
     cancel_token: CancellationToken,
-    state: JetstreamSourceState,
-}
-
-impl JetstreamSourceFactory {
-    pub(crate) fn new(
-        config: JetstreamSourceConfig,
-        batch_size: usize,
-        timeout: Duration,
-        cancel_token: CancellationToken,
-    ) -> Self {
-        Self {
-            config,
-            batch_size,
-            timeout,
-            cancel_token,
-            state: JetstreamSourceState::default(),
+) -> ConnectFactory {
+    let state = JetstreamSourceState::default();
+    ConnectFactory::new("Jetstream", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        let state = state.clone();
+        async move {
+            let source = JetstreamSource::connect_with_state(
+                config,
+                batch_size,
+                timeout,
+                cancel_token,
+                state.clone(),
+            )
+            .await
+            .map_err(|e| nats_error_to_source_redrive("Jetstream", e))?;
+            let source_to_retire = source.clone();
+            Ok(Box::new(SourceBackend::with_retire(source, move || {
+                let state = state.clone();
+                let source = source_to_retire.clone();
+                async move {
+                    // Stop the actor before draining shared WIP state so the retiring generation
+                    // cannot insert another stale tracker after the drain.
+                    source.shutdown().await;
+                    state.retire_in_progress_generation().await;
+                }
+            })) as Box<dyn BuiltinSourceBackend>)
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl BuiltinSourceFactory for JetstreamSourceFactory {
-    fn name(&self) -> &'static str {
-        "Jetstream"
-    }
-
-    async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
-        let source = JetstreamSource::connect_with_state(
-            self.config.clone(),
-            self.batch_size,
-            self.timeout,
-            self.cancel_token.clone(),
-            self.state.clone(),
-        )
-        .await?;
-        Ok(Box::new(SourceBackend::new(source)))
-    }
+    })
 }
 
 impl SourceReader for JetstreamSource {
@@ -111,7 +129,7 @@ impl SourceReader for JetstreamSource {
     async fn read(&mut self) -> Option<Result<Vec<Message>>> {
         match self.read_messages().await {
             Ok(messages) => Some(Ok(messages.into_iter().map(Message::from).collect())),
-            Err(e) => Some(Err(e.into())),
+            Err(e) => Some(Err(nats_error_to_source_redrive("Jetstream", e))),
         }
     }
 
@@ -134,7 +152,9 @@ impl SourceAcker for JetstreamSource {
             };
             jetstream_offsets.push(seq_num.offset as u64);
         }
-        self.ack_messages(jetstream_offsets).await?;
+        self.ack_messages(jetstream_offsets)
+            .await
+            .map_err(|e| nats_error_to_source_redrive("Jetstream", e))?;
         Ok(())
     }
 
@@ -149,14 +169,18 @@ impl SourceAcker for JetstreamSource {
             };
             jetstream_offsets.push(seq_num.offset as u64);
         }
-        self.nack_messages(jetstream_offsets).await?;
+        self.nack_messages(jetstream_offsets)
+            .await
+            .map_err(|e| nats_error_to_source_redrive("Jetstream", e))?;
         Ok(())
     }
 }
 
 impl super::LagReader for JetstreamSource {
     async fn pending(&mut self) -> Result<Option<usize>> {
-        Ok(self.pending_messages().await?)
+        self.pending_messages()
+            .await
+            .map_err(|e| nats_error_to_source_redrive("Jetstream", e))
     }
 }
 
@@ -169,6 +193,45 @@ mod tests {
     use numaflow_nats::jetstream::Message as JetstreamMessage;
 
     use super::*;
+
+    #[test]
+    fn nats_connection_configuration_stays_degraded() {
+        let error: Error = numaflow_nats::Error::Connection {
+            server: "nats://localhost".into(),
+            error: "authorization violation".into(),
+        }
+        .into();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                source_name: "NATS",
+                action: SourceFailureAction::StayDegraded,
+                impact: SourceFailureImpact::Outage,
+                code: "nats_connection_config",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn jetstream_errors_use_jetstream_source_name() {
+        let error = nats_error_to_source_redrive(
+            "Jetstream",
+            numaflow_nats::Error::Connection {
+                server: "nats://localhost".into(),
+                error: "authorization violation".into(),
+            },
+        );
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                source_name: "Jetstream",
+                action: SourceFailureAction::StayDegraded,
+                code: "nats_connection_config",
+                ..
+            }
+        ));
+    }
 
     #[tokio::test]
     async fn test_try_from_jetstream_message_success() {
@@ -333,27 +396,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn jetstream_source_factory_name() {
-        let factory = JetstreamSourceFactory::new(
-            JetstreamSourceConfig {
-                addr: "nats://127.0.0.1:1".into(),
-                stream: "test-stream".into(),
-                consumer: "test-consumer".into(),
-                deliver_policy: ConsumerDeliverPolicy::NEW,
-                filter_subjects: vec![],
-                auth: None,
-                tls: None,
-            },
-            1,
-            Duration::from_millis(100),
-            CancellationToken::new(),
-        );
-        assert_eq!(BuiltinSourceFactory::name(&factory), "Jetstream");
-    }
-
-    #[tokio::test]
     async fn jetstream_source_factory_build_fails_with_unreachable_server() {
-        let factory = JetstreamSourceFactory::new(
+        use crate::source::builtin::BuiltinSourceFactory;
+
+        let factory = new_jetstream_source_factory(
             JetstreamSourceConfig {
                 addr: "nats://127.0.0.1:1".into(),
                 stream: "test-stream".into(),

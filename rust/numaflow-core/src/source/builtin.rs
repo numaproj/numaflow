@@ -1,11 +1,21 @@
-//! Resilience wrapper for built-in sources (Kafka, Pulsar, SQS, NATS, HTTP).
+//! Resilience wrapper for reconnectable built-in sources (Kafka, Pulsar, SQS, NATS, JetStream).
 //!
 //! When a source client fails, [`BuiltinSource`] recreates it with backoff instead of
 //! crashing `numa`. In-flight ack state is preserved by each source adapter; this module
 //! owns retry timing, health/readiness, and runtime-error reporting.
+//!
+//! Failure policy:
+//! - `RetrySame + Benign` keeps the current generation ready (for example, Kafka rebalance).
+//! - `RetrySame + Outage` keeps the generation but marks it degraded until an operation succeeds.
+//! - `Recreate` retires the old generation before a background replacement is started.
+//! - `StayDegraded` parks hot retries and probes recovery on a slow interval.
+//!
+//! Reads surface `SourceRedrive` while recovering. The forwarder backs off, reports a read error,
+//! and pauses idle-watermark advancement while continuing non-idle heartbeat publication.
 
-use std::fmt;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
+use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -13,14 +23,15 @@ use tokio::time::{Duration, Instant, sleep_until, timeout};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, SourceFailureAction, SourceFailureImpact};
 use crate::message::{Message, NackOffset, Offset};
 use crate::reader::LagReader;
 use crate::source::runtime_error::SourceRuntimeErrorTracker;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 
-// Cap read-side wait so the forwarder is not blocked for the full backoff.
-const READ_RETRY_WAIT_CAP: Duration = Duration::from_millis(100);
+const HEALTH_STARTING: u8 = 0;
+const HEALTH_READY: u8 = 1;
+const HEALTH_DEGRADED: u8 = 2;
 
 /// One live connection to an external source (e.g. a Kafka consumer or Pulsar client).
 ///
@@ -34,16 +45,39 @@ pub(crate) trait BuiltinSourceBackend: Send {
     async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()>;
     async fn pending(&mut self) -> Result<Option<usize>>;
     async fn partitions(&mut self) -> Result<SourcePartitions>;
+
+    /// Release external resources before the supervisor drops this generation.
+    async fn retire(&mut self) {}
 }
 
 /// Adapts an existing source type (Kafka, Pulsar, …) to [`BuiltinSourceBackend`].
 ///
 /// This avoids duplicating read/ack/nack wiring in every built-in adapter.
-pub(crate) struct SourceBackend<T>(T);
+type RetireFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+type RetireHook = Box<dyn FnMut() -> RetireFuture + Send>;
+
+pub(crate) struct SourceBackend<T> {
+    source: T,
+    retire_hook: Option<RetireHook>,
+}
 
 impl<T> SourceBackend<T> {
     pub(crate) fn new(source: T) -> Self {
-        Self(source)
+        Self {
+            source,
+            retire_hook: None,
+        }
+    }
+
+    pub(crate) fn with_retire<F, Fut>(source: T, mut retire_hook: F) -> Self
+    where
+        F: FnMut() -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        Self {
+            source,
+            retire_hook: Some(Box::new(move || Box::pin(retire_hook()))),
+        }
     }
 }
 
@@ -53,23 +87,29 @@ where
     T: SourceReader + SourceAcker + LagReader + Send,
 {
     async fn read(&mut self) -> Option<Result<Vec<Message>>> {
-        SourceReader::read(&mut self.0).await
+        SourceReader::read(&mut self.source).await
     }
 
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
-        SourceAcker::ack(&mut self.0, offsets).await
+        SourceAcker::ack(&mut self.source, offsets).await
     }
 
     async fn nack(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
-        SourceAcker::nack(&mut self.0, offsets).await
+        SourceAcker::nack(&mut self.source, offsets).await
     }
 
     async fn pending(&mut self) -> Result<Option<usize>> {
-        LagReader::pending(&mut self.0).await
+        LagReader::pending(&mut self.source).await
     }
 
     async fn partitions(&mut self) -> Result<SourcePartitions> {
-        SourceReader::partitions(&mut self.0).await
+        SourceReader::partitions(&mut self.source).await
+    }
+
+    async fn retire(&mut self) {
+        if let Some(retire_hook) = &mut self.retire_hook {
+            retire_hook().await;
+        }
     }
 }
 
@@ -83,7 +123,41 @@ pub(crate) trait BuiltinSourceFactory: Send + Sync {
     async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>>;
 }
 
+type BuildFuture =
+    Pin<Box<dyn Future<Output = Result<Box<dyn BuiltinSourceBackend>>> + Send + 'static>>;
+
+/// Factory for sources whose generations are created by the same connect-style closure.
+pub(crate) struct ConnectFactory {
+    name: &'static str,
+    connect: Box<dyn Fn() -> BuildFuture + Send + Sync>,
+}
+
+impl ConnectFactory {
+    pub(crate) fn new<F, Fut>(name: &'static str, connect: F) -> Self
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Box<dyn BuiltinSourceBackend>>> + Send + 'static,
+    {
+        Self {
+            name,
+            connect: Box::new(move || Box::pin(connect())),
+        }
+    }
+}
+
+#[async_trait]
+impl BuiltinSourceFactory for ConnectFactory {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
+        (self.connect)().await
+    }
+}
+
 /// Health of a built-in source from the supervisor's point of view.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuiltinSourceHealth {
     /// Initial startup; backend not ready yet.
@@ -94,12 +168,25 @@ pub(crate) enum BuiltinSourceHealth {
     Degraded,
 }
 
+#[cfg(test)]
+impl BuiltinSourceHealth {
+    fn from_atomic(value: u8) -> Self {
+        match value {
+            HEALTH_READY => Self::Ready,
+            HEALTH_DEGRADED => Self::Degraded,
+            _ => Self::Starting,
+        }
+    }
+}
+
 /// Controls how long the supervisor waits between rebuild attempts.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BuiltinSourceRetryConfig {
     pub(crate) initial_backoff: Duration,
     pub(crate) max_backoff: Duration,
     pub(crate) build_timeout: Duration,
+    /// Interval for [`SourceFailureAction::StayDegraded`] recovery probes.
+    pub(crate) slow_recovery_interval: Duration,
 }
 
 impl Default for BuiltinSourceRetryConfig {
@@ -108,20 +195,22 @@ impl Default for BuiltinSourceRetryConfig {
             initial_backoff: Duration::from_millis(100),
             max_backoff: Duration::from_secs(5),
             build_timeout: Duration::from_secs(10),
+            slow_recovery_interval: Duration::from_secs(30),
         }
     }
 }
 
-/// Mutable supervisor state: active backend, retry schedule, cached lag/partitions,
-/// and runtime-error deduplication.
-struct SupervisorState {
-    backend: Option<Box<dyn BuiltinSourceBackend>>,
-    health: BuiltinSourceHealth,
+type BackendHandle = Arc<Mutex<Box<dyn BuiltinSourceBackend>>>;
+
+/// Mutable supervisor metadata. The lock must never be held across backend I/O or factory builds.
+struct SupervisorMetadata {
+    backend: Option<BackendHandle>,
     retry_backoff: Duration,
     retry_at: Instant,
+    slow_recovery: bool,
+    runtime_error_tracker: SourceRuntimeErrorTracker,
     last_pending: Option<usize>,
     last_partitions: SourcePartitions,
-    runtime_error_tracker: SourceRuntimeErrorTracker,
 }
 
 /// Resilient wrapper around built-in sources.
@@ -129,7 +218,7 @@ struct SupervisorState {
 /// On failure, recreates the underlying client with exponential backoff and keeps
 /// `numa` alive. Behavior by operation:
 ///
-/// - **read** — returns an empty batch while recovering (forwarder keeps polling)
+/// - **read** — returns [`Error::SourceRedrive`] while recovering
 /// - **ack / nack** — returns [`Error::SourceRedrive`] so offsets are retried later
 /// - **pending / partitions** — returns the last known good value while degraded
 ///
@@ -137,7 +226,11 @@ struct SupervisorState {
 #[derive(Clone)]
 pub(crate) struct BuiltinSource {
     factory: Arc<dyn BuiltinSourceFactory>,
-    state: Arc<Mutex<SupervisorState>>,
+    metadata: Arc<Mutex<SupervisorMetadata>>,
+    health: Arc<AtomicU8>,
+    watermark_ready: Arc<AtomicBool>,
+    generation: Arc<AtomicU64>,
+    builder_active: Arc<AtomicBool>,
     cancel_token: CancellationToken,
     retry_config: BuiltinSourceRetryConfig,
 }
@@ -184,126 +277,403 @@ impl BuiltinSource {
         retry_config: BuiltinSourceRetryConfig,
         runtime_error_tracker: SourceRuntimeErrorTracker,
     ) -> Self {
-        assert!(
+        debug_assert!(
             !retry_config.initial_backoff.is_zero(),
             "initial source retry backoff must be greater than zero"
         );
-        assert!(
+        debug_assert!(
             retry_config.initial_backoff <= retry_config.max_backoff,
             "initial source retry backoff must not exceed max backoff"
         );
-        assert!(
+        debug_assert!(
             !retry_config.build_timeout.is_zero(),
             "source build timeout must be greater than zero"
         );
+        debug_assert!(
+            !retry_config.slow_recovery_interval.is_zero(),
+            "slow recovery interval must be greater than zero"
+        );
 
-        Self {
+        let source = Self {
             factory,
-            state: Arc::new(Mutex::new(SupervisorState {
+            metadata: Arc::new(Mutex::new(SupervisorMetadata {
                 backend: None,
-                health: BuiltinSourceHealth::Starting,
                 retry_backoff: retry_config.initial_backoff,
                 retry_at: Instant::now(),
+                slow_recovery: false,
+                runtime_error_tracker,
                 last_pending: None,
                 last_partitions: SourcePartitions::default(),
-                runtime_error_tracker,
             })),
+            health: Arc::new(AtomicU8::new(HEALTH_STARTING)),
+            watermark_ready: Arc::new(AtomicBool::new(false)),
+            generation: Arc::new(AtomicU64::new(0)),
+            builder_active: Arc::new(AtomicBool::new(false)),
             cancel_token,
             retry_config,
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current()
+            && source.try_start_builder()
+        {
+            let source_to_build = source.clone();
+            runtime.spawn(async move {
+                source_to_build.run_background_builder(None).await;
+            });
         }
+        source
     }
 
+    #[cfg(test)]
     pub(crate) async fn health(&self) -> BuiltinSourceHealth {
-        self.state.lock().await.health
+        BuiltinSourceHealth::from_atomic(self.health.load(Ordering::Acquire))
     }
 
     pub(crate) async fn is_ready(&self) -> bool {
-        self.health().await == BuiltinSourceHealth::Ready
+        self.is_ready_now()
     }
 
-    fn redrive_error(&self, operation: &'static str, error: impl fmt::Display) -> Error {
+    pub(crate) fn is_ready_now(&self) -> bool {
+        self.health.load(Ordering::Acquire) == HEALTH_READY
+    }
+
+    pub(crate) fn is_watermark_ready_now(&self) -> bool {
+        self.watermark_ready.load(Ordering::Acquire)
+    }
+
+    fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    fn source_redrive(
+        &self,
+        operation: &'static str,
+        action: SourceFailureAction,
+        impact: SourceFailureImpact,
+        code: &'static str,
+        message: impl Into<String>,
+    ) -> Error {
         Error::SourceRedrive {
-            source_name: self.factory.name().to_string(),
+            source_name: self.factory.name(),
             operation,
-            message: error.to_string(),
+            action,
+            impact,
+            code,
+            message: message.into(),
         }
     }
 
-    fn mark_degraded(&self, state: &mut SupervisorState, operation: &'static str, error: &Error) {
-        state
+    async fn unavailable_redrive(&self, operation: &'static str) -> Error {
+        let slow_recovery = self.metadata.lock().await.slow_recovery;
+        self.source_redrive(
+            operation,
+            if slow_recovery {
+                SourceFailureAction::StayDegraded
+            } else {
+                SourceFailureAction::Recreate
+            },
+            SourceFailureImpact::Outage,
+            "backend_unavailable",
+            "source backend is unavailable; recovery build in progress",
+        )
+    }
+
+    fn classify_failure(
+        error: &Error,
+    ) -> (
+        SourceFailureAction,
+        SourceFailureImpact,
+        &'static str,
+        String,
+    ) {
+        if let Error::SourceRedrive {
+            action,
+            impact,
+            code,
+            message,
+            ..
+        } = error
+        {
+            return (*action, *impact, code, message.clone());
+        }
+
+        (
+            SourceFailureAction::Recreate,
+            SourceFailureImpact::Outage,
+            stable_error_code(error),
+            source_error_message(error),
+        )
+    }
+
+    fn mark_degraded(&self, impact: SourceFailureImpact) {
+        if impact == SourceFailureImpact::Outage {
+            self.health.store(HEALTH_DEGRADED, Ordering::Release);
+            self.watermark_ready.store(false, Ordering::Release);
+        }
+    }
+
+    async fn mark_ready(&self) {
+        self.watermark_ready.store(true, Ordering::Release);
+        let previous = self.health.swap(HEALTH_READY, Ordering::AcqRel);
+        self.metadata
+            .lock()
+            .await
+            .runtime_error_tracker
+            .record_recovery(self.factory.name());
+        if previous == HEALTH_DEGRADED {
+            info!(
+                source = self.factory.name(),
+                generation = self.generation.load(Ordering::Acquire),
+                "Built-in source recovered successfully"
+            );
+        }
+    }
+
+    async fn report_outage(&self, operation: &'static str, error: &Error) {
+        let mut metadata = self.metadata.lock().await;
+        metadata
             .runtime_error_tracker
             .record_failure(self.factory.name(), operation, error);
-        warn!(
-            source = self.factory.name(),
-            operation,
-            ?error,
-            retry_in_ms = state.retry_backoff.as_millis(),
-            "Built-in source operation failed; will recreate the source client after backoff"
-        );
-        state.backend = None;
-        state.health = BuiltinSourceHealth::Degraded;
-        state.retry_at = Instant::now() + state.retry_backoff;
-        state.retry_backoff = state
-            .retry_backoff
-            .saturating_mul(2)
-            .min(self.retry_config.max_backoff);
     }
 
-    async fn ensure_backend(&self, state: &mut SupervisorState) -> Result<()> {
-        if state.backend.is_some() {
-            return Ok(());
+    async fn schedule_backoff(&self, slow_recovery: bool) {
+        let mut metadata = self.metadata.lock().await;
+        metadata.slow_recovery = slow_recovery;
+        let interval = if slow_recovery {
+            self.retry_config.slow_recovery_interval
+        } else {
+            metadata.retry_backoff
+        };
+        metadata.retry_at = Instant::now() + interval;
+        if !slow_recovery {
+            metadata.retry_backoff = metadata
+                .retry_backoff
+                .saturating_mul(2)
+                .min(self.retry_config.max_backoff);
         }
+    }
+
+    fn try_start_builder(&self) -> bool {
         if self.cancel_token.is_cancelled() {
-            return Err(Error::Cancelled());
+            return false;
         }
-        if Instant::now() < state.retry_at {
-            return Err(self.redrive_error("build", "backend recreation is waiting for backoff"));
+        !self.builder_active.swap(true, Ordering::AcqRel)
+    }
+
+    fn finish_builder(&self) {
+        self.builder_active.store(false, Ordering::Release);
+    }
+
+    async fn schedule_build(&self, slow_recovery: bool, backend_to_retire: Option<BackendHandle>) {
+        if !self.try_start_builder() {
+            if let Some(backend_to_retire) = backend_to_retire {
+                let source = self.clone();
+                tokio::spawn(async move {
+                    Self::retire_backend(backend_to_retire).await;
+                    loop {
+                        if source.cancel_token.is_cancelled() {
+                            return;
+                        }
+                        if source.try_start_builder() {
+                            source.schedule_backoff(slow_recovery).await;
+                            let builder_source = source.clone();
+                            tokio::spawn(async move {
+                                builder_source.run_background_builder(None).await;
+                            });
+                            return;
+                        }
+                        tokio::select! {
+                            _ = source.cancel_token.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+                        }
+                    }
+                });
+            }
+            return;
+        }
+        self.schedule_backoff(slow_recovery).await;
+        let source = self.clone();
+        tokio::spawn(async move {
+            source.run_background_builder(backend_to_retire).await;
+        });
+    }
+
+    async fn take_backend_for_retirement(&self) -> Option<BackendHandle> {
+        let mut metadata = self.metadata.lock().await;
+        metadata.backend.take()
+    }
+
+    async fn snapshot_backend(&self) -> Option<BackendHandle> {
+        let metadata = self.metadata.lock().await;
+        metadata.backend.clone()
+    }
+
+    async fn cached_pending(&self) -> Option<usize> {
+        self.metadata.lock().await.last_pending
+    }
+
+    async fn cached_partitions(&self) -> SourcePartitions {
+        self.metadata.lock().await.last_partitions.clone()
+    }
+
+    async fn update_cached_pending(&self, pending: Option<usize>) {
+        self.metadata.lock().await.last_pending = pending;
+    }
+
+    async fn update_cached_partitions(&self, partitions: SourcePartitions) {
+        self.metadata.lock().await.last_partitions = partitions;
+    }
+
+    async fn retire_backend(backend: BackendHandle) {
+        backend.lock().await.retire().await;
+    }
+
+    async fn run_background_builder(self, backend_to_retire: Option<BackendHandle>) {
+        struct BuilderGuard {
+            source: BuiltinSource,
         }
 
-        let build = timeout(self.retry_config.build_timeout, self.factory.build());
-        let result = tokio::select! {
-            _ = self.cancel_token.cancelled() => return Err(Error::Cancelled()),
-            result = build => result,
+        impl Drop for BuilderGuard {
+            fn drop(&mut self) {
+                self.source.finish_builder();
+            }
+        }
+
+        let _guard = BuilderGuard {
+            source: self.clone(),
         };
-        match result {
-            Ok(Ok(backend)) => {
-                let recovered = state.health == BuiltinSourceHealth::Degraded;
-                state.backend = Some(backend);
-                state.health = BuiltinSourceHealth::Ready;
-                state.retry_backoff = self.retry_config.initial_backoff;
-                state.retry_at = Instant::now();
-                if recovered {
-                    state
-                        .runtime_error_tracker
-                        .record_recovery(self.factory.name());
+
+        let old_backend = match backend_to_retire {
+            Some(backend) => Some(backend),
+            None => self.take_backend_for_retirement().await,
+        };
+        if let Some(old_backend) = old_backend {
+            Self::retire_backend(old_backend).await;
+        }
+
+        loop {
+            if self.cancel_token.is_cancelled() {
+                return;
+            }
+
+            let wait_until = {
+                let metadata = self.metadata.lock().await;
+                metadata.retry_at
+            };
+
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => return,
+                _ = sleep_until(wait_until) => {}
+            }
+
+            if self.cancel_token.is_cancelled() {
+                return;
+            }
+
+            let build = timeout(self.retry_config.build_timeout, self.factory.build());
+            let result = tokio::select! {
+                biased;
+                _ = self.cancel_token.cancelled() => return,
+                result = build => result,
+            };
+
+            match result {
+                Ok(Ok(backend)) => {
+                    let new_handle = Arc::new(Mutex::new(backend));
+                    let next_generation = {
+                        let mut metadata = self.metadata.lock().await;
+                        metadata.backend = Some(new_handle);
+                        metadata.retry_backoff = self.retry_config.initial_backoff;
+                        metadata.retry_at = Instant::now();
+                        metadata.slow_recovery = false;
+                        let next_generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+                        self.health.store(HEALTH_READY, Ordering::Release);
+                        next_generation
+                    };
                     info!(
                         source = self.factory.name(),
-                        "Source client reconnected successfully"
+                        generation = next_generation,
+                        "Built-in source client generation installed successfully"
                     );
+                    return;
                 }
-                Ok(())
-            }
-            Ok(Err(error)) => {
-                self.mark_degraded(state, "build", &error);
-                Err(self.redrive_error("build", error))
-            }
-            Err(error) => {
-                let error = Error::Source(format!(
-                    "timed out after {:?} building {} source backend: {error}",
-                    self.retry_config.build_timeout,
-                    self.factory.name()
-                ));
-                self.mark_degraded(state, "build", &error);
-                Err(self.redrive_error("build", error))
+                Ok(Err(error)) => {
+                    self.health.store(HEALTH_DEGRADED, Ordering::Release);
+                    self.watermark_ready.store(false, Ordering::Release);
+                    let (action, _, _, _) = Self::classify_failure(&error);
+                    let slow_recovery = action == SourceFailureAction::StayDegraded;
+                    self.report_outage("build", &error).await;
+                    warn!(
+                        source = self.factory.name(),
+                        ?error,
+                        "Built-in source backend build failed; will retry after backoff"
+                    );
+                    self.schedule_backoff(slow_recovery).await;
+                }
+                Err(error) => {
+                    let error = Error::Source(format!(
+                        "timed out after {:?} building {} source backend: {error}",
+                        self.retry_config.build_timeout,
+                        self.factory.name()
+                    ));
+                    self.health.store(HEALTH_DEGRADED, Ordering::Release);
+                    self.watermark_ready.store(false, Ordering::Release);
+                    self.report_outage("build", &error).await;
+                    warn!(
+                        source = self.factory.name(),
+                        ?error,
+                        "Built-in source backend build timed out; will retry after backoff"
+                    );
+                    let slow_recovery = self.metadata.lock().await.slow_recovery;
+                    self.schedule_backoff(slow_recovery).await;
+                }
             }
         }
     }
 
-    async fn wait_after_read_failure(&self, retry_at: Instant) {
-        let wait_until = retry_at.min(Instant::now() + READ_RETRY_WAIT_CAP);
-        tokio::select! {
-            _ = self.cancel_token.cancelled() => {}
-            _ = sleep_until(wait_until) => {}
+    async fn handle_failure(&self, operation: &'static str, error: &Error) -> Error {
+        let (action, impact, code, message) = Self::classify_failure(error);
+        let redrive = self.source_redrive(operation, action, impact, code, message);
+
+        match (action, impact) {
+            (SourceFailureAction::RetrySame, SourceFailureImpact::Benign) => redrive,
+            (SourceFailureAction::RetrySame, SourceFailureImpact::Outage) => {
+                self.mark_degraded(impact);
+                self.report_outage(operation, &redrive).await;
+                warn!(
+                    source = self.factory.name(),
+                    operation,
+                    generation = self.generation(),
+                    ?error,
+                    "Built-in source operation failed; keeping current client generation"
+                );
+                redrive
+            }
+            (SourceFailureAction::Recreate, _) => {
+                self.mark_degraded(impact);
+                self.report_outage(operation, &redrive).await;
+                warn!(
+                    source = self.factory.name(),
+                    operation,
+                    ?error,
+                    "Built-in source operation failed; scheduling backend recreation"
+                );
+                let old_backend = self.take_backend_for_retirement().await;
+                self.schedule_build(false, old_backend).await;
+                redrive
+            }
+            (SourceFailureAction::StayDegraded, _) => {
+                self.mark_degraded(impact);
+                self.report_outage(operation, &redrive).await;
+                warn!(
+                    source = self.factory.name(),
+                    operation,
+                    ?error,
+                    "Built-in source operation failed; staying degraded until slow recovery"
+                );
+                let old_backend = self.take_backend_for_retirement().await;
+                self.schedule_build(true, old_backend).await;
+                redrive
+            }
         }
     }
 
@@ -312,120 +682,157 @@ impl BuiltinSource {
             return None;
         }
 
-        let mut state = self.state.lock().await;
-        if self.ensure_backend(&mut state).await.is_err() {
-            let retry_at = state.retry_at;
-            drop(state);
-            self.wait_after_read_failure(retry_at).await;
-            return (!self.cancel_token.is_cancelled()).then_some(Ok(vec![]));
-        }
+        let backend = self.snapshot_backend().await;
+        let Some(backend) = backend else {
+            self.mark_degraded(SourceFailureImpact::Outage);
+            self.schedule_build(false, None).await;
+            return Some(Err(self.unavailable_redrive("read").await));
+        };
 
-        let result = state
-            .backend
-            .as_mut()
-            .expect("backend must exist after ensure_backend")
-            .read()
-            .await;
+        let result = backend.lock().await.read().await;
         match result {
-            Some(Ok(messages)) => Some(Ok(messages)),
-            Some(Err(error)) => {
-                self.mark_degraded(&mut state, "read", &error);
-                let retry_at = state.retry_at;
-                drop(state);
-                self.wait_after_read_failure(retry_at).await;
-                (!self.cancel_token.is_cancelled()).then_some(Ok(vec![]))
+            Some(Ok(messages)) => {
+                self.mark_ready().await;
+                Some(Ok(messages))
             }
+            Some(Err(error)) => Some(Err(self.handle_failure("read", &error).await)),
             None if self.cancel_token.is_cancelled() => None,
             None => {
                 let error = Error::Source(format!(
                     "{} source stream closed unexpectedly",
                     self.factory.name()
                 ));
-                self.mark_degraded(&mut state, "read", &error);
-                let retry_at = state.retry_at;
-                drop(state);
-                self.wait_after_read_failure(retry_at).await;
-                (!self.cancel_token.is_cancelled()).then_some(Ok(vec![]))
+                Some(Err(self.handle_failure("read", &error).await))
             }
         }
     }
 
     async fn ack_offsets(&mut self, offsets: Vec<Offset>) -> Result<()> {
-        let mut state = self.state.lock().await;
-        self.ensure_backend(&mut state).await?;
-        let result = state
-            .backend
-            .as_mut()
-            .expect("backend must exist after ensure_backend")
-            .ack(offsets)
-            .await;
-        if let Err(error) = result {
-            self.mark_degraded(&mut state, "ack", &error);
-            return Err(self.redrive_error("ack", error));
+        if self.cancel_token.is_cancelled() {
+            return Err(Error::Cancelled());
         }
-        Ok(())
+
+        let backend = self.snapshot_backend().await;
+        let Some(backend) = backend else {
+            self.mark_degraded(SourceFailureImpact::Outage);
+            self.schedule_build(false, None).await;
+            return Err(self.unavailable_redrive("ack").await);
+        };
+
+        match backend.lock().await.ack(offsets).await {
+            Ok(()) => {
+                self.mark_ready().await;
+                Ok(())
+            }
+            Err(error) => Err(self.handle_failure("ack", &error).await),
+        }
     }
 
     async fn nack_offsets(&mut self, offsets: Vec<NackOffset>) -> Result<()> {
-        let mut state = self.state.lock().await;
-        self.ensure_backend(&mut state).await?;
-        let result = state
-            .backend
-            .as_mut()
-            .expect("backend must exist after ensure_backend")
-            .nack(offsets)
-            .await;
-        if let Err(error) = result {
-            self.mark_degraded(&mut state, "nack", &error);
-            return Err(self.redrive_error("nack", error));
+        if self.cancel_token.is_cancelled() {
+            return Err(Error::Cancelled());
         }
-        Ok(())
+
+        let backend = self.snapshot_backend().await;
+        let Some(backend) = backend else {
+            self.mark_degraded(SourceFailureImpact::Outage);
+            self.schedule_build(false, None).await;
+            return Err(self.unavailable_redrive("nack").await);
+        };
+
+        match backend.lock().await.nack(offsets).await {
+            Ok(()) => {
+                self.mark_ready().await;
+                Ok(())
+            }
+            Err(error) => Err(self.handle_failure("nack", &error).await),
+        }
     }
 
     async fn pending_messages(&mut self) -> Result<Option<usize>> {
-        let mut state = self.state.lock().await;
-        if self.ensure_backend(&mut state).await.is_err() {
-            return Ok(state.last_pending);
-        }
-        match state
-            .backend
-            .as_mut()
-            .expect("backend must exist after ensure_backend")
-            .pending()
-            .await
-        {
+        let backend = self.snapshot_backend().await;
+        let Some(backend) = backend else {
+            self.schedule_build(false, None).await;
+            return Ok(self.cached_pending().await);
+        };
+
+        match backend.lock().await.pending().await {
             Ok(pending) => {
-                state.last_pending = pending;
+                self.update_cached_pending(pending).await;
                 Ok(pending)
             }
             Err(error) => {
-                self.mark_degraded(&mut state, "pending", &error);
-                Ok(state.last_pending)
+                let _ = self.handle_failure("pending", &error).await;
+                Ok(self.cached_pending().await)
             }
         }
     }
 
     async fn source_partitions(&mut self) -> Result<SourcePartitions> {
-        let mut state = self.state.lock().await;
-        if self.ensure_backend(&mut state).await.is_err() {
-            return Ok(state.last_partitions.clone());
-        }
-        match state
-            .backend
-            .as_mut()
-            .expect("backend must exist after ensure_backend")
-            .partitions()
-            .await
-        {
+        let backend = self.snapshot_backend().await;
+        let Some(backend) = backend else {
+            self.schedule_build(false, None).await;
+            return Ok(self.cached_partitions().await);
+        };
+
+        match backend.lock().await.partitions().await {
             Ok(partitions) => {
-                state.last_partitions = partitions.clone();
+                self.update_cached_partitions(partitions.clone()).await;
                 Ok(partitions)
             }
             Err(error) => {
-                self.mark_degraded(&mut state, "partitions", &error);
-                Ok(state.last_partitions.clone())
+                let _ = self.handle_failure("partitions", &error).await;
+                Ok(self.cached_partitions().await)
             }
         }
+    }
+}
+
+fn stable_error_code(error: &Error) -> &'static str {
+    match error {
+        Error::Metrics(_) => "metrics",
+        Error::Source(_) => "source",
+        Error::Sink(_) => "sink",
+        Error::FbSink(_) => "fb_sink",
+        Error::OsSink(_) => "os_sink",
+        Error::Transformer(_) => "transformer",
+        Error::Mapper(_) => "mapper",
+        Error::Forwarder(_) => "forwarder",
+        Error::BypassRouter(_) => "bypass_router",
+        Error::Connection(_) => "connection",
+        Error::Grpc(_) => "grpc",
+        Error::UdfRedrive(_) => "udf_redrive",
+        Error::SourceRedrive { code, .. } => code,
+        Error::Config(_) => "config",
+        Error::Shared(_) => "shared",
+        Error::Proto(_) => "proto",
+        Error::ISB(_) => "isb",
+        Error::ActorPatternRecv(_) => "actor_pattern_recv",
+        Error::AckPendingExceeded(_) => "ack_pending_exceeded",
+        Error::AckOffsetNotFound(_) => "ack_offset_not_found",
+        Error::Lag(_) => "lag",
+        Error::Tracker(_) => "tracker",
+        Error::DuplicateInflight(_) => "duplicate_inflight",
+        Error::Watermark(_) => "watermark",
+        Error::SideInput(_) => "side_input",
+        Error::Reduce(_) => "reduce",
+        Error::Cancelled() => "cancelled",
+        Error::WAL(_) => "wal",
+        Error::NonRetryable(_) => "non_retryable",
+    }
+}
+
+fn source_error_message(error: &Error) -> String {
+    match error {
+        Error::Source(message)
+        | Error::Connection(message)
+        | Error::Config(message)
+        | Error::Lag(message)
+        | Error::NonRetryable(message)
+        | Error::ActorPatternRecv(message)
+        | Error::Tracker(message) => message.clone(),
+        Error::SourceRedrive { message, .. } => message.clone(),
+        _ => error.to_string(),
     }
 }
 
@@ -573,11 +980,61 @@ mod tests {
         }
     }
 
+    struct BlockingBackend {
+        read_started: Arc<tokio::sync::Notify>,
+        release_read: Arc<tokio::sync::Notify>,
+    }
+
+    #[async_trait]
+    impl BuiltinSourceBackend for BlockingBackend {
+        async fn read(&mut self) -> Option<Result<Vec<Message>>> {
+            self.read_started.notify_one();
+            self.release_read.notified().await;
+            Some(Ok(vec![]))
+        }
+
+        async fn ack(&mut self, _offsets: Vec<Offset>) -> Result<()> {
+            Ok(())
+        }
+
+        async fn nack(&mut self, _offsets: Vec<NackOffset>) -> Result<()> {
+            Ok(())
+        }
+
+        async fn pending(&mut self) -> Result<Option<usize>> {
+            Ok(None)
+        }
+
+        async fn partitions(&mut self) -> Result<SourcePartitions> {
+            Ok(SourcePartitions::default())
+        }
+    }
+
+    struct BlockingFactory {
+        read_started: Arc<tokio::sync::Notify>,
+        release_read: Arc<tokio::sync::Notify>,
+    }
+
+    #[async_trait]
+    impl BuiltinSourceFactory for BlockingFactory {
+        fn name(&self) -> &'static str {
+            "blocking"
+        }
+
+        async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
+            Ok(Box::new(BlockingBackend {
+                read_started: self.read_started.clone(),
+                release_read: self.release_read.clone(),
+            }))
+        }
+    }
+
     fn retry_config() -> BuiltinSourceRetryConfig {
         BuiltinSourceRetryConfig {
             initial_backoff: Duration::from_millis(1),
             max_backoff: Duration::from_millis(4),
             build_timeout: Duration::from_millis(50),
+            slow_recovery_interval: Duration::from_millis(5),
         }
     }
 
@@ -614,24 +1071,61 @@ mod tests {
         backend
     }
 
+    fn source_redrive(
+        operation: &'static str,
+        action: SourceFailureAction,
+        impact: SourceFailureImpact,
+        code: &'static str,
+        message: &str,
+    ) -> Error {
+        Error::SourceRedrive {
+            source_name: "fake",
+            operation,
+            action,
+            impact,
+            code,
+            message: message.into(),
+        }
+    }
+
+    async fn wait_for_ready(source: &BuiltinSource) {
+        for _ in 0..50 {
+            if source.is_ready().await {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        panic!("source did not become ready");
+    }
+
     #[tokio::test]
-    async fn startup_failure_is_retried_without_returning_read_error() {
+    async fn startup_failure_is_retried_and_returns_source_redrive() {
         let factory = Arc::new(FakeFactory::new(vec![
             Err(Error::Config("missing secret".into())),
             Ok(FakeBackend::healthy()),
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                operation: "read",
+                action: SourceFailureAction::Recreate,
+                impact: SourceFailureImpact::Outage,
+                ..
+            }
+        ));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert!(source.is_ready().await);
         assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
-    async fn read_failure_recreates_backend_and_returns_empty_batch() {
+    async fn read_failure_recreates_backend_and_returns_source_redrive() {
         let mut failed_backend = FakeBackend::healthy();
         failed_backend.read_error = Some(Error::Source("broker disconnected".into()));
         let factory = Arc::new(FakeFactory::new(vec![
@@ -640,11 +1134,53 @@ mod tests {
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        wait_for_ready(&source).await;
+        let generation_before = source.generation();
+
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                operation: "read",
+                action: SourceFailureAction::Recreate,
+                ..
+            }
+        ));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
+        assert!(source.generation() > generation_before);
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert!(source.is_ready().await);
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn recreate_waits_for_an_active_builder_to_release_its_slot() {
+        let mut failed_backend = FakeBackend::healthy();
+        failed_backend.read_error = Some(Error::Source("broker disconnected".into()));
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(failed_backend),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        wait_for_ready(&source).await;
+        let generation_before = source.generation();
+        source.builder_active.store(true, Ordering::Release);
+
+        assert!(matches!(
+            source.read().await.unwrap().unwrap_err(),
+            Error::SourceRedrive {
+                action: SourceFailureAction::Recreate,
+                ..
+            }
+        ));
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+
+        source.builder_active.store(false, Ordering::Release);
+        wait_for_ready(&source).await;
+        assert!(source.generation() > generation_before);
         assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
     }
 
@@ -658,30 +1194,23 @@ mod tests {
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
+        wait_for_ready(&source).await;
+
         let error = source.ack(vec![]).await.unwrap_err();
         assert!(matches!(
             error,
             Error::SourceRedrive {
                 operation: "ack",
+                action: SourceFailureAction::Recreate,
+                code: "non_retryable",
                 ..
             }
         ));
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         source.ack(vec![]).await.unwrap();
         assert!(source.is_ready().await);
         assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
-    }
-
-    #[tokio::test]
-    async fn lag_and_partitions_use_last_successful_values_while_degraded() {
-        let factory = Arc::new(FakeFactory::new(vec![Ok(FakeBackend::healthy())]));
-        let mut source =
-            BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
-
-        assert_eq!(source.pending().await.unwrap(), Some(12));
-        let partitions = source.partitions().await.unwrap();
-        assert_eq!(partitions.active_partitions, vec![1, 2]);
-        assert_eq!(partitions.total_partitions, Some(2));
     }
 
     #[tokio::test]
@@ -703,9 +1232,14 @@ mod tests {
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
         assert_eq!(source.health().await, BuiltinSourceHealth::Starting);
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        wait_for_ready(&source).await;
+        assert_eq!(source.health().await, BuiltinSourceHealth::Ready);
+
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(error, Error::SourceRedrive { .. }));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.health().await, BuiltinSourceHealth::Ready);
     }
@@ -720,6 +1254,8 @@ mod tests {
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
+        wait_for_ready(&source).await;
+
         let error = source.nack(vec![]).await.unwrap_err();
         assert!(matches!(
             error,
@@ -728,7 +1264,8 @@ mod tests {
                 ..
             }
         ));
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         source.nack(vec![]).await.unwrap();
         assert!(source.is_ready().await);
     }
@@ -741,16 +1278,33 @@ mod tests {
         ]));
         let (mut source, temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        wait_for_ready(&source).await;
+        assert_eq!(
+            source.read().await.unwrap().unwrap_err().to_string(),
+            source_redrive(
+                "read",
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+                "source",
+                "broker disconnected",
+            )
+            .to_string()
+        );
         assert_eq!(runtime_error_files(&temp_dir).len(), 1);
 
         // Backoff has not elapsed yet, so the supervisor should not report again.
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert!(matches!(
+            source.read().await.unwrap().unwrap_err(),
+            Error::SourceRedrive {
+                operation: "read",
+                ..
+            }
+        ));
         assert_eq!(runtime_error_files(&temp_dir).len(), 1);
     }
 
     #[tokio::test]
-    async fn changed_failure_persists_a_new_runtime_error() {
+    async fn changed_message_with_same_code_remains_deduplicated_until_recovery() {
         let factory = Arc::new(FakeFactory::new(vec![
             Ok(failed_read_backend("broker disconnected")),
             Ok(failed_read_backend("authorization failed")),
@@ -758,12 +1312,33 @@ mod tests {
         ]));
         let (mut source, temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        wait_for_ready(&source).await;
+        assert_eq!(
+            source.read().await.unwrap().unwrap_err().to_string(),
+            source_redrive(
+                "read",
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+                "source",
+                "broker disconnected",
+            )
+            .to_string()
+        );
         assert_eq!(runtime_error_files(&temp_dir).len(), 1);
 
-        tokio::time::sleep(Duration::from_millis(2)).await;
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
-        assert_eq!(runtime_error_files(&temp_dir).len(), 2);
+        wait_for_ready(&source).await;
+        assert_eq!(
+            source.read().await.unwrap().unwrap_err().to_string(),
+            source_redrive(
+                "read",
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+                "source",
+                "authorization failed",
+            )
+            .to_string()
+        );
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
     }
 
     #[tokio::test]
@@ -781,12 +1356,38 @@ mod tests {
             temp_dir.path().to_str().expect("temp path").to_string(),
         );
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(error, Error::SourceRedrive { .. }));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
     }
 
     #[tokio::test]
-    async fn stream_closed_recreates_backend_and_returns_empty_batch() {
+    async fn readiness_does_not_wait_for_backend_io() {
+        let read_started = Arc::new(tokio::sync::Notify::new());
+        let release_read = Arc::new(tokio::sync::Notify::new());
+        let factory = Arc::new(BlockingFactory {
+            read_started: read_started.clone(),
+            release_read: release_read.clone(),
+        });
+        let source =
+            BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
+        wait_for_ready(&source).await;
+
+        let mut reader = source.clone();
+        let read_task = tokio::spawn(async move { reader.read().await });
+        read_started.notified().await;
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), source.is_ready())
+                .await
+                .expect("readiness must not wait for backend I/O")
+        );
+        release_read.notify_one();
+        assert!(read_task.await.unwrap().unwrap().is_ok());
+    }
+
+    #[tokio::test]
+    async fn stream_closed_recreates_backend_and_returns_source_redrive() {
         let mut closed_backend = FakeBackend::healthy();
         closed_backend.read_returns_none = true;
         let factory = Arc::new(FakeFactory::new(vec![
@@ -795,9 +1396,12 @@ mod tests {
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        wait_for_ready(&source).await;
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(error, Error::SourceRedrive { .. }));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert!(source.is_ready().await);
         assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
@@ -810,6 +1414,7 @@ mod tests {
         let factory = Arc::new(FakeFactory::new(vec![Ok(failing)]));
         let (mut source, _temp_dir) = test_source(factory, CancellationToken::new());
 
+        wait_for_ready(&source).await;
         assert_eq!(source.pending().await.unwrap(), None);
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
     }
@@ -823,10 +1428,22 @@ mod tests {
         let factory = Arc::new(FakeFactory::new(vec![Ok(read_failed), Ok(pending_failed)]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
+        wait_for_ready(&source).await;
         assert_eq!(source.pending().await.unwrap(), Some(12));
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(
+            source.read().await.unwrap().unwrap_err().to_string(),
+            source_redrive(
+                "read",
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+                "source",
+                "read failed",
+            )
+            .to_string()
+        );
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
-        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        wait_for_ready(&source).await;
         assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
         assert_eq!(source.pending().await.unwrap(), Some(12));
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -839,6 +1456,7 @@ mod tests {
         let factory = Arc::new(FakeFactory::new(vec![Ok(failing)]));
         let (mut source, _temp_dir) = test_source(factory, CancellationToken::new());
 
+        wait_for_ready(&source).await;
         let partitions = source.partitions().await.unwrap();
         assert!(partitions.active_partitions.is_empty());
         assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
@@ -847,13 +1465,18 @@ mod tests {
     #[tokio::test]
     async fn pending_while_backend_unavailable_returns_last_cached_value() {
         let factory = Arc::new(FakeFactory::new(vec![
-            Ok(FakeBackend::healthy()),
+            Ok(failed_read_backend("broker disconnected")),
             Err(Error::Config("still starting".into())),
+            Ok(FakeBackend::healthy()),
         ]));
         let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
 
+        wait_for_ready(&source).await;
         assert_eq!(source.pending().await.unwrap(), Some(12));
-        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(error, Error::SourceRedrive { .. }));
+
         assert_eq!(source.pending().await.unwrap(), Some(12));
     }
 
@@ -863,5 +1486,122 @@ mod tests {
         let source =
             BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
         assert_eq!(SourceReader::name(&source), "fake");
+    }
+
+    #[tokio::test]
+    async fn retry_same_benign_keeps_ready_without_rebuild() {
+        let mut backend = FakeBackend::healthy();
+        backend.read_error = Some(source_redrive(
+            "read",
+            SourceFailureAction::RetrySame,
+            SourceFailureImpact::Benign,
+            "rebalance",
+            "rebalance in progress",
+        ));
+        let factory = Arc::new(FakeFactory::new(vec![Ok(backend)]));
+        let (mut source, temp_dir) = test_source(factory, CancellationToken::new());
+
+        wait_for_ready(&source).await;
+        source.ack(vec![]).await.unwrap();
+        assert!(source.is_watermark_ready_now());
+        let generation_before = source.generation();
+
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::RetrySame,
+                impact: SourceFailureImpact::Benign,
+                code: "rebalance",
+                ..
+            }
+        ));
+        assert!(source.is_ready().await);
+        assert!(source.is_watermark_ready_now());
+        assert_eq!(source.generation(), generation_before);
+        assert!(runtime_error_files(&temp_dir).is_empty());
+    }
+
+    #[tokio::test]
+    async fn retry_same_outage_marks_degraded_and_recovers_on_success() {
+        let mut outage_backend = FakeBackend::healthy();
+        outage_backend.read_error = Some(source_redrive(
+            "read",
+            SourceFailureAction::RetrySame,
+            SourceFailureImpact::Outage,
+            "broker_unavailable",
+            "temporary broker outage",
+        ));
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(outage_backend),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        wait_for_ready(&source).await;
+        source.ack(vec![]).await.unwrap();
+        assert!(source.is_watermark_ready_now());
+        let generation_before = source.generation();
+
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::RetrySame,
+                impact: SourceFailureImpact::Outage,
+                ..
+            }
+        ));
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        assert!(!source.is_watermark_ready_now());
+        assert_eq!(source.generation(), generation_before);
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime_error_files(&temp_dir).len(), 1);
+
+        assert_eq!(source.pending().await.unwrap(), Some(12));
+        assert_eq!(
+            source.partitions().await.unwrap().active_partitions,
+            vec![1, 2]
+        );
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        assert!(!source.is_watermark_ready_now());
+
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert!(source.is_ready().await);
+        assert!(source.is_watermark_ready_now());
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn stay_degraded_uses_slow_recovery_interval() {
+        let mut backend = FakeBackend::healthy();
+        backend.read_error = Some(source_redrive(
+            "read",
+            SourceFailureAction::StayDegraded,
+            SourceFailureImpact::Outage,
+            "auth_failed",
+            "authorization failed permanently",
+        ));
+        let factory = Arc::new(FakeFactory::new(vec![
+            Ok(backend),
+            Ok(FakeBackend::healthy()),
+        ]));
+        let (mut source, _temp_dir) = test_source(Arc::clone(&factory), CancellationToken::new());
+
+        wait_for_ready(&source).await;
+        let error = source.read().await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::StayDegraded,
+                ..
+            }
+        ));
+        assert_eq!(source.health().await, BuiltinSourceHealth::Degraded);
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 1);
+
+        wait_for_ready(&source).await;
+        assert_eq!(source.read().await.unwrap().unwrap().len(), 0);
+        assert_eq!(factory.build_count.load(Ordering::SeqCst), 2);
     }
 }

@@ -8,6 +8,22 @@ const KAFKA_TOPIC_HEADER_KEY: &str = "X-NF-Kafka-TopicName";
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Kafka consumer failures that need source-lifecycle handling in the core crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsumerErrorKind {
+    RebalanceInProgress,
+    CoordinatorUnavailable,
+    UnknownMemberId,
+    IllegalGeneration,
+    FencedInstanceId,
+    FencedMemberEpoch,
+    StaleMemberEpoch,
+    GroupAuthorizationFailed,
+    TopicAuthorizationFailed,
+    ClusterAuthorizationFailed,
+    SaslAuthenticationFailed,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Connecting to Kafka {server} - {error}")]
@@ -16,8 +32,11 @@ pub enum Error {
     #[error("Kafka - {0}")]
     Kafka(String),
 
-    #[error("{0}")]
-    NonRetryable(String),
+    #[error("Kafka consumer error ({kind:?}) - {message}")]
+    Consumer {
+        kind: ConsumerErrorKind,
+        message: String,
+    },
 
     #[error("{0}")]
     Other(String),
