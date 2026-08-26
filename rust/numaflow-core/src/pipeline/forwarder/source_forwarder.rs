@@ -94,6 +94,7 @@ pub(crate) async fn start_source_forwarder(
         .create_writers(
             &config.to_vertex_config,
             config.isb_config.as_ref(),
+            config.vertex_type,
             cln_token.clone(),
         )
         .await?;
@@ -992,6 +993,7 @@ mod tests {
                     stream.clone(),
                     context.clone(),
                     writer_config.clone(),
+                    None,
                     None,
                     cln_token.clone(),
                 )

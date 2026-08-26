@@ -18,6 +18,7 @@ use crate::Result;
 use crate::config::pipeline::isb::{
     BufferWriterConfig, DEFAULT_MAX_LENGTH, DEFAULT_USAGE_LIMIT, ISBConfig, Stream,
 };
+use crate::metrics::MetricLabels;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::inmemory::SimpleBuffer;
@@ -103,6 +104,7 @@ impl ISBFactory for InMemoryFactory {
         stream: Stream,
         writer_config: BufferWriterConfig,
         _isb_config: Option<&ISBConfig>,
+        _metric_labels: Option<MetricLabels>,
         _cln_token: CancellationToken,
     ) -> Result<ISBWriterRef> {
         let buffer =
@@ -166,7 +168,13 @@ mod tests {
         let cln = CancellationToken::new();
 
         let writer = factory
-            .create_writer(stream.clone(), BufferWriterConfig::default(), None, cln)
+            .create_writer(
+                stream.clone(),
+                BufferWriterConfig::default(),
+                None,
+                None,
+                cln,
+            )
             .await
             .expect("create_writer");
         let reader = factory
@@ -231,7 +239,13 @@ mod tests {
 
         let stream = Stream::new("factory-stream", "v", 0);
         let writer = factory
-            .create_writer(stream.clone(), BufferWriterConfig::default(), None, cln)
+            .create_writer(
+                stream.clone(),
+                BufferWriterConfig::default(),
+                None,
+                None,
+                cln,
+            )
             .await
             .expect("create_writer");
         let reader = factory

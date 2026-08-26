@@ -31,6 +31,45 @@ consumption will also be high, that will probably cause the Inter-Step Buffer Se
 need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
 Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer-service.md#buffer-configuration) for more details.
 
+## Identify Oversized Messages
+
+Pipeline vertex pods expose `isb_jetstream_publish_size_bytes`, a histogram of the NATS publish
+body size after ISB compression and serialization. Unlike `forwarder_write_bytes_total`, it
+includes the protobuf envelope and NATS headers and also observes attempts that exceed
+`max_payload`.
+
+For example, the following query returns the p99 publish size by pipeline and vertex. The
+`namespace` and `pod` labels are available when they are added by the Prometheus Kubernetes scrape
+configuration.
+
+```promql
+histogram_quantile(
+  0.99,
+  sum by (namespace, pipeline, vertex, pod, le) (
+    rate(isb_jetstream_publish_size_bytes_bucket[5m])
+  )
+)
+```
+
+Use `isb_jetstream_message_too_large_total` to find exact limit violations:
+
+```promql
+sum by (namespace, pipeline, vertex, pod, partition_name) (
+  increase(isb_jetstream_message_too_large_total[5m])
+)
+```
+
+When a publish exceeds the server-advertised limit, the vertex logs the message ID, stream,
+measured size, configured maximum, and compression type. This instrumentation does not change
+publishing, retry, or acknowledgment behavior.
+
+For older versions, the client IP in the NATS `maximum payload exceeded` log can be matched to a
+vertex pod:
+
+```shell
+kubectl get pods -A -o wide --field-selector status.podIP=<client-ip>
+```
+
 ## Enable Compression
 
 Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 

@@ -14,8 +14,8 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 use tokio::task::JoinHandle;
@@ -35,6 +35,8 @@ use crate::watermark::WatermarkHandle;
 
 pub(crate) mod sqs;
 pub(crate) use sqs::sqs_metrics;
+
+pub(crate) type MetricLabels = Arc<Vec<(String, String)>>;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -128,6 +130,7 @@ const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
 const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
 const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
 const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
+const JETSTREAM_ISB_MESSAGE_TOO_LARGE_TOTAL: &str = "message_too_large";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING_RAW: &str = "pending_raw";
@@ -161,6 +164,24 @@ const NACK_TIME: &str = "nack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 const ON_SUCCESS_SINK_TIME: &str = "time";
+
+const JETSTREAM_ISB_PUBLISH_SIZE_BYTES: &str = "publish_size_bytes";
+const JETSTREAM_ISB_PUBLISH_SIZE_BUCKETS_BYTES: [f64; 14] = [
+    1_024.0,
+    4_096.0,
+    16_384.0,
+    65_536.0,
+    262_144.0,
+    524_288.0,
+    786_432.0,
+    1_048_576.0,
+    2_097_152.0,
+    4_194_304.0,
+    8_388_608.0,
+    16_777_216.0,
+    33_554_432.0,
+    67_108_864.0,
+];
 
 // reduce specific metrics
 const REDUCE_ACTIVE_WINDOWS: &str = "active_windows";
@@ -568,6 +589,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) message_too_large_total: Family<Vec<(String, String)>, Counter>,
 
     pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
@@ -575,6 +597,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) buffer_ack_pending: Family<Vec<(String, String)>, Gauge>,
 
     pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) publish_size_bytes: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) nack_time_total: Family<Vec<(String, String)>, Histogram>,
@@ -588,6 +611,7 @@ impl JetStreamISBMetrics {
             isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
+            message_too_large_total: Family::<Vec<(String, String)>, Counter>::default(),
 
             buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
@@ -596,6 +620,9 @@ impl JetStreamISBMetrics {
 
             write_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            publish_size_bytes: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(JETSTREAM_ISB_PUBLISH_SIZE_BUCKETS_BYTES.into_iter()),
             ),
             read_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
@@ -1104,6 +1131,16 @@ impl PipelineMetrics {
             "Total number of jetstream write timeouts",
             metrics.jetstream_isb.write_timeout_total.clone(),
         );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_MESSAGE_TOO_LARGE_TOTAL,
+            "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
+            metrics.jetstream_isb.message_too_large_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_PUBLISH_SIZE_BYTES,
+            "NATS publish body sizes after ISB compression and serialization, in bytes",
+            metrics.jetstream_isb.publish_size_bytes.clone(),
+        );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
             JETSTREAM_ISB_BUFFER_SOFT_USAGE,
@@ -1273,6 +1310,18 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
             ),
         ]
     })
+}
+
+pub(crate) fn pipeline_partition_metric_labels(
+    vertex_type: &str,
+    partition_name: &str,
+) -> Vec<(String, String)> {
+    let mut labels = pipeline_metric_labels(vertex_type).clone();
+    labels.push((
+        PIPELINE_PARTITION_NAME_LABEL.to_string(),
+        partition_name.to_string(),
+    ));
+    labels
 }
 
 /// drop metric labels which can be due to buffer-full and retry strategy,
@@ -2105,6 +2154,22 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
+        let mut isb_publish_labels = common_pipeline_labels.clone();
+        isb_publish_labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            "test-partition".to_string(),
+        ));
+        pipeline_metrics
+            .jetstream_isb
+            .publish_size_bytes
+            .get_or_create(&isb_publish_labels)
+            .observe(1024.0);
+        pipeline_metrics
+            .jetstream_isb
+            .message_too_large_total
+            .get_or_create(&isb_publish_labels)
+            .inc();
+
         pipeline_metrics
             .forwarder
             .ack_processing_time
@@ -2195,6 +2260,10 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_publish_size_bytes_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1024.0"#,
+            r#"isb_jetstream_publish_size_bytes_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
+            r#"isb_jetstream_publish_size_bytes_bucket{le="1024.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
+            r#"isb_jetstream_message_too_large_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
