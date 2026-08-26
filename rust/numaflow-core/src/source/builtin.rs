@@ -1023,8 +1023,8 @@ mod tests {
 
         async fn build(&self) -> Result<Box<dyn BuiltinSourceBackend>> {
             Ok(Box::new(BlockingBackend {
-                read_started: self.read_started.clone(),
-                release_read: self.release_read.clone(),
+                read_started: Arc::clone(&self.read_started),
+                release_read: Arc::clone(&self.release_read),
             }))
         }
     }
@@ -1366,8 +1366,8 @@ mod tests {
         let read_started = Arc::new(tokio::sync::Notify::new());
         let release_read = Arc::new(tokio::sync::Notify::new());
         let factory = Arc::new(BlockingFactory {
-            read_started: read_started.clone(),
-            release_read: release_read.clone(),
+            read_started: Arc::clone(&read_started),
+            release_read: Arc::clone(&release_read),
         });
         let source =
             BuiltinSource::with_retry_config(factory, CancellationToken::new(), retry_config());
