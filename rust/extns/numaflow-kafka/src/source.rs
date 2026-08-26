@@ -803,9 +803,13 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rdkafka::message::{Header, OwnedHeaders};
-    use rdkafka::producer::FutureRecord;
     use rdkafka::types::RDKafkaErrorCode;
+
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
+    use rdkafka::message::{Header, OwnedHeaders};
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
+    use rdkafka::producer::FutureRecord;
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     use tokio::time::Instant;
 
     #[test]
