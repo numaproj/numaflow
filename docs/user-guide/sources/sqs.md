@@ -97,6 +97,39 @@ spec:
       to: out
 ```
 
+### Multiple Queues
+
+A single SQS source can consume from multiple queues in the same AWS account
+and region by using `queueNames` instead of `queueName`. `queueNames` is a
+comma-separated list; the two queue selector fields are mutually exclusive.
+
+```yaml
+source:
+  sqs:
+    queueNames: "orders-queue,refunds-queue,replay-queue"
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+    visibilityTimeout: 30
+    maxNumberOfMessages: 10
+    waitTimeSeconds: 20
+```
+
+Every listed queue uses the same:
+
+- AWS account and region;
+- pod credentials or `assumeRole`;
+- `endpointUrl`;
+- visibility and polling settings; and
+- system and message attribute selections.
+
+The IAM identity must have access to every queue. If queues require different
+accounts, regions, credentials, or tuning, configure separate source vertices.
+
+Messages from all configured queues are merged without a cross-queue ordering
+guarantee. Numaflow does not add the source queue name to headers or metadata.
+If a UDF must route by origin, use separate vertices or have the producer add a
+message attribute or body field.
+
 ## Apply the Configuration
 
 Apply the pipeline specification:

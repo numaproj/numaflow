@@ -2,6 +2,8 @@ use numaflow_sqs::source::{SqsMessage, SqsNack, SqsSource, SqsSourceBuilder, Sqs
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
+
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
@@ -9,11 +11,38 @@ use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
+fn encode_offset(queue_index: usize, receipt_handle: &str) -> String {
+    format!("{queue_index}:{receipt_handle}")
+}
+
+fn decode_offset(offset: &Bytes) -> crate::Result<(usize, Bytes)> {
+    let offset = std::str::from_utf8(offset)
+        .map_err(|err| Error::Source(format!("Invalid UTF-8 SQS offset: {err}")))?;
+    let (queue_index, receipt_handle) = offset.split_once(':').ok_or_else(|| {
+        Error::Source("Invalid SQS offset: missing queue index prefix".to_string())
+    })?;
+    let queue_index = queue_index
+        .parse::<usize>()
+        .map_err(|err| Error::Source(format!("Invalid SQS queue index: {err}")))?;
+    if receipt_handle.is_empty() {
+        return Err(Error::Source(
+            "Invalid SQS offset: empty receipt handle".to_string(),
+        ));
+    }
+    Ok((
+        queue_index,
+        Bytes::copy_from_slice(receipt_handle.as_bytes()),
+    ))
+}
+
 impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
-        let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+        let offset = Offset::String(StringOffset::new(
+            encode_offset(message.queue_index, &message.offset),
+            *get_vertex_replica(),
+        ));
 
         let metadata = if message.custom_attributes.is_empty() {
             Some(Arc::new(Metadata::default()))
@@ -120,7 +149,7 @@ impl source::SourceAcker for SqsSource {
                     "Expected Offset::String type for SQS. offset={offset:?}"
                 )));
             };
-            sqs_offsets.push(string_offset.offset);
+            sqs_offsets.push(decode_offset(&string_offset.offset)?);
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
@@ -151,8 +180,10 @@ impl source::SourceAcker for SqsSource {
                 );
             }
 
+            let (queue_index, receipt_handle) = decode_offset(&string_offset.offset)?;
             sqs_offsets.push(SqsNack {
-                receipt_handle: string_offset.offset,
+                queue_index,
+                receipt_handle,
                 visibility_timeout,
             });
         }
@@ -192,6 +223,21 @@ pub mod tests {
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use tokio::sync::oneshot;
 
+    #[test]
+    fn test_offset_encode_decode_round_trip() {
+        let receipt_handle = "AQEB+opaque/receipt=with:colon";
+        let encoded = encode_offset(3, receipt_handle);
+        assert_eq!(encoded, "3:AQEB+opaque/receipt=with:colon");
+
+        let (queue_index, decoded) = decode_offset(&Bytes::from(encoded)).unwrap();
+        assert_eq!(queue_index, 3);
+        assert_eq!(decoded, Bytes::from(receipt_handle));
+
+        assert!(decode_offset(&Bytes::from("missing-prefix")).is_err());
+        assert!(decode_offset(&Bytes::from("not-a-number:receipt")).is_err());
+        assert!(decode_offset(&Bytes::from("0:")).is_err());
+    }
+
     #[tokio::test]
     async fn test_sqs_message_conversion() {
         let ts = Utc::now();
@@ -200,6 +246,7 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
+            queue_index: 0,
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
             event_time: ts,
@@ -217,7 +264,7 @@ pub mod tests {
         assert_eq!(message.value, "value");
         assert_eq!(
             message.offset,
-            Offset::String(StringOffset::new("offset".to_string(), 0)),
+            Offset::String(StringOffset::new("0:offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
@@ -240,6 +287,7 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
+            queue_index: 1,
             payload: Bytes::from("test payload"),
             offset: "offset".to_string(),
             event_time: ts,
@@ -329,7 +377,7 @@ pub mod tests {
 
         let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
-            queue_name: "test-q",
+            queue_names: vec!["test-q"],
             queue_owner_aws_account_id: "12345678912",
             visibility_timeout: None,
             max_number_of_messages: None,

@@ -808,27 +808,74 @@ func validateAWSAssumeRole(assumeRole *dfv1.AWSAssumeRole) error {
 
 // validateSQSSource validates SQS source configuration
 func validateSQSSource(sqs dfv1.SqsSource) error {
-	// Basic required field validation
-	if sqs.AWSRegion == "" {
-		return fmt.Errorf("awsRegion is required")
+	if sqs.QueueName != "" && sqs.QueueNames != "" {
+		return fmt.Errorf("'queueNames' is mutually exclusive with 'queueName'")
 	}
-	if sqs.QueueName == "" {
-		return fmt.Errorf("queueName is required")
+	if sqs.QueueName == "" && sqs.QueueNames == "" {
+		return fmt.Errorf("either 'queueName' or 'queueNames' must be specified")
 	}
-	if sqs.QueueOwnerAWSAccountID == "" {
-		return fmt.Errorf("queueOwnerAWSAccountID is required")
-	} else {
-		// Basic AWS Account ID validation
-		// https://docs.aws.amazon.com/organizations/latest/APIReference/API_Account.html
-		validAccountID := regexp.MustCompile(`^\d{12}$`)
-		if !validAccountID.MatchString(sqs.QueueOwnerAWSAccountID) {
-			return fmt.Errorf("queueOwnerAWSAccountID must be a valid 12-digit AWS account ID")
+
+	if sqs.QueueNames != "" {
+		queueNames, err := parseSQSQueueNames(sqs.QueueNames)
+		if err != nil {
+			return err
 		}
+
+		seen := make(map[string]struct{}, len(queueNames))
+		for i, queueName := range queueNames {
+			if _, ok := seen[queueName]; ok {
+				return fmt.Errorf("duplicate queue name in 'queueNames': %q", queueName)
+			}
+			seen[queueName] = struct{}{}
+
+			if err := validateSQSQueueIdentity(sqs.AWSRegion, queueName, sqs.QueueOwnerAWSAccountID); err != nil {
+				return fmt.Errorf("invalid queueNames[%d]: %w", i, err)
+			}
+		}
+	} else if err := validateSQSQueueIdentity(sqs.AWSRegion, sqs.QueueName, sqs.QueueOwnerAWSAccountID); err != nil {
+		return err
 	}
 
 	// Validate assume role if present
 	if err := validateAWSAssumeRole(sqs.AssumeRole); err != nil {
 		return fmt.Errorf("invalid assume role configuration: %w", err)
+	}
+
+	return nil
+}
+
+// parseSQSQueueNames parses the comma-separated queueNames field. Empty
+// entries are rejected rather than silently discarded.
+func parseSQSQueueNames(queueNames string) ([]string, error) {
+	parts := strings.Split(queueNames, ",")
+	names := make([]string, 0, len(parts))
+	for i, part := range parts {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			return nil, fmt.Errorf("queueNames contains empty queue name at position %d", i)
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// validateSQSQueueIdentity validates the fields identifying an SQS queue.
+func validateSQSQueueIdentity(awsRegion, queueName, queueOwnerAWSAccountID string) error {
+	if awsRegion == "" {
+		return fmt.Errorf("awsRegion is required")
+	}
+	if queueName == "" {
+		return fmt.Errorf("queueName is required")
+	}
+	if queueOwnerAWSAccountID == "" {
+		return fmt.Errorf("queueOwnerAWSAccountID is required")
+	} else {
+		// Basic AWS Account ID validation
+		// https://docs.aws.amazon.com/organizations/latest/APIReference/API_Account.html
+		validAccountID := regexp.MustCompile(`^\d{12}$`)
+		if !validAccountID.MatchString(queueOwnerAWSAccountID) {
+			return fmt.Errorf("queueOwnerAWSAccountID must be a valid 12-digit AWS account ID")
+		}
 	}
 
 	return nil
