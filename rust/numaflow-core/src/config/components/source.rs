@@ -209,6 +209,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             ));
         }
 
+        // Both API forms collapse to a name list. queueName is a one-element Vec.
         let queue_names = match (value.queue_name, value.queue_names) {
             (Some(_), Some(queue_names)) if !queue_names.is_empty() => {
                 return Err(Error::Config(

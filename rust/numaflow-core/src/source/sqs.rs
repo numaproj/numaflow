@@ -11,6 +11,8 @@ use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
+// Prefix the receipt handle with the config-order queue index so ack/nack can
+// route to the actor that issued it. Receipt handles are valid only on that queue.
 fn encode_offset(queue_index: usize, receipt_handle: &str) -> String {
     format!("{queue_index}:{receipt_handle}")
 }
@@ -18,6 +20,8 @@ fn encode_offset(queue_index: usize, receipt_handle: &str) -> String {
 fn decode_offset(offset: &Bytes) -> crate::Result<(usize, Bytes)> {
     let offset = std::str::from_utf8(offset)
         .map_err(|err| Error::Source(format!("Invalid UTF-8 SQS offset: {err}")))?;
+    // Split only on the first ':' because SQS receipt handles are opaque and may
+    // themselves contain colons.
     let (queue_index, receipt_handle) = offset.split_once(':').ok_or_else(|| {
         Error::Source("Invalid SQS offset: missing queue index prefix".to_string())
     })?;

@@ -806,7 +806,9 @@ func validateAWSAssumeRole(assumeRole *dfv1.AWSAssumeRole) error {
 	return nil
 }
 
-// validateSQSSource validates SQS source configuration
+// validateSQSSource validates SQS source configuration.
+// Exactly one of queueName or queueNames is required. All names share awsRegion
+// and queueOwnerAWSAccountID.
 func validateSQSSource(sqs dfv1.SqsSource) error {
 	if sqs.QueueName != "" && sqs.QueueNames != "" {
 		return fmt.Errorf("'queueNames' is mutually exclusive with 'queueName'")

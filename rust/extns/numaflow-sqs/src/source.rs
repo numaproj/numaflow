@@ -107,8 +107,10 @@ pub struct SqsMessage {
 struct SqsActor {
     handler_rx: mpsc::Receiver<SQSActorMessage>,
     client: Client,
+    /// Per-queue URL from GetQueueUrl. Not shared across actors.
     queue_url: String,
     queue_name: &'static str,
+    /// Index in `queue_names` order. Used to stamp messages for ack/nack routing.
     queue_index: usize,
     config: SqsSourceConfig,
     cancel_token: CancellationToken,
@@ -594,6 +596,7 @@ impl SqsSourceBuilder {
 
         let mut resolved_queues = Vec::with_capacity(self.config.queue_names.len());
         for (queue_index, queue_name) in self.config.queue_names.iter().enumerate() {
+            // Clone the shared AWS client; each actor still gets its own queue URL.
             let sqs_client = self
                 .clients
                 .as_ref()
@@ -820,6 +823,7 @@ impl SqsSource {
         for rx in receivers {
             match rx.await {
                 Ok(Ok(Some(count))) => total = total.saturating_add(count),
+                // Any queue failure returns None so autoscaling never sees a partial sum.
                 _ => return None,
             }
         }
