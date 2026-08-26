@@ -917,6 +917,8 @@ func Test_cleanupBuffers(t *testing.T) {
 		assert.Equal(t, 1, len(jobs.Items))
 		assert.Contains(t, jobs.Items[0].Name, "cln")
 		assert.Equal(t, 0, len(jobs.Items[0].OwnerReferences))
+		assert.NotNil(t, jobs.Items[0].Spec.ActiveDeadlineSeconds)
+		assert.Equal(t, cleanUpJobActiveDeadlineSeconds, *jobs.Items[0].Spec.ActiveDeadlineSeconds)
 	})
 }
 

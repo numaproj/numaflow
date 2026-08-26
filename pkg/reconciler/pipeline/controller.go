@@ -57,6 +57,8 @@ const (
 	deprecatedFinalizerName = dfv1.ControllerPipeline
 
 	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
+
+	cleanUpJobActiveDeadlineSeconds = int64(600)
 )
 
 // pipelineReconciler reconciles a pipeline object.
@@ -632,6 +634,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}
+		batchJob.Spec.ActiveDeadlineSeconds = ptr.To(cleanUpJobActiveDeadlineSeconds)
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create buffer clean up job, err: %w", err)
 		}
