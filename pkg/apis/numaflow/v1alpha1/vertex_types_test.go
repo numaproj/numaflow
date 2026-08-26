@@ -548,6 +548,39 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
 		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
 	})
+
+	t.Run("test pod spec is not affected by scale min/max changes", func(t *testing.T) {
+		testObj1 := testVertex.DeepCopy()
+		testObj1.Spec.Sink = &Sink{}
+		testObj1.Spec.Scale = Scale{Min: ptr.To[int32](3), Max: ptr.To[int32](5)}
+		originalScale := testObj1.Spec.Scale.DeepCopy()
+
+		testObj2 := testVertex.DeepCopy()
+		testObj2.Spec.Sink = &Sink{}
+		testObj2.Spec.Scale = Scale{Min: ptr.To[int32](1), Max: ptr.To[int32](1)}
+
+		s1, err := testObj1.GetPodSpec(req)
+		assert.NoError(t, err)
+		s2, err := testObj2.GetPodSpec(req)
+		assert.NoError(t, err)
+
+		var env1, env2 string
+		for _, e := range s1.Containers[0].Env {
+			if e.Name == EnvVertexObject {
+				env1 = e.Value
+			}
+		}
+		for _, e := range s2.Containers[0].Env {
+			if e.Name == EnvVertexObject {
+				env2 = e.Value
+			}
+		}
+		assert.NotEmpty(t, env1)
+		assert.Equal(t, env1, env2, "vertex object env var must not change when only scale min/max changes")
+
+		// GetPodSpec must not mutate the receiver's original Scale.
+		assert.Equal(t, *originalScale, testObj1.Spec.Scale)
+	})
 }
 
 func Test_getType(t *testing.T) {
