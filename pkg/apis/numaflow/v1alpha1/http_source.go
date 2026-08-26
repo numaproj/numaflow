@@ -28,8 +28,9 @@ type HTTPSource struct {
 	// To enable plain HTTP, set ports.http explicitly.
 	// +optional
 	Ports *Ports `json:"ports,omitempty" protobuf:"bytes,3,opt,name=ports"`
-	// Endpoint at which the http source will be available.
-	// By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`
+	// Endpoint customizes the path segment that follows `/vertices/` in the URL
+	// where the HTTP source accepts messages.
+	// If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
 	// +optional
 	Endpoint string `json:"endpoint,omitempty" protobuf:"bytes,4,opt,name=endpoint"`
 }

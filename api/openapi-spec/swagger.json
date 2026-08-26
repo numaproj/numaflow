@@ -20612,7 +20612,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
         "endpoint": {
-          "description": "Endpoint at which the http source will be available. By default, the endpoint is `vertices/\u003cvertex-name\u003e` or `vertices/\u003cmvtx-name\u003e`",
+          "description": "Endpoint customizes the path segment that follows `/vertices/` in the URL where the HTTP source accepts messages. If unset, it defaults to `vertices/\u003cvertex-name\u003e` (or `vertices/\u003cmvtx-name\u003e` for a MonoVertex).",
           "type": "string"
         },
         "ports": {

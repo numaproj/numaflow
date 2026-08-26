@@ -727,8 +727,9 @@ message HTTPSource {
   // +optional
   optional Ports ports = 3;
 
-  // Endpoint at which the http source will be available.
-  // By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`
+  // Endpoint customizes the path segment that follows `/vertices/` in the URL
+  // where the HTTP source accepts messages.
+  // If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
   // +optional
   optional string endpoint = 4;
 }

@@ -4455,9 +4455,10 @@ plain HTTP, set ports.http explicitly.
 <em>(Optional)</em>
 <p>
 
-Endpoint at which the http source will be available. By default, the
-endpoint is <code>vertices/\<vertex-name\></code> or
-<code>vertices/\<mvtx-name\></code>
+Endpoint customizes the path segment that follows
+<code>/vertices/</code> in the URL where the HTTP source accepts
+messages. If unset, it defaults to <code>vertices/\<vertex-name\></code>
+(or <code>vertices/\<mvtx-name\></code> for a MonoVertex).
 </p>
 
 </td>

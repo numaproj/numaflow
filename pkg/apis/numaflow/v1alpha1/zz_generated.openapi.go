@@ -2226,7 +2226,7 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 					},
 					"endpoint": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Endpoint at which the http source will be available. By default, the endpoint is `vertices/<vertex-name>` or `vertices/<mvtx-name>`",
+							Description: "Endpoint customizes the path segment that follows `/vertices/` in the URL where the HTTP source accepts messages. If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).",
 							Type:        []string{"string"},
 							Format:      "",
 						},
