@@ -726,6 +726,12 @@ message HTTPSource {
   // To enable plain HTTP, set ports.http explicitly.
   // +optional
   optional Ports ports = 3;
+
+  // Endpoint customizes the path segment that follows `/vertices/` in the URL
+  // where the HTTP source accepts messages.
+  // If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
+  // +optional
+  optional string endpoint = 4;
 }
 
 message IdleSource {
