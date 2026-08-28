@@ -74,10 +74,6 @@ fn nats_header_block_len(headers: &HeaderMap) -> usize {
         + NATS_HEADER_TERMINATOR.len()
 }
 
-fn exceeds_max_payload(size: usize, max: usize) -> bool {
-    size > max
-}
-
 /// Lightweight JetStream Writer for a single stream.
 /// Handles core JetStream operations: async write (returning PAF), blocking write (returning PublishAck),
 /// and buffer fullness tracking for its stream.
@@ -93,9 +89,9 @@ pub(crate) struct JetStreamWriter {
     writer_config: BufferWriterConfig,
     /// Cached metric labels to avoid repeated allocations
     buffer_labels: MetricLabels,
-    /// Pipeline labels for publish-size metrics. Some internal/test writers do not
+    /// Pipeline labels for oversized-message metrics. Some internal/test writers do not
     /// have pipeline context and therefore leave these unset.
-    publish_metric_labels: Option<MetricLabels>,
+    metric_labels: Option<MetricLabels>,
 }
 
 impl JetStreamWriter {
@@ -111,7 +107,7 @@ impl JetStreamWriter {
         js_ctx: Context,
         writer_config: BufferWriterConfig,
         compression_type: Option<CompressionType>,
-        publish_metric_labels: Option<MetricLabels>,
+        metric_labels: Option<MetricLabels>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
         let is_full = Arc::new(AtomicBool::new(true));
@@ -126,7 +122,7 @@ impl JetStreamWriter {
             is_full: Arc::clone(&is_full),
             writer_config,
             buffer_labels,
-            publish_metric_labels,
+            metric_labels,
         };
 
         // Spawn background task to monitor this stream's fullness
@@ -172,21 +168,13 @@ impl JetStreamWriter {
         Ok(js_writer)
     }
 
-    fn record_publish_size(&self, size: usize, message_id: &str) {
-        if let Some(labels) = &self.publish_metric_labels {
-            pipeline_metrics()
-                .jetstream_isb
-                .publish_size_bytes
-                .get_or_create(labels)
-                .observe(size as f64);
-        }
-
+    fn record_message_too_large(&self, size: usize, message_id: &str) {
         let max = self.js_ctx.client().server_info().max_payload;
-        if !exceeds_max_payload(size, max) {
+        if size <= max {
             return;
         }
 
-        if let Some(labels) = &self.publish_metric_labels {
+        if let Some(labels) = &self.metric_labels {
             pipeline_metrics()
                 .jetstream_isb
                 .message_too_large_total
@@ -273,7 +261,7 @@ impl JetStreamWriter {
                     publish_size,
                 )
             };
-            self.record_publish_size(publish_size, &id);
+            self.record_message_too_large(publish_size, &id);
             self.js_ctx.send_publish(self.stream.name, publish).await
         };
 
@@ -351,7 +339,7 @@ impl JetStreamWriter {
             let payload: Bytes = message
                 .try_into()
                 .expect("message serialization should not fail");
-            self.record_publish_size(payload.len(), &id);
+            self.record_message_too_large(payload.len(), &id);
             self.js_ctx.publish(self.stream.name, payload).await
         };
 
@@ -577,12 +565,6 @@ mod tests {
         let expected = b"NATS/1.0\r\nNats-Msg-Id: source-offset-0\r\n\r\n".len();
         assert_eq!(nats_header_block_len(&headers), expected);
         assert_eq!(nats_header_block_len(&HeaderMap::new()), 0);
-    }
-
-    #[test]
-    fn test_max_payload_boundary() {
-        assert!(!exceeds_max_payload(1_048_576, 1_048_576));
-        assert!(exceeds_max_payload(1_048_577, 1_048_576));
     }
 
     #[cfg(feature = "nats-tests")]

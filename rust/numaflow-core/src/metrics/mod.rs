@@ -165,24 +165,6 @@ const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 const ON_SUCCESS_SINK_TIME: &str = "time";
 
-const JETSTREAM_ISB_PUBLISH_SIZE_BYTES: &str = "publish_size_bytes";
-const JETSTREAM_ISB_PUBLISH_SIZE_BUCKETS_BYTES: [f64; 14] = [
-    1_024.0,
-    4_096.0,
-    16_384.0,
-    65_536.0,
-    262_144.0,
-    524_288.0,
-    786_432.0,
-    1_048_576.0,
-    2_097_152.0,
-    4_194_304.0,
-    8_388_608.0,
-    16_777_216.0,
-    33_554_432.0,
-    67_108_864.0,
-];
-
 // reduce specific metrics
 const REDUCE_ACTIVE_WINDOWS: &str = "active_windows";
 const REDUCE_CLOSED_WINDOWS: &str = "closed_windows";
@@ -597,7 +579,6 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) buffer_ack_pending: Family<Vec<(String, String)>, Gauge>,
 
     pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) publish_size_bytes: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
     pub(crate) nack_time_total: Family<Vec<(String, String)>, Histogram>,
@@ -620,9 +601,6 @@ impl JetStreamISBMetrics {
 
             write_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
-            ),
-            publish_size_bytes: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                || Histogram::new(JETSTREAM_ISB_PUBLISH_SIZE_BUCKETS_BYTES.into_iter()),
             ),
             read_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                 || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
@@ -1135,11 +1113,6 @@ impl PipelineMetrics {
             JETSTREAM_ISB_MESSAGE_TOO_LARGE_TOTAL,
             "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
             metrics.jetstream_isb.message_too_large_total.clone(),
-        );
-        jetstream_isb_registry.register(
-            JETSTREAM_ISB_PUBLISH_SIZE_BYTES,
-            "NATS publish body sizes after ISB compression and serialization, in bytes",
-            metrics.jetstream_isb.publish_size_bytes.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
@@ -2161,11 +2134,6 @@ mod tests {
         ));
         pipeline_metrics
             .jetstream_isb
-            .publish_size_bytes
-            .get_or_create(&isb_publish_labels)
-            .observe(1024.0);
-        pipeline_metrics
-            .jetstream_isb
             .message_too_large_total
             .get_or_create(&isb_publish_labels)
             .inc();
@@ -2260,9 +2228,6 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_publish_size_bytes_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1024.0"#,
-            r#"isb_jetstream_publish_size_bytes_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
-            r#"isb_jetstream_publish_size_bytes_bucket{le="1024.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"isb_jetstream_message_too_large_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

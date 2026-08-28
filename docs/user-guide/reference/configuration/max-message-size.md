@@ -33,10 +33,10 @@ Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buff
 
 ## Identify Oversized Messages
 
-Pipeline vertex pods expose `isb_jetstream_publish_size_bytes`, a histogram of the NATS publish
-body size after ISB compression and serialization. Unlike `forwarder_write_bytes_total`, it
-includes the protobuf envelope and NATS headers and also observes attempts that exceed
-`max_payload`. Use `isb_jetstream_message_too_large_total` to find exact limit violations.
+Pipeline vertex pods expose `isb_jetstream_message_too_large_total` for JetStream
+publish attempts that exceed the server-advertised `max_payload`. Labels identify the
+pipeline, vertex, replica, and partition. Vertex logs include a structured warning
+with the attempted publish size and the limit.
 
 ## Enable Compression
 
