@@ -1642,11 +1642,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-                        metric_labels.push((
-                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                            get_vertex_name().to_string(),
-                        ));
+                        let metric_labels =
+                            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
                         pipeline_metrics()
                             .pending_raw
                             .get_or_create(&metric_labels)
@@ -1676,11 +1673,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                                     reader_name,
                                 );
                             }
-                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
-                            metric_labels.push((
-                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                reader_name.to_string(),
-                            ));
+                            let metric_labels =
+                                pipeline_partition_metric_labels(reader_name, reader_name);
                             pipeline_metrics()
                                 .pending_raw
                                 .get_or_create(&metric_labels)
