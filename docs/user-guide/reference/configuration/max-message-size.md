@@ -33,7 +33,7 @@ Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buff
 
 ## Identify Oversized Messages
 
-Pipeline vertex pods expose `isb_jetstream_message_too_large_total` for JetStream
+Pipeline vertex pods expose `isb_jetstream_max_payload_exceeded_total` for JetStream
 publish attempts that exceed the server-advertised `max_payload`. Labels identify the
 pipeline, vertex, replica, and partition. Vertex logs include a structured warning
 with the attempted publish size and the limit.

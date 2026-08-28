@@ -166,7 +166,7 @@ These metrics are emitted by pipeline vertex pods for NATS JetStream Inter-Step 
 | `isb_jetstream_read_error_total`    | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of read errors with NATS JetStream ISB                                                         |
 | `isb_jetstream_write_error_total`   | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write errors with NATS JetStream ISB                                                        |
 | `isb_jetstream_write_timeout_total` | Counter    | `buffer=<buffer-name>`, `reason=<reason>` | Total number of write timeouts with NATS JetStream ISB                                                      |
-| `isb_jetstream_message_too_large_total` | Counter | `pipeline`, `vertex`, `vertex_type`, `replica`, `partition_name` | Total number of JetStream publish attempts exceeding the server-advertised maximum payload                  |
+| `isb_jetstream_max_payload_exceeded_total` | Counter | `pipeline`, `vertex`, `vertex_type`, `replica`, `partition_name` | Total number of JetStream publish attempts exceeding the server-advertised maximum payload                  |
 | `isb_jetstream_buffer_soft_usage`   | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer soft usage (based on pending + ack pending messages)                                   |
 | `isb_jetstream_buffer_solid_usage`  | Gauge       | `buffer=<buffer-name>`      | Percentage of buffer solid usage (based on messages remaining in the stream)                                |
 | `isb_jetstream_buffer_pending`      | Gauge       | `buffer=<buffer-name>`      | Number of pending messages at a given point in time                                                         |

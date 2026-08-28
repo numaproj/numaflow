@@ -130,7 +130,7 @@ const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
 const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
 const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
 const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
-const JETSTREAM_ISB_MESSAGE_TOO_LARGE_TOTAL: &str = "message_too_large";
+const JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL: &str = "max_payload_exceeded";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING_RAW: &str = "pending_raw";
@@ -571,7 +571,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) message_too_large_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) max_payload_exceeded_total: Family<Vec<(String, String)>, Counter>,
 
     pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
@@ -592,7 +592,7 @@ impl JetStreamISBMetrics {
             isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
-            message_too_large_total: Family::<Vec<(String, String)>, Counter>::default(),
+            max_payload_exceeded_total: Family::<Vec<(String, String)>, Counter>::default(),
 
             buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
@@ -1110,9 +1110,9 @@ impl PipelineMetrics {
             metrics.jetstream_isb.write_timeout_total.clone(),
         );
         jetstream_isb_registry.register(
-            JETSTREAM_ISB_MESSAGE_TOO_LARGE_TOTAL,
+            JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
             "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
-            metrics.jetstream_isb.message_too_large_total.clone(),
+            metrics.jetstream_isb.max_payload_exceeded_total.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
@@ -2134,7 +2134,7 @@ mod tests {
         ));
         pipeline_metrics
             .jetstream_isb
-            .message_too_large_total
+            .max_payload_exceeded_total
             .get_or_create(&isb_publish_labels)
             .inc();
 
@@ -2228,7 +2228,7 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_message_too_large_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
+            r#"isb_jetstream_max_payload_exceeded_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

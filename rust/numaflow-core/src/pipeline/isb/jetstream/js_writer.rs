@@ -89,7 +89,7 @@ pub(crate) struct JetStreamWriter {
     writer_config: BufferWriterConfig,
     /// Cached metric labels to avoid repeated allocations
     buffer_labels: MetricLabels,
-    /// Pipeline labels for oversized-message metrics. Some internal/test writers do not
+    /// Pipeline labels for max-payload exceeded metrics. Some internal/test writers do not
     /// have pipeline context and therefore leave these unset.
     metric_labels: Option<MetricLabels>,
 }
@@ -168,7 +168,7 @@ impl JetStreamWriter {
         Ok(js_writer)
     }
 
-    fn record_message_too_large(&self, size: usize, message_id: &str) {
+    fn record_max_payload_exceeded(&self, size: usize, message_id: &str) {
         let max = self.js_ctx.client().server_info().max_payload;
         if size <= max {
             return;
@@ -177,7 +177,7 @@ impl JetStreamWriter {
         if let Some(labels) = &self.metric_labels {
             pipeline_metrics()
                 .jetstream_isb
-                .message_too_large_total
+                .max_payload_exceeded_total
                 .get_or_create(labels)
                 .inc();
         }
@@ -261,7 +261,7 @@ impl JetStreamWriter {
                     publish_size,
                 )
             };
-            self.record_message_too_large(publish_size, &id);
+            self.record_max_payload_exceeded(publish_size, &id);
             self.js_ctx.send_publish(self.stream.name, publish).await
         };
 
@@ -339,7 +339,7 @@ impl JetStreamWriter {
             let payload: Bytes = message
                 .try_into()
                 .expect("message serialization should not fail");
-            self.record_message_too_large(payload.len(), &id);
+            self.record_max_payload_exceeded(payload.len(), &id);
             self.js_ctx.publish(self.stream.name, payload).await
         };
 
