@@ -2121,15 +2121,15 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
-        let mut isb_publish_labels = common_pipeline_labels.clone();
-        isb_publish_labels.push((
+        let mut isb_max_payload_labels = common_pipeline_labels.clone();
+        isb_max_payload_labels.push((
             PIPELINE_PARTITION_NAME_LABEL.to_string(),
             "test-partition".to_string(),
         ));
         pipeline_metrics
             .jetstream_isb
             .max_payload_exceeded_total
-            .get_or_create(&isb_publish_labels)
+            .get_or_create(&isb_max_payload_labels)
             .inc();
 
         pipeline_metrics

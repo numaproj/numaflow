@@ -44,7 +44,7 @@ pub(crate) trait ISBFactory: Send + Sync {
     /// * `stream` - The stream configuration to write to
     /// * `writer_config` - Writer configuration (buffer limits, strategies, etc.)
     /// * `isb_config` - Optional ISB-specific configuration (e.g., compression settings)
-    /// * `metric_labels` - Optional pipeline labels for backend-specific write metrics
+    /// * `metric_labels` - Optional pipeline labels for write metrics
     /// * `cln_token` - Cancellation token for graceful shutdown
     async fn create_writer(
         &self,
