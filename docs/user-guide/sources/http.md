@@ -41,6 +41,24 @@ curl -X POST -d "hello world" http://${http-source-host}:8090/vertices/${vertexN
 
 > **Note:** Plain HTTP should only be used in trusted network environments (e.g., you have service mesh). Prefer HTTPS whenever possible, as it encrypts data in transit.
 
+## Custom Endpoint
+
+By default, the HTTP Source accepts POST requests at `/vertices/{vertexName}` (for a Pipeline) or `/vertices/{monoVertexName}` (for a MonoVertex). The path after the `/vertices/` prefix can be customized with the `endpoint` field:
+
+```yaml
+source:
+  http:
+    endpoint: my/custom/path
+```
+
+With the spec above, the source listens at `/vertices/my/custom/path`. The `/vertices/` prefix is always kept, so `endpoint` sets only the trailing path.
+
+```sh
+curl -kq -X POST -d "hello world" https://${http-source-host}:8443/vertices/my/custom/path
+```
+
+The `endpoint` value must be a clean relative path — one or more `/`-separated segments using the characters `A-Z a-z 0-9 - . _ ~`. Leading or trailing slashes, empty segments (`//`), `.`/`..` segments, whitespace, and path-parameter syntax (e.g. `{id}` or `:id`) are rejected at validation time. The reserved `/health` endpoint is unaffected, since custom endpoints always live under `/vertices/`.
+
 ## x-numaflow-id
 
 When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
