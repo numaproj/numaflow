@@ -92,6 +92,8 @@ pub(crate) struct JetStreamWriter {
     /// Pipeline labels for max-payload exceeded metrics. Some internal/test writers do not
     /// have pipeline context and therefore leave these unset.
     metric_labels: Option<MetricLabels>,
+    /// Max NATS payload (bytes), cached at construction to avoid cloning ServerInfo per publish.
+    max_payload: usize,
 }
 
 impl JetStreamWriter {
@@ -115,6 +117,8 @@ impl JetStreamWriter {
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
 
+        let max_payload = js_ctx.client().server_info().max_payload;
+
         let js_writer = Self {
             stream,
             js_ctx,
@@ -123,6 +127,7 @@ impl JetStreamWriter {
             writer_config,
             buffer_labels,
             metric_labels,
+            max_payload,
         };
 
         // Spawn background task to monitor this stream's fullness
@@ -169,7 +174,7 @@ impl JetStreamWriter {
     }
 
     fn record_max_payload_exceeded(&self, size: usize, message_id: &str) {
-        let max = self.js_ctx.client().server_info().max_payload;
+        let max = self.max_payload;
         if size <= max {
             return;
         }
