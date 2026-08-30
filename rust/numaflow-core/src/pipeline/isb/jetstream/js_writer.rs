@@ -322,8 +322,6 @@ impl JetStreamWriter {
             return Err(WriteError::BufferFull);
         }
 
-        let id = message.id.to_string();
-
         // Compress the message value if compression is enabled
         let mut message = message;
         if let Some(compression_type) = self.compression_type {
@@ -337,14 +335,12 @@ impl JetStreamWriter {
         // before `paf.await`. The span covers producer-side serialization (Message -> Bytes)
         // plus submission of the JetStream publish request. Waiting on the returned PAF
         // measures broker ack latency, so it is intentionally outside this span.
+        // Max-payload is recorded only in async_write (this path is retry-only).
         let publish_result = {
-            // No formatted dedup id is in hand on this path, so let the helper compute it
-            // (only when tracing is on — disabled path stays allocation-free).
             let _isb_write_guard = otel::start_isb_write_span(&message, None);
             let payload: Bytes = message
                 .try_into()
                 .expect("message serialization should not fail");
-            self.record_max_payload_exceeded(payload.len(), &id);
             self.js_ctx.publish(self.stream.name, payload).await
         };
 
