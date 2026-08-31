@@ -14,8 +14,8 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 use tokio::task::JoinHandle;
@@ -35,6 +35,8 @@ use crate::watermark::WatermarkHandle;
 
 pub(crate) mod sqs;
 pub(crate) use sqs::sqs_metrics;
+
+pub(crate) type MetricLabels = Arc<Vec<(String, String)>>;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -128,6 +130,7 @@ const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
 const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
 const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
 const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
+const JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL: &str = "max_payload_exceeded";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING_RAW: &str = "pending_raw";
@@ -568,6 +571,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) max_payload_exceeded_total: Family<Vec<(String, String)>, Counter>,
 
     pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
@@ -588,6 +592,7 @@ impl JetStreamISBMetrics {
             isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
+            max_payload_exceeded_total: Family::<Vec<(String, String)>, Counter>::default(),
 
             buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
@@ -1104,6 +1109,11 @@ impl PipelineMetrics {
             "Total number of jetstream write timeouts",
             metrics.jetstream_isb.write_timeout_total.clone(),
         );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
+            "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
+            metrics.jetstream_isb.max_payload_exceeded_total.clone(),
+        );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
             JETSTREAM_ISB_BUFFER_SOFT_USAGE,
@@ -1273,6 +1283,18 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
             ),
         ]
     })
+}
+
+pub(crate) fn pipeline_partition_metric_labels(
+    vertex_type: &str,
+    partition_name: &str,
+) -> Vec<(String, String)> {
+    let mut labels = pipeline_metric_labels(vertex_type).clone();
+    labels.push((
+        PIPELINE_PARTITION_NAME_LABEL.to_string(),
+        partition_name.to_string(),
+    ));
+    labels
 }
 
 /// drop metric labels which can be due to buffer-full and retry strategy,
@@ -1620,11 +1642,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-                        metric_labels.push((
-                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                            get_vertex_name().to_string(),
-                        ));
+                        let metric_labels =
+                            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
                         pipeline_metrics()
                             .pending_raw
                             .get_or_create(&metric_labels)
@@ -1654,11 +1673,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                                     reader_name,
                                 );
                             }
-                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
-                            metric_labels.push((
-                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                reader_name.to_string(),
-                            ));
+                            let metric_labels =
+                                pipeline_partition_metric_labels(reader_name, reader_name);
                             pipeline_metrics()
                                 .pending_raw
                                 .get_or_create(&metric_labels)
@@ -2105,6 +2121,17 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
+        let mut isb_max_payload_labels = common_pipeline_labels.clone();
+        isb_max_payload_labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            "test-partition".to_string(),
+        ));
+        pipeline_metrics
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&isb_max_payload_labels)
+            .inc();
+
         pipeline_metrics
             .forwarder
             .ack_processing_time
@@ -2195,6 +2222,7 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_max_payload_exceeded_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

@@ -131,6 +131,7 @@ pub async fn start_map_forwarder(
         .create_writers(
             &config.to_vertex_config,
             config.isb_config.as_ref(),
+            config.vertex_type,
             cln_token.clone(),
         )
         .await?;

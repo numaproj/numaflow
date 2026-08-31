@@ -11,8 +11,9 @@ use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
-use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferWriterConfig, ISBClientConfig, ISBConfig, Stream};
+use crate::config::pipeline::{ToVertexConfig, VertexType};
+use crate::metrics::{MetricLabels, pipeline_partition_metric_labels};
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::inmemory::InMemoryFactory;
 use crate::pipeline::isb::jetstream::JetStreamFactory;
@@ -43,12 +44,14 @@ pub(crate) trait ISBFactory: Send + Sync {
     /// * `stream` - The stream configuration to write to
     /// * `writer_config` - Writer configuration (buffer limits, strategies, etc.)
     /// * `isb_config` - Optional ISB-specific configuration (e.g., compression settings)
+    /// * `metric_labels` - Optional pipeline labels for write metrics
     /// * `cln_token` - Cancellation token for graceful shutdown
     async fn create_writer(
         &self,
         stream: Stream,
         writer_config: BufferWriterConfig,
         isb_config: Option<&ISBConfig>,
+        metric_labels: Option<MetricLabels>,
         cln_token: CancellationToken,
     ) -> Result<ISBWriterRef>;
 
@@ -60,21 +63,26 @@ pub(crate) trait ISBFactory: Send + Sync {
     /// # Arguments
     /// * `to_vertex_config` - List of vertex configurations containing stream info
     /// * `isb_config` - Optional ISB-specific configuration
+    /// * `vertex_type` - Current vertex type used for standard metric labels
     /// * `cln_token` - Cancellation token for graceful shutdown
     async fn create_writers(
         &self,
         to_vertex_config: &[ToVertexConfig],
         isb_config: Option<&ISBConfig>,
+        vertex_type: VertexType,
         cln_token: CancellationToken,
     ) -> Result<HashMap<&'static str, ISBWriterRef>> {
         let mut writers = HashMap::new();
         for vertex_config in to_vertex_config {
             for stream in &vertex_config.writer_config.streams {
+                let metric_labels =
+                    pipeline_partition_metric_labels(vertex_type.as_str(), stream.name);
                 let writer = self
                     .create_writer(
                         stream.clone(),
                         vertex_config.writer_config.clone(),
                         isb_config,
+                        Some(Arc::new(metric_labels)),
                         cln_token.clone(),
                     )
                     .await?;

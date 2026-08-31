@@ -1082,6 +1082,7 @@ mod tests {
                     js_context.clone(),
                     writer_config.clone(),
                     None,
+                    None,
                     cln_token.clone(),
                 )
                 .await?,
@@ -1319,6 +1320,7 @@ mod tests {
                     stream.clone(),
                     js_context.clone(),
                     writer_config.clone(),
+                    None,
                     None,
                     cln_token.clone(),
                 )
@@ -1621,6 +1623,7 @@ mod tests {
                     js_context.clone(),
                     writer_config.clone(),
                     None,
+                    None,
                     cln_token.clone(),
                 )
                 .await?,
@@ -1839,6 +1842,7 @@ mod tests {
                     stream.clone(),
                     js_context.clone(),
                     writer_config.clone(),
+                    None,
                     None,
                     cln_token.clone(),
                 )
@@ -2113,6 +2117,7 @@ mod tests {
                     js_context.clone(),
                     writer_config.clone(),
                     None,
+                    None,
                     cln_token.clone(),
                 )
                 .await?,
@@ -2363,6 +2368,7 @@ mod tests {
                     stream.clone(),
                     js_context.clone(),
                     writer_config.clone(),
+                    None,
                     None,
                     cln_token.clone(),
                 )

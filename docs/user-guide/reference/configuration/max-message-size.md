@@ -31,6 +31,13 @@ consumption will also be high, that will probably cause the Inter-Step Buffer Se
 need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
 Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer-service.md#buffer-configuration) for more details.
 
+## Identify Oversized Messages
+
+Pipeline vertex pods expose `isb_jetstream_max_payload_exceeded_total` for JetStream
+publish attempts that exceed the server-advertised `max_payload`. Labels identify the
+pipeline, vertex, replica, and partition. Vertex logs include a structured warning
+with the attempted publish size and the limit.
+
 ## Enable Compression
 
 Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 

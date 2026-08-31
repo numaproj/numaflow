@@ -7,24 +7,23 @@ use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::message::PublishMessage;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
+use async_nats::{HeaderMap, header};
 use bytes::{Bytes, BytesMut};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
 use crate::message::{Message, MessageType};
 use crate::metrics::{
-    jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
+    MetricLabels, jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels,
+    pipeline_metrics,
 };
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
 use crate::shared::otel;
-
-/// Type alias for metric labels
-type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
@@ -45,6 +44,35 @@ struct BufferInfo {
 }
 
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
+const NATS_HEADER_PREAMBLE: &[u8] = b"NATS/1.0\r\n";
+const NATS_HEADER_TERMINATOR: &[u8] = b"\r\n";
+
+/// Returns the number of bytes NATS adds to the HPUB body for the supplied headers.
+///
+/// NATS applies `max_payload` to the HPUB body, which is the encoded header block plus
+/// the application payload. Keep this in sync with async-nats header encoding.
+fn nats_header_block_len(headers: &HeaderMap) -> usize {
+    if headers.is_empty() {
+        return 0;
+    }
+
+    NATS_HEADER_PREAMBLE.len()
+        + headers
+            .iter()
+            .map(|(name, values)| {
+                values
+                    .iter()
+                    .map(|value| {
+                        AsRef::<str>::as_ref(name).len()
+                            + b": ".len()
+                            + value.as_str().len()
+                            + b"\r\n".len()
+                    })
+                    .sum::<usize>()
+            })
+            .sum::<usize>()
+        + NATS_HEADER_TERMINATOR.len()
+}
 
 /// Lightweight JetStream Writer for a single stream.
 /// Handles core JetStream operations: async write (returning PAF), blocking write (returning PublishAck),
@@ -61,6 +89,11 @@ pub(crate) struct JetStreamWriter {
     writer_config: BufferWriterConfig,
     /// Cached metric labels to avoid repeated allocations
     buffer_labels: MetricLabels,
+    /// Pipeline labels for max-payload exceeded metrics. Some internal/test writers do not
+    /// have pipeline context and therefore leave these unset.
+    metric_labels: Option<MetricLabels>,
+    /// Max NATS payload (bytes), cached at construction to avoid cloning ServerInfo per publish.
+    max_payload: usize,
 }
 
 impl JetStreamWriter {
@@ -76,12 +109,15 @@ impl JetStreamWriter {
         js_ctx: Context,
         writer_config: BufferWriterConfig,
         compression_type: Option<CompressionType>,
+        metric_labels: Option<MetricLabels>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
         let is_full = Arc::new(AtomicBool::new(true));
 
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
+
+        let max_payload = js_ctx.client().server_info().max_payload;
 
         let js_writer = Self {
             stream,
@@ -90,6 +126,8 @@ impl JetStreamWriter {
             is_full: Arc::clone(&is_full),
             writer_config,
             buffer_labels,
+            metric_labels,
+            max_payload,
         };
 
         // Spawn background task to monitor this stream's fullness
@@ -133,6 +171,30 @@ impl JetStreamWriter {
         });
 
         Ok(js_writer)
+    }
+
+    fn record_max_payload_exceeded(&self, size: usize, message_id: &str) {
+        let max = self.max_payload;
+        if size <= max {
+            return;
+        }
+
+        if let Some(labels) = &self.metric_labels {
+            pipeline_metrics()
+                .jetstream_isb
+                .max_payload_exceeded_total
+                .get_or_create(labels)
+                .inc();
+        }
+
+        warn!(
+            message_id,
+            stream = self.stream.name,
+            publish_size_bytes = size,
+            max_payload_bytes = max,
+            compression = ?self.compression_type,
+            "ISB message exceeds the maximum NATS payload"
+        );
     }
 
     /// Returns the stream name.
@@ -191,10 +253,20 @@ impl JetStreamWriter {
             let payload: BytesMut = message
                 .try_into()
                 .expect("message serialization should not fail");
-            let mut publish = PublishMessage::build().payload(payload.freeze());
-            if !skip_dedup {
-                publish = publish.message_id(&id);
-            }
+            let payload = payload.freeze();
+            let payload_len = payload.len();
+            let (publish, publish_size) = if skip_dedup {
+                (PublishMessage::build().payload(payload), payload_len)
+            } else {
+                let mut headers = HeaderMap::new();
+                headers.insert(header::NATS_MESSAGE_ID, id.as_str());
+                let publish_size = payload_len + nats_header_block_len(&headers);
+                (
+                    PublishMessage::build().payload(payload).headers(headers),
+                    publish_size,
+                )
+            };
+            self.record_max_payload_exceeded(publish_size, &id);
             self.js_ctx.send_publish(self.stream.name, publish).await
         };
 
@@ -263,9 +335,8 @@ impl JetStreamWriter {
         // before `paf.await`. The span covers producer-side serialization (Message -> Bytes)
         // plus submission of the JetStream publish request. Waiting on the returned PAF
         // measures broker ack latency, so it is intentionally outside this span.
+        // Max-payload is recorded only in async_write (this path is retry-only).
         let publish_result = {
-            // No formatted dedup id is in hand on this path, so let the helper compute it
-            // (only when tracing is on — disabled path stays allocation-free).
             let _isb_write_guard = otel::start_isb_write_span(&message, None);
             let payload: Bytes = message
                 .try_into()
@@ -487,6 +558,16 @@ mod tests {
     use async_nats::jetstream::stream;
     use chrono::Utc;
 
+    #[test]
+    fn test_nats_header_block_len_includes_protocol_overhead() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::NATS_MESSAGE_ID, "source-offset-0");
+
+        let expected = b"NATS/1.0\r\nNats-Msg-Id: source-offset-0\r\n\r\n".len();
+        assert_eq!(nats_header_block_len(&headers), expected);
+        assert_eq!(nats_header_block_len(&HeaderMap::new()), 0);
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_buffer_info() {
@@ -593,6 +674,7 @@ mod tests {
             context.clone(),
             writer_config,
             None,
+            None,
             cln_token.clone(),
         )
         .await
@@ -691,6 +773,7 @@ mod tests {
             context.clone(),
             writer_config,
             Some(CompressionType::Gzip),
+            None,
             cln_token.clone(),
         )
         .await
@@ -776,6 +859,7 @@ mod tests {
             context.clone(),
             writer_config,
             Some(CompressionType::Zstd),
+            None,
             cln_token.clone(),
         )
         .await

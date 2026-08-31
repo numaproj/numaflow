@@ -9,9 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{MessageHandle, NackOffset, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
-    mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    SOURCE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metrics, pipeline_partition_metric_labels,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
@@ -491,11 +490,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-        pipeline_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            get_vertex_name().to_string(),
-        ));
+        let pipeline_labels =
+            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(
@@ -1365,11 +1361,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
@@ -1399,11 +1392,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .nack_processing_time
@@ -1427,11 +1417,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .e2e_time
