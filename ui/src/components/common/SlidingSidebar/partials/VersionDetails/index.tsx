@@ -1,10 +1,11 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
+import Chip from "@mui/material/Chip";
+import { ControllerInfo } from "../../../../../utils/models/controllerInfo";
 
 import "./style.css";
 
+// Server fields come from GET /api/v1/sysinfo (UX server binary).
 export interface VersionDetailsProps {
   Version?: string;
   BuildDate?: string;
@@ -14,59 +15,143 @@ export interface VersionDetailsProps {
   GoVersion?: string;
   Compiler?: string;
   Platform?: string;
+  // Controller fields come from GET /api/v1/namespaces/:ns/controller-info.
+  controllerInfo?: ControllerInfo;
+  controllerInfoError?: string;
+  controllerInfoLoading?: boolean;
 }
 
-const paperStyle = {
-  display: "flex",
-  padding: "1.6rem",
-  overflow: "scroll",
-};
+function displayValue(value?: string): string {
+  return value && value.trim() !== "" ? value : "unknown";
+}
 
-const keyStyle = {
-  fontWeight: "bold",
-  marginRight: "1rem",
-  minWidth: "10rem",
-};
+function InfoRow({
+  label,
+  value,
+  mono,
+  children,
+}: {
+  label: string;
+  value?: string;
+  mono?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="version-info-row">
+      <span className="version-info-label">{label}</span>
+      <span
+        className={
+          mono ? "version-info-value version-value-mono" : "version-info-value"
+        }
+        title={typeof value === "string" ? value : undefined}
+      >
+        {children ?? displayValue(value)}
+      </span>
+    </div>
+  );
+}
 
-const versionDetails = [
-  "Version",
-  "BuildDate",
-  "GitCommit",
-  "GitTag",
-  "GitTreeState",
-  "GoVersion",
-  "Compiler",
-  "Platform",
-] as const;
+function Section({
+  title,
+  hero,
+  children,
+}: {
+  title: string;
+  hero?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="version-section">
+      <h3 className="version-section-title">{title}</h3>
+      {hero !== undefined && (
+        <div className="version-hero" title={hero}>
+          {displayValue(hero)}
+        </div>
+      )}
+      <div className="version-info-list">{children}</div>
+    </section>
+  );
+}
 
 export function VersionDetails(props: VersionDetailsProps) {
+  const { controllerInfo } = props;
+  const treeState = displayValue(props.GitTreeState);
+  const isDirty = treeState.toLowerCase() === "dirty";
+  const controllerScope = controllerInfo?.found
+    ? controllerInfo.namespaced
+      ? "Namespace"
+      : "Cluster"
+    : undefined;
+
   return (
     <Box
+      className="version-details"
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        // Let SlidingSidebar own scrolling; nested height/overflow caused a short
+        // scrollport and clipped the section headers.
+        flex: "0 0 auto",
+        minHeight: 0,
       }}
     >
-      <span className="version-header-text">Numaflow Server Version</span>
-      <Grid
-        container
-        spacing={2}
-        sx={{
-          marginTop: "0.8rem",
-          justifyContent: "center",
-          fontSize: "1.3rem",
-        }}
+      <h2 className="version-header-text">Version details</h2>
+
+      {/* Server version from /api/v1/sysinfo */}
+      <Section title="UI Server" hero={props.Version}>
+        <InfoRow label="Build date" value={props.BuildDate} />
+        <InfoRow label="Git commit" value={props.GitCommit} mono />
+        <InfoRow label="Git tag" value={props.GitTag} />
+        <InfoRow label="Tree state" value={treeState}>
+          <Chip
+            size="small"
+            label={treeState}
+            color={isDirty ? "warning" : "default"}
+            variant={isDirty ? "filled" : "outlined"}
+            sx={{ fontSize: "1.1rem", height: "2.2rem" }}
+          />
+        </InfoRow>
+        <InfoRow label="Go version" value={props.GoVersion} />
+        <InfoRow label="Compiler" value={props.Compiler} />
+        <InfoRow label="Platform" value={props.Platform} />
+      </Section>
+
+      {/* Controller version/scope from /api/v1/namespaces/:ns/controller-info */}
+      <Section
+        title="Controller"
+        hero={controllerInfo?.found ? controllerInfo.version : undefined}
       >
-        {versionDetails.map((detail) => (
-          <Grid item xs={12} key={detail}>
-            <Paper elevation={0} sx={paperStyle}>
-              <span style={keyStyle}>{detail}</span>
-              <span>{props?.[detail] ?? "unknown"}</span>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
+        {props.controllerInfoLoading ? (
+          <p className="version-empty-state">Loading controller details...</p>
+        ) : props.controllerInfoError ? (
+          <p className="version-empty-state">
+            Unable to load controller details: {props.controllerInfoError}
+          </p>
+        ) : controllerInfo?.found ? (
+          <>
+            <InfoRow label="Image" value={controllerInfo.image} mono />
+            <InfoRow label="Scope" value={controllerScope}>
+              <Chip
+                size="small"
+                label={controllerScope}
+                color="primary"
+                variant="outlined"
+                sx={{ fontSize: "1.1rem", height: "2.2rem" }}
+              />
+            </InfoRow>
+            <InfoRow
+              label="Managed namespace"
+              value={controllerInfo.managedNamespace || "—"}
+            />
+            <InfoRow label="Namespace" value={controllerInfo.namespace} />
+            <InfoRow label="Deployment" value={controllerInfo.name} />
+          </>
+        ) : (
+          <p className="version-empty-state">
+            No controller found in this namespace
+          </p>
+        )}
+      </Section>
     </Box>
   );
 }

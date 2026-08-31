@@ -1,5 +1,85 @@
+.version-details {
+  padding-right: 0.4rem;
+  color: var(--text-primary);
+}
+
 .version-header-text {
-    font-size: 2rem;
-    font-style: normal;
-    font-weight: 500;
+  margin: 0 0 1.6rem;
+  font-size: 2rem;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.version-section {
+  margin-bottom: 2.4rem;
+}
+
+.version-section:last-child {
+  margin-bottom: 0.8rem;
+}
+
+.version-section-title {
+  margin: 0 0 0.8rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.version-hero {
+  margin: 0 0 1.2rem;
+  font-size: 1.9rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.version-info-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.version-info-row {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 1.3rem;
+  line-height: 1.4;
+}
+
+.version-info-row:last-child {
+  border-bottom: none;
+}
+
+.version-info-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.version-info-value {
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.version-value-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+
+.version-empty-state {
+  margin: 0;
+  padding: 0.9rem 0;
+  font-size: 1.3rem;
+  color: var(--text-secondary);
 }

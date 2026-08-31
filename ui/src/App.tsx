@@ -17,6 +17,7 @@ import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
+import { useControllerInfoFetch } from "./utils/fetchWrappers/controllerInfoFetch";
 import { notifyError } from "./utils/error";
 import {
   SidebarType,
@@ -91,6 +92,24 @@ function App(props: AppProps) {
 
   const location = useLocation();
   const history = useHistory();
+  const currentNamespace =
+    new URLSearchParams(location.search).get("namespace") ||
+    namespace ||
+    systemInfo?.managedNamespace ||
+    undefined;
+
+  // Discovers the numaflow-controller Deployment; falls back to managedNamespace
+  // when the current ns has no controller (typical cluster-scoped install).
+  const {
+    controllerInfo,
+    error: controllerInfoError,
+    loading: controllerInfoLoading,
+  } = useControllerInfoFetch({
+    host: hostUrl,
+    namespace: currentNamespace,
+    managedNamespace: systemInfo?.managedNamespace,
+    namespaced: systemInfo?.namespaced,
+  });
 
   useEffect(() => {
     if (systemInfo?.namespaced && systemInfo?.managedNamespace) {
@@ -188,23 +207,43 @@ function App(props: AppProps) {
     setErrors([]);
   }, []);
 
+  const getVersionDetailsProps = useCallback(
+    (): VersionDetailsProps => ({
+      Version: versionDetails?.Version,
+      BuildDate: versionDetails?.BuildDate,
+      GitCommit: versionDetails?.GitCommit,
+      GitTag: versionDetails?.GitTag,
+      GitTreeState: versionDetails?.GitTreeState,
+      GoVersion: versionDetails?.GoVersion,
+      Compiler: versionDetails?.Compiler,
+      Platform: versionDetails?.Platform,
+      controllerInfo,
+      controllerInfoError,
+      controllerInfoLoading,
+    }),
+    [versionDetails, controllerInfo, controllerInfoError, controllerInfoLoading]
+  );
+
+  useEffect(() => {
+    setSidebarProps((current) => {
+      if (current?.type !== SidebarType.VERSION_DETAILS) {
+        return current;
+      }
+      return {
+        ...current,
+        versionDetailsProps: getVersionDetailsProps(),
+      };
+    });
+  }, [getVersionDetailsProps]);
+
   const handleVersionDetails = useCallback(() => {
     setSidebarProps({
       type: SidebarType.VERSION_DETAILS,
       slide: false,
       pageWidth,
-      versionDetailsProps: {
-        Version: versionDetails?.Version,
-        BuildDate: versionDetails?.BuildDate,
-        GitCommit: versionDetails?.GitCommit,
-        GitTag: versionDetails?.GitTag,
-        GitTreeState: versionDetails?.GitTreeState,
-        GoVersion: versionDetails?.GoVersion,
-        Compiler: versionDetails?.Compiler,
-        Platform: versionDetails?.Platform,
-      },
+      versionDetailsProps: getVersionDetailsProps(),
     });
-  }, [versionDetails, pageWidth]);
+  }, [pageWidth, getVersionDetailsProps]);
 
   const routes = useMemo(() => {
     if (loading) {
