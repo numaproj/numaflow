@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	runtimeErrorsPath     = "runtime/errors"
-	runtimeErrorsTimeStep = 60 * time.Second
+	runtimeErrorsPath            = "runtime/errors"
+	defaultRuntimeErrorsTimeStep = 10 * time.Second
 )
 
 // ErrorDetails is used to provide information for a container error
@@ -73,20 +73,46 @@ type runtimeHTTPClient interface {
 	Head(url string) (*http.Response, error)
 }
 
+// RuntimeOption configures a monoVertexRuntimeCache.
+type RuntimeOption func(*monoVertexRuntimeCache)
+
+// WithRuntimeErrorsTimeStep sets how often runtime errors are refreshed from active pods.
+func WithRuntimeErrorsTimeStep(d time.Duration) RuntimeOption {
+	return func(r *monoVertexRuntimeCache) {
+		r.runtimeErrorsTimeStep = d
+	}
+}
+
+// WithPodTrackerOptions configures the pod tracker used by the runtime cache.
+func WithPodTrackerOptions(opts ...PodTrackerOption) RuntimeOption {
+	return func(r *monoVertexRuntimeCache) {
+		r.podTrackerOpts = append(r.podTrackerOpts, opts...)
+	}
+}
+
+// WithRuntimeHTTPClient sets the HTTP client used to fetch runtime errors from worker pods.
+func WithRuntimeHTTPClient(client runtimeHTTPClient) RuntimeOption {
+	return func(r *monoVertexRuntimeCache) {
+		r.httpClient = client
+	}
+}
+
 // monoVertexRuntimeCache is used to store the local cache of runtime errors for a monoVertex.
 // It implements the MonoVertexRuntimeCache interface.
 type monoVertexRuntimeCache struct {
-	monoVtx    *v1alpha1.MonoVertex
-	localCache map[string][]ReplicaErrors
-	cacheMutex sync.RWMutex
-	podTracker *PodTracker
-	log        *zap.SugaredLogger
-	httpClient runtimeHTTPClient
+	monoVtx               *v1alpha1.MonoVertex
+	localCache            map[string][]ReplicaErrors
+	cacheMutex            sync.RWMutex
+	podTracker            *PodTracker
+	log                   *zap.SugaredLogger
+	httpClient            runtimeHTTPClient
+	runtimeErrorsTimeStep time.Duration
+	podTrackerOpts        []PodTrackerOption
 }
 
 // NewRuntime creates a new instance of monoVertexRuntimeCache.
-func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) MonoVertexRuntimeCache {
-	return &monoVertexRuntimeCache{
+func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...RuntimeOption) MonoVertexRuntimeCache {
+	r := &monoVertexRuntimeCache{
 		monoVtx:    mv,
 		localCache: make(map[string][]ReplicaErrors),
 		cacheMutex: sync.RWMutex{},
@@ -97,8 +123,15 @@ func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) MonoVertexRuntimeC
 			},
 			Timeout: time.Second * 1,
 		},
-		podTracker: NewPodTracker(ctx, mv),
+		runtimeErrorsTimeStep: defaultRuntimeErrorsTimeStep,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(r)
+		}
+	}
+	r.podTracker = NewPodTracker(ctx, mv, r.podTrackerOpts...)
+	return r
 }
 
 // StartCacheRefresher starts the cache refresher to update the local cache periodically with the runtime errors.
@@ -140,7 +173,7 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 	fetchAndPersistErrors()
 
 	// Set up a ticker to run periodically
-	ticker := time.NewTicker(runtimeErrorsTimeStep)
+	ticker := time.NewTicker(r.runtimeErrorsTimeStep)
 	defer ticker.Stop()
 	for {
 		select {
@@ -161,7 +194,7 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Warnf("[MonoVertex %s Index %v]: failed reading the runtime endpoint, the pod might have been scaled down: %v", r.monoVtx.Name, podIndex, err.Error())
+		r.log.Debugf("[MonoVertex %s Index %v]: failed reading the runtime endpoint, the pod might have been scaled down: %v", r.monoVtx.Name, podIndex, err.Error())
 		return
 	}
 
@@ -220,7 +253,14 @@ func (r *monoVertexRuntimeCache) GetLocalCache() map[string][]ReplicaErrors {
 	localCacheCopy := make(map[string][]ReplicaErrors, len(r.localCache))
 	for key, value := range r.localCache {
 		localCacheValue := make([]ReplicaErrors, len(value))
-		copy(localCacheValue, value)
+		for i, replicaErrors := range value {
+			containerErrors := make([]ErrorDetails, len(replicaErrors.ContainerErrors))
+			copy(containerErrors, replicaErrors.ContainerErrors)
+			localCacheValue[i] = ReplicaErrors{
+				Replica:         replicaErrors.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
 		localCacheCopy[key] = localCacheValue
 	}
 	return localCacheCopy

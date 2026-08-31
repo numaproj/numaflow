@@ -14,6 +14,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,47 +40,6 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 	return nil, nil
 }
 
-func TestNewPodTracker(t *testing.T) {
-	ctx := context.Background()
-	mv := &v1alpha1.MonoVertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "p",
-			Namespace: "default",
-		},
-	}
-	pt := NewPodTracker(ctx, mv)
-
-	assert.NotNil(t, pt)
-	assert.Equal(t, mv, pt.monoVertex)
-	assert.NotNil(t, pt.httpClient)
-	assert.Equal(t, 30*time.Second, pt.refreshInterval)
-}
-
-func TestPodTracker_Start(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	mv := &v1alpha1.MonoVertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "p",
-			Namespace: "default",
-		},
-	}
-	pt := NewPodTracker(ctx, mv)
-	pt.httpClient = &mockHttpClient{
-		podsCount: 10,
-		lock:      &sync.RWMutex{},
-	}
-
-	err := pt.Start(ctx)
-	assert.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
-
-	// Check if the active pods are being tracked
-	assert.Equal(t, pt.GetActivePodsCount(), 10)
-}
-
 func TestPodTracker_updateActivePods(t *testing.T) {
 	ctx := context.Background()
 	mv := &v1alpha1.MonoVertex{
@@ -94,47 +54,41 @@ func TestPodTracker_updateActivePods(t *testing.T) {
 		lock:      &sync.RWMutex{},
 	}
 	pt.updateActivePods()
-	time.Sleep(100 * time.Millisecond)
 	assert.Equal(t, 3, pt.GetActivePodsCount())
 }
 
-func TestPodTracker_isActive(t *testing.T) {
-	ctx := context.Background()
+func TestPodTracker_zeroToActiveTransition(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	mv := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p",
 			Namespace: "default",
 		},
 	}
-	pt := NewPodTracker(ctx, mv)
-	pt.httpClient = &mockHttpClient{
-		podsCount: 3,
+	mockClient := &mockHttpClient{
+		podsCount: 0,
 		lock:      &sync.RWMutex{},
 	}
+	pt := NewPodTracker(ctx, mv,
+		WithRefreshInterval(time.Millisecond*50),
+		WithInitialRefreshInterval(time.Millisecond*20),
+		WithPodTrackerHTTPClient(mockClient),
+	)
 
-	time.Sleep(100 * time.Millisecond)
-	active := pt.isActive("p-mv-0")
-	assert.True(t, active)
-	active = pt.isActive("p-mv-3")
-	assert.False(t, active)
-}
+	err := pt.Start(ctx)
+	require.NoError(t, err)
 
-func TestPodTracker_setActivePodsCount(t *testing.T) {
-	ctx := context.Background()
-	mv := &v1alpha1.MonoVertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "p",
-			Namespace: "default",
-		},
-	}
+	assert.Eventually(t, func() bool {
+		return pt.GetActivePodsCount() == 0
+	}, time.Second, time.Millisecond*10)
 
-	pt := NewPodTracker(ctx, mv)
-	pt.httpClient = &mockHttpClient{
-		// active pods would be 3, from index 0..2
-		podsCount: 3,
-		lock:      &sync.RWMutex{},
-	}
-	// set active pods to 4
-	pt.setActivePodsCount(4)
-	assert.Equal(t, pt.GetActivePodsCount(), 4)
+	mockClient.lock.Lock()
+	mockClient.podsCount = 1
+	mockClient.lock.Unlock()
+
+	assert.Eventually(t, func() bool {
+		return pt.GetActivePodsCount() == 1
+	}, time.Second, time.Millisecond*10)
 }

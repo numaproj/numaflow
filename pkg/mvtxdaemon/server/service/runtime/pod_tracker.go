@@ -31,19 +31,50 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+const (
+	defaultRefreshInterval        = 30 * time.Second
+	defaultInitialRefreshInterval = 3 * time.Second
+)
+
+// PodTrackerOption configures a PodTracker.
+type PodTrackerOption func(*PodTracker)
+
+// WithRefreshInterval sets how often to refresh active pods once workers are discovered.
+func WithRefreshInterval(d time.Duration) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.refreshInterval = d
+	}
+}
+
+// WithInitialRefreshInterval sets how often to refresh active pods while waiting for workers.
+func WithInitialRefreshInterval(d time.Duration) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.initialRefreshInterval = d
+	}
+}
+
+// WithPodTrackerHTTPClient sets the HTTP client used for pod discovery probes.
+func WithPodTrackerHTTPClient(client runtimeHTTPClient) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.httpClient = client
+	}
+}
+
 // PodTracker tracks the active pods for a MonoVertex.
 type PodTracker struct {
-	monoVertex          *v1alpha1.MonoVertex
-	log                 *zap.SugaredLogger
-	httpClient          runtimeHTTPClient
-	activePodsCount     int
-	activePodsMutex     sync.RWMutex
-	refreshInterval     time.Duration
-	firstPodsUpdateChan chan struct{} // Channel to signal the first active pods update is done
+	monoVertex             *v1alpha1.MonoVertex
+	log                    *zap.SugaredLogger
+	httpClient             runtimeHTTPClient
+	activePodsCount        int
+	activePodsMutex        sync.RWMutex
+	refreshInterval        time.Duration
+	initialRefreshInterval time.Duration
+	firstPodsUpdateChan    chan struct{} // Channel to signal the first active pods update is done
+	firstPodsUpdateOnce    sync.Once
 }
 
 // NewPodTracker creates a new pod tracker instance.
-func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
+func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...PodTrackerOption) *PodTracker {
 	pt := &PodTracker{
 		monoVertex: mv,
 		log:        logging.FromContext(ctx).Named("RuntimePodTracker"),
@@ -53,8 +84,14 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		refreshInterval:     30 * time.Second,
-		firstPodsUpdateChan: make(chan struct{}),
+		refreshInterval:        defaultRefreshInterval,
+		initialRefreshInterval: defaultInitialRefreshInterval,
+		firstPodsUpdateChan:    make(chan struct{}),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(pt)
+		}
 	}
 	return pt
 }
@@ -67,12 +104,12 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
-	// start updating active pods as soon as called and then after every refreshInterval
 	pt.updateActivePods()
-	// close the channel to signal first update
-	close(pt.firstPodsUpdateChan)
-	ticker := time.NewTicker(pt.refreshInterval)
+
+	interval := pt.currentRefreshInterval()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -80,8 +117,21 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 			return
 		case <-ticker.C:
 			pt.updateActivePods()
+			newInterval := pt.currentRefreshInterval()
+			if newInterval != interval {
+				ticker.Stop()
+				interval = newInterval
+				ticker = time.NewTicker(interval)
+			}
 		}
 	}
+}
+
+func (pt *PodTracker) currentRefreshInterval() time.Duration {
+	if pt.GetActivePodsCount() == 0 {
+		return pt.initialRefreshInterval
+	}
+	return pt.refreshInterval
 }
 
 // updateActivePods checks the status of all pods and updates the count of activePods accordingly.
@@ -136,9 +186,13 @@ func (pt *PodTracker) isActive(podName string) bool {
 // setActivePodsCount sets the activePodsCount.
 func (pt *PodTracker) setActivePodsCount(count int) {
 	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
 	pt.log.Debugf("Setting active pods count to %d", count)
 	pt.activePodsCount = count
+	pt.activePodsMutex.Unlock()
+
+	pt.firstPodsUpdateOnce.Do(func() {
+		close(pt.firstPodsUpdateChan)
+	})
 }
 
 // GetActivePodsCount returns the number of active pods.
