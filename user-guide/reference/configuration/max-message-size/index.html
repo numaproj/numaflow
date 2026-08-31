@@ -3644,6 +3644,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#identify-oversized-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identify Oversized Messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#enable-compression" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5154,6 +5165,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#identify-oversized-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identify Oversized Messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#enable-compression" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5238,6 +5260,11 @@ pipeline will make each of the Inter-Step Buffer need at least 800MB of disk spa
 consumption will also be high, that will probably cause the Inter-Step Buffer Service to crash. In that case, you might 
 need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
 Check out the <a href="../../../../core-concepts/inter-step-buffer-service/#buffer-configuration">Inter-Step Buffer Service</a> for more details.</p>
+<h2 id="identify-oversized-messages">Identify Oversized Messages<a class="headerlink" href="#identify-oversized-messages" title="Permanent link">&para;</a></h2>
+<p>Pipeline vertex pods expose <code>isb_jetstream_max_payload_exceeded_total</code> for JetStream
+publish attempts that exceed the server-advertised <code>max_payload</code>. Labels identify the
+pipeline, vertex, replica, and partition. Vertex logs include a structured warning
+with the attempted publish size and the limit.</p>
 <h2 id="enable-compression">Enable Compression<a class="headerlink" href="#enable-compression" title="Permanent link">&para;</a></h2>
 <p>Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 
 reduce the storage and network cost to ISB. Enabling compression will help in ISB stability and should be used if the 
