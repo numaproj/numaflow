@@ -126,9 +126,11 @@ The IAM identity must have access to every queue. If queues require different
 accounts, regions, credentials, or tuning, configure separate source vertices.
 
 Messages from all configured queues are merged without a cross-queue ordering
-guarantee. Numaflow does not add the source queue name to headers or metadata.
-If a UDF must route by origin, use separate vertices or have the producer add a
-message attribute or body field.
+guarantee. The source queue name is stamped on each message as **system
+metadata** (group `sqs`, key `queue_name`) so a UDF or user-defined sink can
+route or audit by origin. It is not added to headers or to user metadata.
+A builtin SQS sink still writes to the destination `queueName` in its YAML;
+origin does not change that destination.
 
 ## Apply the Configuration
 
@@ -158,7 +160,23 @@ When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp
 
 ### Custom Attributes
 
-When `messageAttributeNames` is configured, user-defined message attributes are propagated as **message metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+When `messageAttributeNames` is configured, user-defined message attributes are propagated as **user metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+
+### Source Queue Origin
+
+Every message from an SQS source includes the queue it was read from as **system
+metadata** (not headers, not user metadata):
+
+- Group: `sqs`
+- Key: `queue_name`
+
+Transformers and map UDFs copy parent system metadata, so origin survives
+downstream. A user-defined sink can read the same group and key to write to a
+different database or destination. The builtin SQS sink does not use this field
+for its destination queue.
+
+The exact accessor depends on the SDK; the value lives in the `Datum`/request
+system metadata under group `sqs`, key `queue_name`.
 
 ### Example: Accessing SQS Attributes in a UDF
 
@@ -169,6 +187,8 @@ func handler(ctx context.Context, keys []string, datum functionsdk.Datum) functi
     headers := datum.Headers()
     sentTimestamp := headers["SentTimestamp"]
     messageGroupId := headers["MessageGroupId"]
+    // Origin queue: system metadata group "sqs", key "queue_name"
+    // (SDK accessor name varies; see Source Queue Origin above).
     
     // Process message...
     return functionsdk.MessagesBuilder().Append(datum.Value())
@@ -182,6 +202,8 @@ def handler(keys: list[str], datum: Datum) -> Messages:
     headers = datum.headers
     sent_timestamp = headers.get("SentTimestamp")
     message_group_id = headers.get("MessageGroupId")
+    # Origin queue: system metadata group "sqs", key "queue_name"
+    # (SDK accessor name varies; see Source Queue Origin above).
     
     # Process message...
     return Messages(Message(datum.value))

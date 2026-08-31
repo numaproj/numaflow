@@ -93,6 +93,9 @@ pub struct SqsMessage {
     /// Index of the queue name in `SqsSourceConfig::queue_names`.
     /// Receipt handles are valid only for the queue that issued them.
     pub queue_index: usize,
+    /// Origin queue this message was read from. Carried for downstream
+    /// sys_metadata; not used for Delete/ChangeVisibility.
+    pub queue_name: &'static str,
     /// SQS system attributes (SentTimestamp, MessageGroupId, etc.)
     pub system_attributes: HashMap<String, String>,
     /// User-defined message attributes from `message_attributes`, keyed by namespace.
@@ -315,6 +318,7 @@ impl SqsActor {
                     offset,
                     event_time,
                     queue_index: self.queue_index,
+                    queue_name: self.queue_name,
                     system_attributes,
                     custom_attributes,
                 }
@@ -1438,6 +1442,8 @@ mod tests {
             .unwrap();
         assert_eq!(orders.queue_index, 0);
         assert_eq!(refunds.queue_index, 1);
+        assert_eq!(orders.queue_name, "orders-queue");
+        assert_eq!(refunds.queue_name, "refunds-queue");
         assert_eq!(orders.system_attributes.len(), 1);
         assert!(!orders.system_attributes.contains_key("queue_name"));
         assert!(!orders.system_attributes.contains_key("aws_region"));

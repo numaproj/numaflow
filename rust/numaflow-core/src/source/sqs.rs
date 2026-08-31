@@ -1,4 +1,6 @@
 use numaflow_sqs::source::{SqsMessage, SqsNack, SqsSource, SqsSourceBuilder, SqsSourceConfig};
+use numaflow_sqs::{SQS_METADATA_KEY, SQS_SYS_QUEUE_NAME_KEY};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,22 +50,28 @@ impl TryFrom<SqsMessage> for Message {
             *get_vertex_replica(),
         ));
 
-        let metadata = if message.custom_attributes.is_empty() {
-            Some(Arc::new(Metadata::default()))
-        } else {
-            let user_metadata = message
-                .custom_attributes
-                .into_iter()
-                .map(|(k, v)| {
-                    let key_value = v.into_iter().map(|(ik, iv)| (ik, iv.into())).collect();
-                    (k, KeyValueGroup { key_value })
-                })
-                .collect();
-            Some(Arc::new(Metadata {
-                user_metadata,
-                ..Default::default()
-            }))
-        };
+        let user_metadata = message
+            .custom_attributes
+            .into_iter()
+            .map(|(k, v)| {
+                let key_value = v.into_iter().map(|(ik, iv)| (ik, iv.into())).collect();
+                (k, KeyValueGroup { key_value })
+            })
+            .collect();
+        let sys_metadata = HashMap::from([(
+            SQS_METADATA_KEY.to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([(
+                    SQS_SYS_QUEUE_NAME_KEY.to_string(),
+                    Bytes::copy_from_slice(message.queue_name.as_bytes()),
+                )]),
+            },
+        )]);
+        let metadata = Some(Arc::new(Metadata {
+            user_metadata,
+            sys_metadata,
+            ..Default::default()
+        }));
 
         Ok(Message {
             typ: Default::default(),
@@ -212,7 +220,7 @@ pub mod tests {
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_sqs::{
-        SQS_METADATA_KEY,
+        SQS_METADATA_KEY, SQS_SYS_QUEUE_NAME_KEY,
         source::{SQS_DEFAULT_REGION, SqsSourceBuilder},
     };
     use tokio::task::JoinHandle;
@@ -251,6 +259,7 @@ pub mod tests {
         let sqs_message = SqsMessage {
             key: "key".to_string(),
             queue_index: 0,
+            queue_name: "test-queue",
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
             event_time: ts,
@@ -272,6 +281,20 @@ pub mod tests {
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
+
+        let metadata = message.metadata.expect("missing metadata");
+        assert!(metadata.user_metadata.is_empty());
+        let sqs_sys = metadata
+            .sys_metadata
+            .get(SQS_METADATA_KEY)
+            .expect("missing sys_metadata sqs group");
+        assert_eq!(
+            sqs_sys
+                .key_value
+                .get(SQS_SYS_QUEUE_NAME_KEY)
+                .map(|v| v.as_ref()),
+            Some(b"test-queue".as_slice())
+        );
     }
 
     #[tokio::test]
@@ -292,6 +315,7 @@ pub mod tests {
         let sqs_message = SqsMessage {
             key: "key".to_string(),
             queue_index: 1,
+            queue_name: "orders-queue",
             payload: Bytes::from("test payload"),
             offset: "offset".to_string(),
             event_time: ts,
@@ -322,6 +346,18 @@ pub mod tests {
         assert_eq!(
             sqs_meta.key_value.get("correlation_id").map(|v| v.as_ref()),
             Some(b"xyz789".as_slice())
+        );
+
+        let sqs_sys = metadata
+            .sys_metadata
+            .get(SQS_METADATA_KEY)
+            .expect("missing sys_metadata sqs group");
+        assert_eq!(
+            sqs_sys
+                .key_value
+                .get(SQS_SYS_QUEUE_NAME_KEY)
+                .map(|v| v.as_ref()),
+            Some(b"orders-queue".as_slice())
         );
     }
     use std::sync::{

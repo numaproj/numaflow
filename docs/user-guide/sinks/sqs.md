@@ -27,6 +27,10 @@ The SQS sink uses message headers to control SQS-specific behavior. Headers can 
 1. The source (e.g., SQS system attributes from an SQS source)
 2. User metadata under the `sqs` namespace (merged into headers at the sink)
 
+The source queue name (system metadata group `sqs`, key `queue_name`) is origin
+only. The builtin SQS sink still writes to the destination `queueName` in this
+spec; a user-defined sink can read origin if it needs to route elsewhere.
+
 ### Supported Headers
 
 | Header | Description |
