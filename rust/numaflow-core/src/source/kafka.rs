@@ -2,14 +2,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use numaflow_kafka::ConsumerErrorKind;
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 use tracing::info;
 
 use crate::config::get_vertex_name;
-use crate::error::Error;
+use crate::error::{Error, SourceFailureAction, SourceFailureImpact};
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 impl TryFrom<KafkaMessage> for Message {
     type Error = Error;
@@ -61,13 +64,101 @@ impl TryFrom<KafkaMessage> for Message {
 impl From<numaflow_kafka::Error> for Error {
     fn from(value: numaflow_kafka::Error) -> Self {
         match value {
-            numaflow_kafka::Error::Kafka(e) => Error::Source(e.to_string()),
-            numaflow_kafka::Error::Connection { server, error } => Error::Source(format!(
-                "Failed to connect to Kafka server: {server} - {error}"
-            )),
-            numaflow_kafka::Error::NonRetryable(e) => Error::NonRetryable(e.to_string()),
-            numaflow_kafka::Error::Other(e) => Error::Source(e),
+            numaflow_kafka::Error::Kafka(message) => source_redrive(
+                SourceFailureAction::RetrySame,
+                SourceFailureImpact::Outage,
+                "kafka_transport",
+                message,
+            ),
+            numaflow_kafka::Error::Connection { server, error } => source_redrive(
+                SourceFailureAction::StayDegraded,
+                SourceFailureImpact::Outage,
+                "kafka_config",
+                format!("Failed to create Kafka client for {server}: {error}"),
+            ),
+            numaflow_kafka::Error::Consumer { kind, message } => {
+                let (action, impact, code) = match kind {
+                    ConsumerErrorKind::RebalanceInProgress => (
+                        SourceFailureAction::RetrySame,
+                        SourceFailureImpact::Benign,
+                        "kafka_rebalance_in_progress",
+                    ),
+                    ConsumerErrorKind::CoordinatorUnavailable => (
+                        SourceFailureAction::RetrySame,
+                        SourceFailureImpact::Benign,
+                        "kafka_coordinator_unavailable",
+                    ),
+                    ConsumerErrorKind::UnknownMemberId => (
+                        SourceFailureAction::Recreate,
+                        SourceFailureImpact::Outage,
+                        "kafka_unknown_member_id",
+                    ),
+                    ConsumerErrorKind::IllegalGeneration => (
+                        SourceFailureAction::Recreate,
+                        SourceFailureImpact::Outage,
+                        "kafka_illegal_generation",
+                    ),
+                    ConsumerErrorKind::FencedInstanceId => (
+                        SourceFailureAction::Recreate,
+                        SourceFailureImpact::Outage,
+                        "kafka_fenced_instance_id",
+                    ),
+                    ConsumerErrorKind::FencedMemberEpoch => (
+                        SourceFailureAction::Recreate,
+                        SourceFailureImpact::Outage,
+                        "kafka_fenced_member_epoch",
+                    ),
+                    ConsumerErrorKind::StaleMemberEpoch => (
+                        SourceFailureAction::Recreate,
+                        SourceFailureImpact::Outage,
+                        "kafka_stale_member_epoch",
+                    ),
+                    ConsumerErrorKind::GroupAuthorizationFailed => (
+                        SourceFailureAction::StayDegraded,
+                        SourceFailureImpact::Outage,
+                        "kafka_group_authorization_failed",
+                    ),
+                    ConsumerErrorKind::TopicAuthorizationFailed => (
+                        SourceFailureAction::StayDegraded,
+                        SourceFailureImpact::Outage,
+                        "kafka_topic_authorization_failed",
+                    ),
+                    ConsumerErrorKind::ClusterAuthorizationFailed => (
+                        SourceFailureAction::StayDegraded,
+                        SourceFailureImpact::Outage,
+                        "kafka_cluster_authorization_failed",
+                    ),
+                    ConsumerErrorKind::SaslAuthenticationFailed => (
+                        SourceFailureAction::StayDegraded,
+                        SourceFailureImpact::Outage,
+                        "kafka_sasl_authentication_failed",
+                    ),
+                };
+                source_redrive(action, impact, code, message)
+            }
+            numaflow_kafka::Error::Other(message) => source_redrive(
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+                "kafka_internal",
+                message,
+            ),
         }
+    }
+}
+
+fn source_redrive(
+    action: SourceFailureAction,
+    impact: SourceFailureImpact,
+    code: &'static str,
+    message: impl Into<String>,
+) -> Error {
+    Error::SourceRedrive {
+        source_name: "Kafka",
+        operation: "backend",
+        action,
+        impact,
+        code,
+        message: message.into(),
     }
 }
 
@@ -78,6 +169,28 @@ pub(crate) async fn new_kafka_source(
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<KafkaSource> {
     Ok(KafkaSource::connect(cfg, batch_size, timeout, cancel_token).await?)
+}
+
+pub(crate) fn new_kafka_source_factory(
+    config: KafkaSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    cancel_token: CancellationToken,
+) -> ConnectFactory {
+    ConnectFactory::new("Kafka", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        async move {
+            let source = new_kafka_source(config, batch_size, timeout, cancel_token).await?;
+            let source_to_retire = source.clone();
+            Ok(Box::new(SourceBackend::with_retire(source, move || {
+                let source = source_to_retire.clone();
+                async move {
+                    source.shutdown().await;
+                }
+            })) as Box<dyn BuiltinSourceBackend>)
+        }
+    })
 }
 
 impl source::SourceReader for KafkaSource {
@@ -347,5 +460,77 @@ mod tests {
             Some(0),
             "Pending messages should be 0 after acking all messages"
         );
+    }
+
+    #[tokio::test]
+    async fn kafka_source_factory_build_does_not_gate_on_broker_liveness() {
+        use crate::source::builtin::BuiltinSourceFactory;
+
+        let factory = new_kafka_source_factory(
+            KafkaSourceConfig {
+                brokers: vec!["127.0.0.1:1".into()],
+                topics: vec!["test-topic".into()],
+                consumer_group: "test-group".into(),
+                auth: None,
+                tls: None,
+                kafka_raw_config: HashMap::from([(
+                    "socket.timeout.ms".to_string(),
+                    "100".to_string(),
+                )]),
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        let result = tokio::time::timeout(Duration::from_secs(5), factory.build()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_ok());
+    }
+
+    #[test]
+    fn kafka_consumer_failures_map_to_distinct_source_actions() {
+        let cases = [
+            (
+                ConsumerErrorKind::RebalanceInProgress,
+                SourceFailureAction::RetrySame,
+                SourceFailureImpact::Benign,
+            ),
+            (
+                ConsumerErrorKind::CoordinatorUnavailable,
+                SourceFailureAction::RetrySame,
+                SourceFailureImpact::Benign,
+            ),
+            (
+                ConsumerErrorKind::IllegalGeneration,
+                SourceFailureAction::Recreate,
+                SourceFailureImpact::Outage,
+            ),
+            (
+                ConsumerErrorKind::GroupAuthorizationFailed,
+                SourceFailureAction::StayDegraded,
+                SourceFailureImpact::Outage,
+            ),
+            (
+                ConsumerErrorKind::SaslAuthenticationFailed,
+                SourceFailureAction::StayDegraded,
+                SourceFailureImpact::Outage,
+            ),
+        ];
+
+        for (kind, expected_action, expected_impact) in cases {
+            let error: Error = numaflow_kafka::Error::Consumer {
+                kind,
+                message: "consumer operation failed".into(),
+            }
+            .into();
+            assert!(matches!(
+                error,
+                Error::SourceRedrive {
+                    action,
+                    impact,
+                    ..
+                } if action == expected_action && impact == expected_impact
+            ));
+        }
     }
 }

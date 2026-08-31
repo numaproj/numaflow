@@ -238,8 +238,11 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     use super::*;
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     use bytes::Bytes;
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     use std::collections::HashMap;
 
     #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]

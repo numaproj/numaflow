@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crate::{Error, NatsAuth, Result, TlsConfig, tls};
@@ -12,7 +15,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant, sleep};
 use tokio_stream::StreamExt;
@@ -177,11 +180,50 @@ enum JetstreamActorMessage {
     },
 }
 
+struct InProgressEntry {
+    tracker: MessageProcessingTracker,
+}
+
+#[derive(Clone, Default)]
+pub struct JetstreamSourceState {
+    in_progress_messages: Arc<Mutex<HashMap<u64, InProgressEntry>>>,
+    generation: Arc<AtomicU64>,
+}
+
+impl JetstreamSourceState {
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    /// Retires the current in-progress generation by draining all trackers and aborting their
+    /// background tasks. Returns the new generation value. Aborted messages are left unacked so
+    /// JetStream can redeliver them to the next supervisor generation (at-least-once).
+    pub async fn retire_in_progress_generation(&self) -> u64 {
+        let new_generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let stale_trackers: Vec<MessageProcessingTracker> = {
+            let mut map = self.in_progress_messages.lock().await;
+            map.drain().map(|(_, entry)| entry.tracker).collect()
+        };
+        for tracker in stale_trackers {
+            tracker.abort().await;
+        }
+        new_generation
+    }
+
+    async fn remove_tracker(&self, stream_sequence: u64) -> Option<MessageProcessingTracker> {
+        // ACK/NACK retries can cross supervisor generations. A tracker with the same stream
+        // sequence belongs to a redelivery of the same logical message, so applying the original
+        // disposition to it preserves the downstream processing result.
+        let mut map = self.in_progress_messages.lock().await;
+        map.remove(&stream_sequence).map(|entry| entry.tracker)
+    }
+}
+
 struct JetstreamActor {
     consumer: Consumer<Config>,
     read_timeout: Duration,
     batch_size: usize,
-    in_progress_messages: HashMap<u64, MessageProcessingTracker>,
+    state: JetstreamSourceState,
     handler_rx: mpsc::Receiver<JetstreamActorMessage>,
     cancel_token: CancellationToken,
 }
@@ -193,7 +235,8 @@ impl JetstreamActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<JetstreamActorMessage>,
         cancel_token: CancellationToken,
-    ) -> Result<()> {
+        state: JetstreamSourceState,
+    ) -> Result<JoinHandle<()>> {
         let mut conn_opts = ConnectOptions::new()
             .max_reconnects(None) // unlimited reconnects
             .reconnect_delay_callback(|attempts| {
@@ -270,12 +313,12 @@ impl JetstreamActor {
             }
         };
 
-        tokio::spawn(async move {
+        let actor_join = tokio::spawn(async move {
             let mut actor = JetstreamActor {
                 consumer,
                 read_timeout,
                 batch_size,
-                in_progress_messages: HashMap::new(),
+                state,
                 handler_rx,
                 cancel_token,
             };
@@ -283,12 +326,20 @@ impl JetstreamActor {
             actor.run().await;
         });
 
-        Ok(())
+        Ok(actor_join)
     }
 
     async fn run(&mut self) {
-        while let Some(msg) = self.handler_rx.recv().await {
-            self.handle_message(msg).await;
+        loop {
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => return,
+                msg = self.handler_rx.recv() => {
+                    let Some(msg) = msg else {
+                        return;
+                    };
+                    self.handle_message(msg).await;
+                }
+            }
         }
     }
 
@@ -333,11 +384,9 @@ impl JetstreamActor {
         {
             Ok(batch) => batch,
             Err(e) => {
-                warn!(
-                    ?e,
-                    "Failed to get message batch from Jetstream (ignoring, will be retried)"
-                );
-                return Ok(Vec::new());
+                return Err(Error::Jetstream(format!(
+                    "Failed to get message batch from Jetstream: {e:?}"
+                )));
             }
         };
 
@@ -351,7 +400,9 @@ impl JetstreamActor {
                 }
             };
 
-            messages.push(self.process_message(message).await?);
+            if let Some(message) = self.process_message(message).await? {
+                messages.push(message);
+            }
         }
 
         tracing::debug!(msg_count = messages.len(), "Read batch from Jetstream");
@@ -362,7 +413,7 @@ impl JetstreamActor {
         let mut tasks = Vec::with_capacity(offsets.len());
 
         for offset in offsets {
-            let msg_task = self.in_progress_messages.remove(&offset);
+            let msg_task = self.state.remove_tracker(offset).await;
             let Some(msg_task) = msg_task else {
                 warn!(offset, "Received ACK request for unknown offset");
                 continue;
@@ -389,7 +440,7 @@ impl JetstreamActor {
         let mut tasks = Vec::with_capacity(offsets.len());
 
         for offset in offsets {
-            let msg_task = self.in_progress_messages.remove(&offset);
+            let msg_task = self.state.remove_tracker(offset).await;
             let Some(msg_task) = msg_task else {
                 warn!(offset, "Received NACK request for unknown offset");
                 continue;
@@ -412,7 +463,7 @@ impl JetstreamActor {
         Ok(())
     }
 
-    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
+    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Option<Message>> {
         // we need to clone because the message should be held around for ack
         let message: Message = js_message.clone().try_into().map_err(|e| {
             Error::Jetstream(format!(
@@ -420,16 +471,32 @@ impl JetstreamActor {
             ))
         })?;
 
-        // we need to start WIP ack because some processing can be quite slow and we have to avoid
-        // redelivery.
+        // Reserve the in-progress slot and start WIP ack in one critical section so a concurrent
+        // redelivery cannot slip in between contains_key and insert.
         let tick_interval = self.consumer.cached_info().config.ack_wait / 2;
-        let message_tracker =
-            MessageProcessingTracker::start(js_message, tick_interval, self.cancel_token.clone())
+        let mut map = self.state.in_progress_messages.lock().await;
+        match map.entry(message.stream_sequence) {
+            Entry::Occupied(_) => {
+                warn!(
+                    stream_sequence = message.stream_sequence,
+                    "Skipping redelivered Jetstream message that is already being processed"
+                );
+                return Ok(None);
+            }
+            Entry::Vacant(v) => {
+                let message_tracker = MessageProcessingTracker::start(
+                    js_message,
+                    tick_interval,
+                    self.cancel_token.clone(),
+                )
                 .await;
-        self.in_progress_messages
-            .insert(message.stream_sequence, message_tracker);
+                v.insert(InProgressEntry {
+                    tracker: message_tracker,
+                });
+            }
+        }
 
-        Ok(message)
+        Ok(Some(message))
     }
 
     pub async fn pending_messages(&mut self) -> Result<Option<usize>> {
@@ -445,7 +512,13 @@ impl JetstreamActor {
 
 #[derive(Clone)]
 pub struct JetstreamSource {
+    inner: Arc<JetstreamSourceInner>,
+}
+
+struct JetstreamSourceInner {
     actor_tx: mpsc::Sender<JetstreamActorMessage>,
+    cancel_token: CancellationToken,
+    actor_join: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl JetstreamSource {
@@ -455,15 +528,47 @@ impl JetstreamSource {
         read_timeout: Duration,
         cancel_token: CancellationToken,
     ) -> Result<Self> {
+        Self::connect_with_state(
+            config,
+            batch_size,
+            read_timeout,
+            cancel_token,
+            JetstreamSourceState::default(),
+        )
+        .await
+    }
+
+    pub async fn connect_with_state(
+        config: JetstreamSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+        cancel_token: CancellationToken,
+        state: JetstreamSourceState,
+    ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        JetstreamActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
-        Ok(Self { actor_tx: tx })
+        let generation_token = cancel_token.child_token();
+        let actor_join = JetstreamActor::start(
+            config,
+            batch_size,
+            read_timeout,
+            rx,
+            generation_token.clone(),
+            state,
+        )
+        .await?;
+        Ok(Self {
+            inner: Arc::new(JetstreamSourceInner {
+                actor_tx: tx,
+                cancel_token: generation_token,
+                actor_join: Mutex::new(Some(actor_join)),
+            }),
+        })
     }
 
     pub async fn read_messages(&self) -> Result<Vec<Message>> {
         let (tx, rx) = oneshot::channel();
         let msg = JetstreamActorMessage::Read { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
@@ -474,7 +579,7 @@ impl JetstreamSource {
             offsets,
             respond_to: tx,
         };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
@@ -485,7 +590,7 @@ impl JetstreamSource {
             offsets,
             respond_to: tx,
         };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
@@ -493,9 +598,19 @@ impl JetstreamSource {
     pub async fn pending_messages(&self) -> Result<Option<usize>> {
         let (tx, rx) = oneshot::channel();
         let msg = JetstreamActorMessage::Pending { respond_to: tx };
-        let _ = self.actor_tx.send(msg).await;
+        let _ = self.inner.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
+    /// Cancels this consumer generation and waits for its actor to be dropped.
+    pub async fn shutdown(&self) {
+        self.inner.cancel_token.cancel();
+        if let Some(actor_join) = self.inner.actor_join.lock().await.take()
+            && let Err(error) = actor_join.await
+        {
+            warn!(?error, "JetStream source actor failed while shutting down");
+        }
     }
 }
 
@@ -644,6 +759,31 @@ impl MessageProcessingTracker {
         }
         let _ = in_progress_task.await;
     }
+
+    async fn abort(self) {
+        let Self {
+            in_progress_task,
+            ack_signal_tx,
+        } = self;
+        in_progress_task.abort();
+        let _ = in_progress_task.await;
+        // Dropping this sender before cancellation would be interpreted as a NACK request.
+        drop(ack_signal_tx);
+    }
+}
+
+#[cfg(test)]
+impl MessageProcessingTracker {
+    fn new_for_test() -> Self {
+        let (ack_signal_tx, ack_signal_rx) = oneshot::channel::<AckKind>();
+        let in_progress_task = tokio::spawn(async move {
+            let _ = ack_signal_rx.await;
+        });
+        Self {
+            in_progress_task,
+            ack_signal_tx,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -654,6 +794,70 @@ mod tests {
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
     use std::time::Duration;
+
+    #[test]
+    fn source_state_preserves_wip_map_across_generations() {
+        let state = JetstreamSourceState::default();
+        let next_generation = state.clone();
+
+        assert!(Arc::ptr_eq(
+            &state.in_progress_messages,
+            &next_generation.in_progress_messages
+        ));
+        assert!(Arc::ptr_eq(&state.generation, &next_generation.generation));
+        assert_eq!(state.generation(), 0);
+        assert_eq!(next_generation.generation(), 0);
+    }
+
+    #[tokio::test]
+    async fn retire_in_progress_generation_drains_trackers_and_bumps_generation() {
+        let state = JetstreamSourceState::default();
+        let tracker = MessageProcessingTracker::new_for_test();
+
+        {
+            let mut map = state.in_progress_messages.lock().await;
+            map.insert(42, InProgressEntry { tracker });
+        }
+
+        assert_eq!(state.in_progress_messages.lock().await.len(), 1);
+        let new_generation = state.retire_in_progress_generation().await;
+        assert_eq!(new_generation, 1);
+        assert_eq!(state.generation(), 1);
+        assert!(state.in_progress_messages.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn in_progress_insertion_is_single_critical_section() {
+        let state = JetstreamSourceState::default();
+        let first_tracker = MessageProcessingTracker::new_for_test();
+        let second_tracker = MessageProcessingTracker::new_for_test();
+
+        {
+            let mut map = state.in_progress_messages.lock().await;
+            assert!(matches!(map.entry(7), Entry::Vacant(_)));
+            map.insert(
+                7,
+                InProgressEntry {
+                    tracker: first_tracker,
+                },
+            );
+            assert!(matches!(map.entry(7), Entry::Occupied(_)));
+        }
+
+        {
+            let mut map = state.in_progress_messages.lock().await;
+            assert!(matches!(map.entry(7), Entry::Occupied(_)));
+            // A second insert attempt for the same sequence must fail without replacing.
+            if let Entry::Vacant(v) = map.entry(7) {
+                v.insert(InProgressEntry {
+                    tracker: second_tracker,
+                });
+                panic!("duplicate stream sequence should not be inserted");
+            }
+        }
+
+        assert_eq!(state.in_progress_messages.lock().await.len(), 1);
+    }
 
     async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
         let client = async_nats::connect("localhost").await.unwrap();
@@ -738,8 +942,8 @@ mod tests {
         .await;
 
         // Ack messages
-        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
-        source.ack_messages(offsets).await.unwrap();
+        let acks: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(acks).await.unwrap();
 
         assert_pending_eventually(
             &source,
@@ -753,8 +957,8 @@ mod tests {
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
-        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
-        source.ack_messages(offsets).await.unwrap();
+        let acks: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(acks).await.unwrap();
 
         assert_pending_eventually(
             &source,
@@ -768,8 +972,8 @@ mod tests {
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
-        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
-        source.ack_messages(offsets).await.unwrap();
+        let acks: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(acks).await.unwrap();
 
         assert_pending_eventually(
             &source,
@@ -783,8 +987,8 @@ mod tests {
         assert_eq!(messages.len(), 10);
 
         // Ack remaining messages
-        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
-        source.ack_messages(offsets).await.unwrap();
+        let acks: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(acks).await.unwrap();
 
         assert_pending_eventually(
             &source,

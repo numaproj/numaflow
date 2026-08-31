@@ -6,7 +6,7 @@
 
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, SourceFailureAction, SourceFailureImpact};
 use crate::message::{MessageHandle, NackOffset, ReadAck};
 use crate::metrics::{
     SOURCE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
@@ -20,13 +20,8 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
-use numaflow_kafka::source::KafkaSource;
-use numaflow_nats::jetstream::JetstreamSource;
-use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pulsar::source::PulsarSource;
+#[cfg(test)]
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::collections::HashMap;
@@ -41,7 +36,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::warn;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -63,8 +58,10 @@ pub(crate) mod nats;
 
 pub(crate) mod sqs;
 
+pub(crate) mod builtin;
 pub(crate) mod http;
 pub(crate) mod kafka;
+pub(crate) mod runtime_error;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
@@ -74,6 +71,62 @@ use crate::watermark::source::{SourceWatermarkEntry, SourceWatermarkHandle};
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
+const SOURCE_REDRIVE_INTERVAL: Duration = Duration::from_millis(100);
+const SOURCE_RECREATE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const SOURCE_STAY_DEGRADED_POLL_INTERVAL: Duration = Duration::from_secs(30);
+
+async fn wait_before_source_redrive(error: &Error, cancel_token: &CancellationToken) -> Result<()> {
+    let delay = match error {
+        Error::SourceRedrive {
+            action: SourceFailureAction::StayDegraded,
+            ..
+        } => SOURCE_STAY_DEGRADED_POLL_INTERVAL,
+        Error::SourceRedrive {
+            action: SourceFailureAction::Recreate,
+            ..
+        } => SOURCE_RECREATE_POLL_INTERVAL,
+        Error::SourceRedrive { .. } => SOURCE_REDRIVE_INTERVAL,
+        _ => return Ok(()),
+    };
+    tokio::select! {
+        _ = cancel_token.cancelled() => Err(Error::Cancelled()),
+        _ = tokio::time::sleep(delay) => Ok(()),
+    }
+}
+
+fn record_source_read_redrive(
+    error: &Error,
+    pipeline_labels: &Vec<(String, String)>,
+    mvtx_labels: &Vec<(String, String)>,
+) {
+    match error {
+        Error::SourceRedrive {
+            impact: SourceFailureImpact::Benign,
+            ..
+        } => {
+            debug!(?error, "Built-in source read retrying");
+        }
+        Error::SourceRedrive {
+            impact: SourceFailureImpact::Outage,
+            ..
+        } => {
+            error!(?error, "Built-in source read is recovering");
+            if is_mono_vertex() {
+                monovertex_metrics()
+                    .read_error_total
+                    .get_or_create(mvtx_labels)
+                    .inc();
+            } else {
+                pipeline_metrics()
+                    .forwarder
+                    .read_error_total
+                    .get_or_create(pipeline_labels)
+                    .inc();
+            }
+        }
+        _ => {}
+    }
+}
 
 /// Represents the partition information returned by a source.
 /// Contains both the active partitions being processed and optionally the total number of partitions.
@@ -128,6 +181,7 @@ pub(crate) trait LocalSourceAcker {
 }
 
 pub(crate) enum SourceType {
+    Builtin(builtin::BuiltinSource),
     UserDefinedSource(
         Box<user_defined::UserDefinedSourceRead>,
         Box<user_defined::UserDefinedSourceAck>,
@@ -138,12 +192,10 @@ pub(crate) enum SourceType {
         generator::GeneratorAck,
         generator::GeneratorLagReader,
     ),
-    Pulsar(PulsarSource),
+    #[cfg(test)]
+    #[allow(dead_code)] // constructed in source::sqs::tests::test_sqs_source_e2e
     Sqs(SqsSource),
-    Jetstream(JetstreamSource),
-    Kafka(KafkaSource),
     Http(CoreHttpSource),
-    Nats(NatsSource),
 }
 
 enum ActorMessage {
@@ -234,6 +286,12 @@ where
     }
 }
 
+#[derive(Clone)]
+enum SourceHealthChecker {
+    Builtin(builtin::BuiltinSource),
+    UserDefined(SourceClient<Channel>),
+}
+
 /// Source is used to read, ack, and get the pending messages count from the source.
 /// Source is responsible for invoking the transformer.
 ///
@@ -259,7 +317,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
-    health_checker: Option<SourceClient<Channel>>,
+    health_checker: Option<SourceHealthChecker>,
     rate_limiter: Option<C::RateLimiter>,
 }
 
@@ -301,8 +359,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
         match src_type {
+            SourceType::Builtin(source) => {
+                health_checker = Some(SourceHealthChecker::Builtin(source.clone()));
+                if let Some(watermark_handle) = watermark_handle.as_ref() {
+                    let source = source.clone();
+                    watermark_handle
+                        .set_source_readiness_check(move || source.is_watermark_ready_now())
+                        .await;
+                }
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, source.clone(), source.clone(), source);
+                    actor.run().await;
+                });
+            }
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
-                health_checker = Some(reader.get_source_client());
+                health_checker = Some(SourceHealthChecker::UserDefined(reader.get_source_client()));
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
@@ -314,17 +385,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     actor.run().await;
                 });
             }
-            SourceType::Pulsar(pulsar_source) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(
-                        receiver,
-                        pulsar_source.clone(),
-                        pulsar_source.clone(),
-                        pulsar_source,
-                    );
-                    actor.run().await;
-                });
-            }
+            #[cfg(test)]
             SourceType::Sqs(sqs_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
@@ -333,25 +394,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         sqs_source.clone(),
                         sqs_source,
                     );
-                    actor.run().await;
-                });
-            }
-            SourceType::Jetstream(jetstream) => {
-                tokio::spawn(async move {
-                    let actor =
-                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
-                    actor.run().await;
-                });
-            }
-            SourceType::Nats(nats) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
-                    actor.run().await;
-                });
-            }
-            SourceType::Kafka(kafka) => {
-                tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
                     actor.run().await;
                 });
             }
@@ -559,6 +601,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             info!("Source returned None (end of stream). Stopping the source.");
                             break;
                         }
+                        Some(Err(e @ Error::SourceRedrive { .. })) => {
+                            record_source_read_redrive(&e, &pipeline_labels, mvtx_labels);
+                            wait_before_source_redrive(&e, &cln_token).await?;
+                            continue;
+                        }
                         Some(Err(e)) => {
                             error!("Error while reading messages: {:?}", e);
                             result = Err(e);
@@ -657,6 +704,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             .await;
 
                             if let Err(e) = result {
+                                if matches!(&e, Error::UdfRedrive(_) | Error::SourceRedrive { .. })
+                                {
+                                    // Local tracker/permit accounting is already released. Do not
+                                    // synthesize a nack for an original Ack disposition.
+                                    error!(?e, "Redrivable error while invoking batch ack");
+                                    return;
+                                }
                                 error!(
                                     ?e,
                                     "Non retryable error while invoking ack, stopping the source forwarder"
@@ -831,6 +885,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     info!("Source returned None (end of stream). Stopping the source.");
                     break 'outer;
                 }
+                Some(Err(e @ Error::SourceRedrive { .. })) => {
+                    record_source_read_redrive(&e, &pipeline_labels, mvtx_labels);
+                    wait_before_source_redrive(&e, &cln_token).await?;
+                    continue 'outer;
+                }
                 Some(Err(e)) => {
                     error!("Error while reading messages: {:?}", e);
                     result = Err(e);
@@ -924,7 +983,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         )
                         .await;
                         if let Err(e) = result {
-                            if matches!(e, Error::UdfRedrive(_)) {
+                            if matches!(&e, Error::UdfRedrive(_) | Error::SourceRedrive { .. }) {
                                 // The source ack path failed before numa could confirm the ack.
                                 // Do not synthesize a nack here because the original disposition
                                 // may have been Ack after successful downstream processing.
@@ -1188,29 +1247,53 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        Retry::new(
-            interval,
-            async || Self::ack(source_handle.clone(), offsets.clone()).await,
-            |error: &Error| {
-                error!(?error, "Failed to send ack to source, retrying...");
-                // Don't retry non-retryable errors
-                if matches!(error, Error::NonRetryable(_)) {
+        for _ in 0..ACK_RETRY_ATTEMPTS {
+            match Self::ack(source_handle.clone(), offsets.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(
+                    error @ Error::SourceRedrive {
+                        action: SourceFailureAction::StayDegraded,
+                        ..
+                    },
+                ) => {
+                    error!(?error, "Source ack parked while source stays degraded");
+                    return Err(error);
+                }
+                Err(
+                    error @ Error::SourceRedrive {
+                        action: SourceFailureAction::Recreate,
+                        ..
+                    },
+                ) => {
+                    error!(?error, "Source ack waiting for a new client generation");
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(SOURCE_RECREATE_POLL_INTERVAL) => {}
+                    }
+                }
+                Err(error @ Error::SourceRedrive { .. }) => {
+                    error!(?error, "Failed to ack with current source client, retrying");
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(Duration::from_millis(ACK_RETRY_INTERVAL)) => {}
+                    }
+                }
+                Err(error @ Error::NonRetryable(_)) => {
                     error!(?error, "Non retryable error, stopping the ack retry loop");
-                    return false;
+                    return Err(error);
                 }
-                // Don't retry if cancelled
-                if cancel_token.is_cancelled() {
-                    error!(
-                        ?error,
-                        "Cancellation token received, stopping the ack retry loop"
-                    );
-                    return false;
+                Err(error) => {
+                    error!(?error, "Failed to send ack to source, retrying...");
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(Duration::from_millis(ACK_RETRY_INTERVAL)) => {}
+                    }
                 }
-                true // Retry for all other errors
-            },
-        )
-        .await
+            }
+        }
+        Err(Error::Source(
+            "source ack retry attempts exhausted".to_string(),
+        ))
     }
 
     /// Invokes nack with infinite retries until the cancellation token is cancelled.
@@ -1219,29 +1302,54 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         offsets: Vec<NackOffset>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
-        // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
-            interval,
-            async || Self::nack(source_handle.clone(), offsets.clone()).await,
-            |error: &Error| {
-                error!(?error, "Failed to send nack to source, retrying...");
-                // Don't retry non-retryable errors
-                if matches!(error, Error::NonRetryable(_)) {
-                    error!(?error, "Non retryable error, stopping the NACK retry loop");
-                    return false;
+        let retry_deadline =
+            Instant::now() + Duration::from_millis(ACK_RETRY_INTERVAL * NACK_RETRY_ATTEMPTS as u64);
+        let mut last_redrive = None;
+        for _ in 0..NACK_RETRY_ATTEMPTS {
+            if Instant::now() >= retry_deadline {
+                break;
+            }
+            match Self::nack(source_handle.clone(), offsets.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(
+                    error @ Error::SourceRedrive {
+                        action: SourceFailureAction::StayDegraded,
+                        ..
+                    },
+                ) => return Err(error),
+                Err(
+                    error @ Error::SourceRedrive {
+                        action: SourceFailureAction::Recreate,
+                        ..
+                    },
+                ) => {
+                    last_redrive = Some(error);
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(SOURCE_RECREATE_POLL_INTERVAL) => {}
+                    }
                 }
-                if cancel_token.is_cancelled() {
-                    error!(
-                        ?error,
-                        "Cancellation token received, stopping the NACK retry loop"
-                    );
-                    return false;
+                Err(error @ Error::SourceRedrive { .. }) => {
+                    last_redrive = Some(error);
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(Duration::from_millis(ACK_RETRY_INTERVAL)) => {}
+                    }
                 }
-                true
-            },
-        )
-        .await;
+                Err(error @ Error::NonRetryable(_)) => return Err(error),
+                Err(error) => {
+                    error!(?error, "Failed to send nack to source, retrying...");
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => return Err(Error::Cancelled()),
+                        _ = tokio::time::sleep(Duration::from_millis(ACK_RETRY_INTERVAL)) => {}
+                    }
+                }
+            }
+        }
+        if let Some(error) = last_redrive {
+            return Err(error);
+        }
+        warn!("Source nack retry attempts exhausted; preserving previous behavior");
         Ok(())
     }
 
@@ -1428,17 +1536,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     pub(crate) async fn ready(&mut self) -> bool {
-        let source_ready = if let Some(client) = &mut self.health_checker {
-            let request = tonic::Request::new(());
-            match client.is_ready(request).await {
-                Ok(response) => response.into_inner().ready,
-                Err(e) => {
-                    error!("Source is not ready: {:?}", e);
-                    false
+        let source_ready = match &mut self.health_checker {
+            Some(SourceHealthChecker::Builtin(source)) => source.is_ready().await,
+            Some(SourceHealthChecker::UserDefined(client)) => {
+                let request = tonic::Request::new(());
+                match client.is_ready(request).await {
+                    Ok(response) => response.into_inner().ready,
+                    Err(e) => {
+                        error!("Source is not ready: {:?}", e);
+                        false
+                    }
                 }
             }
-        } else {
-            true
+            None => true,
         };
 
         let transformer_ready = if let Some(client) = &mut self.transformer {
@@ -2469,5 +2579,41 @@ mod tests {
             .expect("handle should complete")
             .expect("handle join");
         assert!(result.is_ok(), "handle returned error: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn permanent_source_ack_failure_is_parked_without_cancelling_forwarder() {
+        use crate::error::{Error, SourceFailureAction, SourceFailureImpact};
+
+        let (actor_tx, mut actor_rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            if let Some(super::ActorMessage::Ack { respond_to, .. }) = actor_rx.recv().await {
+                let _ = respond_to.send(Err(Error::SourceRedrive {
+                    source_name: "Kafka",
+                    operation: "ack",
+                    action: SourceFailureAction::StayDegraded,
+                    impact: SourceFailureImpact::Outage,
+                    code: "kafka_group_authorization_failed",
+                    message: "group authorization failed".into(),
+                }));
+            }
+        });
+
+        let cancel_token = CancellationToken::new();
+        let error = Source::<crate::typ::WithoutRateLimiter>::ack_with_retry(
+            actor_tx,
+            vec![],
+            &cancel_token,
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::StayDegraded,
+                ..
+            }
+        ));
+        assert!(!cancel_token.is_cancelled());
     }
 }

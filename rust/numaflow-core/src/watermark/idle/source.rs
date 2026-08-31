@@ -142,6 +142,23 @@ impl SourceIdleDetector {
         }
     }
 
+    /// Resets idle timing for every known partition after source recovery.
+    pub(crate) fn reset_all(&mut self) {
+        let partitions: Vec<_> = self.partition_states.keys().copied().collect();
+        for partition in partitions {
+            self.reset(partition);
+        }
+    }
+
+    /// Records a non-idle heartbeat without advancing the watermark value.
+    pub(crate) fn heartbeat_watermark(&mut self, partition: u16, computed_wm: i64) -> i64 {
+        self.ensure_partition(partition);
+        if let Some(state) = self.partition_states.get_mut(&partition) {
+            state.last_wm_published_time = Utc::now();
+        }
+        computed_wm
+    }
+
     /// Initializes partitions for idle tracking.
     /// This replaces the current set of partitions - any partitions not in the new list
     /// will be removed to handle dynamic partition changes (e.g., Kafka rebalancing).
@@ -296,6 +313,27 @@ mod tests {
         // Partition is not idle, should return current watermark without increment
         let wm = manager.compute_watermark(TEST_PARTITION, 1000, i64::MAX);
         assert_eq!(wm, 1000);
+    }
+
+    #[test]
+    fn heartbeat_during_outage_does_not_increment_idle_watermark() {
+        let config = IdleConfig {
+            threshold: Duration::from_millis(100),
+            step_interval: Duration::from_millis(50),
+            increment_by: Duration::from_millis(10),
+            init_source_delay: None,
+        };
+        let mut manager = SourceIdleDetector::new(config);
+        manager.initialize_partitions(&[TEST_PARTITION]);
+        if let Some(state) = manager.partition_states.get_mut(&TEST_PARTITION) {
+            state.updated_ts = Utc::now() - chrono::Duration::milliseconds(200);
+        }
+
+        assert!(manager.is_partition_idle(TEST_PARTITION));
+        assert_eq!(manager.heartbeat_watermark(TEST_PARTITION, 1000), 1000);
+
+        manager.reset_all();
+        assert!(!manager.is_partition_idle(TEST_PARTITION));
     }
 
     #[test]

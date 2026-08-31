@@ -3,9 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::error::Error;
+use crate::error::{Error, SourceFailureAction, SourceFailureImpact};
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::source;
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
+use tokio_util::sync::CancellationToken;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
@@ -63,7 +65,14 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
                 Error::ActorPatternRecv(value.to_string())
             }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(e)) => {
-                Error::Source(e)
+                Error::SourceRedrive {
+                    source_name: "SQS",
+                    operation: "backend",
+                    action: SourceFailureAction::StayDegraded,
+                    impact: SourceFailureImpact::Outage,
+                    code: "sqs_invalid_config",
+                    message: e,
+                }
             }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
         }
@@ -83,6 +92,24 @@ pub(crate) async fn new_sqs_source(
         .vertex_replica(vertex_replica)
         .build(cancel_token)
         .await?)
+}
+
+pub(crate) fn new_sqs_source_factory(
+    config: SqsSourceConfig,
+    batch_size: usize,
+    timeout: Duration,
+    vertex_replica: u16,
+    cancel_token: CancellationToken,
+) -> ConnectFactory {
+    ConnectFactory::new("SQS", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        async move {
+            let source =
+                new_sqs_source(config, batch_size, timeout, vertex_replica, cancel_token).await?;
+            Ok(Box::new(SourceBackend::new(source)) as Box<dyn BuiltinSourceBackend>)
+        }
+    })
 }
 
 impl source::SourceReader for SqsSource {
@@ -165,6 +192,29 @@ impl source::LagReader for SqsSource {
         Ok(self.pending_count().await)
     }
 }
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_sqs_configuration_stays_degraded() {
+        let source_error = numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(
+            "missing queue".into(),
+        ));
+        let error: Error = source_error.into();
+        assert!(matches!(
+            error,
+            Error::SourceRedrive {
+                action: SourceFailureAction::StayDegraded,
+                impact: SourceFailureImpact::Outage,
+                code: "sqs_invalid_config",
+                ..
+            }
+        ));
+    }
+}
+
 #[cfg(feature = "sqs-tests")]
 #[cfg(test)]
 pub mod tests {
@@ -478,13 +528,7 @@ pub mod tests {
                             .build()
                             .unwrap(),
                     )
-                    .failed(
-                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
-                            .id("") // Empty string ID (minimal valid value)
-                            .code("") // Empty string code (minimal valid value)
-                            .build()
-                            .unwrap(),
-                    )
+                    .set_failed(Some(vec![]))
                     .build()
                     .unwrap()
             })
@@ -563,5 +607,36 @@ pub mod tests {
             None,
             "",
         )
+    }
+}
+
+#[cfg(test)]
+mod factory_tests {
+    use super::*;
+    use crate::source::builtin::BuiltinSourceFactory;
+
+    #[tokio::test]
+    async fn sqs_source_factory_build_fails_with_unreachable_endpoint() {
+        let factory = new_sqs_source_factory(
+            SqsSourceConfig {
+                region: "us-west-2",
+                queue_name: "missing-queue",
+                queue_owner_aws_account_id: "123456789012",
+                visibility_timeout: None,
+                max_number_of_messages: None,
+                wait_time_seconds: None,
+                endpoint_url: Some("http://127.0.0.1:1".into()),
+                attribute_names: vec![],
+                message_attribute_names: vec![],
+                assume_role_config: None,
+            },
+            1,
+            Duration::from_millis(100),
+            0,
+            CancellationToken::new(),
+        );
+        let result = tokio::time::timeout(Duration::from_secs(5), factory.build()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
     }
 }

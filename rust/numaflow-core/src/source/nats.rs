@@ -6,7 +6,9 @@ use crate::message::{Message, NackOffset};
 use crate::message::{MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
+use crate::source::builtin::{BuiltinSourceBackend, ConnectFactory, SourceBackend};
 use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
+use tokio_util::sync::CancellationToken;
 
 use super::SourceAcker;
 
@@ -17,6 +19,28 @@ pub(crate) async fn new_nats_source(
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<NatsSource> {
     Ok(NatsSource::connect(config, batch_size, read_timeout, cancel_token).await?)
+}
+
+pub(crate) fn new_nats_source_factory(
+    config: NatsSourceConfig,
+    batch_size: usize,
+    read_timeout: Duration,
+    cancel_token: CancellationToken,
+) -> ConnectFactory {
+    ConnectFactory::new("NATS", move || {
+        let config = config.clone();
+        let cancel_token = cancel_token.clone();
+        async move {
+            let source = new_nats_source(config, batch_size, read_timeout, cancel_token).await?;
+            let source_to_retire = source.clone();
+            Ok(Box::new(SourceBackend::with_retire(source, move || {
+                let source = source_to_retire.clone();
+                async move {
+                    source.shutdown().await;
+                }
+            })) as Box<dyn BuiltinSourceBackend>)
+        }
+    })
 }
 
 impl From<NatsMessage> for Message {
@@ -211,5 +235,25 @@ mod tests {
         // Ack should succeed and do nothing
         let result = source.ack(vec![]).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn nats_source_factory_build_starts_actor() {
+        use crate::source::builtin::BuiltinSourceFactory;
+
+        let factory = new_nats_source_factory(
+            NatsSourceConfig {
+                addr: "nats://127.0.0.1:1".into(),
+                subject: "test.subject".into(),
+                queue: "test-queue".into(),
+                auth: None,
+                tls: None,
+            },
+            1,
+            Duration::from_millis(100),
+            CancellationToken::new(),
+        );
+        let mut backend = factory.build().await.expect("factory build");
+        assert!(backend.read().await.is_some());
     }
 }
