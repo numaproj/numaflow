@@ -13,30 +13,33 @@ use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
-// Prefix the receipt handle with the config-order queue index so ack/nack can
-// route to the actor that issued it. Receipt handles are valid only on that queue.
-fn encode_offset(queue_index: usize, receipt_handle: &str) -> String {
-    format!("{queue_index}:{receipt_handle}")
+// Prefix the receipt handle with the origin queue name so ack/nack can route to
+// the actor that issued it. Receipt handles are valid only on that queue. SQS
+// queue names cannot contain ':', so the prefix is unambiguous.
+fn encode_offset(queue_name: &str, receipt_handle: &str) -> String {
+    format!("{queue_name}:{receipt_handle}")
 }
 
-fn decode_offset(offset: &Bytes) -> crate::Result<(usize, Bytes)> {
+fn decode_offset(offset: &Bytes) -> crate::Result<(String, Bytes)> {
     let offset = std::str::from_utf8(offset)
         .map_err(|err| Error::Source(format!("Invalid UTF-8 SQS offset: {err}")))?;
     // Split only on the first ':' because SQS receipt handles are opaque and may
     // themselves contain colons.
-    let (queue_index, receipt_handle) = offset.split_once(':').ok_or_else(|| {
-        Error::Source("Invalid SQS offset: missing queue index prefix".to_string())
+    let (queue_name, receipt_handle) = offset.split_once(':').ok_or_else(|| {
+        Error::Source("Invalid SQS offset: missing queue name prefix".to_string())
     })?;
-    let queue_index = queue_index
-        .parse::<usize>()
-        .map_err(|err| Error::Source(format!("Invalid SQS queue index: {err}")))?;
+    if queue_name.is_empty() {
+        return Err(Error::Source(
+            "Invalid SQS offset: empty queue name".to_string(),
+        ));
+    }
     if receipt_handle.is_empty() {
         return Err(Error::Source(
             "Invalid SQS offset: empty receipt handle".to_string(),
         ));
     }
     Ok((
-        queue_index,
+        queue_name.to_string(),
         Bytes::copy_from_slice(receipt_handle.as_bytes()),
     ))
 }
@@ -46,7 +49,7 @@ impl TryFrom<SqsMessage> for Message {
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(
-            encode_offset(message.queue_index, &message.offset),
+            encode_offset(message.queue_name, &message.offset),
             *get_vertex_replica(),
         ));
 
@@ -192,9 +195,9 @@ impl source::SourceAcker for SqsSource {
                 );
             }
 
-            let (queue_index, receipt_handle) = decode_offset(&string_offset.offset)?;
+            let (queue_name, receipt_handle) = decode_offset(&string_offset.offset)?;
             sqs_offsets.push(SqsNack {
-                queue_index,
+                queue_name,
                 receipt_handle,
                 visibility_timeout,
             });
@@ -238,16 +241,16 @@ pub mod tests {
     #[test]
     fn test_offset_encode_decode_round_trip() {
         let receipt_handle = "AQEB+opaque/receipt=with:colon";
-        let encoded = encode_offset(3, receipt_handle);
-        assert_eq!(encoded, "3:AQEB+opaque/receipt=with:colon");
+        let encoded = encode_offset("orders-queue", receipt_handle);
+        assert_eq!(encoded, "orders-queue:AQEB+opaque/receipt=with:colon");
 
-        let (queue_index, decoded) = decode_offset(&Bytes::from(encoded)).unwrap();
-        assert_eq!(queue_index, 3);
+        let (queue_name, decoded) = decode_offset(&Bytes::from(encoded)).unwrap();
+        assert_eq!(queue_name, "orders-queue");
         assert_eq!(decoded, Bytes::from(receipt_handle));
 
         assert!(decode_offset(&Bytes::from("missing-prefix")).is_err());
-        assert!(decode_offset(&Bytes::from("not-a-number:receipt")).is_err());
-        assert!(decode_offset(&Bytes::from("0:")).is_err());
+        assert!(decode_offset(&Bytes::from(":receipt")).is_err());
+        assert!(decode_offset(&Bytes::from("orders-queue:")).is_err());
     }
 
     #[tokio::test]
@@ -258,7 +261,6 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
-            queue_index: 0,
             queue_name: "test-queue",
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
@@ -277,7 +279,7 @@ pub mod tests {
         assert_eq!(message.value, "value");
         assert_eq!(
             message.offset,
-            Offset::String(StringOffset::new("0:offset".to_string(), 0)),
+            Offset::String(StringOffset::new("test-queue:offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
@@ -314,7 +316,6 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
-            queue_index: 1,
             queue_name: "orders-queue",
             payload: Bytes::from("test payload"),
             offset: "offset".to_string(),
@@ -325,6 +326,10 @@ pub mod tests {
 
         let message: Message = sqs_message.try_into().unwrap();
 
+        assert_eq!(
+            message.offset,
+            Offset::String(StringOffset::new("orders-queue:offset".to_string(), 0)),
+        );
         assert_eq!(*message.headers, system_attrs);
         assert_eq!(
             message.headers.get("SentTimestamp"),

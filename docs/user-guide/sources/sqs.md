@@ -137,6 +137,19 @@ accounts, regions, credentials, or tuning, configure separate source vertices.
 Messages from all configured queues are merged without a cross-queue ordering
 guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-queue-origin).
 
+#### Read and Failure Behavior
+
+Every queue is polled concurrently, and a read returns as soon as any queue has
+messages. A slow or empty queue never holds back messages already received from
+the others. If a queue answers after the read has returned, its messages are held
+and served on the next read rather than waiting out their visibility timeout.
+
+Receive failures are handled per queue. A failing queue does not discard messages
+already received from healthy queues, and a transient error (a throttle, for
+example) is retried on subsequent reads. Only when one queue fails ten consecutive
+receives does the source stop, so the pod restarts and every queue URL is resolved
+again. Until then, the remaining queues keep flowing.
+
 ## Apply the Configuration
 
 Apply the pipeline specification:
