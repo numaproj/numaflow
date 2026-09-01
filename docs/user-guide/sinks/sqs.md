@@ -17,6 +17,10 @@ spec:
             roleArn: "arn:aws:iam::123456789012:role/CrossAccount-Role"
 ```
 
+This spec's `queueName` is the **destination**. Source origin (system metadata
+group `sqs`, key `queue_name`) does not change it. To branch on origin, use a
+UDSink or tagged edges; see [Source Queue Origin](../sources/sqs.md#source-queue-origin).
+
 ## Authentication
 
 See [SQS Source - Configuring Credentials](../sources/sqs.md#configuring-credentials-to-access-aws) for authentication options including AWS credentials secrets and IAM roles.
@@ -26,10 +30,6 @@ See [SQS Source - Configuring Credentials](../sources/sqs.md#configuring-credent
 The SQS sink uses message headers to control SQS-specific behavior. Headers can originate from:
 1. The source (e.g., SQS system attributes from an SQS source)
 2. User metadata under the `sqs` namespace (merged into headers at the sink)
-
-The source queue name (system metadata group `sqs`, key `queue_name`) is origin
-only. The builtin SQS sink still writes to the destination `queueName` in this
-spec; a user-defined sink can read origin if it needs to route elsewhere.
 
 ### Supported Headers
 

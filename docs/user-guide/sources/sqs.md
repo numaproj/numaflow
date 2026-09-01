@@ -31,6 +31,15 @@ For more details, refer to the AWS documentation: https://docs.aws.amazon.com/ek
 
 Create a file named `sqs-pl.yaml` with either of the following content.
 
+| YAML / key | Where | Meaning |
+|---|---|---|
+| `queueName` | source spec | **Read** this one queue |
+| `queueNames` | source spec | **Read** these queues (XOR with `queueName`) |
+| `queue_name` | **system** metadata, group `sqs` | **Origin** of this message (single- or multi-queue) |
+| `queueName` | sink spec | **Write** dest (builtin SQS sink; unchanged by origin) |
+
+User metadata group `sqs` is producer or UDF attributes, not origin. See [Source Queue Origin](#source-queue-origin).
+
 ### MonoVertex Specification
 
 ```yaml
@@ -53,7 +62,7 @@ spec:
           messageAttributeNames:             # Message attributes to retrieve
             - All
     sink:
-        log: {}                             # Simple log sink for testing
+        log: {}                             # Prints payload/headers, not system metadata
     limits:
         readBatchSize: 10
         bufferSize: 100
@@ -126,11 +135,7 @@ The IAM identity must have access to every queue. If queues require different
 accounts, regions, credentials, or tuning, configure separate source vertices.
 
 Messages from all configured queues are merged without a cross-queue ordering
-guarantee. The source queue name is stamped on each message as **system
-metadata** (group `sqs`, key `queue_name`) so a UDF or user-defined sink can
-route or audit by origin. It is not added to headers or to user metadata.
-A builtin SQS sink still writes to the destination `queueName` in its YAML;
-origin does not change that destination.
+guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-queue-origin).
 
 ## Apply the Configuration
 
@@ -165,20 +170,27 @@ When `messageAttributeNames` is configured, user-defined message attributes are 
 ### Source Queue Origin
 
 Every message from an SQS source includes the queue it was read from as **system
-metadata** (not headers, not user metadata):
+metadata** (not headers, not user metadata). This is stamped for both
+`queueName` and `queueNames`:
 
 - Group: `sqs`
 - Key: `queue_name`
 
 Transformers and map UDFs copy parent system metadata, so origin survives
-downstream. A user-defined sink can read the same group and key to write to a
-different database or destination. The builtin SQS sink does not use this field
-for its destination queue.
+downstream. The builtin `log` sink does not print system metadata; use a UDF or
+UDSink to see it. The builtin SQS sink destination is still that vertex's YAML
+`queueName`.
+
+```python
+origin = datum.system_metadata.value("sqs", "queue_name")
+```
 
 The exact accessor depends on the SDK; the value lives in the `Datum`/request
 system metadata under group `sqs`, key `queue_name`.
 
 ### Example: Accessing SQS Attributes in a UDF
+
+Headers below; origin is system metadata (see [Source Queue Origin](#source-queue-origin)).
 
 **Go SDK:**
 ```go
@@ -187,8 +199,6 @@ func handler(ctx context.Context, keys []string, datum functionsdk.Datum) functi
     headers := datum.Headers()
     sentTimestamp := headers["SentTimestamp"]
     messageGroupId := headers["MessageGroupId"]
-    // Origin queue: system metadata group "sqs", key "queue_name"
-    // (SDK accessor name varies; see Source Queue Origin above).
     
     // Process message...
     return functionsdk.MessagesBuilder().Append(datum.Value())
@@ -202,8 +212,6 @@ def handler(keys: list[str], datum: Datum) -> Messages:
     headers = datum.headers
     sent_timestamp = headers.get("SentTimestamp")
     message_group_id = headers.get("MessageGroupId")
-    # Origin queue: system metadata group "sqs", key "queue_name"
-    # (SDK accessor name varies; see Source Queue Origin above).
     
     # Process message...
     return Messages(Message(datum.value))

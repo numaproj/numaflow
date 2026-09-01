@@ -207,11 +207,8 @@ spec:
             image: my-sink:latest
 ```
 
-When the pipeline source is SQS (including a multi-queue source), each request
-includes the origin queue as system metadata (group `sqs`, key `queue_name`).
-A UDSink can read that value to route writes (for example, to another database).
-A builtin SQS sink still uses the destination `queueName` from its spec; origin
-does not change that destination.
+When the pipeline source is SQS (one or many queues), origin is system metadata
+group `sqs`, key `queue_name`. See [Source Queue Origin](../sources/sqs.md#source-queue-origin).
 
 ## Available Environment Variables
 
