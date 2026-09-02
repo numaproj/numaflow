@@ -191,6 +191,39 @@ func (t *Expect) VertexNumaStable(baseline PodRuntimeSnapshot, vertexName string
 	return t
 }
 
+// VertexNumaRestarted waits until the numa container of the exact pod captured in the baseline
+// snapshot has restarted at least minRestarts times since the baseline. The restart count is durable
+// pod status, so it is reliably observable even while the container keeps crashing.
+func (t *Expect) VertexNumaRestarted(baseline PodRuntimeSnapshot, vertexName string, minRestarts int32) *Expect {
+	t.t.Helper()
+	timeout := 3 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	target := baseline.NumaRestartCount + minRestarts
+	var last PodRuntimeSnapshot
+	for {
+		select {
+		case <-ctx.Done():
+			t.t.Fatalf("Expected vertex %q numa container to restart >= %d time(s) (baseline %d, last seen %d) within %v",
+				vertexName, minRestarts, baseline.NumaRestartCount, last.NumaRestartCount, timeout)
+			return t
+		default:
+		}
+		current, err := getPodSnapshotByName(t.kubeClient, Namespace, baseline.PodName)
+		if err == nil {
+			last = current
+			if current.UID != baseline.UID {
+				t.t.Fatalf("Expected vertex %q pod %q to remain the same pod (crash-loop), but it was replaced", vertexName, baseline.PodName)
+				return t
+			}
+			if current.NumaRestartCount >= target {
+				return t
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 // MonoVertexNumaStable verifies that the exact pod captured in the baseline snapshot is still the one
 // running the MonoVertex, and that its numa container has not restarted since the baseline was taken.
 func (t *Expect) MonoVertexNumaStable(baseline PodRuntimeSnapshot) *Expect {
