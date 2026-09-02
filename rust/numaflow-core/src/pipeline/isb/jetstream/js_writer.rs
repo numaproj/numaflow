@@ -825,7 +825,7 @@ mod tests {
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
 
-        let stream = Stream::new("test-write-compress", "temp", 0);
+        let stream = Stream::new("test-write-compress-sync", "temp", 0);
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
