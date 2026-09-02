@@ -154,6 +154,26 @@ func (w *When) CreateMonoVertexAndWait() *When {
 	return w
 }
 
+func (w *When) PauseMonoVertexAndWait() *When {
+	w.t.Helper()
+	if w.monoVertex == nil {
+		w.t.Fatal("No MonoVertex to pause")
+	}
+	ctx := context.Background()
+	mv, err := w.monoVertexClient.Get(ctx, w.monoVertex.Name, metav1.GetOptions{})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	mv.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+	if _, err = w.monoVertexClient.Update(ctx, mv, metav1.UpdateOptions{}); err != nil {
+		w.t.Fatal(err)
+	}
+	if err := WaitForMonoVertexWorkerPodsScaledToZero(w.kubeClient, Namespace, w.monoVertex.Name, defaultTimeout); err != nil {
+		w.t.Fatal(err)
+	}
+	return w
+}
+
 func (w *When) DeletePipelineAndWait() *When {
 	w.t.Helper()
 	if w.pipeline == nil {

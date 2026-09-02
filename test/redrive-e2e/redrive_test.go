@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -270,6 +271,53 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the UX server for the monovertex")
 
 	w.Expect().MonoVertexNumaStable(podSnapshot)
+}
+
+func (s *RedriveSuite) TestMonoVertexRuntimeErrorsRetainedAfterScaleToZero() {
+	monoVertexName := "runtime-error-monovertex"
+	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
+		When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
+
+	defer w.MvtxDaemonPodPortForward(3245, dfv1.MonoVertexDaemonServicePort).
+		UXServerPodPortForward(8145, 8443).
+		TerminateAllPodPortForwards()
+
+	client, err := mvtxclient.NewGRPCClient("localhost:3245")
+	require.NoError(s.T(), err)
+	defer func() { assert.NoError(s.T(), client.Close()) }()
+
+	go func() {
+		defer func() {
+			_ = recover()
+		}()
+		w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
+	}()
+
+	assert.Eventually(s.T(), func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
+		return err == nil && monoVertexHasContainerError(replicaErrors, "udf")
+	}, 2*time.Minute, time.Second, "udf runtime error not captured by the monovertex daemon before scale to zero")
+
+	w.PauseMonoVertexAndWait()
+	w.Expect().MvtxDaemonPodsRunning()
+
+	ctx := context.Background()
+	replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
+	require.NoError(s.T(), err)
+	assert.True(s.T(), monoVertexHasContainerError(replicaErrors, "udf"), "daemon should retain udf runtime error after worker pods scale to zero")
+
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains(
+			"https://localhost:8145",
+			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
+			`"container":"udf"`,
+		)
+	}, 2*time.Minute, time.Second, "udf runtime error not retained by the UX server after worker pods scale to zero")
 }
 
 func TestRedriveSuite(t *testing.T) {

@@ -419,6 +419,26 @@ func WaitForDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, pipeli
 	}
 }
 
+func WaitForMonoVertexWorkerPodsScaledToZero(kubeClient kubernetes.Interface, namespace, monoVertexName string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	for {
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return fmt.Errorf("error listing mono vertex worker pods: %w", err)
+		}
+		if len(podList.Items) == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout after %v waiting for mono vertex worker pods to scale to zero", timeout)
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
 func WaitForMvtxDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, mvtx string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

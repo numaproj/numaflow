@@ -158,6 +158,14 @@ func (t *Expect) MonoVertexPodsRunning() *Expect {
 	return t
 }
 
+func (t *Expect) MonoVertexWorkerPodsScaledToZero() *Expect {
+	t.t.Helper()
+	if err := WaitForMonoVertexWorkerPodsScaledToZero(t.kubeClient, Namespace, t.monoVertex.Name, defaultTimeout); err != nil {
+		t.t.Fatalf("Expected mono vertex %q worker pods scaled to zero: %v", t.monoVertex.Name, err)
+	}
+	return t
+}
+
 func (t *Expect) VertexPodRuntimeSnapshot(vertexName string) PodRuntimeSnapshot {
 	t.t.Helper()
 	timeout := 3 * time.Minute
