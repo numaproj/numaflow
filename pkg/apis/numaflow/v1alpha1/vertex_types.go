@@ -538,6 +538,17 @@ func (v Vertex) getReplicas() int {
 	return int(*v.Spec.Replicas)
 }
 
+// GetDesiredReplicasBeforeScaling returns the replica count that would apply
+// if the Vertex is not paused, before any scale.min/max (or cron window)
+// clamping is applied. Used by callers that need to apply their own
+// bounds-clamping logic on top (e.g. cron-aware effective replicas).
+func (v Vertex) GetDesiredReplicasBeforeScaling() int {
+	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {
+		return 0
+	}
+	return v.getReplicas()
+}
+
 func (v Vertex) CalculateReplicas() int {
 	// If we are pausing the Pipeline/Vertex then we should have the desired replicas as 0
 	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {

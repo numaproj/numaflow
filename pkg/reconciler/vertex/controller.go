@@ -40,6 +40,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -206,7 +207,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService) error {
 	log := logging.FromContext(ctx)
-	desiredReplicas := vertex.CalculateReplicas()
+	desiredReplicas := scalingutil.CalculateEffectiveReplicas(vertex.Spec.Scale, vertex.GetDesiredReplicasBeforeScaling(), time.Now())
 	vertex.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics

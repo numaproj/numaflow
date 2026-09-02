@@ -42,6 +42,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -193,7 +194,7 @@ func (mr *monoVertexReconciler) orchestrateFixedResources(ctx context.Context, m
 
 func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
 	log := logging.FromContext(ctx)
-	desiredReplicas := monoVtx.CalculateReplicas()
+	desiredReplicas := scalingutil.CalculateEffectiveReplicas(monoVtx.Spec.Scale, monoVtx.GetDesiredReplicasBeforeScaling(), time.Now())
 	monoVtx.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics
