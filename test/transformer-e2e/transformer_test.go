@@ -98,10 +98,10 @@ func (s *TransformerSuite) TestSourceTransformerRetryDrop() {
 	// The transformer runs on the source vertex ("in"); the numa container logs
 	// each retry attempt (unquoted number, JSON logging) and the drop on exhaustion.
 	w.Expect().
-		VertexPodLogContains("in", `"retry_attempt":1`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("in", `"retry_attempt":2`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("in", "Retries exhausted, dropping message", PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogNotContains("in", `"retry_attempt":3`, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+		VertexPodLogContains("in", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogNotContains("in", LogRetryAttempt+"3", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 // TestSourceTransformerRetryRecover verifies that a source transformer whose
@@ -121,14 +121,14 @@ func (s *TransformerSuite) TestSourceTransformerRetryRecover() {
 
 	// Two retries happen, then the message recovers and reaches the sink.
 	w.Expect().
-		VertexPodLogContains("in", `"retry_attempt":1`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("in", `"retry_attempt":2`, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", "recover-me", PodLogCheckOptionWithContainer("numa"))
 
 	// It recovered: no nack, no drop.
 	w.Expect().
-		VertexPodLogNotContains("in", "received nack", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
-		VertexPodLogNotContains("in", "Retries exhausted, dropping message", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+		VertexPodLogNotContains("in", LogReceivedNack, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
+		VertexPodLogNotContains("in", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 func TestTransformerSuite(t *testing.T) {

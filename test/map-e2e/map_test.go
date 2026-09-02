@@ -165,10 +165,10 @@ func (s *MapSuite) TestMapRetryDrop() {
 
 	// The udf vertex's numa container logs each retry attempt and the drop.
 	w.Expect().
-		VertexPodLogContains("udf", `"retry_attempt":1`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("udf", `"retry_attempt":2`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("udf", "Retries exhausted, dropping message", PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogNotContains("udf", `"retry_attempt":3`, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+		VertexPodLogContains("udf", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogNotContains("udf", LogRetryAttempt+"3", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 // TestMapRetryRecover verifies that a map UDF whose retryStrategy has enough steps
@@ -188,14 +188,14 @@ func (s *MapSuite) TestMapRetryRecover() {
 
 	// Two retries happen, then the message recovers and reaches the sink.
 	w.Expect().
-		VertexPodLogContains("udf", `"retry_attempt":1`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("udf", `"retry_attempt":2`, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", "recover-me", PodLogCheckOptionWithContainer("numa"))
 
 	// It recovered: no nack, no drop.
 	w.Expect().
-		VertexPodLogNotContains("udf", "received nack", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
-		VertexPodLogNotContains("udf", "Retries exhausted, dropping message", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+		VertexPodLogNotContains("udf", LogReceivedNack, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
+		VertexPodLogNotContains("udf", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 // TestMapRetryExhaustedNack verifies that when a map UDF keeps failing a message
@@ -214,12 +214,13 @@ func (s *MapSuite) TestMapRetryExhaustedNack() {
 	// The map always fails a message whose body is "fail".
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fail")))
 
-	// Retries are exhausted and the message is nacked (received nack), never dropped.
+	// Retries are exhausted; under `onFailure: retry` the error propagates instead of
+	// dropping.
 	w.Expect().
-		VertexPodLogContains("udf", `"retry_attempt":1`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("udf", `"retry_attempt":2`, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("udf", "received nack", PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogNotContains("udf", "Retries exhausted, dropping message", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+		VertexPodLogContains("udf", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogMapUDFError, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogNotContains("udf", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 func TestMapSuite(t *testing.T) {

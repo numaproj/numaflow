@@ -54,6 +54,10 @@ const (
 	LogSourceVertexStartedRustRuntime = "Starting source forwarder"
 	LogSinkVertexStartedRustRuntime   = "Starting sink forwarder"
 	LogMapVertexStartedRustRuntime    = "Starting map forwarder"
+	LogRetryAttempt                   = `"retry_attempt":`
+	LogRetriesExhaustedDrop           = "Retries exhausted, dropping message"
+	LogMapUDFError                    = "error received while performing map operation"
+	LogReceivedNack                   = "received nack"
 )
 
 var (
