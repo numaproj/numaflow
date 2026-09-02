@@ -95,7 +95,7 @@ axum = { version = "0.8.4", default-features = false, features = [
     "tracing",
     "tokio",
 ] }
-axum-server = { version = "0.7.2", features = ["tls-rustls"] }
+axum-server = { version = "0.7.3", features = ["tls-rustls"] }
 tower = "0.5.2"
 serde = { version = "1.0.219", features = ["derive"] }
 rustls = { version = "0.23.28", features = ["aws_lc_rs"] }
