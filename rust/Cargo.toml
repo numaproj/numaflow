@@ -4,6 +4,7 @@ members = [
     "backoff",
     "serving",
     "numaflow-core",
+    "numaflow-cli",
     "numaflow",
     "numaflow-sideinput",
     "numaflow-daemon",
