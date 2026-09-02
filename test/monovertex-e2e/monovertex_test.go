@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	mvtxclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
@@ -201,6 +203,147 @@ func (s *MonoVertexSuite) TestStreamingMonoVertex() {
 	for _, msg := range messages {
 		w.Expect().RedisSinkContains("streaming-mvtx-output", msg)
 	}
+}
+
+// cronWindowCoveringNow returns a six-field (second minute hour dom month dow)
+// start/end cron expression pair whose window is currently active and remains
+// active for at least windowSeconds more, anchored to the current wall clock.
+func cronWindowCoveringNow(windowSeconds int) (start, end string) {
+	now := time.Now().UTC()
+	from := now.Add(-2 * time.Second)
+	to := now.Add(time.Duration(windowSeconds) * time.Second)
+	start = fmt.Sprintf("%d %d %d * * *", from.Second(), from.Minute(), from.Hour())
+	end = fmt.Sprintf("%d %d %d * * *", to.Second(), to.Minute(), to.Hour())
+	return start, end
+}
+
+// TestMonoVertexCronScaleUpFromZero verifies that a MonoVertex with an active
+// cron window scales up to the window's min replicas immediately, even
+// starting from 0 replicas and without any traffic/pending-message metrics
+// being available (cron bounds are applied before daemon metrics are read).
+//
+// Source/sink shape mirrors examples/20-simple-mono-vertex-builtin.yaml, the
+// project's canonical simple MonoVertex; scale/cron is added at runtime since
+// the cron window must be anchored to the current wall clock.
+func (s *MonoVertexSuite) TestMonoVertexCronScaleUpFromZero() {
+	start, end := cronWindowCoveringNow(120)
+	mv := &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cron-scale-up-mono-vertex",
+		},
+		Spec: dfv1.MonoVertexSpec{
+			Replicas: ptr.To[int32](0),
+			Scale: dfv1.Scale{
+				Min:                      ptr.To[int32](0),
+				Max:                      ptr.To[int32](5),
+				ScaleUpCooldownSeconds:   ptr.To[uint32](0),
+				ScaleDownCooldownSeconds: ptr.To[uint32](0),
+				Cron: &dfv1.CronScheduling{
+					Timezone: "UTC",
+					Schedules: []dfv1.CronSchedule{
+						{
+							Start: start,
+							End:   end,
+							Min:   ptr.To[int32](3),
+							Max:   ptr.To[int32](5),
+						},
+					},
+				},
+			},
+			Source: &dfv1.Source{
+				Generator: &dfv1.GeneratorSource{
+					RPU: ptr.To(int64(5)),
+				},
+			},
+			Sink: &dfv1.Sink{
+				AbstractSink: dfv1.AbstractSink{
+					Log: &dfv1.Log{},
+				},
+			},
+		},
+	}
+
+	w := s.Given().WithMonoVertex(mv).When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	// The autoscaler should detect the active cron window and scale the
+	// MonoVertex up to at least the window's min (3), well before any
+	// reactive/metrics-based scaling could kick in.
+	w.Expect().MonoVertexSizeScaledTo(3)
+}
+
+// cronShortWindowFromNow returns a six-field start/end cron expression pair
+// for a window that opens roughly startInSeconds from now and stays open for
+// durationSeconds, anchored to the current wall clock.
+func cronShortWindowFromNow(startInSeconds, durationSeconds int) (start, end string) {
+	now := time.Now().UTC()
+	from := now.Add(time.Duration(startInSeconds) * time.Second)
+	to := from.Add(time.Duration(durationSeconds) * time.Second)
+	start = fmt.Sprintf("%d %d %d * * *", from.Second(), from.Minute(), from.Hour())
+	end = fmt.Sprintf("%d %d %d * * *", to.Second(), to.Minute(), to.Hour())
+	return start, end
+}
+
+// TestMonoVertexCronScaleDownAfterWindowExpires verifies that once an active
+// cron window closes, the autoscaler stops honoring the window's bounds and
+// reverts to base scale.min/scale.max, scaling a MonoVertex back down even
+// though it had scaled up while the window was active.
+//
+// Source/sink shape mirrors examples/20-simple-mono-vertex-builtin.yaml, the
+// project's canonical simple MonoVertex; scale/cron is added at runtime since
+// the cron window must be anchored to the current wall clock.
+func (s *MonoVertexSuite) TestMonoVertexCronScaleDownAfterWindowExpires() {
+	// Window opens almost immediately and stays open long enough for the
+	// autoscaler (default task interval 30s) to reliably detect it and scale
+	// up to 3 before it closes on its own while the test is still running.
+	start, end := cronShortWindowFromNow(2, 60)
+	mv := &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cron-scale-down-mono-vertex",
+		},
+		Spec: dfv1.MonoVertexSpec{
+			// Base bounds cap at 1 so CreateMonoVertexAndWait's readiness
+			// check (which only knows about base min/max) is satisfied
+			// immediately, before the cron window opens.
+			Scale: dfv1.Scale{
+				Min:                      ptr.To[int32](0),
+				Max:                      ptr.To[int32](1),
+				ScaleUpCooldownSeconds:   ptr.To[uint32](0),
+				ScaleDownCooldownSeconds: ptr.To[uint32](0),
+				Cron: &dfv1.CronScheduling{
+					Timezone: "UTC",
+					Schedules: []dfv1.CronSchedule{
+						{
+							Start: start,
+							End:   end,
+							Min:   ptr.To[int32](3),
+							Max:   ptr.To[int32](3),
+						},
+					},
+				},
+			},
+			Source: &dfv1.Source{
+				Generator: &dfv1.GeneratorSource{
+					RPU: ptr.To(int64(5)),
+				},
+			},
+			Sink: &dfv1.Sink{
+				AbstractSink: dfv1.AbstractSink{
+					Log: &dfv1.Log{},
+				},
+			},
+		},
+	}
+
+	w := s.Given().WithMonoVertex(mv).When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	// Cron window opens shortly after creation; expect scale-up to 3.
+	w.Expect().MonoVertexSizeScaledTo(3)
+
+	// Window has now closed (it only lasted 60s); expect the autoscaler to
+	// revert to base bounds and scale back down to max=1.
+	w.Expect().MonoVertexSizeScaledTo(1)
 }
 
 func TestMonoVertexSuite(t *testing.T) {
