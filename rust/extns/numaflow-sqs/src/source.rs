@@ -1817,7 +1817,16 @@ mod tests {
         let second = source.read_messages().await.unwrap().unwrap();
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
-        assert_ne!(first[0].queue_name, second[0].queue_name);
+        assert_ne!(
+            first
+                .first()
+                .expect("first batch has one message")
+                .queue_name,
+            second
+                .first()
+                .expect("second batch has one message")
+                .queue_name
+        );
         assert_eq!(orders_receive.num_calls(), 1);
         assert_eq!(refunds_receive.num_calls(), 1);
     }
