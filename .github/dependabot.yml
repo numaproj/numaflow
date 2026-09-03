@@ -7,6 +7,7 @@ updates:
       interval: "weekly"
     groups:
       go-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -17,6 +18,7 @@ updates:
       interval: "weekly"
     groups:
       ui-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -27,6 +29,7 @@ updates:
       interval: "weekly"
     groups:
       rust-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -37,5 +40,6 @@ updates:
       interval: "weekly"
     groups:
       github-actions:
+        applies-to: security-updates
         patterns:
           - "*"
