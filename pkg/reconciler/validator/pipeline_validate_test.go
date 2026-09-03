@@ -1790,3 +1790,138 @@ func TestValidateOrderedProcessing(t *testing.T) {
 		})
 	}
 }
+
+func Test_validateSQSSource(t *testing.T) {
+	tests := []struct {
+		name    string
+		sqs     dfv1.SqsSource
+		wantErr string
+	}{
+		{
+			name: "valid legacy queueName",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue,replay-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames with whitespace",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             " orders-queue , refunds-queue ",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames and assume role",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+				AssumeRole: &dfv1.AWSAssumeRole{
+					RoleARN: "arn:aws:iam::111111111111:role/numaflow-sqs",
+				},
+			},
+		},
+		{
+			name: "queueName and queueNames are mutually exclusive",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				QueueNames:             "refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name: "queue selector is required",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "either 'queueName' or 'queueNames'",
+		},
+		{
+			name: "queueNames rejects empty entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "empty queue name",
+		},
+		{
+			name: "queueNames rejects whitespace-only entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,   ,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "empty queue name",
+		},
+		{
+			name: "queueNames rejects duplicate trimmed name",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue, orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "duplicate queue name",
+		},
+		{
+			name: "awsRegion is required",
+			sqs: dfv1.SqsSource{
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "awsRegion is required",
+		},
+		{
+			name: "queueOwnerAWSAccountID is required",
+			sqs: dfv1.SqsSource{
+				AWSRegion:  "us-east-1",
+				QueueNames: "orders-queue",
+			},
+			wantErr: "queueOwnerAWSAccountID is required",
+		},
+		{
+			name: "queueOwnerAWSAccountID must be valid",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "12345",
+			},
+			wantErr: "valid 12-digit AWS account ID",
+		},
+		{
+			name: "invalid assume role is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+				AssumeRole:             &dfv1.AWSAssumeRole{},
+			},
+			wantErr: "invalid assume role configuration",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSQSSource(tt.sqs)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}

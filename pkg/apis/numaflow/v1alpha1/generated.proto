@@ -2139,7 +2139,9 @@ message SqsSource {
   // AWSRegion is the AWS Region where the SQS queue is located
   optional string awsRegion = 1;
 
-  // QueueName is the name of the SQS queue
+  // QueueName is the name of the SQS queue.
+  // Mutually exclusive with queueNames.
+  // +optional
   optional string queueName = 2;
 
   // QueueOwnerAWSAccountID is the queue owner aws account id
@@ -2187,6 +2189,12 @@ message SqsSource {
   // When specified, the SQS client will assume the specified role for authentication.
   // +optional
   optional AWSAssumeRole assumeRole = 10;
+
+  // QueueNames is a comma-separated list of SQS queue names to consume from.
+  // All queues must live in the configured awsRegion and queueOwnerAWSAccountID.
+  // Mutually exclusive with queueName.
+  // +optional
+  optional string queueNames = 11;
 }
 
 // Status is a common structure which can be used for Status field.

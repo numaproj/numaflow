@@ -1,6 +1,10 @@
 use numaflow_sqs::source::{SqsMessage, SqsNack, SqsSource, SqsSourceBuilder, SqsSourceConfig};
+use numaflow_sqs::{SQS_METADATA_KEY, SQS_SYS_QUEUE_NAME_KEY};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
+use bytes::Bytes;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -9,28 +13,68 @@ use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
 
+// Prefix the receipt handle with the origin queue name so ack/nack can route to
+// the actor that issued it. Receipt handles are valid only on that queue. SQS
+// queue names cannot contain ':', so the prefix is unambiguous.
+fn encode_offset(queue_name: &str, receipt_handle: &str) -> String {
+    format!("{queue_name}:{receipt_handle}")
+}
+
+fn decode_offset(offset: &Bytes) -> crate::Result<(String, Bytes)> {
+    let offset = std::str::from_utf8(offset)
+        .map_err(|err| Error::Source(format!("Invalid UTF-8 SQS offset: {err}")))?;
+    // Split only on the first ':' because SQS receipt handles are opaque and may
+    // themselves contain colons.
+    let (queue_name, receipt_handle) = offset.split_once(':').ok_or_else(|| {
+        Error::Source("Invalid SQS offset: missing queue name prefix".to_string())
+    })?;
+    if queue_name.is_empty() {
+        return Err(Error::Source(
+            "Invalid SQS offset: empty queue name".to_string(),
+        ));
+    }
+    if receipt_handle.is_empty() {
+        return Err(Error::Source(
+            "Invalid SQS offset: empty receipt handle".to_string(),
+        ));
+    }
+    Ok((
+        queue_name.to_string(),
+        Bytes::copy_from_slice(receipt_handle.as_bytes()),
+    ))
+}
+
 impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
-        let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+        let offset = Offset::String(StringOffset::new(
+            encode_offset(message.queue_name, &message.offset),
+            *get_vertex_replica(),
+        ));
 
-        let metadata = if message.custom_attributes.is_empty() {
-            Some(Arc::new(Metadata::default()))
-        } else {
-            let user_metadata = message
-                .custom_attributes
-                .into_iter()
-                .map(|(k, v)| {
-                    let key_value = v.into_iter().map(|(ik, iv)| (ik, iv.into())).collect();
-                    (k, KeyValueGroup { key_value })
-                })
-                .collect();
-            Some(Arc::new(Metadata {
-                user_metadata,
-                ..Default::default()
-            }))
-        };
+        let user_metadata = message
+            .custom_attributes
+            .into_iter()
+            .map(|(k, v)| {
+                let key_value = v.into_iter().map(|(ik, iv)| (ik, iv.into())).collect();
+                (k, KeyValueGroup { key_value })
+            })
+            .collect();
+        let sys_metadata = HashMap::from([(
+            SQS_METADATA_KEY.to_string(),
+            KeyValueGroup {
+                key_value: HashMap::from([(
+                    SQS_SYS_QUEUE_NAME_KEY.to_string(),
+                    Bytes::copy_from_slice(message.queue_name.as_bytes()),
+                )]),
+            },
+        )]);
+        let metadata = Some(Arc::new(Metadata {
+            user_metadata,
+            sys_metadata,
+            ..Default::default()
+        }));
 
         Ok(Message {
             typ: Default::default(),
@@ -120,7 +164,7 @@ impl source::SourceAcker for SqsSource {
                     "Expected Offset::String type for SQS. offset={offset:?}"
                 )));
             };
-            sqs_offsets.push(string_offset.offset);
+            sqs_offsets.push(decode_offset(&string_offset.offset)?);
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
@@ -151,8 +195,10 @@ impl source::SourceAcker for SqsSource {
                 );
             }
 
+            let (queue_name, receipt_handle) = decode_offset(&string_offset.offset)?;
             sqs_offsets.push(SqsNack {
-                receipt_handle: string_offset.offset,
+                queue_name,
+                receipt_handle,
                 visibility_timeout,
             });
         }
@@ -177,7 +223,7 @@ pub mod tests {
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_sqs::{
-        SQS_METADATA_KEY,
+        SQS_METADATA_KEY, SQS_SYS_QUEUE_NAME_KEY,
         source::{SQS_DEFAULT_REGION, SqsSourceBuilder},
     };
     use tokio::task::JoinHandle;
@@ -192,6 +238,21 @@ pub mod tests {
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use tokio::sync::oneshot;
 
+    #[test]
+    fn test_offset_encode_decode_round_trip() {
+        let receipt_handle = "AQEB+opaque/receipt=with:colon";
+        let encoded = encode_offset("orders-queue", receipt_handle);
+        assert_eq!(encoded, "orders-queue:AQEB+opaque/receipt=with:colon");
+
+        let (queue_name, decoded) = decode_offset(&Bytes::from(encoded)).unwrap();
+        assert_eq!(queue_name, "orders-queue");
+        assert_eq!(decoded, Bytes::from(receipt_handle));
+
+        assert!(decode_offset(&Bytes::from("missing-prefix")).is_err());
+        assert!(decode_offset(&Bytes::from(":receipt")).is_err());
+        assert!(decode_offset(&Bytes::from("orders-queue:")).is_err());
+    }
+
     #[tokio::test]
     async fn test_sqs_message_conversion() {
         let ts = Utc::now();
@@ -200,6 +261,7 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
+            queue_name: "test-queue",
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
             event_time: ts,
@@ -217,10 +279,24 @@ pub mod tests {
         assert_eq!(message.value, "value");
         assert_eq!(
             message.offset,
-            Offset::String(StringOffset::new("offset".to_string(), 0)),
+            Offset::String(StringOffset::new("test-queue:offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
+
+        let metadata = message.metadata.expect("missing metadata");
+        assert!(metadata.user_metadata.is_empty());
+        let sqs_sys = metadata
+            .sys_metadata
+            .get(SQS_METADATA_KEY)
+            .expect("missing sys_metadata sqs group");
+        assert_eq!(
+            sqs_sys
+                .key_value
+                .get(SQS_SYS_QUEUE_NAME_KEY)
+                .map(|v| v.as_ref()),
+            Some(b"test-queue".as_slice())
+        );
     }
 
     #[tokio::test]
@@ -240,6 +316,7 @@ pub mod tests {
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
+            queue_name: "orders-queue",
             payload: Bytes::from("test payload"),
             offset: "offset".to_string(),
             event_time: ts,
@@ -249,6 +326,10 @@ pub mod tests {
 
         let message: Message = sqs_message.try_into().unwrap();
 
+        assert_eq!(
+            message.offset,
+            Offset::String(StringOffset::new("orders-queue:offset".to_string(), 0)),
+        );
         assert_eq!(*message.headers, system_attrs);
         assert_eq!(
             message.headers.get("SentTimestamp"),
@@ -270,6 +351,18 @@ pub mod tests {
         assert_eq!(
             sqs_meta.key_value.get("correlation_id").map(|v| v.as_ref()),
             Some(b"xyz789".as_slice())
+        );
+
+        let sqs_sys = metadata
+            .sys_metadata
+            .get(SQS_METADATA_KEY)
+            .expect("missing sys_metadata sqs group");
+        assert_eq!(
+            sqs_sys
+                .key_value
+                .get(SQS_SYS_QUEUE_NAME_KEY)
+                .map(|v| v.as_ref()),
+            Some(b"orders-queue".as_slice())
         );
     }
     use std::sync::{
@@ -329,7 +422,7 @@ pub mod tests {
 
         let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
-            queue_name: "test-q",
+            queue_names: vec!["test-q"],
             queue_owner_aws_account_id: "12345678912",
             visibility_timeout: None,
             max_number_of_messages: None,

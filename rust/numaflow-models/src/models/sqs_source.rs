@@ -43,9 +43,12 @@ pub struct SqsSource {
         skip_serializing_if = "Option::is_none"
     )]
     pub message_attribute_names: Option<Vec<String>>,
-    /// QueueName is the name of the SQS queue
-    #[serde(rename = "queueName")]
-    pub queue_name: String,
+    /// QueueName is the name of the SQS queue. Mutually exclusive with queueNames.
+    #[serde(rename = "queueName", skip_serializing_if = "Option::is_none")]
+    pub queue_name: Option<String>,
+    /// QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.
+    #[serde(rename = "queueNames", skip_serializing_if = "Option::is_none")]
+    pub queue_names: Option<String>,
     /// QueueOwnerAWSAccountID is the queue owner aws account id
     #[serde(rename = "queueOwnerAWSAccountID")]
     pub queue_owner_aws_account_id: String,
@@ -59,11 +62,7 @@ pub struct SqsSource {
 
 impl SqsSource {
     /// SqsSource represents the configuration of an AWS SQS source
-    pub fn new(
-        aws_region: String,
-        queue_name: String,
-        queue_owner_aws_account_id: String,
-    ) -> SqsSource {
+    pub fn new(aws_region: String, queue_owner_aws_account_id: String) -> SqsSource {
         SqsSource {
             assume_role: None,
             attribute_names: None,
@@ -71,7 +70,8 @@ impl SqsSource {
             endpoint_url: None,
             max_number_of_messages: None,
             message_attribute_names: None,
-            queue_name,
+            queue_name: None,
+            queue_names: None,
             queue_owner_aws_account_id,
             visibility_timeout: None,
             wait_time_seconds: None,

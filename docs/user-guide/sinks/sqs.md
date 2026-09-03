@@ -17,6 +17,10 @@ spec:
             roleArn: "arn:aws:iam::123456789012:role/CrossAccount-Role"
 ```
 
+This spec's `queueName` is the **destination**. Source origin (system metadata
+group `sqs`, key `queue_name`) does not change it. To branch on origin, use a
+UDSink or tagged edges; see [Source Queue Origin](../sources/sqs.md#source-queue-origin).
+
 ## Authentication
 
 See [SQS Source - Configuring Credentials](../sources/sqs.md#configuring-credentials-to-access-aws) for authentication options including AWS credentials secrets and IAM roles.
