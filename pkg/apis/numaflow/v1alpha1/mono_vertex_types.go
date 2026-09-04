@@ -96,16 +96,26 @@ func (mv MonoVertex) getReplicas() int {
 	return int(*mv.Spec.Replicas)
 }
 
+// CalculateReplicas returns the number of pods the reconciler should run,
+// clamped to the parent scale.min/scale.max bounds.
+// Use CalculateReplicasWithBounds when an active cron window may set bounds
+// outside the parent range.
 func (mv MonoVertex) CalculateReplicas() int {
-	// If we are pausing the MonoVertex then we should have the desired replicas as 0
+	return mv.CalculateReplicasWithBounds(mv.Spec.Scale.GetMinReplicas(), mv.Spec.Scale.GetMaxReplicas())
+}
+
+// CalculateReplicasWithBounds returns the desired replica count clamped to
+// [effectiveMin, effectiveMax]. Pass the effective bounds derived from any
+// active cron window so that cron min/max outside the parent scale range are
+// honoured.
+func (mv MonoVertex) CalculateReplicasWithBounds(effectiveMin, effectiveMax int32) int {
 	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {
 		return 0
 	}
 	desiredReplicas := mv.getReplicas()
-	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := mv.Spec.Scale; !s.Disabled {
-		max := int(s.GetMaxReplicas())
-		min := int(s.GetMinReplicas())
+		min := int(effectiveMin)
+		max := int(effectiveMax)
 		if desiredReplicas < min {
 			desiredReplicas = min
 		} else if desiredReplicas > max {

@@ -538,16 +538,25 @@ func (v Vertex) getReplicas() int {
 	return int(*v.Spec.Replicas)
 }
 
+// CalculateReplicas returns the desired replica count clamped to the parent
+// scale.min/scale.max bounds. Use CalculateReplicasWithBounds when an active
+// cron window may set bounds outside the parent range.
 func (v Vertex) CalculateReplicas() int {
-	// If we are pausing the Pipeline/Vertex then we should have the desired replicas as 0
+	return v.CalculateReplicasWithBounds(v.Spec.Scale.GetMinReplicas(), v.Spec.Scale.GetMaxReplicas())
+}
+
+// CalculateReplicasWithBounds returns the desired replica count clamped to
+// [effectiveMin, effectiveMax]. Pass the effective bounds derived from any
+// active cron window so that cron min/max outside the parent scale range are
+// honoured.
+func (v Vertex) CalculateReplicasWithBounds(effectiveMin, effectiveMax int32) int {
 	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {
 		return 0
 	}
 	desiredReplicas := v.getReplicas()
-	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := v.Spec.Scale; !s.Disabled {
-		max := int(s.GetMaxReplicas())
-		min := int(s.GetMinReplicas())
+		min := int(effectiveMin)
+		max := int(effectiveMax)
 		if desiredReplicas < min {
 			desiredReplicas = min
 		} else if desiredReplicas > max {

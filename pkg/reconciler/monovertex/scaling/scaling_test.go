@@ -285,9 +285,10 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 		cronMax              int32
 		replicasPerScaleUp   uint32
 		replicasPerScaleDown uint32
-		expected             int32
+		expected             int32 // spec.replicas after the call; unchanged when autoscaler defers to reconciler
 	}{
 		{
+			// status.replicas=0 < CalculateReplicasWithBounds(cronMin=1)=1 → mismatch → autoscaler skips
 			name:                 "scale up from zero for nightly DLQ drain",
 			current:              0,
 			parentMin:            0,
@@ -296,9 +297,10 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 			cronMax:              5,
 			replicasPerScaleUp:   2,
 			replicasPerScaleDown: 2,
-			expected:             1,
+			expected:             0, // autoscaler defers to reconciler
 		},
 		{
+			// status.replicas=10 > CalculateReplicasWithBounds(cronMax=5)=5 → mismatch → autoscaler skips
 			name:                 "scale down toward cron max",
 			current:              10,
 			parentMin:            0,
@@ -307,7 +309,7 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 			cronMax:              5,
 			replicasPerScaleUp:   2,
 			replicasPerScaleDown: 2,
-			expected:             8,
+			expected:             10, // autoscaler defers to reconciler
 		},
 	}
 
@@ -367,6 +369,68 @@ func TestScaleOneMonoVertex_AppliesActiveCronBoundsBeforeMetrics(t *testing.T) {
 			assert.Equal(t, tc.expected, *updated.Spec.Replicas)
 		})
 	}
+}
+
+func TestScaleOneMonoVertex_CronBoundsAfterReconcilerConverged(t *testing.T) {
+	makeScaler := func(t *testing.T, current int32, parentMin, parentMax, cronMin, cronMax int32, rpsUp, rpsDown uint32) (*Scaler, *dfv1.MonoVertex, client.Client) {
+		t.Helper()
+		location, err := time.LoadLocation("America/Los_Angeles")
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().In(location)
+		start := now.Add(-time.Minute)
+		end := now.Add(time.Minute)
+		cronExpression := func(t time.Time) string {
+			return fmt.Sprintf("0 %d %d %d %d *", t.Minute(), t.Hour(), t.Day(), int(t.Month()))
+		}
+		mv := &dfv1.MonoVertex{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-mvtx", Namespace: "default"},
+			Spec: dfv1.MonoVertexSpec{
+				Replicas: ptr.To(current),
+				Scale: dfv1.Scale{
+					Min: ptr.To(parentMin), Max: ptr.To(parentMax),
+					ReplicasPerScaleUp: ptr.To(rpsUp), ReplicasPerScaleDown: ptr.To(rpsDown),
+					Cron: &dfv1.CronScheduling{
+						Timezone: "America/Los_Angeles",
+						Schedules: []dfv1.CronSchedule{{
+							Start: cronExpression(start),
+							End:   cronExpression(end),
+							Min:   ptr.To(cronMin), Max: ptr.To(cronMax),
+						}},
+					},
+				},
+			},
+			Status: dfv1.MonoVertexStatus{
+				Phase:         dfv1.MonoVertexPhaseRunning,
+				Replicas:      uint32(current),
+				ReadyReplicas: 0, // skips the gRPC daemon dial, keeping the test self-contained
+				LastScaledAt:  metav1.NewTime(time.Now().Add(-10 * time.Minute)),
+			},
+		}
+		scheme := runtime.NewScheme()
+		assert.NoError(t, dfv1.AddToScheme(scheme))
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mv).Build()
+		return NewScaler(cl), mv, cl
+	}
+
+	t.Run("at cronMin (below parentMin): autoscaler runs without mismatch", func(t *testing.T) {
+		scaler, mv, cl := makeScaler(t, 2, 5, 10, 2, 15, 2, 2)
+		assert.NoError(t, scaler.scaleOneMonoVertex(context.Background(), "default/test-mvtx", 1))
+		updated := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.Background(), client.ObjectKeyFromObject(mv), updated))
+		assert.Equal(t, int32(2), *updated.Spec.Replicas,
+			"spec.replicas should remain at cronMin=2 (autoscaler skips metric phase, no metrics available)")
+	})
+
+	t.Run("at cronMax (above parentMax): autoscaler runs without mismatch", func(t *testing.T) {
+		scaler, mv, cl := makeScaler(t, 15, 5, 10, 2, 15, 2, 2)
+		assert.NoError(t, scaler.scaleOneMonoVertex(context.Background(), "default/test-mvtx", 1))
+		updated := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.Background(), client.ObjectKeyFromObject(mv), updated))
+		assert.Equal(t, int32(15), *updated.Spec.Replicas,
+			"spec.replicas should remain at cronMax=15 (autoscaler skips metric phase, no metrics available)")
+	})
 }
 
 func monoVtxWithCronSchedule(uid types.UID, generation int64, start string) *dfv1.MonoVertex {
