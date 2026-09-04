@@ -75,7 +75,7 @@ Description
 
 <td>
 
-<code>roleArn</code></br> <em> string </em>
+<code>roleArn</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -95,7 +95,7 @@ a required field when assume role is enabled. Example:
 
 <td>
 
-<code>sessionName</code></br> <em> string </em>
+<code>sessionName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -117,7 +117,7 @@ context.
 
 <td>
 
-<code>durationSeconds</code></br> <em> int32 </em>
+<code>durationSeconds</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -139,7 +139,7 @@ session duration setting of the IAM role being assumed.
 
 <td>
 
-<code>externalID</code></br> <em> string </em>
+<code>externalID</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -160,7 +160,7 @@ security measure for cross-account role access.
 
 <td>
 
-<code>policy</code></br> <em> string </em>
+<code>policy</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -183,7 +183,7 @@ restriction of permissions for the specific service operations.
 
 <td>
 
-<code>policyArns</code></br> <em> \[\]string </em>
+<code>policyArns</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -259,7 +259,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Metadata"> Metadata </a> </em>
 </td>
 
@@ -279,7 +279,7 @@ Metadata sets the pods’s metadata, i.e. annotations and labels
 
 <td>
 
-<code>nodeSelector</code></br> <em> map\[string\]string </em>
+<code>nodeSelector</code><br /> <em> map\[string\]string </em>
 </td>
 
 <td>
@@ -301,7 +301,7 @@ scheduled on that node. More info:
 
 <td>
 
-<code>tolerations</code></br> <em>
+<code>tolerations</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
 \[\]Kubernetes core/v1.Toleration </a> </em>
 </td>
@@ -322,7 +322,7 @@ If specified, the pod’s tolerations.
 
 <td>
 
-<code>securityContext</code></br> <em>
+<code>securityContext</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podsecuritycontext-v1-core">
 Kubernetes core/v1.PodSecurityContext </a> </em>
 </td>
@@ -345,7 +345,7 @@ values of each field.
 
 <td>
 
-<code>imagePullSecrets</code></br> <em>
+<code>imagePullSecrets</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
 \[\]Kubernetes core/v1.LocalObjectReference </a> </em>
 </td>
@@ -371,7 +371,7 @@ only DockerConfig type secrets are honored. More info:
 
 <td>
 
-<code>priorityClassName</code></br> <em> string </em>
+<code>priorityClassName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -396,7 +396,7 @@ no default. More info:
 
 <td>
 
-<code>priority</code></br> <em> int32 </em>
+<code>priority</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -420,7 +420,7 @@ higher the priority. More info:
 
 <td>
 
-<code>affinity</code></br> <em>
+<code>affinity</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#affinity-v1-core">
 Kubernetes core/v1.Affinity </a> </em>
 </td>
@@ -442,7 +442,7 @@ The pod’s scheduling constraints More info:
 
 <td>
 
-<code>serviceAccountName</code></br> <em> string </em>
+<code>serviceAccountName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -461,7 +461,7 @@ ServiceAccountName applied to the pod
 
 <td>
 
-<code>runtimeClassName</code></br> <em> string </em>
+<code>runtimeClassName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -485,7 +485,7 @@ empty definition that uses the default runtime handler. More info:
 
 <td>
 
-<code>automountServiceAccountToken</code></br> <em> bool </em>
+<code>automountServiceAccountToken</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -505,7 +505,7 @@ should be automatically mounted.
 
 <td>
 
-<code>dnsPolicy</code></br> <em>
+<code>dnsPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#dnspolicy-v1-core">
 Kubernetes core/v1.DNSPolicy </a> </em>
 </td>
@@ -530,7 +530,7 @@ to specify DNS policy explicitly to ‘ClusterFirstWithHostNet’.
 
 <td>
 
-<code>dnsConfig</code></br> <em>
+<code>dnsConfig</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#poddnsconfig-v1-core">
 Kubernetes core/v1.PodDNSConfig </a> </em>
 </td>
@@ -552,7 +552,7 @@ merged to the generated DNS configuration based on DNSPolicy.
 
 <td>
 
-<code>resourceClaims</code></br> <em>
+<code>resourceClaims</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podresourceclaim-v1-core">
 \[\]Kubernetes core/v1.PodResourceClaim </a> </em>
 </td>
@@ -616,7 +616,7 @@ Description
 
 <td>
 
-<code>log</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.Log">
+<code>log</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.Log">
 Log </a> </em>
 </td>
 
@@ -636,7 +636,7 @@ Log sink is used to write the data to the log.
 
 <td>
 
-<code>kafka</code></br> <em>
+<code>kafka</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
 </td>
 
@@ -656,7 +656,7 @@ Kafka sink is used to write the data to the Kafka.
 
 <td>
 
-<code>blackhole</code></br> <em>
+<code>blackhole</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
 </td>
 
@@ -677,7 +677,7 @@ a sink that discards all the data written to it.
 
 <td>
 
-<code>udsink</code></br> <em>
+<code>udsink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink"> UDSink </a> </em>
 </td>
 
@@ -697,7 +697,7 @@ UDSink sink is used to write the data to the user-defined sink.
 
 <td>
 
-<code>serve</code></br> <em>
+<code>serve</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServeSink"> ServeSink </a> </em>
 </td>
 
@@ -718,7 +718,7 @@ ServingPipeline.
 
 <td>
 
-<code>sqs</code></br> <em>
+<code>sqs</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SqsSink"> SqsSink </a> </em>
 </td>
 
@@ -738,7 +738,7 @@ SQS sink is used to write the data to the AWS SQS.
 
 <td>
 
-<code>pulsar</code></br> <em>
+<code>pulsar</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarSink"> PulsarSink </a>
 </em>
 </td>
@@ -801,7 +801,7 @@ Description
 
 <td>
 
-<code>name</code></br> <em> string </em>
+<code>name</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -814,7 +814,7 @@ Description
 
 <td>
 
-<code>source</code></br> <em>
+<code>source</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Source"> Source </a> </em>
 </td>
 
@@ -829,7 +829,7 @@ Description
 
 <td>
 
-<code>sink</code></br> <em>
+<code>sink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink"> Sink </a> </em>
 </td>
 
@@ -844,7 +844,7 @@ Description
 
 <td>
 
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+<code>udf</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
 UDF </a> </em>
 </td>
 
@@ -859,7 +859,7 @@ UDF </a> </em>
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -880,7 +880,7 @@ Container template for the main numa container.
 
 <td>
 
-<code>initContainerTemplate</code></br> <em>
+<code>initContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -902,7 +902,7 @@ numaflow, excluding the ones specified by the user.
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -924,7 +924,7 @@ type.)
 
 <td>
 
-<code>volumes</code></br> <em>
+<code>volumes</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
 \[\]Kubernetes core/v1.Volume </a> </em>
 </td>
@@ -940,7 +940,7 @@ type.)
 
 <td>
 
-<code>limits</code></br> <em>
+<code>limits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexLimits"> VertexLimits </a>
 </em>
 </td>
@@ -962,7 +962,7 @@ vertices of a pipeline, will override pipeline level settings
 
 <td>
 
-<code>scale</code></br> <em>
+<code>scale</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
 </td>
 
@@ -982,7 +982,7 @@ Settings for autoscaling
 
 <td>
 
-<code>initContainers</code></br> <em>
+<code>initContainers</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -1004,7 +1004,7 @@ List of customized init containers belonging to the pod. More info:
 
 <td>
 
-<code>sidecars</code></br> <em>
+<code>sidecars</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -1025,7 +1025,7 @@ List of customized sidecar containers belonging to the pod.
 
 <td>
 
-<code>partitions</code></br> <em> int32 </em>
+<code>partitions</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -1045,7 +1045,7 @@ sink vertices only.
 
 <td>
 
-<code>sideInputs</code></br> <em> \[\]string </em>
+<code>sideInputs</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -1064,7 +1064,7 @@ Names of the side inputs used in this vertex.
 
 <td>
 
-<code>sideInputsContainerTemplate</code></br> <em>
+<code>sideInputsContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -1085,7 +1085,7 @@ Container template for the side inputs watcher container.
 
 <td>
 
-<code>updateStrategy</code></br> <em>
+<code>updateStrategy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
 </a> </em>
 </td>
@@ -1106,7 +1106,7 @@ The strategy to use to replace existing pods with new ones.
 
 <td>
 
-<code>ordered</code></br> <em>
+<code>ordered</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
 </td>
 
@@ -1179,7 +1179,7 @@ Description
 
 <td>
 
-<code>timeout</code></br> <em>
+<code>timeout</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -1242,7 +1242,7 @@ Description
 
 <td>
 
-<code>token</code></br> <em>
+<code>token</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -1311,7 +1311,7 @@ Description
 
 <td>
 
-<code>interval</code></br> <em>
+<code>interval</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -1332,7 +1332,7 @@ Interval sets the initial retry duration, after a failure occurs.
 
 <td>
 
-<code>steps</code></br> <em> uint32 </em>
+<code>steps</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -1351,7 +1351,7 @@ Steps defines the maximum number of retry attempts
 
 <td>
 
-<code>factor</code></br> <em> float64 </em>
+<code>factor</code><br /> <em> float64 </em>
 </td>
 
 <td>
@@ -1371,7 +1371,7 @@ and the limits imposed by Steps and Cap have not been reached.
 
 <td>
 
-<code>cap</code></br> <em>
+<code>cap</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -1394,7 +1394,7 @@ interval is set to the cap and the steps parameter is set to zero.
 
 <td>
 
-<code>jitter</code></br> <em> float64 </em>
+<code>jitter</code><br /> <em> float64 </em>
 </td>
 
 <td>
@@ -1462,7 +1462,7 @@ Description
 
 <td>
 
-<code>user</code></br> <em>
+<code>user</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -1483,7 +1483,7 @@ Secret for auth user
 
 <td>
 
-<code>password</code></br> <em>
+<code>password</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -1583,7 +1583,7 @@ Description
 
 <td>
 
-<code>jetstream</code></br> <em>
+<code>jetstream</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamConfig">
 JetStreamConfig </a> </em>
 </td>
@@ -1649,7 +1649,7 @@ Description
 
 <td>
 
-<code>Edge</code></br> <em>
+<code>Edge</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Edge"> Edge </a> </em>
 </td>
 
@@ -1668,7 +1668,7 @@ Description
 
 <td>
 
-<code>fromVertexType</code></br> <em>
+<code>fromVertexType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexType"> VertexType </a>
 </em>
 </td>
@@ -1688,7 +1688,7 @@ From vertex type.
 
 <td>
 
-<code>fromVertexPartitionCount</code></br> <em> int32 </em>
+<code>fromVertexPartitionCount</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -1708,7 +1708,7 @@ default value is set to “1”.
 
 <td>
 
-<code>fromVertexLimits</code></br> <em>
+<code>fromVertexLimits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexLimits"> VertexLimits </a>
 </em>
 </td>
@@ -1724,7 +1724,7 @@ default value is set to “1”.
 
 <td>
 
-<code>toVertexType</code></br> <em>
+<code>toVertexType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexType"> VertexType </a>
 </em>
 </td>
@@ -1744,7 +1744,7 @@ To vertex type.
 
 <td>
 
-<code>toVertexPartitionCount</code></br> <em> int32 </em>
+<code>toVertexPartitionCount</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -1764,7 +1764,7 @@ value is set to “1”.
 
 <td>
 
-<code>toVertexLimits</code></br> <em>
+<code>toVertexLimits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexLimits"> VertexLimits </a>
 </em>
 </td>
@@ -1780,7 +1780,7 @@ value is set to “1”.
 
 <td>
 
-<code>toVertexOrdered</code></br> <em>
+<code>toVertexOrdered</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
 </td>
 
@@ -1848,7 +1848,7 @@ Description
 
 <td>
 
-<code>type</code></br> <em>
+<code>type</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CompressionType">
 CompressionType </a> </em>
 </td>
@@ -1960,7 +1960,7 @@ Description
 
 <td>
 
-<code>image</code></br> <em> string </em>
+<code>image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -1974,7 +1974,7 @@ Description
 
 <td>
 
-<code>command</code></br> <em> \[\]string </em>
+<code>command</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -1988,7 +1988,7 @@ Description
 
 <td>
 
-<code>args</code></br> <em> \[\]string </em>
+<code>args</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -2002,7 +2002,7 @@ Description
 
 <td>
 
-<code>env</code></br> <em>
+<code>env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -2018,7 +2018,7 @@ Description
 
 <td>
 
-<code>envFrom</code></br> <em>
+<code>envFrom</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
 \[\]Kubernetes core/v1.EnvFromSource </a> </em>
 </td>
@@ -2034,7 +2034,7 @@ Description
 
 <td>
 
-<code>volumeMounts</code></br> <em>
+<code>volumeMounts</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volumemount-v1-core">
 \[\]Kubernetes core/v1.VolumeMount </a> </em>
 </td>
@@ -2050,7 +2050,7 @@ Description
 
 <td>
 
-<code>resources</code></br> <em>
+<code>resources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -2066,7 +2066,7 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 
 <td>
 
-<code>securityContext</code></br> <em>
+<code>securityContext</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#securitycontext-v1-core">
 Kubernetes core/v1.SecurityContext </a> </em>
 </td>
@@ -2082,7 +2082,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 <td>
 
-<code>imagePullPolicy</code></br> <em>
+<code>imagePullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -2098,7 +2098,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>readinessProbe</code></br> <em>
+<code>readinessProbe</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
@@ -2113,7 +2113,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>livenessProbe</code></br> <em>
+<code>livenessProbe</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
@@ -2128,7 +2128,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>ports</code></br> <em>
+<code>ports</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#containerport-v1-core">
 \[\]Kubernetes core/v1.ContainerPort </a> </em>
 </td>
@@ -2197,7 +2197,7 @@ Description
 
 <td>
 
-<code>resources</code></br> <em>
+<code>resources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -2213,7 +2213,7 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 
 <td>
 
-<code>imagePullPolicy</code></br> <em>
+<code>imagePullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -2229,7 +2229,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>securityContext</code></br> <em>
+<code>securityContext</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#securitycontext-v1-core">
 Kubernetes core/v1.SecurityContext </a> </em>
 </td>
@@ -2245,7 +2245,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 <td>
 
-<code>env</code></br> <em>
+<code>env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -2261,7 +2261,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 <td>
 
-<code>envFrom</code></br> <em>
+<code>envFrom</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
 \[\]Kubernetes core/v1.EnvFromSource </a> </em>
 </td>
@@ -2277,7 +2277,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 <td>
 
-<code>readinessProbe</code></br> <em>
+<code>readinessProbe</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
@@ -2292,7 +2292,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 <td>
 
-<code>livenessProbe</code></br> <em>
+<code>livenessProbe</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
@@ -2348,7 +2348,7 @@ Description
 
 <td>
 
-<code>start</code></br> <em> string </em>
+<code>start</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2367,7 +2367,7 @@ Month Dow).
 
 <td>
 
-<code>end</code></br> <em> string </em>
+<code>end</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2385,7 +2385,7 @@ End of the cron window. Same format as Start. Must differ from Start.
 
 <td>
 
-<code>min</code></br> <em> int32 </em>
+<code>min</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -2403,7 +2403,7 @@ Minimum replicas during this window. Overrides scale.min.
 
 <td>
 
-<code>max</code></br> <em> int32 </em>
+<code>max</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -2467,7 +2467,7 @@ Description
 
 <td>
 
-<code>timezone</code></br> <em> string </em>
+<code>timezone</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2487,7 +2487,7 @@ format. Defaults to UTC.
 
 <td>
 
-<code>schedules</code></br> <em>
+<code>schedules</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CronSchedule"> \[\]CronSchedule
 </a> </em>
 </td>
@@ -2550,7 +2550,7 @@ Description
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -2572,7 +2572,7 @@ type.)
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -2594,7 +2594,7 @@ to 1. More info:
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -2610,7 +2610,7 @@ ContainerTemplate </a> </em>
 
 <td>
 
-<code>initContainerTemplate</code></br> <em>
+<code>initContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -2668,7 +2668,7 @@ Description
 
 <td>
 
-<code>from</code></br> <em> string </em>
+<code>from</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2681,7 +2681,7 @@ Description
 
 <td>
 
-<code>to</code></br> <em> string </em>
+<code>to</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2694,7 +2694,7 @@ Description
 
 <td>
 
-<code>conditions</code></br> <em>
+<code>conditions</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
 ForwardConditions </a> </em>
 </td>
@@ -2715,7 +2715,7 @@ Conditional forwarding, only allowed when “From” is a Source or UDF.
 
 <td>
 
-<code>onFull</code></br> <em>
+<code>onFull</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferFullWritingStrategy">
 BufferFullWritingStrategy </a> </em>
 </td>
@@ -2785,7 +2785,7 @@ Description
 
 <td>
 
-<code>length</code></br> <em>
+<code>length</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -2805,7 +2805,7 @@ Length is the duration of the fixed window.
 
 <td>
 
-<code>streaming</code></br> <em> bool </em>
+<code>streaming</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -2866,7 +2866,7 @@ Description
 
 <td>
 
-<code>tags</code></br> <em>
+<code>tags</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.TagConditions"> TagConditions
 </a> </em>
 </td>
@@ -2932,7 +2932,7 @@ Description
 
 <td>
 
-<code>serviceName</code></br> <em> string </em>
+<code>serviceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2945,7 +2945,7 @@ Description
 
 <td>
 
-<code>realm</code></br> <em> string </em>
+<code>realm</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -2958,7 +2958,7 @@ Description
 
 <td>
 
-<code>usernameSecret</code></br> <em>
+<code>usernameSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -2978,7 +2978,7 @@ UsernameSecret refers to the secret that contains the username
 
 <td>
 
-<code>authType</code></br> <em>
+<code>authType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.KRB5AuthType"> KRB5AuthType </a>
 </em>
 </td>
@@ -2998,7 +2998,7 @@ valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
 
 <td>
 
-<code>passwordSecret</code></br> <em>
+<code>passwordSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -3019,7 +3019,7 @@ PasswordSecret refers to the secret that contains the password
 
 <td>
 
-<code>keytabSecret</code></br> <em>
+<code>keytabSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -3040,7 +3040,7 @@ KeytabSecret refers to the secret that contains the keytab
 
 <td>
 
-<code>kerberosConfigSecret</code></br> <em>
+<code>kerberosConfigSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -3103,7 +3103,7 @@ Description
 
 <td>
 
-<code>rpu</code></br> <em> int64 </em>
+<code>rpu</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -3117,7 +3117,7 @@ Description
 
 <td>
 
-<code>duration</code></br> <em>
+<code>duration</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -3133,7 +3133,7 @@ Kubernetes meta/v1.Duration </a> </em>
 
 <td>
 
-<code>msgSize</code></br> <em> int32 </em>
+<code>msgSize</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3152,7 +3152,7 @@ Size of each generated message
 
 <td>
 
-<code>keyCount</code></br> <em> int32 </em>
+<code>keyCount</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3171,7 +3171,7 @@ KeyCount is the number of unique keys in the payload
 
 <td>
 
-<code>value</code></br> <em> uint64 </em>
+<code>value</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -3190,7 +3190,7 @@ Value is an optional uint64 value to be written in to the payload
 
 <td>
 
-<code>jitter</code></br> <em>
+<code>jitter</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -3214,7 +3214,7 @@ result in the message being out of order by 0 to 10s
 
 <td>
 
-<code>valueBlob</code></br> <em> string </em>
+<code>valueBlob</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3272,7 +3272,7 @@ Description
 
 <td>
 
-<code>ISBSvcType</code></br> <em>
+<code>ISBSvcType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
 </em>
 </td>
@@ -3287,7 +3287,7 @@ Description
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3300,7 +3300,7 @@ Description
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -3315,7 +3315,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -3330,7 +3330,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -3380,7 +3380,7 @@ Description
 
 <td>
 
-<code>Labels</code></br> <em> map\[string\]string </em>
+<code>Labels</code><br /> <em> map\[string\]string </em>
 </td>
 
 <td>
@@ -3393,7 +3393,7 @@ Description
 
 <td>
 
-<code>ClusterPort</code></br> <em> int32 </em>
+<code>ClusterPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3406,7 +3406,7 @@ Description
 
 <td>
 
-<code>ClientPort</code></br> <em> int32 </em>
+<code>ClientPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3419,7 +3419,7 @@ Description
 
 <td>
 
-<code>MonitorPort</code></br> <em> int32 </em>
+<code>MonitorPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3432,7 +3432,7 @@ Description
 
 <td>
 
-<code>MetricsPort</code></br> <em> int32 </em>
+<code>MetricsPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3480,7 +3480,7 @@ Description
 
 <td>
 
-<code>ServiceName</code></br> <em> string </em>
+<code>ServiceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3493,7 +3493,7 @@ Description
 
 <td>
 
-<code>Labels</code></br> <em> map\[string\]string </em>
+<code>Labels</code><br /> <em> map\[string\]string </em>
 </td>
 
 <td>
@@ -3506,7 +3506,7 @@ Description
 
 <td>
 
-<code>NatsImage</code></br> <em> string </em>
+<code>NatsImage</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3519,7 +3519,7 @@ Description
 
 <td>
 
-<code>MetricsExporterImage</code></br> <em> string </em>
+<code>MetricsExporterImage</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3532,7 +3532,7 @@ Description
 
 <td>
 
-<code>ConfigReloaderImage</code></br> <em> string </em>
+<code>ConfigReloaderImage</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3545,7 +3545,7 @@ Description
 
 <td>
 
-<code>ClusterPort</code></br> <em> int32 </em>
+<code>ClusterPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3558,7 +3558,7 @@ Description
 
 <td>
 
-<code>ClientPort</code></br> <em> int32 </em>
+<code>ClientPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3571,7 +3571,7 @@ Description
 
 <td>
 
-<code>MonitorPort</code></br> <em> int32 </em>
+<code>MonitorPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3584,7 +3584,7 @@ Description
 
 <td>
 
-<code>MetricsPort</code></br> <em> int32 </em>
+<code>MetricsPort</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -3597,7 +3597,7 @@ Description
 
 <td>
 
-<code>ServerAuthSecretName</code></br> <em> string </em>
+<code>ServerAuthSecretName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3610,7 +3610,7 @@ Description
 
 <td>
 
-<code>ServerEncryptionSecretName</code></br> <em> string </em>
+<code>ServerEncryptionSecretName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3623,7 +3623,7 @@ Description
 
 <td>
 
-<code>ConfigMapName</code></br> <em> string </em>
+<code>ConfigMapName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3636,7 +3636,7 @@ Description
 
 <td>
 
-<code>PvcNameIfNeeded</code></br> <em> string </em>
+<code>PvcNameIfNeeded</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3649,7 +3649,7 @@ Description
 
 <td>
 
-<code>StartCommand</code></br> <em> string </em>
+<code>StartCommand</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3662,7 +3662,7 @@ Description
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -3712,7 +3712,7 @@ Description
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3725,7 +3725,7 @@ Description
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -3740,7 +3740,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -3755,7 +3755,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -3805,7 +3805,7 @@ Description
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3818,7 +3818,7 @@ Description
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -3833,7 +3833,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -3848,7 +3848,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -3898,7 +3898,7 @@ Description
 
 <td>
 
-<code>ISBSvcConfig</code></br> <em>
+<code>ISBSvcConfig</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig </a> </em>
 </td>
@@ -3913,7 +3913,7 @@ BufferServiceConfig </a> </em>
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -3926,7 +3926,7 @@ BufferServiceConfig </a> </em>
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -3941,7 +3941,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -3956,7 +3956,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -4006,7 +4006,7 @@ Description
 
 <td>
 
-<code>ISBSvcType</code></br> <em>
+<code>ISBSvcType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
 </em>
 </td>
@@ -4021,7 +4021,7 @@ Description
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -4034,7 +4034,7 @@ Description
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -4049,7 +4049,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -4064,7 +4064,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -4114,7 +4114,7 @@ Description
 
 <td>
 
-<code>ISBSvcType</code></br> <em>
+<code>ISBSvcType</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
 </em>
 </td>
@@ -4129,7 +4129,7 @@ Description
 
 <td>
 
-<code>Image</code></br> <em> string </em>
+<code>Image</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -4142,7 +4142,7 @@ Description
 
 <td>
 
-<code>PullPolicy</code></br> <em>
+<code>PullPolicy</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
@@ -4157,7 +4157,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>Env</code></br> <em>
+<code>Env</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
@@ -4172,7 +4172,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>SideInputsStoreName</code></br> <em> string </em>
+<code>SideInputsStoreName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -4185,7 +4185,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>ServingSourceStreamName</code></br> <em> string </em>
+<code>ServingSourceStreamName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -4198,7 +4198,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>PipelineSpec</code></br> <em>
+<code>PipelineSpec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
 </em>
 </td>
@@ -4213,7 +4213,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
-<code>DefaultResources</code></br> <em>
+<code>DefaultResources</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -4274,7 +4274,7 @@ Description
 
 <td>
 
-<code>window</code></br> <em>
+<code>window</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Window"> Window </a> </em>
 </td>
 
@@ -4293,7 +4293,7 @@ Window describes the windowing strategy.
 
 <td>
 
-<code>keyed</code></br> <em> bool </em>
+<code>keyed</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -4307,7 +4307,7 @@ Window describes the windowing strategy.
 
 <td>
 
-<code>allowedLateness</code></br> <em>
+<code>allowedLateness</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -4330,7 +4330,7 @@ AllowedLateness).
 
 <td>
 
-<code>storage</code></br> <em>
+<code>storage</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PBQStorage"> PBQStorage </a>
 </em>
 </td>
@@ -4391,7 +4391,7 @@ Description
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Authorization"> Authorization
 </a> </em>
 </td>
@@ -4407,7 +4407,7 @@ Description
 
 <td>
 
-<code>service</code></br> <em> bool </em>
+<code>service</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -4426,7 +4426,7 @@ Whether to create a ClusterIP Service
 
 <td>
 
-<code>ports</code></br> <em>
+<code>ports</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ports"> Ports </a> </em>
 </td>
 
@@ -4547,7 +4547,7 @@ Description
 
 <td>
 
-<code>threshold</code></br> <em>
+<code>threshold</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -4569,7 +4569,7 @@ duration then the watermark is progressed by <code>IncrementBy</code>.
 
 <td>
 
-<code>stepInterval</code></br> <em>
+<code>stepInterval</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -4594,7 +4594,7 @@ is empty (in other words, this will be a very frequent update).
 
 <td>
 
-<code>incrementBy</code></br> <em>
+<code>incrementBy</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -4615,7 +4615,7 @@ progress the watermark when source is idling.
 
 <td>
 
-<code>initSourceDelay</code></br> <em>
+<code>initSourceDelay</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -4684,7 +4684,7 @@ Description
 
 <td>
 
-<code>compression</code></br> <em>
+<code>compression</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Compression"> Compression </a>
 </em>
 </td>
@@ -4740,7 +4740,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta </a> </em>
 </td>
@@ -4757,7 +4757,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>spec</code></br> <em>
+<code>spec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceSpec">
 InterStepBufferServiceSpec </a> </em>
 </td>
@@ -4771,7 +4771,7 @@ InterStepBufferServiceSpec </a> </em>
 
 <td>
 
-<code>jetstream</code></br> <em>
+<code>jetstream</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">
 JetStreamBufferService </a> </em>
 </td>
@@ -4792,7 +4792,7 @@ JetStreamBufferService </a> </em>
 
 <td>
 
-<code>status</code></br> <em>
+<code>status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">
 InterStepBufferServiceStatus </a> </em>
 </td>
@@ -4849,7 +4849,7 @@ Description
 
 <td>
 
-<code>jetstream</code></br> <em>
+<code>jetstream</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">
 JetStreamBufferService </a> </em>
 </td>
@@ -4905,7 +4905,7 @@ Description
 
 <td>
 
-<code>Status</code></br> <em>
+<code>Status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
 </td>
 
@@ -4924,7 +4924,7 @@ Description
 
 <td>
 
-<code>phase</code></br> <em>
+<code>phase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ISBSvcPhase"> ISBSvcPhase </a>
 </em>
 </td>
@@ -4939,7 +4939,7 @@ Description
 
 <td>
 
-<code>message</code></br> <em> string </em>
+<code>message</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -4952,7 +4952,7 @@ Description
 
 <td>
 
-<code>config</code></br> <em>
+<code>config</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig </a> </em>
 </td>
@@ -4967,7 +4967,7 @@ BufferServiceConfig </a> </em>
 
 <td>
 
-<code>type</code></br> <em>
+<code>type</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
 </em>
 </td>
@@ -4982,7 +4982,7 @@ BufferServiceConfig </a> </em>
 
 <td>
 
-<code>observedGeneration</code></br> <em> int64 </em>
+<code>observedGeneration</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -5036,7 +5036,7 @@ Description
 
 <td>
 
-<code>version</code></br> <em> string </em>
+<code>version</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5054,7 +5054,7 @@ JetStream version, such as “2.7.1”
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -5072,7 +5072,7 @@ JetStream StatefulSet size
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -5093,7 +5093,7 @@ ContainerTemplate contains customized spec for NATS container
 
 <td>
 
-<code>reloaderContainerTemplate</code></br> <em>
+<code>reloaderContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -5115,7 +5115,7 @@ container
 
 <td>
 
-<code>metricsContainerTemplate</code></br> <em>
+<code>metricsContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -5136,7 +5136,7 @@ MetricsContainerTemplate contains customized spec for metrics container
 
 <td>
 
-<code>persistence</code></br> <em>
+<code>persistence</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy </a> </em>
 </td>
@@ -5152,7 +5152,7 @@ PersistenceStrategy </a> </em>
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -5174,7 +5174,7 @@ type.)
 
 <td>
 
-<code>settings</code></br> <em> string </em>
+<code>settings</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5202,7 +5202,7 @@ do not set “store_dir” as it has been hardcoded.
 
 <td>
 
-<code>startArgs</code></br> <em> \[\]string </em>
+<code>startArgs</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -5224,7 +5224,7 @@ available arguments.
 
 <td>
 
-<code>bufferConfig</code></br> <em> string </em>
+<code>bufferConfig</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5254,7 +5254,7 @@ fields under “otBucket” include “maxValueSize”, “history”, “ttl”
 
 <td>
 
-<code>encryption</code></br> <em> bool </em>
+<code>encryption</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -5277,7 +5277,7 @@ existing messages.
 
 <td>
 
-<code>tls</code></br> <em> bool </em>
+<code>tls</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -5338,7 +5338,7 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>url</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5356,7 +5356,7 @@ JetStream (NATS) URL
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.NatsAuth"> NatsAuth </a> </em>
 </td>
 
@@ -5370,7 +5370,7 @@ JetStream (NATS) URL
 
 <td>
 
-<code>streamConfig</code></br> <em> string </em>
+<code>streamConfig</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5384,7 +5384,7 @@ JetStream (NATS) URL
 
 <td>
 
-<code>tlsEnabled</code></br> <em> bool </em>
+<code>tlsEnabled</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -5443,7 +5443,7 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>url</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5462,7 +5462,7 @@ comma.
 
 <td>
 
-<code>stream</code></br> <em> string </em>
+<code>stream</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5480,7 +5480,7 @@ Stream represents the name of the stream.
 
 <td>
 
-<code>consumer</code></br> <em> string </em>
+<code>consumer</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5503,7 +5503,7 @@ be created if it doesn’t exist on the stream.
 
 <td>
 
-<code>deliver_policy</code></br> <em> string </em>
+<code>deliver_policy</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5526,7 +5526,7 @@ to “by_start_time” is unix epoch time in milliseconds.
 
 <td>
 
-<code>filter_subjects</code></br> <em> \[\]string </em>
+<code>filter_subjects</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -5547,7 +5547,7 @@ filter delivery to subscribers.
 
 <td>
 
-<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+<code>tls</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
 
@@ -5567,7 +5567,7 @@ TLS configuration for the nats client.
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.NatsAuth"> NatsAuth </a> </em>
 </td>
 
@@ -5628,7 +5628,7 @@ Description
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -5650,7 +5650,7 @@ type.)
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -5666,7 +5666,7 @@ ContainerTemplate </a> </em>
 
 <td>
 
-<code>ttlSecondsAfterFinished</code></br> <em> int32 </em>
+<code>ttlSecondsAfterFinished</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -5692,7 +5692,7 @@ Numaflow defaults to 30
 
 <td>
 
-<code>backoffLimit</code></br> <em> int32 </em>
+<code>backoffLimit</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -5777,7 +5777,7 @@ Description
 
 <td>
 
-<code>brokers</code></br> <em> \[\]string </em>
+<code>brokers</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -5790,7 +5790,7 @@ Description
 
 <td>
 
-<code>topic</code></br> <em> string </em>
+<code>topic</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5803,7 +5803,7 @@ Description
 
 <td>
 
-<code>setKey</code></br> <em> bool </em>
+<code>setKey</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -5827,7 +5827,7 @@ partition.
 
 <td>
 
-<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+<code>tls</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
 
@@ -5848,7 +5848,7 @@ default for TLS.
 
 <td>
 
-<code>config</code></br> <em> string </em>
+<code>config</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5862,7 +5862,7 @@ default for TLS.
 
 <td>
 
-<code>sasl</code></br> <em>
+<code>sasl</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
 </td>
 
@@ -5924,7 +5924,7 @@ Description
 
 <td>
 
-<code>brokers</code></br> <em> \[\]string </em>
+<code>brokers</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -5937,7 +5937,7 @@ Description
 
 <td>
 
-<code>topic</code></br> <em> string </em>
+<code>topic</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5950,7 +5950,7 @@ Description
 
 <td>
 
-<code>consumerGroup</code></br> <em> string </em>
+<code>consumerGroup</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5963,7 +5963,7 @@ Description
 
 <td>
 
-<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+<code>tls</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
 
@@ -5984,7 +5984,7 @@ default for TLS.
 
 <td>
 
-<code>config</code></br> <em> string </em>
+<code>config</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -5998,7 +5998,7 @@ default for TLS.
 
 <td>
 
-<code>sasl</code></br> <em>
+<code>sasl</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
 </td>
 
@@ -6019,7 +6019,7 @@ default for SASL.
 
 <td>
 
-<code>kafkaVersion</code></br> <em> string </em>
+<code>kafkaVersion</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -6073,7 +6073,7 @@ Description
 
 <td>
 
-<code>deletionGracePeriodSeconds</code></br> <em> int64 </em>
+<code>deletionGracePeriodSeconds</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -6092,7 +6092,7 @@ DeletionGracePeriodSeconds used to delete pipeline gracefully
 
 <td>
 
-<code>desiredPhase</code></br> <em>
+<code>desiredPhase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelinePhase"> PipelinePhase
 </a> </em>
 </td>
@@ -6114,7 +6114,7 @@ phase
 
 <td>
 
-<code>pauseGracePeriodSeconds</code></br> <em> int64 </em>
+<code>pauseGracePeriodSeconds</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -6133,7 +6133,7 @@ PauseGracePeriodSeconds used to pause pipeline gracefully
 
 <td>
 
-<code>deleteGracePeriodSeconds</code></br> <em> int64 </em>
+<code>deleteGracePeriodSeconds</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -6226,7 +6226,7 @@ Description
 
 <td>
 
-<code>annotations</code></br> <em> map\[string\]string </em>
+<code>annotations</code><br /> <em> map\[string\]string </em>
 </td>
 
 <td>
@@ -6239,7 +6239,7 @@ Description
 
 <td>
 
-<code>labels</code></br> <em> map\[string\]string </em>
+<code>labels</code><br /> <em> map\[string\]string </em>
 </td>
 
 <td>
@@ -6287,7 +6287,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta </a> </em>
 </td>
@@ -6304,7 +6304,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>spec</code></br> <em>
+<code>spec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec"> MonoVertexSpec
 </a> </em>
 </td>
@@ -6318,7 +6318,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -6332,7 +6332,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>source</code></br> <em>
+<code>source</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Source"> Source </a> </em>
 </td>
 
@@ -6346,7 +6346,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>sink</code></br> <em>
+<code>sink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink"> Sink </a> </em>
 </td>
 
@@ -6360,7 +6360,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+<code>udf</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
 UDF </a> </em>
 </td>
 
@@ -6375,7 +6375,7 @@ UDF </a> </em>
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -6397,7 +6397,7 @@ type.)
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -6418,7 +6418,7 @@ Container template for the main numa container.
 
 <td>
 
-<code>volumes</code></br> <em>
+<code>volumes</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
 \[\]Kubernetes core/v1.Volume </a> </em>
 </td>
@@ -6434,7 +6434,7 @@ Container template for the main numa container.
 
 <td>
 
-<code>limits</code></br> <em>
+<code>limits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLimits">
 MonoVertexLimits </a> </em>
 </td>
@@ -6456,7 +6456,7 @@ vertex.
 
 <td>
 
-<code>scale</code></br> <em>
+<code>scale</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
 </td>
 
@@ -6476,7 +6476,7 @@ Settings for autoscaling
 
 <td>
 
-<code>initContainers</code></br> <em>
+<code>initContainers</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -6498,7 +6498,7 @@ List of customized init containers belonging to the pod. More info:
 
 <td>
 
-<code>sidecars</code></br> <em>
+<code>sidecars</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -6519,7 +6519,7 @@ List of customized sidecar containers belonging to the pod.
 
 <td>
 
-<code>daemonTemplate</code></br> <em>
+<code>daemonTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
 </a> </em>
 </td>
@@ -6540,7 +6540,7 @@ Template for the daemon service deployment.
 
 <td>
 
-<code>updateStrategy</code></br> <em>
+<code>updateStrategy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
 </a> </em>
 </td>
@@ -6561,7 +6561,7 @@ The strategy to use to replace existing pods with new ones.
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
 MonoVertexLifecycle </a> </em>
 </td>
@@ -6582,7 +6582,7 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 
 <td>
 
-<code>bypass</code></br> <em>
+<code>bypass</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">
 MonoVertexBypassCondition </a> </em>
 </td>
@@ -6608,7 +6608,7 @@ trigger the said bypass.
 
 <td>
 
-<code>streaming</code></br> <em> bool </em>
+<code>streaming</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -6636,7 +6636,7 @@ messages) rather than one batch at a time. This is off by default.
 
 <td>
 
-<code>status</code></br> <em>
+<code>status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexStatus">
 MonoVertexStatus </a> </em>
 </td>
@@ -6693,7 +6693,7 @@ Description
 
 <td>
 
-<code>sink</code></br> <em>
+<code>sink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
 ForwardConditions </a> </em>
 </td>
@@ -6715,7 +6715,7 @@ similar to “conditions” in pipeline spec for edges.
 
 <td>
 
-<code>fallback</code></br> <em>
+<code>fallback</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
 ForwardConditions </a> </em>
 </td>
@@ -6737,7 +6737,7 @@ similar to “conditions” in pipeline spec for edges.
 
 <td>
 
-<code>onSuccess</code></br> <em>
+<code>onSuccess</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
 ForwardConditions </a> </em>
 </td>
@@ -6800,7 +6800,7 @@ Description
 
 <td>
 
-<code>desiredPhase</code></br> <em>
+<code>desiredPhase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexPhase">
 MonoVertexPhase </a> </em>
 </td>
@@ -6863,7 +6863,7 @@ Description
 
 <td>
 
-<code>readBatchSize</code></br> <em> uint64 </em>
+<code>readBatchSize</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -6885,7 +6885,7 @@ for that).
 
 <td>
 
-<code>readTimeout</code></br> <em>
+<code>readTimeout</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -6906,7 +6906,7 @@ ReadTimeout is the read timeout duration from the source.
 
 <td>
 
-<code>rateLimit</code></br> <em>
+<code>rateLimit</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
 </td>
 
@@ -6929,7 +6929,7 @@ calculated for MonoVertex and for Source vertices.
 
 <td>
 
-<code>concurrency</code></br> <em> uint64 </em>
+<code>concurrency</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -7022,7 +7022,7 @@ Description
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -7036,7 +7036,7 @@ Description
 
 <td>
 
-<code>source</code></br> <em>
+<code>source</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Source"> Source </a> </em>
 </td>
 
@@ -7050,7 +7050,7 @@ Description
 
 <td>
 
-<code>sink</code></br> <em>
+<code>sink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink"> Sink </a> </em>
 </td>
 
@@ -7064,7 +7064,7 @@ Description
 
 <td>
 
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+<code>udf</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
 UDF </a> </em>
 </td>
 
@@ -7079,7 +7079,7 @@ UDF </a> </em>
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -7101,7 +7101,7 @@ type.)
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -7122,7 +7122,7 @@ Container template for the main numa container.
 
 <td>
 
-<code>volumes</code></br> <em>
+<code>volumes</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
 \[\]Kubernetes core/v1.Volume </a> </em>
 </td>
@@ -7138,7 +7138,7 @@ Container template for the main numa container.
 
 <td>
 
-<code>limits</code></br> <em>
+<code>limits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLimits">
 MonoVertexLimits </a> </em>
 </td>
@@ -7160,7 +7160,7 @@ vertex.
 
 <td>
 
-<code>scale</code></br> <em>
+<code>scale</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
 </td>
 
@@ -7180,7 +7180,7 @@ Settings for autoscaling
 
 <td>
 
-<code>initContainers</code></br> <em>
+<code>initContainers</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -7202,7 +7202,7 @@ List of customized init containers belonging to the pod. More info:
 
 <td>
 
-<code>sidecars</code></br> <em>
+<code>sidecars</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
 \[\]Kubernetes core/v1.Container </a> </em>
 </td>
@@ -7223,7 +7223,7 @@ List of customized sidecar containers belonging to the pod.
 
 <td>
 
-<code>daemonTemplate</code></br> <em>
+<code>daemonTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
 </a> </em>
 </td>
@@ -7244,7 +7244,7 @@ Template for the daemon service deployment.
 
 <td>
 
-<code>updateStrategy</code></br> <em>
+<code>updateStrategy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
 </a> </em>
 </td>
@@ -7265,7 +7265,7 @@ The strategy to use to replace existing pods with new ones.
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
 MonoVertexLifecycle </a> </em>
 </td>
@@ -7286,7 +7286,7 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 
 <td>
 
-<code>bypass</code></br> <em>
+<code>bypass</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">
 MonoVertexBypassCondition </a> </em>
 </td>
@@ -7312,7 +7312,7 @@ trigger the said bypass.
 
 <td>
 
-<code>streaming</code></br> <em> bool </em>
+<code>streaming</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -7375,7 +7375,7 @@ Description
 
 <td>
 
-<code>Status</code></br> <em>
+<code>Status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
 </td>
 
@@ -7394,7 +7394,7 @@ Description
 
 <td>
 
-<code>phase</code></br> <em>
+<code>phase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexPhase">
 MonoVertexPhase </a> </em>
 </td>
@@ -7410,7 +7410,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
-<code>replicas</code></br> <em> uint32 </em>
+<code>replicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -7430,7 +7430,7 @@ labels match the selector).
 
 <td>
 
-<code>desiredReplicas</code></br> <em> uint32 </em>
+<code>desiredReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -7449,7 +7449,7 @@ The number of desired replicas.
 
 <td>
 
-<code>selector</code></br> <em> string </em>
+<code>selector</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7463,7 +7463,7 @@ The number of desired replicas.
 
 <td>
 
-<code>reason</code></br> <em> string </em>
+<code>reason</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7477,7 +7477,7 @@ The number of desired replicas.
 
 <td>
 
-<code>message</code></br> <em> string </em>
+<code>message</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7491,7 +7491,7 @@ The number of desired replicas.
 
 <td>
 
-<code>lastUpdated</code></br> <em>
+<code>lastUpdated</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
 </td>
@@ -7507,7 +7507,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>lastScaledAt</code></br> <em>
+<code>lastScaledAt</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
 </td>
@@ -7528,7 +7528,7 @@ Time of last scaling operation.
 
 <td>
 
-<code>observedGeneration</code></br> <em> int64 </em>
+<code>observedGeneration</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -7547,7 +7547,7 @@ The generation observed by the MonoVertex controller.
 
 <td>
 
-<code>readyReplicas</code></br> <em> uint32 </em>
+<code>readyReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -7566,7 +7566,7 @@ The number of pods targeted by this MonoVertex with a Ready Condition.
 
 <td>
 
-<code>updatedReplicas</code></br> <em> uint32 </em>
+<code>updatedReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -7585,7 +7585,7 @@ indicated by updateHash.
 
 <td>
 
-<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+<code>updatedReadyReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -7604,7 +7604,7 @@ version indicated by updateHash.
 
 <td>
 
-<code>currentHash</code></br> <em> string </em>
+<code>currentHash</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7623,7 +7623,7 @@ generate Pods.
 
 <td>
 
-<code>updateHash</code></br> <em> string </em>
+<code>updateHash</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7690,7 +7690,7 @@ Description
 
 <td>
 
-<code>basic</code></br> <em>
+<code>basic</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BasicAuth"> BasicAuth </a> </em>
 </td>
 
@@ -7710,7 +7710,7 @@ Basic auth which contains a username and a password
 
 <td>
 
-<code>token</code></br> <em>
+<code>token</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -7731,7 +7731,7 @@ Token auth
 
 <td>
 
-<code>nkey</code></br> <em>
+<code>nkey</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -7793,7 +7793,7 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>url</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7812,7 +7812,7 @@ comma.
 
 <td>
 
-<code>subject</code></br> <em> string </em>
+<code>subject</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7830,7 +7830,7 @@ Subject holds the name of the subject onto which messages are published.
 
 <td>
 
-<code>queue</code></br> <em> string </em>
+<code>queue</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -7848,7 +7848,7 @@ Queue is used for queue subscription.
 
 <td>
 
-<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+<code>tls</code><br /> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
 
@@ -7868,7 +7868,7 @@ TLS configuration for the nats client.
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.NatsAuth"> NatsAuth </a> </em>
 </td>
 
@@ -7976,7 +7976,7 @@ Description
 
 <td>
 
-<code>enabled</code></br> <em> bool </em>
+<code>enabled</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -8041,7 +8041,7 @@ Description
 
 <td>
 
-<code>persistentVolumeClaim</code></br> <em>
+<code>persistentVolumeClaim</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy </a> </em>
 </td>
@@ -8057,7 +8057,7 @@ PersistenceStrategy </a> </em>
 
 <td>
 
-<code>emptyDir</code></br> <em>
+<code>emptyDir</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#emptydirvolumesource-v1-core">
 Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
 </td>
@@ -8073,7 +8073,7 @@ Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
 
 <td>
 
-<code>no_store</code></br> <em>
+<code>no_store</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.NoStore"> NoStore </a> </em>
 </td>
 
@@ -8135,7 +8135,7 @@ Description
 
 <td>
 
-<code>storageClassName</code></br> <em> string </em>
+<code>storageClassName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -8155,7 +8155,7 @@ Name of the StorageClass required by the claim. More info:
 
 <td>
 
-<code>accessMode</code></br> <em>
+<code>accessMode</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#persistentvolumeaccessmode-v1-core">
 Kubernetes core/v1.PersistentVolumeAccessMode </a> </em>
 </td>
@@ -8178,7 +8178,7 @@ ReadWriteMany
 
 <td>
 
-<code>volumeSize</code></br> <em>
+<code>volumeSize</code><br /> <em>
 k8s.io/apimachinery/pkg/api/resource.Quantity </em>
 </td>
 
@@ -8232,7 +8232,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta </a> </em>
 </td>
@@ -8249,7 +8249,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>spec</code></br> <em>
+<code>spec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
 </em>
 </td>
@@ -8263,7 +8263,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>interStepBufferServiceName</code></br> <em> string </em>
+<code>interStepBufferServiceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -8283,7 +8283,7 @@ be used by the pipeline
 
 <td>
 
-<code>vertices</code></br> <em>
+<code>vertices</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">
 \[\]AbstractVertex </a> </em>
 </td>
@@ -8298,7 +8298,7 @@ be used by the pipeline
 
 <td>
 
-<code>edges</code></br> <em>
+<code>edges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 
@@ -8317,7 +8317,7 @@ Edges define the relationships between vertices
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Lifecycle"> Lifecycle </a> </em>
 </td>
 
@@ -8337,7 +8337,7 @@ Lifecycle define the Lifecycle properties
 
 <td>
 
-<code>limits</code></br> <em>
+<code>limits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineLimits"> PipelineLimits
 </a> </em>
 </td>
@@ -8360,7 +8360,7 @@ settings
 
 <td>
 
-<code>watermark</code></br> <em>
+<code>watermark</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
 </td>
 
@@ -8380,7 +8380,7 @@ Watermark enables watermark progression across the entire pipeline.
 
 <td>
 
-<code>templates</code></br> <em>
+<code>templates</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
 </td>
 
@@ -8401,7 +8401,7 @@ for the Pipeline
 
 <td>
 
-<code>sideInputs</code></br> <em>
+<code>sideInputs</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SideInput"> \[\]SideInput </a>
 </em>
 </td>
@@ -8422,7 +8422,7 @@ SideInputs defines the Side Inputs of a pipeline.
 
 <td>
 
-<code>interStepBuffer</code></br> <em>
+<code>interStepBuffer</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
 InterStepBuffer </a> </em>
 </td>
@@ -8443,7 +8443,7 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>ordered</code></br> <em>
+<code>ordered</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
 </td>
 
@@ -8471,7 +8471,7 @@ within each partition). This can be overridden at the vertex level.
 
 <td>
 
-<code>status</code></br> <em>
+<code>status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineStatus"> PipelineStatus
 </a> </em>
 </td>
@@ -8528,7 +8528,7 @@ Description
 
 <td>
 
-<code>readBatchSize</code></br> <em> uint64 </em>
+<code>readBatchSize</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -8551,7 +8551,7 @@ not a cap on how many messages may be in-flight (use
 
 <td>
 
-<code>bufferMaxLength</code></br> <em> uint64 </em>
+<code>bufferMaxLength</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -8572,7 +8572,7 @@ be overridden by the settings in vertex limits.
 
 <td>
 
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
+<code>bufferUsageLimit</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -8594,7 +8594,7 @@ be overridden by the settings in vertex limits.
 
 <td>
 
-<code>readTimeout</code></br> <em>
+<code>readTimeout</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -8616,7 +8616,7 @@ the vertex’s limit settings
 
 <td>
 
-<code>rateLimit</code></br> <em>
+<code>rateLimit</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
 </td>
 
@@ -8641,7 +8641,7 @@ RateLimit.
 
 <td>
 
-<code>concurrency</code></br> <em> uint64 </em>
+<code>concurrency</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -8748,7 +8748,7 @@ Description
 
 <td>
 
-<code>interStepBufferServiceName</code></br> <em> string </em>
+<code>interStepBufferServiceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -8768,7 +8768,7 @@ be used by the pipeline
 
 <td>
 
-<code>vertices</code></br> <em>
+<code>vertices</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">
 \[\]AbstractVertex </a> </em>
 </td>
@@ -8783,7 +8783,7 @@ be used by the pipeline
 
 <td>
 
-<code>edges</code></br> <em>
+<code>edges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 
@@ -8802,7 +8802,7 @@ Edges define the relationships between vertices
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Lifecycle"> Lifecycle </a> </em>
 </td>
 
@@ -8822,7 +8822,7 @@ Lifecycle define the Lifecycle properties
 
 <td>
 
-<code>limits</code></br> <em>
+<code>limits</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineLimits"> PipelineLimits
 </a> </em>
 </td>
@@ -8845,7 +8845,7 @@ settings
 
 <td>
 
-<code>watermark</code></br> <em>
+<code>watermark</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
 </td>
 
@@ -8865,7 +8865,7 @@ Watermark enables watermark progression across the entire pipeline.
 
 <td>
 
-<code>templates</code></br> <em>
+<code>templates</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
 </td>
 
@@ -8886,7 +8886,7 @@ for the Pipeline
 
 <td>
 
-<code>sideInputs</code></br> <em>
+<code>sideInputs</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SideInput"> \[\]SideInput </a>
 </em>
 </td>
@@ -8907,7 +8907,7 @@ SideInputs defines the Side Inputs of a pipeline.
 
 <td>
 
-<code>interStepBuffer</code></br> <em>
+<code>interStepBuffer</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
 InterStepBuffer </a> </em>
 </td>
@@ -8928,7 +8928,7 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>ordered</code></br> <em>
+<code>ordered</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
 </td>
 
@@ -8991,7 +8991,7 @@ Description
 
 <td>
 
-<code>Status</code></br> <em>
+<code>Status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
 </td>
 
@@ -9010,7 +9010,7 @@ Description
 
 <td>
 
-<code>phase</code></br> <em>
+<code>phase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelinePhase"> PipelinePhase
 </a> </em>
 </td>
@@ -9026,7 +9026,7 @@ Description
 
 <td>
 
-<code>message</code></br> <em> string </em>
+<code>message</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9040,7 +9040,7 @@ Description
 
 <td>
 
-<code>lastUpdated</code></br> <em>
+<code>lastUpdated</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
 </td>
@@ -9056,7 +9056,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>vertexCount</code></br> <em> uint32 </em>
+<code>vertexCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9070,7 +9070,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>sourceCount</code></br> <em> uint32 </em>
+<code>sourceCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9084,7 +9084,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>sinkCount</code></br> <em> uint32 </em>
+<code>sinkCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9098,7 +9098,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>udfCount</code></br> <em> uint32 </em>
+<code>udfCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9112,7 +9112,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>mapUDFCount</code></br> <em> uint32 </em>
+<code>mapUDFCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9126,7 +9126,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>reduceUDFCount</code></br> <em> uint32 </em>
+<code>reduceUDFCount</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9140,7 +9140,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>observedGeneration</code></br> <em> int64 </em>
+<code>observedGeneration</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -9159,7 +9159,7 @@ The generation observed by the Pipeline controller.
 
 <td>
 
-<code>drainedOnPause</code></br> <em> bool </em>
+<code>drainedOnPause</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -9222,7 +9222,7 @@ Description
 
 <td>
 
-<code>https</code></br> <em> int32 </em>
+<code>https</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9236,7 +9236,7 @@ Description
 
 <td>
 
-<code>http</code></br> <em> int32 </em>
+<code>http</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9298,7 +9298,7 @@ Description
 
 <td>
 
-<code>initialDelaySeconds</code></br> <em> int32 </em>
+<code>initialDelaySeconds</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9319,7 +9319,7 @@ are initiated. More info:
 
 <td>
 
-<code>timeoutSeconds</code></br> <em> int32 </em>
+<code>timeoutSeconds</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9339,7 +9339,7 @@ Number of seconds after which the probe times out. More info:
 
 <td>
 
-<code>periodSeconds</code></br> <em> int32 </em>
+<code>periodSeconds</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9358,7 +9358,7 @@ How often (in seconds) to perform the probe.
 
 <td>
 
-<code>successThreshold</code></br> <em> int32 </em>
+<code>successThreshold</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9379,7 +9379,7 @@ Minimum value is 1.
 
 <td>
 
-<code>failureThreshold</code></br> <em> int32 </em>
+<code>failureThreshold</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -9446,7 +9446,7 @@ Description
 
 <td>
 
-<code>token</code></br> <em>
+<code>token</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -9467,7 +9467,7 @@ JWT Token auth
 
 <td>
 
-<code>basicAuth</code></br> <em>
+<code>basicAuth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarBasicAuth">
 PulsarBasicAuth </a> </em>
 </td>
@@ -9530,7 +9530,7 @@ Description
 
 <td>
 
-<code>username</code></br> <em>
+<code>username</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -9546,7 +9546,7 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 
 <td>
 
-<code>password</code></br> <em>
+<code>password</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -9603,7 +9603,7 @@ Description
 
 <td>
 
-<code>topic</code></br> <em> string </em>
+<code>topic</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9621,7 +9621,7 @@ Topic where messages exceeding the max redelivery count will be sent.
 
 <td>
 
-<code>maxRedelivery</code></br> <em> uint32 </em>
+<code>maxRedelivery</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9681,7 +9681,7 @@ Description
 
 <td>
 
-<code>serverAddr</code></br> <em> string </em>
+<code>serverAddr</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9694,7 +9694,7 @@ Description
 
 <td>
 
-<code>topic</code></br> <em> string </em>
+<code>topic</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9707,7 +9707,7 @@ Description
 
 <td>
 
-<code>producerName</code></br> <em> string </em>
+<code>producerName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9720,7 +9720,7 @@ Description
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
 </em>
 </td>
@@ -9782,7 +9782,7 @@ Description
 
 <td>
 
-<code>serverAddr</code></br> <em> string </em>
+<code>serverAddr</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9795,7 +9795,7 @@ Description
 
 <td>
 
-<code>topic</code></br> <em> string </em>
+<code>topic</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9808,7 +9808,7 @@ Description
 
 <td>
 
-<code>consumerName</code></br> <em> string </em>
+<code>consumerName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9821,7 +9821,7 @@ Description
 
 <td>
 
-<code>subscriptionName</code></br> <em> string </em>
+<code>subscriptionName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -9834,7 +9834,7 @@ Description
 
 <td>
 
-<code>maxUnack</code></br> <em> uint32 </em>
+<code>maxUnack</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -9853,7 +9853,7 @@ limit is crossed, futher read requests will return empty list.
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
 </em>
 </td>
@@ -9874,7 +9874,7 @@ Auth information
 
 <td>
 
-<code>deadLetterPolicy</code></br> <em>
+<code>deadLetterPolicy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarDeadLetterPolicy">
 PulsarDeadLetterPolicy </a> </em>
 </td>
@@ -9938,7 +9938,7 @@ Description
 
 <td>
 
-<code>max</code></br> <em> uint64 </em>
+<code>max</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -9958,7 +9958,7 @@ for a single replica.
 
 <td>
 
-<code>min</code></br> <em> uint64 </em>
+<code>min</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -9979,7 +9979,7 @@ replica.
 
 <td>
 
-<code>rampUpDuration</code></br> <em>
+<code>rampUpDuration</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -10000,7 +10000,7 @@ TPS. The min unit of ramp up is 1 in 1 second.
 
 <td>
 
-<code>store</code></br> <em>
+<code>store</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">
 RateLimiterStore </a> </em>
 </td>
@@ -10024,7 +10024,7 @@ the sum of all the replicas.
 
 <td>
 
-<code>modes</code></br> <em>
+<code>modes</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">
 RateLimiterModes </a> </em>
 </td>
@@ -10045,7 +10045,7 @@ RateLimiterModes is used to define the modes for rate limiting.
 
 <td>
 
-<code>resumedRampUp</code></br> <em> bool </em>
+<code>resumedRampUp</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -10078,7 +10078,7 @@ processor first deregisters with the rate limiter.
 
 <td>
 
-<code>ttl</code></br> <em>
+<code>ttl</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -10158,7 +10158,7 @@ Description
 
 <td>
 
-<code>coolDownPeriod</code></br> <em>
+<code>coolDownPeriod</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -10180,7 +10180,7 @@ ramping down if the request is made after the cool-down period.
 
 <td>
 
-<code>rampDownPercentage</code></br> <em> uint32 </em>
+<code>rampDownPercentage</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -10201,7 +10201,7 @@ the rate of slope=(max - min)/duration.
 
 <td>
 
-<code>thresholdPercentage</code></br> <em> uint32 </em>
+<code>thresholdPercentage</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -10288,7 +10288,7 @@ Description
 
 <td>
 
-<code>scheduled</code></br> <em>
+<code>scheduled</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterScheduled">
 RateLimiterScheduled </a> </em>
 </td>
@@ -10310,7 +10310,7 @@ tokens based on ramp-up duration.
 
 <td>
 
-<code>relaxed</code></br> <em>
+<code>relaxed</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRelaxed">
 RateLimiterRelaxed </a> </em>
 </td>
@@ -10331,7 +10331,7 @@ If there is some traffic, then release the max possible tokens.
 
 <td>
 
-<code>onlyIfUsed</code></br> <em>
+<code>onlyIfUsed</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterOnlyIfUsed">
 RateLimiterOnlyIfUsed </a> </em>
 </td>
@@ -10353,7 +10353,7 @@ been utilized above the configured threshold
 
 <td>
 
-<code>goBackN</code></br> <em>
+<code>goBackN</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterGoBackN">
 RateLimiterGoBackN </a> </em>
 </td>
@@ -10425,7 +10425,7 @@ Description
 
 <td>
 
-<code>thresholdPercentage</code></br> <em> uint32 </em>
+<code>thresholdPercentage</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -10501,7 +10501,7 @@ Description
 
 <td>
 
-<code>mode</code></br> <em> string </em>
+<code>mode</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -10520,7 +10520,7 @@ rediss://…) - Sentinel: discover the node via Redis Sentinel
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>url</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -10541,7 +10541,7 @@ Mutually exclusive with .sentinel
 
 <td>
 
-<code>sentinel</code></br> <em>
+<code>sentinel</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">
 RedisSentinelConfig </a> </em>
 </td>
@@ -10563,7 +10563,7 @@ Mutually exclusive with .url
 
 <td>
 
-<code>db</code></br> <em> int32 </em>
+<code>db</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -10666,7 +10666,7 @@ Description
 
 <td>
 
-<code>redisStore</code></br> <em>
+<code>redisStore</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
 RateLimiterRedisStore </a> </em>
 </td>
@@ -10687,7 +10687,7 @@ RedisStore is used to define the redis store for the rate limit.
 
 <td>
 
-<code>inMemoryStore</code></br> <em>
+<code>inMemoryStore</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
 RateLimiterInMemoryStore </a> </em>
 </td>
@@ -10749,7 +10749,7 @@ Description
 
 <td>
 
-<code>username</code></br> <em>
+<code>username</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -10770,7 +10770,7 @@ For Redis 6+ ACLs. If Username omitted, password-only is also supported.
 
 <td>
 
-<code>password</code></br> <em>
+<code>password</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -10827,7 +10827,7 @@ Description
 
 <td>
 
-<code>masterName</code></br> <em> string </em>
+<code>masterName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -10845,7 +10845,7 @@ Required Sentinel “service name” (aka master name) from sentinel.conf
 
 <td>
 
-<code>endpoints</code></br> <em> \[\]string </em>
+<code>endpoints</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -10864,7 +10864,7 @@ Example: \[“sentinel-0.redis.svc:26379”, “sentinel-1.redis.svc:26379”\]
 
 <td>
 
-<code>sentinelAuth</code></br> <em>
+<code>sentinelAuth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RedisAuth"> RedisAuth </a> </em>
 </td>
 
@@ -10884,7 +10884,7 @@ Auth to talk to the Sentinel daemons (control-plane). Optional.
 
 <td>
 
-<code>redisAuth</code></br> <em>
+<code>redisAuth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RedisAuth"> RedisAuth </a> </em>
 </td>
 
@@ -10904,7 +10904,7 @@ Auth to talk to the Redis data nodes (data-plane). Optional.
 
 <td>
 
-<code>sentinelTLS</code></br> <em>
+<code>sentinelTLS</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.TLS"> TLS </a> </em>
 </td>
 
@@ -10924,7 +10924,7 @@ TLS for Sentinel connections (if your Sentinels expose TLS).
 
 <td>
 
-<code>redisTLS</code></br> <em>
+<code>redisTLS</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.TLS"> TLS </a> </em>
 </td>
 
@@ -10996,7 +10996,7 @@ Description
 
 <td>
 
-<code>backoff</code></br> <em>
+<code>backoff</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Backoff"> Backoff </a> </em>
 </td>
 
@@ -11017,7 +11017,7 @@ controlling how delays between retries should increase.
 
 <td>
 
-<code>onFailure</code></br> <em>
+<code>onFailure</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.OnFailureRetryStrategy">
 OnFailureRetryStrategy </a> </em>
 </td>
@@ -11089,7 +11089,7 @@ Description
 
 <td>
 
-<code>maxUnavailable</code></br> <em>
+<code>maxUnavailable</code><br /> <em>
 k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
 </td>
 
@@ -11159,7 +11159,7 @@ Description
 
 <td>
 
-<code>mechanism</code></br> <em>
+<code>mechanism</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASLType"> SASLType </a> </em>
 </td>
 
@@ -11178,7 +11178,7 @@ SASL mechanism to use
 
 <td>
 
-<code>gssapi</code></br> <em>
+<code>gssapi</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.GSSAPI"> GSSAPI </a> </em>
 </td>
 
@@ -11198,7 +11198,7 @@ GSSAPI contains the kerberos config
 
 <td>
 
-<code>plain</code></br> <em>
+<code>plain</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
 </td>
 
@@ -11218,7 +11218,7 @@ SASLPlain contains the sasl plain config
 
 <td>
 
-<code>scramsha256</code></br> <em>
+<code>scramsha256</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
 </td>
 
@@ -11238,7 +11238,7 @@ SASLSCRAMSHA256 contains the sasl plain config
 
 <td>
 
-<code>scramsha512</code></br> <em>
+<code>scramsha512</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
 </td>
 
@@ -11258,7 +11258,7 @@ SASLSCRAMSHA512 contains the sasl plain config
 
 <td>
 
-<code>oauth</code></br> <em>
+<code>oauth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SASLOAuth"> SASLOAuth </a> </em>
 </td>
 
@@ -11319,7 +11319,7 @@ Description
 
 <td>
 
-<code>clientID</code></br> <em>
+<code>clientID</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -11339,7 +11339,7 @@ ClientID refers to the secret that contains the client id
 
 <td>
 
-<code>clientSecret</code></br> <em>
+<code>clientSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -11359,7 +11359,7 @@ ClientSecret refers to the secret that contains the client secret
 
 <td>
 
-<code>tokenEndpoint</code></br> <em> string </em>
+<code>tokenEndpoint</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -11418,7 +11418,7 @@ Description
 
 <td>
 
-<code>userSecret</code></br> <em>
+<code>userSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -11438,7 +11438,7 @@ UserSecret refers to the secret that contains the user
 
 <td>
 
-<code>passwordSecret</code></br> <em>
+<code>passwordSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -11459,7 +11459,7 @@ PasswordSecret refers to the secret that contains the password
 
 <td>
 
-<code>handshake</code></br> <em> bool </em>
+<code>handshake</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -11541,7 +11541,7 @@ Description
 
 <td>
 
-<code>disabled</code></br> <em> bool </em>
+<code>disabled</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -11561,7 +11561,7 @@ or any other 3rd party autoscaling strategies.
 
 <td>
 
-<code>min</code></br> <em> int32 </em>
+<code>min</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -11580,7 +11580,7 @@ Minimum replicas.
 
 <td>
 
-<code>max</code></br> <em> int32 </em>
+<code>max</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -11599,7 +11599,7 @@ Maximum replicas.
 
 <td>
 
-<code>lookbackSeconds</code></br> <em> uint32 </em>
+<code>lookbackSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11619,7 +11619,7 @@ processing rate.
 
 <td>
 
-<code>zeroReplicaSleepSeconds</code></br> <em> uint32 </em>
+<code>zeroReplicaSleepSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11639,7 +11639,7 @@ scaling the source vertex back up to peek.
 
 <td>
 
-<code>targetProcessingSeconds</code></br> <em> uint32 </em>
+<code>targetProcessingSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11662,7 +11662,7 @@ only effective for source vertices.
 
 <td>
 
-<code>targetBufferAvailability</code></br> <em> uint32 </em>
+<code>targetBufferAvailability</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11685,7 +11685,7 @@ have buffers to read.
 
 <td>
 
-<code>replicasPerScale</code></br> <em> uint32 </em>
+<code>replicasPerScale</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11707,7 +11707,7 @@ ReplicasPerScaleUp and ReplicasPerScaleDown instead
 
 <td>
 
-<code>scaleUpCooldownSeconds</code></br> <em> uint32 </em>
+<code>scaleUpCooldownSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11728,7 +11728,7 @@ CooldownSeconds if not set.
 
 <td>
 
-<code>scaleDownCooldownSeconds</code></br> <em> uint32 </em>
+<code>scaleDownCooldownSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11749,7 +11749,7 @@ CooldownSeconds if not set.
 
 <td>
 
-<code>replicasPerScaleUp</code></br> <em> uint32 </em>
+<code>replicasPerScaleUp</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11770,7 +11770,7 @@ aggressive scaling up operations
 
 <td>
 
-<code>replicasPerScaleDown</code></br> <em> uint32 </em>
+<code>replicasPerScaleDown</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -11791,7 +11791,7 @@ too aggressive scaling down operations
 
 <td>
 
-<code>cron</code></br> <em>
+<code>cron</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CronScheduling"> CronScheduling
 </a> </em>
 </td>
@@ -11864,7 +11864,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta </a> </em>
 </td>
@@ -11881,7 +11881,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>spec</code></br> <em>
+<code>spec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineSpec">
 ServingPipelineSpec </a> </em>
 </td>
@@ -11895,7 +11895,7 @@ ServingPipelineSpec </a> </em>
 
 <td>
 
-<code>serving</code></br> <em>
+<code>serving</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSpec"> ServingSpec </a>
 </em>
 </td>
@@ -11910,7 +11910,7 @@ ServingPipelineSpec </a> </em>
 
 <td>
 
-<code>pipeline</code></br> <em>
+<code>pipeline</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
 </em>
 </td>
@@ -11931,7 +11931,7 @@ ServingPipelineSpec </a> </em>
 
 <td>
 
-<code>status</code></br> <em>
+<code>status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineStatus">
 ServingPipelineStatus </a> </em>
 </td>
@@ -12005,7 +12005,7 @@ Description
 
 <td>
 
-<code>serving</code></br> <em>
+<code>serving</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSpec"> ServingSpec </a>
 </em>
 </td>
@@ -12020,7 +12020,7 @@ Description
 
 <td>
 
-<code>pipeline</code></br> <em>
+<code>pipeline</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
 </em>
 </td>
@@ -12076,7 +12076,7 @@ Description
 
 <td>
 
-<code>Status</code></br> <em>
+<code>Status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
 </td>
 
@@ -12095,7 +12095,7 @@ Description
 
 <td>
 
-<code>phase</code></br> <em>
+<code>phase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingPipelinePhase">
 ServingPipelinePhase </a> </em>
 </td>
@@ -12111,7 +12111,7 @@ ServingPipelinePhase </a> </em>
 
 <td>
 
-<code>message</code></br> <em> string </em>
+<code>message</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -12125,7 +12125,7 @@ ServingPipelinePhase </a> </em>
 
 <td>
 
-<code>lastUpdated</code></br> <em>
+<code>lastUpdated</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
 </td>
@@ -12141,7 +12141,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>observedGeneration</code></br> <em> int64 </em>
+<code>observedGeneration</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -12222,7 +12222,7 @@ Description
 
 <td>
 
-<code>auth</code></br> <em>
+<code>auth</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Authorization"> Authorization
 </a> </em>
 </td>
@@ -12238,7 +12238,7 @@ Description
 
 <td>
 
-<code>service</code></br> <em> bool </em>
+<code>service</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -12257,7 +12257,7 @@ Whether to create a ClusterIP Service
 
 <td>
 
-<code>ports</code></br> <em>
+<code>ports</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Ports"> Ports </a> </em>
 </td>
 
@@ -12278,7 +12278,7 @@ server the http port should be explicitly set.
 
 <td>
 
-<code>msgIDHeaderKey</code></br> <em> string </em>
+<code>msgIDHeaderKey</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -12296,7 +12296,7 @@ The header key from which the message id will be extracted
 
 <td>
 
-<code>requestTimeoutSeconds</code></br> <em> uint32 </em>
+<code>requestTimeoutSeconds</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -12315,7 +12315,7 @@ Request timeout in seconds. Default value is 120 seconds.
 
 <td>
 
-<code>store</code></br> <em>
+<code>store</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
 </em>
 </td>
@@ -12331,7 +12331,7 @@ Request timeout in seconds. Default value is 120 seconds.
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -12352,7 +12352,7 @@ Container template for the serving container.
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -12371,7 +12371,7 @@ Initial replicas of the serving server deployment.
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -12439,7 +12439,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -12499,7 +12499,7 @@ Description
 
 <td>
 
-<code>timeout</code></br> <em>
+<code>timeout</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -12566,7 +12566,7 @@ Description
 
 <td>
 
-<code>name</code></br> <em> string </em>
+<code>name</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -12579,7 +12579,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -12593,7 +12593,7 @@ Description
 
 <td>
 
-<code>volumes</code></br> <em>
+<code>volumes</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
 \[\]Kubernetes core/v1.Volume </a> </em>
 </td>
@@ -12609,7 +12609,7 @@ Description
 
 <td>
 
-<code>trigger</code></br> <em>
+<code>trigger</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputTrigger">
 SideInputTrigger </a> </em>
 </td>
@@ -12665,7 +12665,7 @@ Description
 
 <td>
 
-<code>schedule</code></br> <em> string </em>
+<code>schedule</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -12685,7 +12685,7 @@ format, such as “@hourly&rdquo;, “@every 1h30m”, etc.
 
 <td>
 
-<code>timezone</code></br> <em> string </em>
+<code>timezone</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -12740,7 +12740,7 @@ Description
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -12762,7 +12762,7 @@ type.)
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -12783,7 +12783,7 @@ Template for the side inputs manager numa container
 
 <td>
 
-<code>initContainerTemplate</code></br> <em>
+<code>initContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -12846,7 +12846,7 @@ Description
 
 <td>
 
-<code>AbstractSink</code></br> <em>
+<code>AbstractSink</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
 </em>
 </td>
@@ -12866,7 +12866,7 @@ Description
 
 <td>
 
-<code>fallback</code></br> <em>
+<code>fallback</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
 </em>
 </td>
@@ -12889,7 +12889,7 @@ it.
 
 <td>
 
-<code>onSuccess</code></br> <em>
+<code>onSuccess</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
 </em>
 </td>
@@ -12914,7 +12914,7 @@ sink.
 
 <td>
 
-<code>retryStrategy</code></br> <em>
+<code>retryStrategy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
 </a> </em>
 </td>
@@ -12982,7 +12982,7 @@ Description
 
 <td>
 
-<code>length</code></br> <em>
+<code>length</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -13002,7 +13002,7 @@ Length is the duration of the sliding window.
 
 <td>
 
-<code>slide</code></br> <em>
+<code>slide</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -13023,7 +13023,7 @@ sliding window is created.
 
 <td>
 
-<code>streaming</code></br> <em> bool </em>
+<code>streaming</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -13084,7 +13084,7 @@ Description
 
 <td>
 
-<code>generator</code></br> <em>
+<code>generator</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.GeneratorSource">
 GeneratorSource </a> </em>
 </td>
@@ -13100,7 +13100,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>kafka</code></br> <em>
+<code>kafka</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource"> KafkaSource </a>
 </em>
 </td>
@@ -13116,7 +13116,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>http</code></br> <em>
+<code>http</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.HTTPSource"> HTTPSource </a>
 </em>
 </td>
@@ -13132,7 +13132,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>nats</code></br> <em>
+<code>nats</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource"> NatsSource </a>
 </em>
 </td>
@@ -13148,7 +13148,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>transformer</code></br> <em>
+<code>transformer</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
 </a> </em>
 </td>
@@ -13164,7 +13164,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>udsource</code></br> <em>
+<code>udsource</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDSource"> UDSource </a> </em>
 </td>
 
@@ -13179,7 +13179,7 @@ GeneratorSource </a> </em>
 
 <td>
 
-<code>jetstream</code></br> <em>
+<code>jetstream</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">
 JetStreamSource </a> </em>
 </td>
@@ -13195,7 +13195,7 @@ JetStreamSource </a> </em>
 
 <td>
 
-<code>serving</code></br> <em>
+<code>serving</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
 </a> </em>
 </td>
@@ -13211,7 +13211,7 @@ JetStreamSource </a> </em>
 
 <td>
 
-<code>pulsar</code></br> <em>
+<code>pulsar</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarSource"> PulsarSource </a>
 </em>
 </td>
@@ -13227,7 +13227,7 @@ JetStreamSource </a> </em>
 
 <td>
 
-<code>sqs</code></br> <em>
+<code>sqs</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SqsSource"> SqsSource </a> </em>
 </td>
 
@@ -13283,7 +13283,7 @@ Description
 
 <td>
 
-<code>awsRegion</code></br> <em> string </em>
+<code>awsRegion</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13301,7 +13301,7 @@ AWSRegion is the AWS Region where the SQS queue is located
 
 <td>
 
-<code>queueName</code></br> <em> string </em>
+<code>queueName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13319,7 +13319,7 @@ QueueName is the name of the SQS queue
 
 <td>
 
-<code>queueOwnerAWSAccountID</code></br> <em> string </em>
+<code>queueOwnerAWSAccountID</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13337,7 +13337,7 @@ QueueOwnerAWSAccountID is the queue owner aws account id
 
 <td>
 
-<code>assumeRole</code></br> <em>
+<code>assumeRole</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AWSAssumeRole"> AWSAssumeRole
 </a> </em>
 </td>
@@ -13406,7 +13406,7 @@ Description
 
 <td>
 
-<code>awsRegion</code></br> <em> string </em>
+<code>awsRegion</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13424,7 +13424,7 @@ AWSRegion is the AWS Region where the SQS queue is located
 
 <td>
 
-<code>queueName</code></br> <em> string </em>
+<code>queueName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13442,7 +13442,7 @@ QueueName is the name of the SQS queue
 
 <td>
 
-<code>queueOwnerAWSAccountID</code></br> <em> string </em>
+<code>queueOwnerAWSAccountID</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13460,7 +13460,7 @@ QueueOwnerAWSAccountID is the queue owner aws account id
 
 <td>
 
-<code>visibilityTimeout</code></br> <em> int32 </em>
+<code>visibilityTimeout</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -13481,7 +13481,7 @@ retrieved by a ReceiveMessage request. Valid values: 0-43200 (12 hours)
 
 <td>
 
-<code>maxNumberOfMessages</code></br> <em> int32 </em>
+<code>maxNumberOfMessages</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -13501,7 +13501,7 @@ single poll. Valid values: 1-10 Defaults to 1
 
 <td>
 
-<code>waitTimeSeconds</code></br> <em> int32 </em>
+<code>waitTimeSeconds</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -13523,7 +13523,7 @@ available, the call returns sooner than WaitTimeSeconds. Valid values:
 
 <td>
 
-<code>endpointUrl</code></br> <em> string </em>
+<code>endpointUrl</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -13543,7 +13543,7 @@ useful for testing with localstack or when using VPC endpoints.
 
 <td>
 
-<code>attributeNames</code></br> <em> \[\]string </em>
+<code>attributeNames</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -13571,7 +13571,7 @@ FifoThroughputLimit \| RedriveAllowPolicy \| SqsManagedSseEnabled
 
 <td>
 
-<code>messageAttributeNames</code></br> <em> \[\]string </em>
+<code>messageAttributeNames</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -13591,7 +13591,7 @@ returned along with each message.
 
 <td>
 
-<code>assumeRole</code></br> <em>
+<code>assumeRole</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AWSAssumeRole"> AWSAssumeRole
 </a> </em>
 </td>
@@ -13664,7 +13664,7 @@ Description
 
 <td>
 
-<code>conditions</code></br> <em>
+<code>conditions</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#condition-v1-meta">
 \[\]Kubernetes meta/v1.Condition </a> </em>
 </td>
@@ -13731,7 +13731,7 @@ Description
 
 <td>
 
-<code>insecureSkipVerify</code></br> <em> bool </em>
+<code>insecureSkipVerify</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -13745,7 +13745,7 @@ Description
 
 <td>
 
-<code>caCertSecret</code></br> <em>
+<code>caCertSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -13766,7 +13766,7 @@ CACertSecret refers to the secret that contains the CA cert
 
 <td>
 
-<code>certSecret</code></br> <em>
+<code>certSecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -13787,7 +13787,7 @@ CertSecret refers to the secret that contains the cert
 
 <td>
 
-<code>keySecret</code></br> <em>
+<code>keySecret</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -13849,7 +13849,7 @@ Description
 
 <td>
 
-<code>operator</code></br> <em>
+<code>operator</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.LogicOperator"> LogicOperator
 </a> </em>
 </td>
@@ -13871,7 +13871,7 @@ conditional forwarding value could be “and”, “or”, “not”
 
 <td>
 
-<code>values</code></br> <em> \[\]string </em>
+<code>values</code><br /> <em> \[\]string </em>
 </td>
 
 <td>
@@ -13930,7 +13930,7 @@ Description
 
 <td>
 
-<code>daemon</code></br> <em>
+<code>daemon</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
 </a> </em>
 </td>
@@ -13951,7 +13951,7 @@ DaemonTemplate is used to customize the Daemon Deployment.
 
 <td>
 
-<code>job</code></br> <em>
+<code>job</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate"> JobTemplate </a>
 </em>
 </td>
@@ -13972,7 +13972,7 @@ JobTemplate is used to customize Jobs.
 
 <td>
 
-<code>sideInputsManager</code></br> <em>
+<code>sideInputsManager</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">
 SideInputsManagerTemplate </a> </em>
 </td>
@@ -13993,7 +13993,7 @@ SideInputsManagerTemplate is used to customize the Side Inputs Manager.
 
 <td>
 
-<code>vertex</code></br> <em>
+<code>vertex</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate"> VertexTemplate
 </a> </em>
 </td>
@@ -14056,7 +14056,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -14071,7 +14071,7 @@ Description
 
 <td>
 
-<code>groupBy</code></br> <em>
+<code>groupBy</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.GroupBy"> GroupBy </a> </em>
 </td>
 
@@ -14143,7 +14143,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -14198,7 +14198,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -14253,7 +14253,7 @@ Description
 
 <td>
 
-<code>container</code></br> <em>
+<code>container</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
@@ -14338,7 +14338,7 @@ Description
 
 <td>
 
-<code>type</code></br> <em>
+<code>type</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
 UpdateStrategyType </a> </em>
 </td>
@@ -14360,7 +14360,7 @@ RollingUpdate.
 
 <td>
 
-<code>rollingUpdate</code></br> <em>
+<code>rollingUpdate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
 RollingUpdateStrategy </a> </em>
 </td>
@@ -14446,7 +14446,7 @@ Description
 
 <td>
 
-<code>metadata</code></br> <em>
+<code>metadata</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta </a> </em>
 </td>
@@ -14463,7 +14463,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>spec</code></br> <em>
+<code>spec</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexSpec"> VertexSpec </a>
 </em>
 </td>
@@ -14477,7 +14477,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>AbstractVertex</code></br> <em>
+<code>AbstractVertex</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex"> AbstractVertex
 </a> </em>
 </td>
@@ -14497,7 +14497,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>pipelineName</code></br> <em> string </em>
+<code>pipelineName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -14510,7 +14510,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>interStepBufferServiceName</code></br> <em> string </em>
+<code>interStepBufferServiceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -14524,7 +14524,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -14538,7 +14538,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>fromEdges</code></br> <em>
+<code>fromEdges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
 </a> </em>
 </td>
@@ -14554,7 +14554,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>toEdges</code></br> <em>
+<code>toEdges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
 </a> </em>
 </td>
@@ -14570,7 +14570,7 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
-<code>watermark</code></br> <em>
+<code>watermark</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
 </td>
 
@@ -14591,7 +14591,7 @@ from the pipeline watermark settings.
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
 VertexLifecycle </a> </em>
 </td>
@@ -14612,7 +14612,7 @@ Lifecycle defines the Lifecycle properties of a vertex
 
 <td>
 
-<code>interStepBuffer</code></br> <em>
+<code>interStepBuffer</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
 InterStepBuffer </a> </em>
 </td>
@@ -14639,7 +14639,7 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>status</code></br> <em>
+<code>status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexStatus"> VertexStatus </a>
 </em>
 </td>
@@ -14697,7 +14697,7 @@ Description
 
 <td>
 
-<code>vertex</code></br> <em>
+<code>vertex</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Vertex"> Vertex </a> </em>
 </td>
 
@@ -14711,7 +14711,7 @@ Description
 
 <td>
 
-<code>hostname</code></br> <em> string </em>
+<code>hostname</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -14724,7 +14724,7 @@ Description
 
 <td>
 
-<code>replica</code></br> <em> int32 </em>
+<code>replica</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -14778,7 +14778,7 @@ Description
 
 <td>
 
-<code>desiredPhase</code></br> <em>
+<code>desiredPhase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexPhase"> VertexPhase </a>
 </em>
 </td>
@@ -14842,7 +14842,7 @@ Description
 
 <td>
 
-<code>readBatchSize</code></br> <em> uint64 </em>
+<code>readBatchSize</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -14865,7 +14865,7 @@ that).
 
 <td>
 
-<code>readTimeout</code></br> <em>
+<code>readTimeout</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -14887,7 +14887,7 @@ settings from pipeline limits.
 
 <td>
 
-<code>bufferMaxLength</code></br> <em> uint64 </em>
+<code>bufferMaxLength</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -14907,7 +14907,7 @@ overrides the settings from pipeline limits.
 
 <td>
 
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
+<code>bufferUsageLimit</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -14928,7 +14928,7 @@ overrides the settings from pipeline limits.
 
 <td>
 
-<code>rateLimit</code></br> <em>
+<code>rateLimit</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
 </td>
 
@@ -14952,7 +14952,7 @@ is not applied to Source vertices.
 
 <td>
 
-<code>concurrency</code></br> <em> uint64 </em>
+<code>concurrency</code><br /> <em> uint64 </em>
 </td>
 
 <td>
@@ -15044,7 +15044,7 @@ Description
 
 <td>
 
-<code>AbstractVertex</code></br> <em>
+<code>AbstractVertex</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex"> AbstractVertex
 </a> </em>
 </td>
@@ -15064,7 +15064,7 @@ Description
 
 <td>
 
-<code>pipelineName</code></br> <em> string </em>
+<code>pipelineName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15077,7 +15077,7 @@ Description
 
 <td>
 
-<code>interStepBufferServiceName</code></br> <em> string </em>
+<code>interStepBufferServiceName</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15091,7 +15091,7 @@ Description
 
 <td>
 
-<code>replicas</code></br> <em> int32 </em>
+<code>replicas</code><br /> <em> int32 </em>
 </td>
 
 <td>
@@ -15105,7 +15105,7 @@ Description
 
 <td>
 
-<code>fromEdges</code></br> <em>
+<code>fromEdges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
 </a> </em>
 </td>
@@ -15121,7 +15121,7 @@ Description
 
 <td>
 
-<code>toEdges</code></br> <em>
+<code>toEdges</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
 </a> </em>
 </td>
@@ -15137,7 +15137,7 @@ Description
 
 <td>
 
-<code>watermark</code></br> <em>
+<code>watermark</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
 </td>
 
@@ -15158,7 +15158,7 @@ from the pipeline watermark settings.
 
 <td>
 
-<code>lifecycle</code></br> <em>
+<code>lifecycle</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
 VertexLifecycle </a> </em>
 </td>
@@ -15179,7 +15179,7 @@ Lifecycle defines the Lifecycle properties of a vertex
 
 <td>
 
-<code>interStepBuffer</code></br> <em>
+<code>interStepBuffer</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
 InterStepBuffer </a> </em>
 </td>
@@ -15241,7 +15241,7 @@ Description
 
 <td>
 
-<code>Status</code></br> <em>
+<code>Status</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
 </td>
 
@@ -15260,7 +15260,7 @@ Description
 
 <td>
 
-<code>phase</code></br> <em>
+<code>phase</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexPhase"> VertexPhase </a>
 </em>
 </td>
@@ -15276,7 +15276,7 @@ Description
 
 <td>
 
-<code>replicas</code></br> <em> uint32 </em>
+<code>replicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -15296,7 +15296,7 @@ labels match the selector).
 
 <td>
 
-<code>desiredReplicas</code></br> <em> uint32 </em>
+<code>desiredReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -15315,7 +15315,7 @@ The number of desired replicas.
 
 <td>
 
-<code>selector</code></br> <em> string </em>
+<code>selector</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15329,7 +15329,7 @@ The number of desired replicas.
 
 <td>
 
-<code>reason</code></br> <em> string </em>
+<code>reason</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15343,7 +15343,7 @@ The number of desired replicas.
 
 <td>
 
-<code>message</code></br> <em> string </em>
+<code>message</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15357,7 +15357,7 @@ The number of desired replicas.
 
 <td>
 
-<code>lastScaledAt</code></br> <em>
+<code>lastScaledAt</code><br /> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
 </td>
@@ -15378,7 +15378,7 @@ Time of last scaling operation.
 
 <td>
 
-<code>observedGeneration</code></br> <em> int64 </em>
+<code>observedGeneration</code><br /> <em> int64 </em>
 </td>
 
 <td>
@@ -15397,7 +15397,7 @@ The generation observed by the Vertex controller.
 
 <td>
 
-<code>readyReplicas</code></br> <em> uint32 </em>
+<code>readyReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -15416,7 +15416,7 @@ The number of pods targeted by this Vertex with a Ready Condition.
 
 <td>
 
-<code>updatedReplicas</code></br> <em> uint32 </em>
+<code>updatedReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -15435,7 +15435,7 @@ indicated by updateHash.
 
 <td>
 
-<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+<code>updatedReadyReplicas</code><br /> <em> uint32 </em>
 </td>
 
 <td>
@@ -15454,7 +15454,7 @@ version indicated by updateHash.
 
 <td>
 
-<code>currentHash</code></br> <em> string </em>
+<code>currentHash</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15473,7 +15473,7 @@ generate Pods.
 
 <td>
 
-<code>updateHash</code></br> <em> string </em>
+<code>updateHash</code><br /> <em> string </em>
 </td>
 
 <td>
@@ -15533,7 +15533,7 @@ Description
 
 <td>
 
-<code>AbstractPodTemplate</code></br> <em>
+<code>AbstractPodTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
 </td>
@@ -15555,7 +15555,7 @@ type.)
 
 <td>
 
-<code>containerTemplate</code></br> <em>
+<code>containerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -15576,7 +15576,7 @@ Template for the vertex numa container
 
 <td>
 
-<code>initContainerTemplate</code></br> <em>
+<code>initContainerTemplate</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -15656,7 +15656,7 @@ Description
 
 <td>
 
-<code>disabled</code></br> <em> bool </em>
+<code>disabled</code><br /> <em> bool </em>
 </td>
 
 <td>
@@ -15675,7 +15675,7 @@ Disabled toggles the watermark propagation, defaults to false.
 
 <td>
 
-<code>maxDelay</code></br> <em>
+<code>maxDelay</code><br /> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -15697,7 +15697,7 @@ means no delay.
 
 <td>
 
-<code>idleSource</code></br> <em>
+<code>idleSource</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.IdleSource"> IdleSource </a>
 </em>
 </td>
@@ -15765,7 +15765,7 @@ Description
 
 <td>
 
-<code>fixed</code></br> <em>
+<code>fixed</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.FixedWindow"> FixedWindow </a>
 </em>
 </td>
@@ -15781,7 +15781,7 @@ Description
 
 <td>
 
-<code>sliding</code></br> <em>
+<code>sliding</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SlidingWindow"> SlidingWindow
 </a> </em>
 </td>
@@ -15797,7 +15797,7 @@ Description
 
 <td>
 
-<code>session</code></br> <em>
+<code>session</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SessionWindow"> SessionWindow
 </a> </em>
 </td>
@@ -15813,7 +15813,7 @@ Description
 
 <td>
 
-<code>accumulator</code></br> <em>
+<code>accumulator</code><br /> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AccumulatorWindow">
 AccumulatorWindow </a> </em>
 </td>

@@ -64,7 +64,10 @@ kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"a
   Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `KUBECONFIG` is sourced.
 
 - `make docs`
-  Convert the docs to GitHub pages, check if there's any error.
+  Build the Docusaurus documentation site and check links.
 
 - `make docs-serve`
-  Start [an HTTP server](http://127.0.0.1:8000/) on your local to host the docs generated Github pages.
+  Serve the generated Docusaurus site locally.
+
+- `make docs-start`
+  Start the Docusaurus development server locally.

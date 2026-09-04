@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # User-defined Sinks
 
 Numaflow provides builtin Sinks but there are many use cases where an user might want to write a custom Sink implementation, and User Defined Sink (`udsink`) can be used to write those custom Sinks.
@@ -124,60 +127,69 @@ Then your response must be:
 
 Check the links below to see the examples for different languages.
 
-=== "Golang"
+<Tabs groupId="sdk-language">
+<TabItem value="golang" label="Golang">
 
-    ```go
-    ResponseOK(id string)
-    ResponseFailure(id string, errMsg string)
-    ResponseFallback(id string)
-    ResponseServe(id string, serveResponse []byte)
-    ResponseOnSuccess(id string, onSuccessMessage Message)
-    ```
-    [Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)
+```go
+ResponseOK(id string)
+ResponseFailure(id string, errMsg string)
+ResponseFallback(id string)
+ResponseServe(id string, serveResponse []byte)
+ResponseOnSuccess(id string, onSuccessMessage Message)
+```
+[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)
 
-=== "Java"
-    
-    ```java
-    Response.responseOK(id)
-    Response.responseFailure(id, errMsg)
-    Response.responseFallback(id)
-    Response.responseServe(id, serveResponse)
-    Response.responseOnSuccess(id, onSuccessMessage)
-    ```
-    [Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)
+</TabItem>
+<TabItem value="java" label="Java">
 
-=== "Python"
 
-    ```python
-    Response.as_success(id)
-    Response.as_failure(id, err_msg)
-    Response.as_fallback(id)
-    Response.as_serve(id, serve_response)
-    Response.as_on_success(id, message)
-    ```
-    [Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)
+```java
+Response.responseOK(id)
+Response.responseFailure(id, errMsg)
+Response.responseFallback(id)
+Response.responseServe(id, serveResponse)
+Response.responseOnSuccess(id, onSuccessMessage)
+```
+[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)
 
-=== "Rust"
+</TabItem>
+<TabItem value="python" label="Python">
 
-    ```rust
-    Response::ok(id)
-    Response::failure(id, err_msg)
-    Response::fallback(id)
-    Response::serve(id, serve_response)
-    Response::on_success(id, payload)
-    ```
-    [Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)
+```python
+Response.as_success(id)
+Response.as_failure(id, err_msg)
+Response.as_fallback(id)
+Response.as_serve(id, serve_response)
+Response.as_on_success(id, message)
+```
+[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)
 
-=== "JS/TS"
+</TabItem>
+<TabItem value="rust" label="Rust">
 
-    ```typescript
-    Response.ok(id)
-    Response.failure(id, err_msg)
-    Response.fallback(id)
-    Response.serve(id, serve_response)
-    Response.onSuccess(id, payload)
-    ```
-    [Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)
+```rust
+Response::ok(id)
+Response::failure(id, err_msg)
+Response::fallback(id)
+Response::serve(id, serve_response)
+Response::on_success(id, payload)
+```
+[Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)
+
+</TabItem>
+<TabItem value="js-ts" label="JS/TS">
+
+```typescript
+Response.ok(id)
+Response.failure(id, err_msg)
+Response.fallback(id)
+Response.serve(id, serve_response)
+Response.onSuccess(id, payload)
+```
+[Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)
+
+</TabItem>
+</Tabs>
 
 ###  Explore SDK Examples
 
