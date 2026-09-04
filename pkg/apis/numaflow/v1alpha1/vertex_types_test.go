@@ -168,6 +168,32 @@ func TestGetVertexReplicas(t *testing.T) {
 	assert.Equal(t, 20, v.CalculateReplicas())
 }
 
+func TestVertex_CalculateReplicasWithBounds(t *testing.T) {
+	baseScale := Scale{Min: ptr.To[int32](5), Max: ptr.To[int32](10)}
+
+	t.Run("cronMin below parentMin is honoured", func(t *testing.T) {
+		replicas := int32(2)
+		v := Vertex{Spec: VertexSpec{AbstractVertex: AbstractVertex{Scale: baseScale}, Replicas: &replicas}}
+		assert.Equal(t, 2, v.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("cronMax above parentMax is honoured", func(t *testing.T) {
+		replicas := int32(15)
+		v := Vertex{Spec: VertexSpec{AbstractVertex: AbstractVertex{Scale: baseScale}, Replicas: &replicas}}
+		assert.Equal(t, 15, v.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("paused returns 0 regardless of bounds", func(t *testing.T) {
+		replicas := int32(5)
+		v := Vertex{Spec: VertexSpec{
+			AbstractVertex: AbstractVertex{Scale: baseScale},
+			Replicas:       &replicas,
+			Lifecycle:      VertexLifecycle{DesiredPhase: VertexPhasePaused},
+		}}
+		assert.Equal(t, 0, v.CalculateReplicasWithBounds(2, 15))
+	})
+}
+
 func TestGetHeadlessSvcSpec(t *testing.T) {
 	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, map[string]int32{VertexMetricsPortName: VertexMetricsPort})
 	assert.Equal(t, s.Name, testVertex.GetHeadlessServiceName())

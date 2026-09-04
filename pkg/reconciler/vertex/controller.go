@@ -40,6 +40,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -187,7 +188,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
 	readyPods := reconciler.NumOfReadyPods(podList)
-	desiredReplicas := vertex.CalculateReplicas()
+	// orchestratePods already computed and stored the cron-aware desired count.
+	desiredReplicas := int(vertex.Status.DesiredReplicas)
 	if readyPods > desiredReplicas { // It might happen in some corner cases, such as during rollout
 		readyPods = desiredReplicas
 	}
@@ -206,7 +208,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService) error {
 	log := logging.FromContext(ctx)
-	desiredReplicas := vertex.CalculateReplicas()
+	desiredReplicas, err := vertexEffectiveReplicas(vertex)
+	if err != nil {
+		return err
+	}
 	vertex.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics
@@ -618,6 +623,22 @@ func (r *vertexReconciler) findExistingPods(ctx context.Context, vertex *dfv1.Ve
 		}
 	}
 	return result, nil
+}
+
+// vertexEffectiveReplicas returns the cron-aware desired replica count for a Vertex.
+// It parses cron schedules inline (acceptable for the reconciler's call rate) and
+// delegates to CalculateReplicasWithBounds with the effective bounds.
+func vertexEffectiveReplicas(vertex *dfv1.Vertex) (int, error) {
+	var parsedSchedules []scalingutil.ParsedCronSchedule
+	if vertex.Spec.Scale.Cron != nil {
+		var err error
+		parsedSchedules, err = scalingutil.ParseCronSchedules(vertex.Spec.Scale.Cron)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse cron schedules: %w", err)
+		}
+	}
+	effectiveMin, effectiveMax, _ := scalingutil.EffectiveScaleBoundsAt(vertex.Spec.Scale, parsedSchedules, time.Now())
+	return vertex.CalculateReplicasWithBounds(effectiveMin, effectiveMax), nil
 }
 
 func (r *vertexReconciler) isTerminatingPod(pod *corev1.Pod) bool {

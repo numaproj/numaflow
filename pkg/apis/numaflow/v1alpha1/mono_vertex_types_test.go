@@ -425,6 +425,50 @@ func TestMonoVertex_CalculateReplicas(t *testing.T) {
 	})
 }
 
+func TestMonoVertex_CalculateReplicasWithBounds(t *testing.T) {
+	baseScale := Scale{Min: ptr.To[int32](5), Max: ptr.To[int32](10)}
+
+	t.Run("cronMin below parentMin is honoured", func(t *testing.T) {
+		replicas := int32(2)
+		mv := MonoVertex{Spec: MonoVertexSpec{Replicas: &replicas, Scale: baseScale}}
+		assert.Equal(t, 2, mv.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("cronMax above parentMax is honoured", func(t *testing.T) {
+		replicas := int32(15)
+		mv := MonoVertex{Spec: MonoVertexSpec{Replicas: &replicas, Scale: baseScale}}
+		assert.Equal(t, 15, mv.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("spec.replicas below effective min is clamped up", func(t *testing.T) {
+		replicas := int32(1)
+		mv := MonoVertex{Spec: MonoVertexSpec{Replicas: &replicas, Scale: baseScale}}
+		assert.Equal(t, 2, mv.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("spec.replicas above effective max is clamped down", func(t *testing.T) {
+		replicas := int32(20)
+		mv := MonoVertex{Spec: MonoVertexSpec{Replicas: &replicas, Scale: baseScale}}
+		assert.Equal(t, 15, mv.CalculateReplicasWithBounds(2, 15))
+	})
+
+	t.Run("parent bounds apply when cron is inactive", func(t *testing.T) {
+		replicas := int32(2) // below parentMin=5
+		mv := MonoVertex{Spec: MonoVertexSpec{Replicas: &replicas, Scale: baseScale}}
+		assert.Equal(t, 5, mv.CalculateReplicasWithBounds(5, 10))
+	})
+
+	t.Run("paused returns 0 regardless of bounds", func(t *testing.T) {
+		replicas := int32(5)
+		mv := MonoVertex{Spec: MonoVertexSpec{
+			Replicas:  &replicas,
+			Scale:     baseScale,
+			Lifecycle: MonoVertexLifecycle{DesiredPhase: MonoVertexPhasePaused},
+		}}
+		assert.Equal(t, 0, mv.CalculateReplicasWithBounds(2, 15))
+	})
+}
+
 func TestMonoVertex_GetServiceObj(t *testing.T) {
 	mv := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{

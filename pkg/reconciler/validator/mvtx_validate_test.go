@@ -338,6 +338,15 @@ func TestValidateCronScaling(t *testing.T) {
 			},
 		},
 		{
+			name: "cron min below parent min and cron max above parent max are both valid",
+			mutate: func(scale *dfv1.Scale) {
+				scale.Min = ptr.To[int32](5)
+				scale.Max = ptr.To[int32](10)
+				scale.Cron.Schedules[0].Min = ptr.To[int32](2)
+				scale.Cron.Schedules[0].Max = ptr.To[int32](15)
+			},
+		},
+		{
 			name: "cron schedules are empty",
 			mutate: func(scale *dfv1.Scale) {
 				scale.Cron.Schedules = nil

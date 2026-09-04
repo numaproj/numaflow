@@ -145,16 +145,6 @@ func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]scalingutil
 	return parsed, nil
 }
 
-// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time.
-func (s *Scaler) effectiveScaleBoundsFor(monoVtx *dfv1.MonoVertex, at time.Time) (int32, int32, bool, error) {
-	parsed, err := s.parsedCronSchedulesFor(monoVtx)
-	if err != nil {
-		return 0, 0, false, err
-	}
-	minReplicas, maxReplicas, cronActive := scalingutil.EffectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
-	return minReplicas, maxReplicas, cronActive, nil
-}
-
 // scaleOneMonoVertex implements the detailed logic of scaling up/down a MonoVertex.
 //
 //	desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)
@@ -206,15 +196,21 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		log.Info("MonoVertex desiredPhase is not running, skip scaling.")
 		return nil
 	}
-	if int(monoVtx.Status.Replicas) != monoVtx.CalculateReplicas() {
+	// Parse cron schedules once (cached by UID+Generation); used for both the
+	// mismatch guard below and the bounds enforcement that follows.
+	parsed, parseErr := s.parsedCronSchedulesFor(monoVtx)
+	if parseErr != nil {
+		log.Errorw("Failed to parse cron schedules.", zap.Error(parseErr))
+		return parseErr
+	}
+	minReplicas, maxReplicas, cronActive := scalingutil.EffectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, time.Now())
+
+	// The mismatch guard uses the cron-aware effective bounds so that a cron window
+	// intentionally placing spec.replicas outside [parentMin, parentMax] is not
+	// misidentified as a reconciler convergence gap.
+	if int(monoVtx.Status.Replicas) != monoVtx.CalculateReplicasWithBounds(minReplicas, maxReplicas) {
 		log.Infof("MonoVertex %s might be under processing, replicas mismatch, skip scaling.", monoVtx.Name)
 		return nil
-	}
-
-	minReplicas, maxReplicas, cronActive, boundsErr := s.effectiveScaleBoundsFor(monoVtx, time.Now())
-	if boundsErr != nil {
-		log.Errorw("Failed to parse cron schedules.", zap.Error(boundsErr))
-		return boundsErr
 	}
 	current := int32(monoVtx.Status.Replicas)
 	if cronActive {

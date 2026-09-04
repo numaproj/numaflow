@@ -114,3 +114,43 @@ func TestEffectiveScaleBoundsAt(t *testing.T) {
 		assert.Equal(t, int32(3), gotMax)
 	})
 }
+
+func TestEffectiveScaleBoundsAt_CronOverridesParent(t *testing.T) {
+	scale := dfv1.Scale{
+		Min: ptr.To[int32](5),
+		Max: ptr.To[int32](10),
+		Cron: &dfv1.CronScheduling{
+			Timezone: "UTC",
+			Schedules: []dfv1.CronSchedule{
+				{
+					Start: "0 0 2 * * *",
+					End:   "0 0 3 * * *",
+					Min:   ptr.To[int32](2),
+					Max:   ptr.To[int32](15),
+				},
+			},
+		},
+	}
+
+	parsed, err := ParseCronSchedules(scale.Cron)
+	assert.NoError(t, err)
+
+	t.Run("active: cron min below parent min and cron max above parent max", func(t *testing.T) {
+		// 2:30 AM — inside the 2:00–3:00 AM window.
+		now := time.Date(2026, 1, 5, 2, 30, 0, 0, time.UTC)
+		gotMin, gotMax, active := EffectiveScaleBoundsAt(scale, parsed, now)
+		assert.True(t, active)
+		// Cron bounds must fully replace parent bounds.
+		assert.Equal(t, int32(2), gotMin, "cron min=2 should override parent min=5")
+		assert.Equal(t, int32(15), gotMax, "cron max=15 should override parent max=10")
+	})
+
+	t.Run("inactive: parent bounds are restored outside the window", func(t *testing.T) {
+		// 10:00 AM — outside the 2:00–3:00 AM window.
+		now := time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC)
+		gotMin, gotMax, active := EffectiveScaleBoundsAt(scale, parsed, now)
+		assert.False(t, active)
+		assert.Equal(t, int32(5), gotMin, "parent min=5 should be restored when cron is inactive")
+		assert.Equal(t, int32(10), gotMax, "parent max=10 should be restored when cron is inactive")
+	})
+}
