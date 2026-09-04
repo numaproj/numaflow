@@ -261,6 +261,21 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 				log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
 				return s.scaleDownVertex(ctx, vertex, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
 			}
+		} else {
+			// No cron window is active right now, but a previously active one
+			// may have left replicas outside these (base) bounds, e.g. right
+			// after it closed. Correct that unconditionally, same as the
+			// cron-active case above, rather than waiting on metrics-driven
+			// reactive scaling, which may never fire if buffer/pending data
+			// isn't available.
+			if current < minReplicas {
+				log.Infof("No cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
+				return s.scaleUpVertex(ctx, vertex, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
+			}
+			if current > maxReplicas {
+				log.Infof("No cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
+				return s.scaleDownVertex(ctx, vertex, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
+			}
 		}
 	} else {
 		minReplicas = vertex.Spec.Scale.GetMinReplicas()

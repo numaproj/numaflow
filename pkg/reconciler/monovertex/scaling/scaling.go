@@ -206,11 +206,6 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		log.Info("MonoVertex desiredPhase is not running, skip scaling.")
 		return nil
 	}
-	if int(monoVtx.Status.Replicas) != monoVtx.CalculateReplicas() {
-		log.Infof("MonoVertex %s might be under processing, replicas mismatch, skip scaling.", monoVtx.Name)
-		return nil
-	}
-
 	minReplicas, maxReplicas, cronActive, boundsErr := s.effectiveScaleBoundsFor(monoVtx, time.Now())
 	if boundsErr != nil {
 		log.Errorw("Failed to parse cron schedules.", zap.Error(boundsErr))
@@ -218,6 +213,11 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	}
 	current := int32(monoVtx.Status.Replicas)
 	if cronActive {
+		// A cron window opening, closing, or changing bounds can put current
+		// replicas outside the newly active bounds even while the controller
+		// has fully reconciled the previous spec; this is not "still
+		// processing an update" but the scaler's own job to correct, so it
+		// must not be gated by the mid-update guard below.
 		if current < minReplicas {
 			log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
 			return s.scaleUp(ctx, monoVtx, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
@@ -226,6 +226,34 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 			log.Infof("Cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
 			return s.scaleDown(ctx, monoVtx, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
 		}
+	} else {
+		// No cron window is active right now, but a previously active one may
+		// have left replicas outside these (base) bounds, e.g. right after it
+		// closed. Correct that unconditionally, same as the cron-active case
+		// above, rather than waiting on metrics-driven reactive scaling,
+		// which may never fire if pending/rate data isn't available.
+		if current < minReplicas {
+			log.Infof("No cron window active [min=%d, max=%d], current=%d is outside bounds; scaling up.", minReplicas, maxReplicas, current)
+			return s.scaleUp(ctx, monoVtx, current, minReplicas, secondsSinceLastScale, scaleUpCooldown)
+		}
+		if current > maxReplicas {
+			log.Infof("No cron window active [min=%d, max=%d], current=%d is outside bounds; scaling down.", minReplicas, maxReplicas, current)
+			return s.scaleDown(ctx, monoVtx, current, maxReplicas, secondsSinceLastScale, scaleDownCooldown)
+		}
+	}
+	specReplicas := int32(1)
+	if monoVtx.Spec.Replicas != nil {
+		specReplicas = *monoVtx.Spec.Replicas
+	}
+	effectiveReplicas := specReplicas
+	if effectiveReplicas < minReplicas {
+		effectiveReplicas = minReplicas
+	} else if effectiveReplicas > maxReplicas {
+		effectiveReplicas = maxReplicas
+	}
+	if int32(monoVtx.Status.Replicas) != effectiveReplicas {
+		log.Infof("MonoVertex %s might be under processing, replicas mismatch, skip scaling.", monoVtx.Name)
+		return nil
 	}
 	if maxReplicas == minReplicas {
 		log.Infof("MonoVertex %s has same scale.min and scale.max, skip scaling.", monoVtx.Name)

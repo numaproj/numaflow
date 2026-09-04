@@ -96,6 +96,17 @@ func (mv MonoVertex) getReplicas() int {
 	return int(*mv.Spec.Replicas)
 }
 
+// GetDesiredReplicasBeforeScaling returns the replica count that would apply
+// if the MonoVertex is not paused, before any scale.min/max (or cron window)
+// clamping is applied. Used by callers that need to apply their own
+// bounds-clamping logic on top (e.g. cron-aware effective replicas).
+func (mv MonoVertex) GetDesiredReplicasBeforeScaling() int {
+	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {
+		return 0
+	}
+	return mv.getReplicas()
+}
+
 func (mv MonoVertex) CalculateReplicas() int {
 	// If we are pausing the MonoVertex then we should have the desired replicas as 0
 	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {

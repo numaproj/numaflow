@@ -80,3 +80,29 @@ func EffectiveScaleBoundsAt(scale dfv1.Scale, parsed []ParsedCronSchedule, at ti
 	}
 	return minReplicas, maxReplicas, false
 }
+
+// CalculateEffectiveReplicas clamps desiredReplicas to scale's effective bounds
+// at time at: the active cron window's min/max when one applies, otherwise the
+// base min/max. Autoscaling-disabled specs are not clamped.
+func CalculateEffectiveReplicas(scale dfv1.Scale, desiredReplicas int, at time.Time) int {
+	if scale.Disabled {
+		return desiredReplicas
+	}
+	var parsed []ParsedCronSchedule
+	if scale.Cron != nil {
+		// Parsing errors are already rejected at admission time by the
+		// validating webhook; if one somehow slips through, fall back to
+		// base bounds rather than failing pod reconciliation.
+		if p, err := ParseCronSchedules(scale.Cron); err == nil {
+			parsed = p
+		}
+	}
+	minReplicas, maxReplicas, _ := EffectiveScaleBoundsAt(scale, parsed, at)
+	if desiredReplicas < int(minReplicas) {
+		return int(minReplicas)
+	}
+	if desiredReplicas > int(maxReplicas) {
+		return int(maxReplicas)
+	}
+	return desiredReplicas
+}

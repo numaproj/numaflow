@@ -114,3 +114,46 @@ func TestEffectiveScaleBoundsAt(t *testing.T) {
 		assert.Equal(t, int32(3), gotMax)
 	})
 }
+
+func TestCalculateEffectiveReplicas(t *testing.T) {
+	t.Run("disabled autoscaling is not clamped", func(t *testing.T) {
+		s := dfv1.Scale{Disabled: true, Min: ptr.To[int32](1), Max: ptr.To[int32](3)}
+		assert.Equal(t, 10, CalculateEffectiveReplicas(s, 10, time.Now()))
+	})
+
+	t.Run("base bounds apply with no cron", func(t *testing.T) {
+		s := dfv1.Scale{Min: ptr.To[int32](1), Max: ptr.To[int32](3)}
+		assert.Equal(t, 3, CalculateEffectiveReplicas(s, 10, time.Now()))
+		assert.Equal(t, 1, CalculateEffectiveReplicas(s, 0, time.Now()))
+	})
+
+	t.Run("cron window widens beyond base bounds", func(t *testing.T) {
+		min := int32(5)
+		max := int32(20)
+		s := dfv1.Scale{
+			Min: ptr.To[int32](1),
+			Max: ptr.To[int32](3),
+			Cron: &dfv1.CronScheduling{
+				Timezone: "UTC",
+				Schedules: []dfv1.CronSchedule{
+					{
+						Start: "0 0 9 * * *",
+						End:   "0 0 17 * * *",
+						Min:   &min,
+						Max:   &max,
+					},
+				},
+			},
+		}
+		activeAt := time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC)
+		// Desired replicas above base max (3) but within the active cron
+		// window's max (20) must not be clamped down to base max.
+		assert.Equal(t, 15, CalculateEffectiveReplicas(s, 15, activeAt))
+		// Desired replicas below the cron window's min (5) get raised to it.
+		assert.Equal(t, 5, CalculateEffectiveReplicas(s, 0, activeAt))
+
+		inactiveAt := time.Date(2026, 1, 5, 20, 0, 0, 0, time.UTC)
+		// Outside the window, base bounds apply again.
+		assert.Equal(t, 3, CalculateEffectiveReplicas(s, 15, inactiveAt))
+	})
+}

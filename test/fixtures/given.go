@@ -17,6 +17,7 @@ limitations under the License.
 package fixtures
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -127,6 +128,26 @@ func (g *Given) WithPipeline(p *dfv1.Pipeline) *Given {
 	g.pipeline.SetLabels(l)
 	g.pipeline.Spec.InterStepBufferServiceName = ISBSvcName
 	return g
+}
+
+// CreatePipelineExpectingError attempts to create a Pipeline directly against
+// the API server (bypassing the CreatePipelineAndWait success path) and
+// returns the resulting error, for tests asserting that a spec is rejected by
+// the validating webhook. text may be a file name if it starts with "@", or
+// raw YAML.
+func (g *Given) CreatePipelineExpectingError(text string) error {
+	g.t.Helper()
+	p := &dfv1.Pipeline{}
+	g.readResource(text, p)
+	l := p.GetLabels()
+	if l == nil {
+		l = map[string]string{}
+	}
+	l[Label] = LabelValue
+	p.SetLabels(l)
+	p.Spec.InterStepBufferServiceName = ISBSvcName
+	_, err := g.pipelineClient.Create(context.Background(), p, metav1.CreateOptions{})
+	return err
 }
 
 func (g *Given) WithMonoVertex(mv *dfv1.MonoVertex) *Given {
