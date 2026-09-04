@@ -1,0 +1,25 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: cron-scale-down-mono-vertex
+spec:
+  # Base bounds cap at 1 so CreateMonoVertexAndWait's readiness check (which
+  # only knows about base min/max) is satisfied immediately, before the cron
+  # window opens.
+  scale:
+    min: 0
+    max: 1
+    scaleUpCooldownSeconds: 0
+    scaleDownCooldownSeconds: 0
+    cron:
+      timezone: UTC
+      schedules:
+        - start: "{{.Start}}"
+          end: "{{.End}}"
+          min: 3
+          max: 3
+  source:
+    generator:
+      rpu: 5
+  sink:
+    log: {}

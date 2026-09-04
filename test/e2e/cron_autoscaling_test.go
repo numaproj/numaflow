@@ -19,16 +19,15 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -49,59 +48,33 @@ func cronShortWindowFromNow(startInSeconds, durationSeconds int) (start, end str
 	return start, end
 }
 
+// renderCronTestdata renders the named testdata YAML template (relative to
+// testdata/), substituting {{.Start}}/{{.End}} with the given cron
+// expressions. Cron windows are anchored to wall-clock time, so they can't be
+// baked into a static YAML fixture; the spec otherwise lives in testdata/ like
+// every other e2e fixture.
+func renderCronTestdata(t *testing.T, filename, start, end string) string {
+	t.Helper()
+	tmpl, err := template.ParseFiles("testdata/" + filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, struct{ Start, End string }{start, end}); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
+}
+
 // TestSourceVertexCronScaleUpFromZero verifies that a Pipeline source vertex
 // with an active cron window scales up to the window's min replicas shortly
 // after creation, even without any traffic/pending-message metrics being
 // available.
 func (s *CronAutoscalingSuite) TestSourceVertexCronScaleUpFromZero() {
 	start, end := cronShortWindowFromNow(2, 60)
-	pl := &dfv1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cron-scale-up-pipeline",
-		},
-		Spec: dfv1.PipelineSpec{
-			Vertices: []dfv1.AbstractVertex{
-				{
-					Name: "input",
-					Source: &dfv1.Source{
-						Generator: &dfv1.GeneratorSource{
-							RPU: ptr.To(int64(5)),
-						},
-					},
-					Scale: dfv1.Scale{
-						Min:                      ptr.To[int32](0),
-						Max:                      ptr.To[int32](5),
-						ScaleUpCooldownSeconds:   ptr.To[uint32](0),
-						ScaleDownCooldownSeconds: ptr.To[uint32](0),
-						Cron: &dfv1.CronScheduling{
-							Timezone: "UTC",
-							Schedules: []dfv1.CronSchedule{
-								{
-									Start: start,
-									End:   end,
-									Min:   ptr.To[int32](3),
-									Max:   ptr.To[int32](5),
-								},
-							},
-						},
-					},
-				},
-				{
-					Name: "output",
-					Sink: &dfv1.Sink{
-						AbstractSink: dfv1.AbstractSink{
-							Log: &dfv1.Log{},
-						},
-					},
-				},
-			},
-			Edges: []dfv1.Edge{
-				{From: "input", To: "output"},
-			},
-		},
-	}
+	spec := renderCronTestdata(s.T(), "cron-scale-up-pipeline.yaml", start, end)
 
-	w := s.Given().WithPipeline(pl).When().CreatePipelineAndWait()
+	w := s.Given().Pipeline(spec).When().CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
 	// The autoscaler should detect the active cron window and scale the
@@ -118,56 +91,9 @@ func (s *CronAutoscalingSuite) TestSourceVertexCronScaleDownAfterWindowExpires()
 	// autoscaler to reliably detect it and scale up to 3 before it closes on
 	// its own while the test is still running.
 	start, end := cronShortWindowFromNow(2, 60)
-	pl := &dfv1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cron-scale-down-pipeline",
-		},
-		Spec: dfv1.PipelineSpec{
-			Vertices: []dfv1.AbstractVertex{
-				{
-					Name: "input",
-					Source: &dfv1.Source{
-						Generator: &dfv1.GeneratorSource{
-							RPU: ptr.To(int64(5)),
-						},
-					},
-					// Base bounds cap at 1 so pipeline creation's readiness
-					// check (which only knows about base min/max) is
-					// satisfied immediately, before the cron window opens.
-					Scale: dfv1.Scale{
-						Min:                      ptr.To[int32](0),
-						Max:                      ptr.To[int32](1),
-						ScaleUpCooldownSeconds:   ptr.To[uint32](0),
-						ScaleDownCooldownSeconds: ptr.To[uint32](0),
-						Cron: &dfv1.CronScheduling{
-							Timezone: "UTC",
-							Schedules: []dfv1.CronSchedule{
-								{
-									Start: start,
-									End:   end,
-									Min:   ptr.To[int32](3),
-									Max:   ptr.To[int32](3),
-								},
-							},
-						},
-					},
-				},
-				{
-					Name: "output",
-					Sink: &dfv1.Sink{
-						AbstractSink: dfv1.AbstractSink{
-							Log: &dfv1.Log{},
-						},
-					},
-				},
-			},
-			Edges: []dfv1.Edge{
-				{From: "input", To: "output"},
-			},
-		},
-	}
+	spec := renderCronTestdata(s.T(), "cron-scale-down-pipeline.yaml", start, end)
 
-	w := s.Given().WithPipeline(pl).When().CreatePipelineAndWait()
+	w := s.Given().Pipeline(spec).When().CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
 	// Cron window opens shortly after creation; expect scale-up to 3.
@@ -183,50 +109,9 @@ func (s *CronAutoscalingSuite) TestSourceVertexCronScaleDownAfterWindowExpires()
 // end to end, rather than silently ignored.
 func (s *CronAutoscalingSuite) TestCronOnNonSourceVertexRejected() {
 	start, end := cronShortWindowFromNow(2, 60)
-	pl := &dfv1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cron-non-source-rejected-pipeline",
-		},
-		Spec: dfv1.PipelineSpec{
-			Vertices: []dfv1.AbstractVertex{
-				{
-					Name: "input",
-					Source: &dfv1.Source{
-						Generator: &dfv1.GeneratorSource{
-							RPU: ptr.To(int64(5)),
-						},
-					},
-				},
-				{
-					Name: "output",
-					Sink: &dfv1.Sink{
-						AbstractSink: dfv1.AbstractSink{
-							Log: &dfv1.Log{},
-						},
-					},
-					// Cron on a non-source (sink) vertex must be rejected.
-					Scale: dfv1.Scale{
-						Cron: &dfv1.CronScheduling{
-							Timezone: "UTC",
-							Schedules: []dfv1.CronSchedule{
-								{
-									Start: start,
-									End:   end,
-									Min:   ptr.To[int32](3),
-									Max:   ptr.To[int32](5),
-								},
-							},
-						},
-					},
-				},
-			},
-			Edges: []dfv1.Edge{
-				{From: "input", To: "output"},
-			},
-		},
-	}
+	spec := renderCronTestdata(s.T(), "cron-non-source-rejected-pipeline.yaml", start, end)
 
-	err := s.Given().CreatePipelineExpectingError(pl)
+	err := s.Given().CreatePipelineExpectingError(spec)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "cron autoscaling is only supported for source vertices")
 }

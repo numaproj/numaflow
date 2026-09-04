@@ -130,12 +130,15 @@ func (g *Given) WithPipeline(p *dfv1.Pipeline) *Given {
 	return g
 }
 
-// CreatePipelineExpectingError attempts to create the given Pipeline directly
-// against the API server (bypassing the CreatePipelineAndWait success path)
-// and returns the resulting error, for tests asserting that a spec is
-// rejected by the validating webhook.
-func (g *Given) CreatePipelineExpectingError(p *dfv1.Pipeline) error {
+// CreatePipelineExpectingError attempts to create a Pipeline directly against
+// the API server (bypassing the CreatePipelineAndWait success path) and
+// returns the resulting error, for tests asserting that a spec is rejected by
+// the validating webhook. text may be a file name if it starts with "@", or
+// raw YAML.
+func (g *Given) CreatePipelineExpectingError(text string) error {
 	g.t.Helper()
+	p := &dfv1.Pipeline{}
+	g.readResource(text, p)
 	l := p.GetLabels()
 	if l == nil {
 		l = map[string]string{}
