@@ -213,6 +213,7 @@ jobs:
             monovertex-e2e,
             builtin-source-e2e,
             serving-e2e,
+            cron-autoscaling-e2e,
           ]
 
     steps:
