@@ -213,6 +213,9 @@ jobs:
             monovertex-e2e,
             builtin-source-e2e,
             serving-e2e,
+            # Kept as its own case (rather than living in test/e2e) so it has
+            # an independent 20-minute budget instead of sharing e2e's, whose
+            # own runtime already leaves little headroom.
             cron-autoscaling-e2e,
           ]
 
