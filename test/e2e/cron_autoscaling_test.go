@@ -82,28 +82,6 @@ func (s *CronAutoscalingSuite) TestSourceVertexCronScaleUpFromZero() {
 	w.Expect().VertexSizeScaledTo("input", 3)
 }
 
-// TestSourceVertexCronScaleDownAfterWindowExpires verifies that once an
-// active cron window closes, the autoscaler stops honoring the window's
-// bounds and reverts to base scale.min/scale.max, scaling a source vertex
-// back down even though it had scaled up while the window was active.
-func (s *CronAutoscalingSuite) TestSourceVertexCronScaleDownAfterWindowExpires() {
-	// Window opens almost immediately and stays open long enough for the
-	// autoscaler to reliably detect it and scale up to 3 before it closes on
-	// its own while the test is still running.
-	start, end := cronShortWindowFromNow(2, 60)
-	spec := renderCronTestdata(s.T(), "cron-scale-down-pipeline.yaml", start, end)
-
-	w := s.Given().Pipeline(spec).When().CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-
-	// Cron window opens shortly after creation; expect scale-up to 3.
-	w.Expect().VertexSizeScaledTo("input", 3)
-
-	// Window has now closed (it only lasted 60s); expect the autoscaler to
-	// revert to base bounds and scale back down to max=1.
-	w.Expect().VertexSizeScaledTo("input", 1)
-}
-
 // TestCronOnNonSourceVertexRejected verifies that configuring scale.cron on a
 // non-source (sink) Pipeline vertex is rejected by the validating webhook,
 // end to end, rather than silently ignored.

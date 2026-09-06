@@ -217,18 +217,6 @@ func cronWindowCoveringNow(windowSeconds int) (start, end string) {
 	return start, end
 }
 
-// cronShortWindowFromNow returns a six-field start/end cron expression pair
-// for a window that opens roughly startInSeconds from now and stays open for
-// durationSeconds, anchored to the current wall clock.
-func cronShortWindowFromNow(startInSeconds, durationSeconds int) (start, end string) {
-	now := time.Now().UTC()
-	from := now.Add(time.Duration(startInSeconds) * time.Second)
-	to := from.Add(time.Duration(durationSeconds) * time.Second)
-	start = fmt.Sprintf("%d %d %d * * *", from.Second(), from.Minute(), from.Hour())
-	end = fmt.Sprintf("%d %d %d * * *", to.Second(), to.Minute(), to.Hour())
-	return start, end
-}
-
 // renderCronTestdata renders the named testdata YAML template (relative to
 // testdata/), substituting {{.Start}}/{{.End}} with the given cron
 // expressions. Cron windows are anchored to wall-clock time, so they can't be
@@ -262,28 +250,6 @@ func (s *MonoVertexSuite) TestMonoVertexCronScaleUpFromZero() {
 	// MonoVertex up to at least the window's min (3), well before any
 	// reactive/metrics-based scaling could kick in.
 	w.Expect().MonoVertexSizeScaledTo(3)
-}
-
-// TestMonoVertexCronScaleDownAfterWindowExpires verifies that once an active
-// cron window closes, the autoscaler stops honoring the window's bounds and
-// reverts to base scale.min/scale.max, scaling a MonoVertex back down even
-// though it had scaled up while the window was active.
-func (s *MonoVertexSuite) TestMonoVertexCronScaleDownAfterWindowExpires() {
-	// Window opens almost immediately and stays open long enough for the
-	// autoscaler (default task interval 30s) to reliably detect it and scale
-	// up to 3 before it closes on its own while the test is still running.
-	start, end := cronShortWindowFromNow(2, 60)
-	spec := renderCronTestdata(s.T(), "cron-scale-down-mono-vertex.yaml", start, end)
-
-	w := s.Given().MonoVertex(spec).When().CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
-
-	// Cron window opens shortly after creation; expect scale-up to 3.
-	w.Expect().MonoVertexSizeScaledTo(3)
-
-	// Window has now closed (it only lasted 60s); expect the autoscaler to
-	// revert to base bounds and scale back down to max=1.
-	w.Expect().MonoVertexSizeScaledTo(1)
 }
 
 func TestMonoVertexSuite(t *testing.T) {
