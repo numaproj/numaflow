@@ -1,0 +1,28 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: cron-scale-up-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        generator:
+          rpu: 5
+      scale:
+        min: 0
+        max: 5
+        scaleUpCooldownSeconds: 0
+        scaleDownCooldownSeconds: 0
+        cron:
+          timezone: UTC
+          schedules:
+            - start: "{{.Start}}"
+              end: "{{.End}}"
+              min: 3
+              max: 5
+    - name: output
+      sink:
+        log: {}
+  edges:
+    - from: input
+      to: output
