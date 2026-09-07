@@ -81,6 +81,23 @@ func (s *CronAutoscalingSuite) TestSourceVertexCronScaleUpFromZero() {
 	w.Expect().VertexSizeScaledTo("input", 3)
 }
 
+// TestMonoVertexCronScaleUpFromZero verifies that a MonoVertex with an active
+// cron window scales up to the window's min replicas immediately, even
+// starting from 0 replicas and without any traffic/pending-message metrics
+// being available (cron bounds are applied before daemon metrics are read).
+func (s *CronAutoscalingSuite) TestMonoVertexCronScaleUpFromZero() {
+	start, end := cronShortWindowFromNow(2, 60)
+	spec := renderCronTestdata(s.T(), "cron-scale-up-mono-vertex.yaml", start, end)
+
+	w := s.Given().MonoVertex(spec).When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	// The autoscaler should detect the active cron window and scale the
+	// MonoVertex up to at least the window's min (3), well before any
+	// reactive/metrics-based scaling could kick in.
+	w.Expect().MonoVertexSizeScaledTo(3)
+}
+
 func TestCronAutoscalingSuite(t *testing.T) {
 	suite.Run(t, new(CronAutoscalingSuite))
 }

@@ -19,10 +19,8 @@ limitations under the License.
 package monovertex_e2e
 
 import (
-	"bytes"
 	"fmt"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -203,53 +201,6 @@ func (s *MonoVertexSuite) TestStreamingMonoVertex() {
 	for _, msg := range messages {
 		w.Expect().RedisSinkContains("streaming-mvtx-output", msg)
 	}
-}
-
-// cronWindowCoveringNow returns a six-field (second minute hour dom month dow)
-// start/end cron expression pair whose window is currently active and remains
-// active for at least windowSeconds more, anchored to the current wall clock.
-func cronWindowCoveringNow(windowSeconds int) (start, end string) {
-	now := time.Now().UTC()
-	from := now.Add(-2 * time.Second)
-	to := now.Add(time.Duration(windowSeconds) * time.Second)
-	start = fmt.Sprintf("%d %d %d * * *", from.Second(), from.Minute(), from.Hour())
-	end = fmt.Sprintf("%d %d %d * * *", to.Second(), to.Minute(), to.Hour())
-	return start, end
-}
-
-// renderCronTestdata renders the named testdata YAML template (relative to
-// testdata/), substituting {{.Start}}/{{.End}} with the given cron
-// expressions. Cron windows are anchored to wall-clock time, so they can't be
-// baked into a static YAML fixture; the spec otherwise lives in testdata/ like
-// every other e2e fixture.
-func renderCronTestdata(t *testing.T, filename, start, end string) string {
-	t.Helper()
-	tmpl, err := template.ParseFiles("testdata/" + filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, struct{ Start, End string }{start, end}); err != nil {
-		t.Fatal(err)
-	}
-	return buf.String()
-}
-
-// TestMonoVertexCronScaleUpFromZero verifies that a MonoVertex with an active
-// cron window scales up to the window's min replicas immediately, even
-// starting from 0 replicas and without any traffic/pending-message metrics
-// being available (cron bounds are applied before daemon metrics are read).
-func (s *MonoVertexSuite) TestMonoVertexCronScaleUpFromZero() {
-	start, end := cronWindowCoveringNow(120)
-	spec := renderCronTestdata(s.T(), "cron-scale-up-mono-vertex.yaml", start, end)
-
-	w := s.Given().MonoVertex(spec).When().CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
-
-	// The autoscaler should detect the active cron window and scale the
-	// MonoVertex up to at least the window's min (3), well before any
-	// reactive/metrics-based scaling could kick in.
-	w.Expect().MonoVertexSizeScaledTo(3)
 }
 
 func TestMonoVertexSuite(t *testing.T) {
