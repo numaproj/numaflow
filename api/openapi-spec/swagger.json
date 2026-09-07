@@ -22722,7 +22722,6 @@
       "type": "object",
       "required": [
         "awsRegion",
-        "queueName",
         "queueOwnerAWSAccountID"
       ],
       "properties": {
@@ -22758,7 +22757,11 @@
           }
         },
         "queueName": {
-          "description": "QueueName is the name of the SQS queue",
+          "description": "QueueName is the name of the SQS queue. Mutually exclusive with queueNames.",
+          "type": "string"
+        },
+        "queueNames": {
+          "description": "QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.",
           "type": "string"
         },
         "queueOwnerAWSAccountID": {

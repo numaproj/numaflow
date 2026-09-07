@@ -31,6 +31,15 @@ For more details, refer to the AWS documentation: https://docs.aws.amazon.com/ek
 
 Create a file named `sqs-pl.yaml` with either of the following content.
 
+| YAML / key | Where | Meaning |
+|---|---|---|
+| `queueName` | source spec | **Read** this one queue |
+| `queueNames` | source spec | **Read** these queues (XOR with `queueName`) |
+| `queue_name` | **system** metadata, group `sqs` | **Origin** of this message (single- or multi-queue) |
+| `queueName` | sink spec | **Write** dest (builtin SQS sink; unchanged by origin) |
+
+User metadata group `sqs` is producer or UDF attributes, not origin. See [Source Queue Origin](#source-queue-origin).
+
 ### MonoVertex Specification
 
 ```yaml
@@ -53,7 +62,7 @@ spec:
           messageAttributeNames:             # Message attributes to retrieve
             - All
     sink:
-        log: {}                             # Simple log sink for testing
+        log: {}                             # Prints payload/headers, not system metadata
     limits:
         readBatchSize: 10
         bufferSize: 100
@@ -97,6 +106,50 @@ spec:
       to: out
 ```
 
+### Multiple Queues
+
+A single SQS source can consume from multiple queues in the same AWS account
+and region by using `queueNames` instead of `queueName`. `queueNames` is a
+comma-separated list; the two queue selector fields are mutually exclusive.
+
+```yaml
+source:
+  sqs:
+    queueNames: "orders-queue,refunds-queue,replay-queue"
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+    visibilityTimeout: 30
+    maxNumberOfMessages: 10
+    waitTimeSeconds: 20
+```
+
+Every listed queue uses the same:
+
+- AWS account and region;
+- pod credentials or `assumeRole`;
+- `endpointUrl`;
+- visibility and polling settings; and
+- system and message attribute selections.
+
+The IAM identity must have access to every queue. If queues require different
+accounts, regions, credentials, or tuning, configure separate source vertices.
+
+Messages from all configured queues are merged without a cross-queue ordering
+guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-queue-origin).
+
+#### Read and Failure Behavior
+
+Every queue is polled concurrently, and a read returns as soon as any queue has
+messages. A slow or empty queue never holds back messages already received from
+the others. If a queue answers after the read has returned, its messages are held
+and served on the next read rather than waiting out their visibility timeout.
+
+Receive failures are handled per queue. A failing queue does not discard messages
+already received from healthy queues, and a transient error (a throttle, for
+example) is retried on subsequent reads. Only when one queue fails ten consecutive
+receives does the source stop, so the pod restarts and every queue URL is resolved
+again. Until then, the remaining queues keep flowing.
+
 ## Apply the Configuration
 
 Apply the pipeline specification:
@@ -125,9 +178,32 @@ When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp
 
 ### Custom Attributes
 
-When `messageAttributeNames` is configured, user-defined message attributes are propagated as **message metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+When `messageAttributeNames` is configured, user-defined message attributes are propagated as **user metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+
+### Source Queue Origin
+
+Every message from an SQS source includes the queue it was read from as **system
+metadata** (not headers, not user metadata). This is stamped for both
+`queueName` and `queueNames`:
+
+- Group: `sqs`
+- Key: `queue_name`
+
+Transformers and map UDFs copy parent system metadata, so origin survives
+downstream. The builtin `log` sink does not print system metadata; use a UDF or
+UDSink to see it. The builtin SQS sink destination is still that vertex's YAML
+`queueName`.
+
+```python
+origin = datum.system_metadata.value("sqs", "queue_name")
+```
+
+The exact accessor depends on the SDK; the value lives in the `Datum`/request
+system metadata under group `sqs`, key `queue_name`.
 
 ### Example: Accessing SQS Attributes in a UDF
+
+Headers below; origin is system metadata (see [Source Queue Origin](#source-queue-origin)).
 
 **Go SDK:**
 ```go

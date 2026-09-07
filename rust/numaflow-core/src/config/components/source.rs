@@ -192,9 +192,68 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             policy_arns: ar.policy_arns,
         });
 
+        if value.aws_region.is_empty() {
+            return Err(Error::Config(
+                "awsRegion must be specified for SQS source".to_string(),
+            ));
+        }
+        if value.queue_owner_aws_account_id.len() != 12
+            || !value
+                .queue_owner_aws_account_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
+        {
+            return Err(Error::Config(
+                "queueOwnerAWSAccountID must be a valid 12-digit AWS account ID for SQS source"
+                    .to_string(),
+            ));
+        }
+
+        // Both API forms collapse to a name list. queueName is a one-element Vec.
+        let queue_names = match (value.queue_name, value.queue_names) {
+            (Some(_), Some(queue_names)) if !queue_names.is_empty() => {
+                return Err(Error::Config(
+                    "'queueNames' is mutually exclusive with 'queueName' for SQS source"
+                        .to_string(),
+                ));
+            }
+            (Some(queue_name), _) if !queue_name.is_empty() => vec![queue_name],
+            (None, Some(queue_names)) if !queue_names.is_empty() => queue_names
+                .split(',')
+                .enumerate()
+                .map(|(idx, name)| {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        return Err(Error::Config(format!(
+                            "queueNames contains empty queue name at position {idx}"
+                        )));
+                    }
+                    Ok(name.to_string())
+                })
+                .collect::<Result<Vec<_>>>()?,
+            _ => {
+                return Err(Error::Config(
+                    "either 'queueName' or 'queueNames' must be specified for SQS source"
+                        .to_string(),
+                ));
+            }
+        };
+
+        let mut seen = std::collections::HashSet::with_capacity(queue_names.len());
+        for queue_name in &queue_names {
+            if !seen.insert(queue_name.clone()) {
+                return Err(Error::Config(format!(
+                    "duplicate queue name in SQS source: {queue_name:?}"
+                )));
+            }
+        }
+
         let sqs_source_config = SqsSourceConfig {
-            queue_name: Box::leak(value.queue_name.into_boxed_str()),
             region: Box::leak(value.aws_region.into_boxed_str()),
+            queue_names: queue_names
+                .into_iter()
+                .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
+                .collect(),
             queue_owner_aws_account_id: Box::leak(
                 value.queue_owner_aws_account_id.into_boxed_str(),
             ),
@@ -1180,5 +1239,89 @@ mod nats_source_tests {
             err.to_string(),
             "Config Error - Authentication is specified, but auth setting is empty"
         );
+    }
+
+    fn base_sqs_source() -> SqsSource {
+        SqsSource::new("us-east-1".to_string(), "111111111111".to_string())
+    }
+
+    #[test]
+    fn test_sqs_source_legacy_queue_name_normalizes_to_one_name() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.region, "us-east-1");
+        assert_eq!(config.queue_names, vec!["orders-queue"]);
+        assert_eq!(config.queue_owner_aws_account_id, "111111111111");
+    }
+
+    #[test]
+    fn test_sqs_source_queue_names_are_split_and_trimmed() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some(" orders-queue , refunds-queue ".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.queue_names, vec!["orders-queue", "refunds-queue"]);
+    }
+
+    #[test]
+    fn test_sqs_source_queue_selectors_are_mutually_exclusive() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.queue_names = Some("refunds-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn test_sqs_source_empty_queue_name_entry_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,,refunds-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("empty queue name"));
+    }
+
+    #[test]
+    fn test_sqs_source_duplicate_queue_name_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue, orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("duplicate queue name"));
+    }
+
+    #[test]
+    fn test_sqs_source_queue_selector_is_required() {
+        let source = base_sqs_source();
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("must be specified"));
+    }
+
+    #[test]
+    fn test_sqs_source_account_id_is_validated() {
+        let mut source = SqsSource::new("us-east-1".to_string(), "12345".to_string());
+        source.queue_name = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("valid 12-digit AWS account ID"));
+    }
+
+    #[test]
+    fn test_sqs_source_region_is_required() {
+        let mut source = SqsSource::new(String::new(), "111111111111".to_string());
+        source.queue_name = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("awsRegion must be specified"));
     }
 }

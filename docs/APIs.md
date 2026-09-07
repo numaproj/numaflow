@@ -13429,9 +13429,11 @@ AWSRegion is the AWS Region where the SQS queue is located
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
-QueueName is the name of the SQS queue
+QueueName is the name of the SQS queue. Mutually exclusive with
+queueNames.
 </p>
 
 </td>
@@ -13604,6 +13606,27 @@ returned along with each message.
 AssumeRole contains the configuration for AWS STS assume role. When
 specified, the SQS client will assume the specified role for
 authentication.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueNames</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+QueueNames is a comma-separated list of SQS queue names to consume from.
+All queues must live in the configured awsRegion and
+queueOwnerAWSAccountID. Mutually exclusive with queueName.
 </p>
 
 </td>

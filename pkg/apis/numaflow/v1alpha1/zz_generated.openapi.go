@@ -6120,8 +6120,7 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 					},
 					"queueName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "QueueName is the name of the SQS queue",
-							Default:     "",
+							Description: "QueueName is the name of the SQS queue. Mutually exclusive with queueNames.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6198,8 +6197,15 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"),
 						},
 					},
+					"queueNames": {
+						SchemaProps: spec.SchemaProps{
+							Description: "QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"awsRegion", "queueName", "queueOwnerAWSAccountID"},
+				Required: []string{"awsRegion", "queueOwnerAWSAccountID"},
 			},
 		},
 		Dependencies: []string{

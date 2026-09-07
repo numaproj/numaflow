@@ -207,6 +207,9 @@ spec:
             image: my-sink:latest
 ```
 
+When the pipeline source is SQS (one or many queues), origin is system metadata
+group `sqs`, key `queue_name`. See [Source Queue Origin](../sources/sqs.md#source-queue-origin).
+
 ## Available Environment Variables
 
 Some environment variables are available in the user-defined sink container:

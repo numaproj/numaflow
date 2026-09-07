@@ -21,6 +21,8 @@ pub mod source;
 
 /// Metadata key used for SQS-specific attributes in message metadata
 pub const SQS_METADATA_KEY: &str = "sqs";
+/// Key under sys_metadata["sqs"] for the source queue this message was read from.
+pub const SQS_SYS_QUEUE_NAME_KEY: &str = "queue_name";
 
 // SQS message header parameter keys
 /// Header key for message delay in seconds (0-900 seconds)
