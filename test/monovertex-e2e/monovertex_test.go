@@ -19,7 +19,6 @@ limitations under the License.
 package monovertex_e2e
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -71,14 +70,10 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex-exponential-retry-strategy.yaml").When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 	w.Expect().MonoVertexPodsRunning()
-	firstRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 1)
-	secondRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 2)
-	thirdLog := fmt.Sprintf(`"retry_attempt":"%d"`, 3)
-	dropLog := "Retries exhausted, dropping messages."
-	w.Expect().MonoVertexPodLogContains(firstRetryLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().MonoVertexPodLogContains(secondRetryLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().MonoVertexPodLogContains(dropLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().MonoVertexPodLogNotContains(thirdLog, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	w.Expect().MonoVertexPodLogContains(LogRetryAttempt+`"1"`, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogContains(LogRetryAttempt+`"2"`, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogContains(LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogNotContains(LogRetryAttempt+`"3"`, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
 }
 
 func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
