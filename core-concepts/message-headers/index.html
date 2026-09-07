@@ -5265,7 +5265,7 @@ Message headers are immutable and cannot be manipulated through the SDKs.</p>
 </li>
 <li>
 <p><strong>SQS Source Example</strong><br />
-  When configured with <code>attributeNames</code>, SQS system attributes (e.g., <code>SentTimestamp</code>, <code>MessageGroupId</code>, <code>MessageDeduplicationId</code>) are copied into the Numaflow message headers. User-defined message attributes (configured via <code>messageAttributeNames</code>) are propagated as metadata under the <code>sqs</code> namespace.</p>
+  When configured with <code>attributeNames</code>, SQS system attributes (e.g., <code>SentTimestamp</code>, <code>MessageGroupId</code>, <code>MessageDeduplicationId</code>) are copied into the Numaflow message headers. User-defined message attributes (configured via <code>messageAttributeNames</code>) are propagated as user metadata under the <code>sqs</code> namespace. Source queue origin is system metadata (group <code>sqs</code>, key <code>queue_name</code>), not a header; see <a href="../../user-guide/sources/sqs/#source-queue-origin">Source Queue Origin</a>.</p>
 </li>
 <li>
 <p><strong>Accessing Headers in UDFs</strong></p>

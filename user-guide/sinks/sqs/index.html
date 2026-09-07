@@ -5312,6 +5312,9 @@
 <span class="w">          </span><span class="nt">assumeRole</span><span class="p">:</span><span class="w">                               </span><span class="c1"># Optional: For cross-account access</span>
 <span class="w">            </span><span class="nt">roleArn</span><span class="p">:</span><span class="w"> </span><span class="s">"arn:aws:iam::123456789012:role/CrossAccount-Role"</span>
 </code></pre></div>
+<p>This spec's <code>queueName</code> is the <strong>destination</strong>. Source origin (system metadata
+group <code>sqs</code>, key <code>queue_name</code>) does not change it. To branch on origin, use a
+UDSink or tagged edges; see <a href="../../sources/sqs/#source-queue-origin">Source Queue Origin</a>.</p>
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
 <p>See <a href="../../sources/sqs/#configuring-credentials-to-access-aws">SQS Source - Configuring Credentials</a> for authentication options including AWS credentials secrets and IAM roles.</p>
 <h2 id="message-headers">Message Headers<a class="headerlink" href="#message-headers" title="Permanent link">&para;</a></h2>

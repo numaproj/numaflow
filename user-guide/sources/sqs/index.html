@@ -1376,6 +1376,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#multiple-queues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Queues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multiple Queues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read-and-failure-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read and Failure Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1431,6 +1459,17 @@
     <span class="md-ellipsis">
       
         Custom Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-queue-origin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source Queue Origin
       
     </span>
   </a>
@@ -5357,6 +5396,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#multiple-queues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Queues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multiple Queues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read-and-failure-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read and Failure Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5412,6 +5479,17 @@
     <span class="md-ellipsis">
       
         Custom Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-queue-origin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source Queue Origin
       
     </span>
   </a>
@@ -5499,6 +5577,38 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <p>For more details, refer to the AWS documentation: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-how-it-works.html</p>
 <h2 id="create-the-numaflow-pipeline">Create the numaflow pipeline<a class="headerlink" href="#create-the-numaflow-pipeline" title="Permanent link">&para;</a></h2>
 <p>Create a file named <code>sqs-pl.yaml</code> with either of the following content.</p>
+<table>
+<thead>
+<tr>
+<th>YAML / key</th>
+<th>Where</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>queueName</code></td>
+<td>source spec</td>
+<td><strong>Read</strong> this one queue</td>
+</tr>
+<tr>
+<td><code>queueNames</code></td>
+<td>source spec</td>
+<td><strong>Read</strong> these queues (XOR with <code>queueName</code>)</td>
+</tr>
+<tr>
+<td><code>queue_name</code></td>
+<td><strong>system</strong> metadata, group <code>sqs</code></td>
+<td><strong>Origin</strong> of this message (single- or multi-queue)</td>
+</tr>
+<tr>
+<td><code>queueName</code></td>
+<td>sink spec</td>
+<td><strong>Write</strong> dest (builtin SQS sink; unchanged by origin)</td>
+</tr>
+</tbody>
+</table>
+<p>User metadata group <code>sqs</code> is producer or UDF attributes, not origin. See <a href="#source-queue-origin">Source Queue Origin</a>.</p>
 <h3 id="monovertex-specification">MonoVertex Specification<a class="headerlink" href="#monovertex-specification" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
@@ -5519,7 +5629,7 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <span class="w">          </span><span class="nt">messageAttributeNames</span><span class="p">:</span><span class="w">             </span><span class="c1"># Message attributes to retrieve</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">All</span>
 <span class="w">    </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">                             </span><span class="c1"># Simple log sink for testing</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">                             </span><span class="c1"># Prints payload/headers, not system metadata</span>
 <span class="w">    </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <span class="w">        </span><span class="nt">bufferSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
@@ -5559,6 +5669,41 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
+<h3 id="multiple-queues">Multiple Queues<a class="headerlink" href="#multiple-queues" title="Permanent link">&para;</a></h3>
+<p>A single SQS source can consume from multiple queues in the same AWS account
+and region by using <code>queueNames</code> instead of <code>queueName</code>. <code>queueNames</code> is a
+comma-separated list; the two queue selector fields are mutually exclusive.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">source</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">queueNames</span><span class="p">:</span><span class="w"> </span><span class="s">"orders-queue,refunds-queue,replay-queue"</span>
+<span class="w">    </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-east-1"</span>
+<span class="w">    </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"111111111111"</span>
+<span class="w">    </span><span class="nt">visibilityTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">    </span><span class="nt">maxNumberOfMessages</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">    </span><span class="nt">waitTimeSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+</code></pre></div>
+<p>Every listed queue uses the same:</p>
+<ul>
+<li>AWS account and region;</li>
+<li>pod credentials or <code>assumeRole</code>;</li>
+<li><code>endpointUrl</code>;</li>
+<li>visibility and polling settings; and</li>
+<li>system and message attribute selections.</li>
+</ul>
+<p>The IAM identity must have access to every queue. If queues require different
+accounts, regions, credentials, or tuning, configure separate source vertices.</p>
+<p>Messages from all configured queues are merged without a cross-queue ordering
+guarantee. Origin is on every SQS message; see <a href="#source-queue-origin">Source Queue Origin</a>.</p>
+<h4 id="read-and-failure-behavior">Read and Failure Behavior<a class="headerlink" href="#read-and-failure-behavior" title="Permanent link">&para;</a></h4>
+<p>Every queue is polled concurrently, and a read returns as soon as any queue has
+messages. A slow or empty queue never holds back messages already received from
+the others. If a queue answers after the read has returned, its messages are held
+and served on the next read rather than waiting out their visibility timeout.</p>
+<p>Receive failures are handled per queue. A failing queue does not discard messages
+already received from healthy queues, and a transient error (a throttle, for
+example) is retried on subsequent reads. Only when one queue fails ten consecutive
+receives does the source stop, so the pod restarts and every queue URL is resolved
+again. Until then, the remaining queues keep flowing.</p>
 <h2 id="apply-the-configuration">Apply the Configuration<a class="headerlink" href="#apply-the-configuration" title="Permanent link">&para;</a></h2>
 <p>Apply the pipeline specification:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>sqs-pl.yaml
@@ -5573,8 +5718,25 @@ kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> <
 <h3 id="system-attributes">System Attributes<a class="headerlink" href="#system-attributes" title="Permanent link">&para;</a></h3>
 <p>When <code>attributeNames</code> is configured, SQS system attributes (e.g., <code>SentTimestamp</code>, <code>ApproximateReceiveCount</code>, <code>MessageGroupId</code>, <code>MessageDeduplicationId</code>) are propagated as <strong>message headers</strong>. These are accessible in UDFs (e.g., <code>datum.Headers()</code> (Go),  <code>datum.headers</code> (Python), etc.).</p>
 <h3 id="custom-attributes">Custom Attributes<a class="headerlink" href="#custom-attributes" title="Permanent link">&para;</a></h3>
-<p>When <code>messageAttributeNames</code> is configured, user-defined message attributes are propagated as <strong>message metadata</strong> under the <code>sqs</code> namespace. These are accessible in UDFs via the metadata API.</p>
+<p>When <code>messageAttributeNames</code> is configured, user-defined message attributes are propagated as <strong>user metadata</strong> under the <code>sqs</code> namespace. These are accessible in UDFs via the metadata API.</p>
+<h3 id="source-queue-origin">Source Queue Origin<a class="headerlink" href="#source-queue-origin" title="Permanent link">&para;</a></h3>
+<p>Every message from an SQS source includes the queue it was read from as <strong>system
+metadata</strong> (not headers, not user metadata). This is stamped for both
+<code>queueName</code> and <code>queueNames</code>:</p>
+<ul>
+<li>Group: <code>sqs</code></li>
+<li>Key: <code>queue_name</code></li>
+</ul>
+<p>Transformers and map UDFs copy parent system metadata, so origin survives
+downstream. The builtin <code>log</code> sink does not print system metadata; use a UDF or
+UDSink to see it. The builtin SQS sink destination is still that vertex's YAML
+<code>queueName</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="n">origin</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">system_metadata</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="s2">"sqs"</span><span class="p">,</span> <span class="s2">"queue_name"</span><span class="p">)</span>
+</code></pre></div>
+<p>The exact accessor depends on the SDK; the value lives in the <code>Datum</code>/request
+system metadata under group <code>sqs</code>, key <code>queue_name</code>.</p>
 <h3 id="example-accessing-sqs-attributes-in-a-udf">Example: Accessing SQS Attributes in a UDF<a class="headerlink" href="#example-accessing-sqs-attributes-in-a-udf" title="Permanent link">&para;</a></h3>
+<p>Headers below; origin is system metadata (see <a href="#source-queue-origin">Source Queue Origin</a>).</p>
 <p><strong>Go SDK:</strong>
 <div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">handler</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// Access system attributes via headers</span>
