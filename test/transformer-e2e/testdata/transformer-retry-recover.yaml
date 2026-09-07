@@ -1,0 +1,34 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: transformer-retry-recover
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http: {}
+        transformer:
+          retryStrategy:
+            backoff:
+              interval: 1s
+              steps: 5
+              factor: 1
+              cap: 5s
+              jitter: 0
+            onFailure: "retry"
+          container:
+            # Fails a non-"fail" body FAIL_COUNT times, then passes it through.
+            # steps (5) > FAIL_COUNT (2) so the message recovers before exhaustion.
+            image: quay.io/numaio/numaflow-rs/source-transformer-conditional-fail:stable
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: FAIL_COUNT
+                value: "2"
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

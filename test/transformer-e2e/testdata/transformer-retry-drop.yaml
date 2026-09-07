@@ -1,0 +1,31 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: transformer-retry-drop
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http: {}
+        transformer:
+          retryStrategy:
+            backoff:
+              interval: 1s
+              steps: 2
+              factor: 2
+              cap: 3s
+              jitter: 0
+            onFailure: "drop"
+          container:
+            # Always fails a message whose body == "fail"; retries are exhausted
+            # and (onFailure: drop) the message is dropped/acked.
+            image: quay.io/numaio/numaflow-rs/source-transformer-conditional-fail:stable
+            imagePullPolicy: IfNotPresent
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

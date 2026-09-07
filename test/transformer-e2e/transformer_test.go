@@ -80,6 +80,57 @@ func (s *TransformerSuite) testSourceTransformer(lang string) {
 		VertexPodLogNotContains("sink-after-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second))
 }
 
+// TestSourceTransformerRetryDrop verifies that when a source transformer keeps
+// failing a message (reserved FAIL tag) and its retryStrategy is exhausted under
+// onFailure: drop, the message is dropped after exactly `steps` retries.
+func (s *TransformerSuite) TestSourceTransformerRetryDrop() {
+	w := s.Given().Pipeline("@testdata/transformer-retry-drop.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "transformer-retry-drop"
+
+	w.Expect().VertexPodsRunning()
+
+	// The transformer always fails a message whose body is "fail".
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fail")))
+
+	// The transformer runs on the source vertex ("in"); the numa container logs
+	// each retry attempt (unquoted number, JSON logging) and the drop on exhaustion.
+	w.Expect().
+		VertexPodLogContains("in", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogNotContains("in", LogRetryAttempt+"3", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+}
+
+// TestSourceTransformerRetryRecover verifies that a source transformer whose
+// retryStrategy has enough steps recovers a transiently-failing message: it is
+// failed FAIL_COUNT times, retried, then delivered to the sink exactly once.
+func (s *TransformerSuite) TestSourceTransformerRetryRecover() {
+	w := s.Given().Pipeline("@testdata/transformer-retry-recover.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "transformer-retry-recover"
+
+	w.Expect().VertexPodsRunning()
+
+	// A non-"fail" body is failed FAIL_COUNT (2) times, then passes through.
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("recover-me")))
+
+	// Two retries happen, then the message recovers and reaches the sink.
+	w.Expect().
+		VertexPodLogContains("in", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("out", "recover-me", PodLogCheckOptionWithContainer("numa"))
+
+	// It recovered: no nack, no drop.
+	w.Expect().
+		VertexPodLogNotContains("in", LogReceivedNack, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
+		VertexPodLogNotContains("in", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+}
+
 func TestTransformerSuite(t *testing.T) {
 	suite.Run(t, new(TransformerSuite))
 }
