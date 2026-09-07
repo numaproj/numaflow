@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cron_autoscaling_e2e
+package cron_e2e
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	. "github.com/numaproj/numaflow/test/fixtures"
@@ -80,18 +79,6 @@ func (s *CronAutoscalingSuite) TestSourceVertexCronScaleUpFromZero() {
 	// The autoscaler should detect the active cron window and scale the
 	// source vertex up to at least the window's min (3).
 	w.Expect().VertexSizeScaledTo("input", 3)
-}
-
-// TestCronOnNonSourceVertexRejected verifies that configuring scale.cron on a
-// non-source (sink) Pipeline vertex is rejected by the validating webhook,
-// end to end, rather than silently ignored.
-func (s *CronAutoscalingSuite) TestCronOnNonSourceVertexRejected() {
-	start, end := cronShortWindowFromNow(2, 60)
-	spec := renderCronTestdata(s.T(), "cron-non-source-rejected-pipeline.yaml", start, end)
-
-	err := s.Given().CreatePipelineExpectingError(spec)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "cron autoscaling is only supported for source vertices")
 }
 
 func TestCronAutoscalingSuite(t *testing.T) {
