@@ -1,4 +1,5 @@
-import React, { Dispatch, SetStateAction, useContext } from "react";
+import React, { Dispatch, SetStateAction, useContext, useEffect } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -31,6 +32,8 @@ import {
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
+import { CopyViewLinkButton } from "../../../../../../../../../../../../common/CopyViewLinkButton";
+import { replaceObservabilityState } from "../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -71,6 +74,8 @@ export function Metrics({
   setMetricsFound,
   presets,
 }: MetricsProps) {
+  const location = useLocation();
+  const history = useHistory();
   const {
     metricsDiscoveryData: discoveredMetrics,
     error: discoveredMetricsError,
@@ -86,6 +91,24 @@ export function Metrics({
     setPresets,
   } = useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
+  useEffect(() => {
+    if (!discoveredMetrics?.data) return;
+    const params = new URLSearchParams(location.search);
+    const panels = new Set(
+      (params.get("metricPanels") || "")
+        .split(",")
+        .filter(Boolean)
+        .filter((panelId) =>
+          discoveredMetrics.data.some(
+            (metric: any) => `${metric.metric_name}-panel` === panelId
+          )
+        )
+    );
+    const metricName = params.get("metric");
+    if (metricName) panels.add(`${metricName}-panel`);
+    if (panels.size) setExpanded(panels);
+  }, [discoveredMetrics, location.search, setExpanded]);
+
   const handleAccordionChange =
     (panel: string) => (_: any, isExpanded: boolean) => {
       setPresets(undefined);
@@ -93,6 +116,10 @@ export function Metrics({
         const newExpanded = new Set(prevExpanded);
         isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
         return newExpanded;
+      });
+      replaceObservabilityState(history, location, {
+        metric: isExpanded ? panel.replace(/-panel$/, "") : null,
+        metricPanels: isExpanded ? panel : null,
       });
     };
 
@@ -161,6 +188,11 @@ export function Metrics({
 
   return (
     <Box sx={{ height: "100%" }}>
+      {!metricDisplayName && (
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <CopyViewLinkButton />
+        </Box>
+      )}
       {discoveredMetrics?.data?.map((metric: any) => {
         if (!shouldShowMetric(metric)) return null;
 

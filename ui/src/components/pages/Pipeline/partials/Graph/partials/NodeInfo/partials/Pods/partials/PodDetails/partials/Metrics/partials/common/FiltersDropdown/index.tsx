@@ -30,6 +30,7 @@ export interface FiltersDropdownProps {
   isFilterFocused: boolean;
   setFilterFocused: any;
   metric: any;
+  initialFilters?: string | null;
 }
 
 const periodData = [
@@ -50,10 +51,13 @@ const FiltersDropdown = ({
   isFilterFocused,
   setFilterFocused,
   metric,
+  initialFilters,
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedFilters, setSelectedFilters] = useState<any[]>([]);
+  const [selectedFilters, setSelectedFilters] = useState<any[]>(() =>
+    (initialFilters || "").split(",").filter(Boolean)
+  );
   const [activeFilters, setActiveFilters] = useState<any[]>([]);
   const [podsData, setPodsData] = useState<any[]>([]);
 

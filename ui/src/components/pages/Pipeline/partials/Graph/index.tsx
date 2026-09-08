@@ -7,6 +7,7 @@ import React, {
   useState,
   useContext,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -74,6 +75,9 @@ import transformer from "../../../../../images/transformer.svg";
 import onSuccess from "../../../../../images/onSuccess.png";
 import fallback from "../../../../../images/fallback.png";
 import monoVertex from "../../../../../images/monoVertex.svg";
+import {
+  pushObservabilityState,
+} from "../../../../../utils/observabilityURLState";
 import bypass from "../../../../../images/bypass.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
@@ -713,6 +717,8 @@ export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId, type, refresh } = props;
   const { sidebarProps, setSidebarProps } =
     useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
     return getLayoutedElements(data.vertices, data.edges, graphDirection);
@@ -904,11 +910,47 @@ export default function Graph(props: GraphProps) {
         });
         return updatedState;
       });
-      if (node?.data?.type !== "sideInput" || target?.innerText === "")
+      if (node?.data?.type !== "sideInput" || target?.innerText === "") {
+        pushObservabilityState(history, location, {
+          vertex: node.id,
+          vertexTab: "pods",
+          pod: null,
+          container: null,
+          logsSearch: null,
+          logsNegate: null,
+          logsWrap: null,
+          logsColor: null,
+          logsPaused: null,
+          logsPrevious: null,
+          logsOrder: null,
+          logsTimestamps: null,
+          logsLevel: null,
+          logsTail: null,
+          logsFocus: null,
+          metric: null,
+          metricPanels: null,
+          metricDimension: null,
+          metricQuantile: null,
+          metricDuration: null,
+          metricStart: null,
+          metricEnd: null,
+          metricFilter: null,
+        });
         openNodeSidebar(node);
+      }
     },
-    [setHidden, openNodeSidebar]
+    [setHidden, openNodeSidebar, history, location]
   );
+
+  useEffect(() => {
+    const vertexIdFromUrl = new URLSearchParams(location.search).get("vertex");
+    if (!vertexIdFromUrl) return;
+    const node = nodes.find((item) => item.id === vertexIdFromUrl);
+    if (!node || node.data?.type === "sideInput") return;
+    setNodeId(node.id);
+    setHighlightValues({ [node.id]: true });
+    openNodeSidebar(node);
+  }, [location.search, nodes, openNodeSidebar]);
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
   useEffect(() => {

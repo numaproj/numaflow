@@ -20,6 +20,7 @@ export interface MetricDropDownProps {
   field: string;
   setMetricReq: any;
   presets?: any;
+  urlValue?: string | null;
 }
 
 const Dropdown = ({
@@ -28,6 +29,7 @@ const Dropdown = ({
   field,
   setMetricReq,
   presets,
+  urlValue,
 }: MetricDropDownProps) => {
   // to handle cases there is no "mono-vertex" as dimension at top level (for eg: container level cpu/memory)
   const initialDimensionValue = useMemo(() => {
@@ -43,11 +45,15 @@ const Dropdown = ({
   const getInitialValue = useMemo(() => {
     switch (field) {
       case "dimension":
-        return initialDimensionValue;
+        return urlValue || initialDimensionValue;
       case "quantile":
-        return presets?.quantile ?? quantileOptions[quantileOptions.length - 1];
+        return (
+          urlValue ||
+          presets?.quantile ||
+          quantileOptions[quantileOptions.length - 1]
+        );
       case "duration":
-        return presets?.duration ?? durationOptions[0];
+        return urlValue || presets?.duration || durationOptions[0];
       default:
         return "";
     }

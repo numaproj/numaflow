@@ -98,7 +98,8 @@ function App(props: AppProps) {
       const ns = query.get("namespace") || "";
 
       if (location.pathname === "/" && ns !== systemInfo.managedNamespace) {
-        history.push(`?namespace=${systemInfo.managedNamespace}`);
+        query.set("namespace", systemInfo.managedNamespace);
+        history.push(`?${query.toString()}`);
       }
     }
     if (systemInfo?.version) {

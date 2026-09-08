@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
@@ -34,6 +35,10 @@ import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
 import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
+import { CopyViewLinkButton } from "../../../CopyViewLinkButton";
+import {
+  replaceObservabilityState,
+} from "../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -44,6 +49,19 @@ const PROCESSING_RATES_TAB_INDEX = 3;
 const K8S_EVENTS_TAB_INDEX = 4;
 const ERRORS_TAB_INDEX = 5;
 const BUFFERS_TAB_INDEX = 6;
+const TAB_KEY_BY_INDEX: Record<number, string> = {
+  [PODS_VIEW_TAB_INDEX]: "pods",
+  [METRICS_TAB_INDEX]: "metrics",
+  [SPEC_TAB_INDEX]: "spec",
+  [PROCESSING_RATES_TAB_INDEX]: "processingRates",
+  [K8S_EVENTS_TAB_INDEX]: "k8sEvents",
+  [ERRORS_TAB_INDEX]: "errors",
+  [BUFFERS_TAB_INDEX]: "buffers",
+};
+const TAB_INDEX_BY_KEY = Object.entries(TAB_KEY_BY_INDEX).reduce(
+  (tabs, [index, key]) => ({ ...tabs, [key]: Number(index) }),
+  {} as Record<string, number>
+);
 
 export enum VertexType {
   SOURCE,
@@ -103,6 +121,10 @@ export function VertexDetails({
 }: VertexDetailsProps) {
   const { addError, disableMetricsCharts } =
     useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
+  const isDeepLinkedVertex =
+    new URLSearchParams(location.search).get("vertex") === vertexId;
   const [errorsCount, setErrorsCount] = useState<number>(0);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
@@ -214,14 +236,46 @@ export function VertexDetails({
         setUpdateModalOpen(true);
       } else {
         setTabValue(newValue);
+        if (isDeepLinkedVertex) {
+          replaceObservabilityState(history, location, {
+            vertexTab: TAB_KEY_BY_INDEX[newValue],
+            ...(newValue === METRICS_TAB_INDEX
+              ? {}
+              : {
+                  metric: null,
+                  metricPanels: null,
+                  metricDimension: null,
+                  metricQuantile: null,
+                  metricDuration: null,
+                  metricStart: null,
+                  metricEnd: null,
+                  metricFilter: null,
+                }),
+          });
+        }
         if (newValue === METRICS_TAB_INDEX) {
           setMetricsPod(undefined);
           setPresets(undefined);
         }
       }
     },
-    [tabValue, updateModalOnClose]
+    [tabValue, updateModalOnClose, history, location, isDeepLinkedVertex]
   );
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get("vertexTab");
+    const requestedTabIndex = requestedTab
+      ? TAB_INDEX_BY_KEY[requestedTab]
+      : undefined;
+    if (
+      isDeepLinkedVertex &&
+      requestedTabIndex !== undefined &&
+      requestedTabIndex !== tabValue &&
+      !(disableMetricsCharts && requestedTabIndex === METRICS_TAB_INDEX)
+    ) {
+      setTabValue(requestedTabIndex);
+    }
+  }, [location.search, tabValue, disableMetricsCharts, isDeepLinkedVertex]);
 
   const handleUpdateModalConfirm = useCallback(() => {
     // Close modal
@@ -311,8 +365,16 @@ export function VertexDetails({
         new Set(previousExpanded).add(panelId)
       );
       setTabValue(METRICS_TAB_INDEX);
+      if (isDeepLinkedVertex) {
+        replaceObservabilityState(history, location, {
+          vertexTab: "metrics",
+          metric: panelId.replace(/-panel$/, ""),
+          metricPanels: panelId,
+          pod: pod?.name,
+        });
+      }
     },
-    [disableMetricsCharts]
+    [disableMetricsCharts, history, location, isDeepLinkedVertex]
   );
 
   useEffect(() => {
@@ -342,7 +404,10 @@ export function VertexDetails({
           height: "100%",
         }}
       >
-        {header}
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {header}
+          <CopyViewLinkButton />
+        </Box>
         <Box
           sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
         >
