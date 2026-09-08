@@ -119,6 +119,14 @@ pub(crate) mod typ;
 /// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
 mod reduce;
 
+/// Embeddable local runner for testing UDFs against the in-memory ISB (used by `nfcli`).
+///
+/// This is the only public API surface besides `run()`/`monovertex`/`runtime_server`. It is
+/// feature-gated (`local-runner`, default off) so the shipping binary is unaffected — see the
+/// design in `rust/numaflow-cli-v2.md`.
+#[cfg(feature = "local-runner")]
+pub mod local;
+
 /// Eagerly populate the cached OTel `BoxedTracer` after the binary has registered its tracer
 /// provider. See [`shared::otel::init_tracer`] for the rationale.
 pub use shared::otel::init_tracer;
