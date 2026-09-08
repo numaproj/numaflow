@@ -186,9 +186,14 @@ func (pt *PodTracker) isActive(podName string) bool {
 // setActivePodsCount sets the activePodsCount.
 func (pt *PodTracker) setActivePodsCount(count int) {
 	pt.activePodsMutex.Lock()
-	pt.log.Debugf("Setting active pods count to %d", count)
+	previous := pt.activePodsCount
 	pt.activePodsCount = count
 	pt.activePodsMutex.Unlock()
+
+	if previous != count {
+		pt.log.Infof("%s active worker pods changed monoVertex=%s previous=%d current=%d",
+			errorRetentionLogPrefix, pt.monoVertex.Name, previous, count)
+	}
 
 	pt.firstPodsUpdateOnce.Do(func() {
 		close(pt.firstPodsUpdateChan)

@@ -35,6 +35,7 @@ import (
 const (
 	runtimeErrorsPath            = "runtime/errors"
 	defaultRuntimeErrorsTimeStep = 10 * time.Second
+	errorRetentionLogPrefix      = "[error-retention]"
 )
 
 // ErrorDetails is used to provide information for a container error
@@ -131,7 +132,38 @@ func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...RuntimeOpt
 		}
 	}
 	r.podTracker = NewPodTracker(ctx, mv, r.podTrackerOpts...)
+	r.log.Infof("%s runtime cache initialized for monoVertex=%s namespace=%s scrapeInterval=%s",
+		errorRetentionLogPrefix, mv.Name, mv.Namespace, r.runtimeErrorsTimeStep)
 	return r
+}
+
+func summarizeReplicaErrors(replicas []ReplicaErrors) []map[string]interface{} {
+	summary := make([]map[string]interface{}, 0, len(replicas))
+	for _, replica := range replicas {
+		containers := make([]map[string]interface{}, 0, len(replica.ContainerErrors))
+		for _, containerError := range replica.ContainerErrors {
+			containers = append(containers, map[string]interface{}{
+				"container": containerError.Container,
+				"timestamp": containerError.Timestamp,
+				"code":      containerError.Code,
+				"message":   containerError.Message,
+			})
+		}
+		summary = append(summary, map[string]interface{}{
+			"replica":          replica.Replica,
+			"containerErrors":  containers,
+			"containerCount":   len(replica.ContainerErrors),
+		})
+	}
+	return summary
+}
+
+func summarizeLocalCache(cache map[string][]ReplicaErrors) map[string]interface{} {
+	result := make(map[string]interface{}, len(cache))
+	for key, replicas := range cache {
+		result[key] = summarizeReplicaErrors(replicas)
+	}
+	return result
 }
 
 // StartCacheRefresher starts the cache refresher to update the local cache periodically with the runtime errors.
@@ -154,10 +186,14 @@ func (r *monoVertexRuntimeCache) StartCacheRefresher(ctx context.Context) (err e
 
 // persistRuntimeErrors updates the local cache with the runtime errors
 func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
-	fetchAndPersistErrors := func() {
+	fetchAndPersistErrors := func(trigger string) {
+		activePods := r.podTracker.GetActivePodsCount()
+		r.log.Infof("%s starting error scrape trigger=%s monoVertex=%s activePods=%d cachedKeys=%v",
+			errorRetentionLogPrefix, trigger, r.monoVtx.Name, activePods, r.localCacheKeys())
+
 		var wg sync.WaitGroup
 
-		for i := range r.podTracker.GetActivePodsCount() {
+		for i := range activePods {
 			wg.Add(1)
 			go func(podIndex int) {
 				defer wg.Done()
@@ -167,10 +203,13 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 
 		// Wait for all goroutines to finish
 		wg.Wait()
+
+		r.log.Infof("%s completed error scrape trigger=%s monoVertex=%s activePods=%d cacheSnapshot=%v",
+			errorRetentionLogPrefix, trigger, r.monoVtx.Name, activePods, summarizeLocalCache(r.GetLocalCache()))
 	}
 
 	// invoke once and then periodically update the cache
-	fetchAndPersistErrors()
+	fetchAndPersistErrors("initial")
 
 	// Set up a ticker to run periodically
 	ticker := time.NewTicker(r.runtimeErrorsTimeStep)
@@ -178,7 +217,7 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			fetchAndPersistErrors()
+			fetchAndPersistErrors("ticker")
 		// If the context is done, return.
 		case <-ctx.Done():
 			r.log.Info("Context canceled, stopping PersistRuntimeErrors")
@@ -194,7 +233,8 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Debugf("[MonoVertex %s Index %v]: failed reading the runtime endpoint, the pod might have been scaled down: %v", r.monoVtx.Name, podIndex, err.Error())
+		r.log.Infof("%s fetch failed monoVertex=%s podIndex=%d url=%s err=%v",
+			errorRetentionLogPrefix, r.monoVtx.Name, podIndex, url, err)
 		return
 	}
 
@@ -202,19 +242,23 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 	body, err := io.ReadAll(res.Body)
 	_ = res.Body.Close()
 	if err != nil {
-		r.log.Errorf("Error reading response body from %s: %v", url, err)
+		r.log.Errorf("%s failed reading response body monoVertex=%s podIndex=%d url=%s err=%v",
+			errorRetentionLogPrefix, r.monoVtx.Name, podIndex, url, err)
 		return
 	}
 
 	// Parse the response body into runtime api response
 	var apiResponse ErrorApiResponse
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+		r.log.Errorf("%s failed decoding response monoVertex=%s podIndex=%d url=%s body=%s err=%v",
+			errorRetentionLogPrefix, r.monoVtx.Name, podIndex, url, string(body), err)
 		return
 	}
 
 	// return if data array length is 0 or if there is any error in the API call
 	if apiResponse.ErrMessage != "" || len(apiResponse.Data) == 0 {
+		r.log.Infof("%s fetch returned no persistable errors monoVertex=%s podIndex=%d url=%s statusCode=%d apiErrMessage=%q dataCount=%d body=%s",
+			errorRetentionLogPrefix, r.monoVtx.Name, podIndex, url, res.StatusCode, apiResponse.ErrMessage, len(apiResponse.Data), string(body))
 		return
 	}
 
@@ -222,7 +266,8 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 	replica := fmt.Sprintf("%s-mv-%v", cacheKey, podIndex)
 	newMvtxErrors := ReplicaErrors{Replica: replica, ContainerErrors: apiResponse.Data}
 
-	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
+	r.log.Infof("%s persisting errors monoVertex=%s podIndex=%d replica=%s cacheKey=%s containers=%v",
+		errorRetentionLogPrefix, r.monoVtx.Name, podIndex, replica, cacheKey, summarizeReplicaErrors([]ReplicaErrors{newMvtxErrors}))
 	// Lock the cache before updating
 	r.cacheMutex.Lock()
 	defer r.cacheMutex.Unlock()
@@ -234,14 +279,20 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 			if mvtxError.Replica == replica {
 				mvtxErrors[i] = newMvtxErrors
 				r.localCache[cacheKey] = mvtxErrors
+				r.log.Infof("%s updated existing replica errors monoVertex=%s replica=%s totalReplicas=%d",
+					errorRetentionLogPrefix, cacheKey, replica, len(mvtxErrors))
 				return
 			}
 		}
 		// Append new replica errors if not found
 		r.localCache[cacheKey] = append(mvtxErrors, newMvtxErrors)
+		r.log.Infof("%s appended replica errors monoVertex=%s replica=%s totalReplicas=%d",
+			errorRetentionLogPrefix, cacheKey, replica, len(r.localCache[cacheKey]))
 	} else {
 		// Initialize the cache entry with the new replica errors
 		r.localCache[cacheKey] = []ReplicaErrors{newMvtxErrors}
+		r.log.Infof("%s initialized cache entry monoVertex=%s replica=%s totalReplicas=%d",
+			errorRetentionLogPrefix, cacheKey, replica, len(r.localCache[cacheKey]))
 	}
 }
 
@@ -264,4 +315,14 @@ func (r *monoVertexRuntimeCache) GetLocalCache() map[string][]ReplicaErrors {
 		localCacheCopy[key] = localCacheValue
 	}
 	return localCacheCopy
+}
+
+func (r *monoVertexRuntimeCache) localCacheKeys() []string {
+	r.cacheMutex.RLock()
+	defer r.cacheMutex.RUnlock()
+	keys := make([]string, 0, len(r.localCache))
+	for key := range r.localCache {
+		keys = append(keys, key)
+	}
+	return keys
 }

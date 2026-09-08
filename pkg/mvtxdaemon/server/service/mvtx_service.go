@@ -99,9 +99,15 @@ func (mvs *MonoVertexService) GetMonoVertexStatus(ctx context.Context, empty *em
 // Errors are retrieved for all active replicas for a given mono vertex.
 // A list of replica errors for a given mono vertex is returned.
 func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	logger := logging.FromContext(ctx).Named("monoVertexErrors")
 	monoVertex := request.GetMonoVertex()
 	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
 	localCache := mvs.monoVertexRuntimeCache.GetLocalCache()
+
+	cacheKeys := make([]string, 0, len(localCache))
+	for key := range localCache {
+		cacheKeys = append(cacheKeys, key)
+	}
 
 	// If the errors are present in the local cache, return the errors.
 	if errors, ok := localCache[monoVertex]; ok {
@@ -123,9 +129,45 @@ func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *
 			}
 		}
 		resp.Errors = replicaErrors
+		logger.Infow("[error-retention] serving cached mono vertex errors",
+			"requestedMonoVertex", monoVertex,
+			"embeddedMonoVertex", mvs.monoVtx.Name,
+			"cacheHit", true,
+			"cacheKeys", cacheKeys,
+			"replicaCount", len(replicaErrors),
+			"errors", summarizeCachedErrorsForLog(errors),
+		)
+	} else {
+		logger.Infow("[error-retention] serving cached mono vertex errors",
+			"requestedMonoVertex", monoVertex,
+			"embeddedMonoVertex", mvs.monoVtx.Name,
+			"cacheHit", false,
+			"cacheKeys", cacheKeys,
+			"replicaCount", 0,
+		)
 	}
 
 	return resp, nil
+}
+
+func summarizeCachedErrorsForLog(errors []runtimePkg.ReplicaErrors) []map[string]interface{} {
+	summary := make([]map[string]interface{}, 0, len(errors))
+	for _, replica := range errors {
+		containers := make([]map[string]interface{}, 0, len(replica.ContainerErrors))
+		for _, containerError := range replica.ContainerErrors {
+			containers = append(containers, map[string]interface{}{
+				"container": containerError.Container,
+				"timestamp": containerError.Timestamp,
+				"code":      containerError.Code,
+				"message":   containerError.Message,
+			})
+		}
+		summary = append(summary, map[string]interface{}{
+			"replica":         replica.Replica,
+			"containerErrors": containers,
+		})
+	}
+	return summary
 }
 
 // StartHealthCheck starts the health check for the MonoVertex using the health checker
