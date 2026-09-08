@@ -56,6 +56,7 @@ spec:
                                 values:
                                   items:
                                     type: string
+                                  minItems: 1
                                   type: array
                               required:
                               - values
