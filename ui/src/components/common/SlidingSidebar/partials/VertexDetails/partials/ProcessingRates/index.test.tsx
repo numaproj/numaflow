@@ -1,8 +1,12 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderBase, screen, waitFor } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import "@testing-library/jest-dom";
 
 import { ProcessingRates } from "./index";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 const mockPipelineId = "simple-pipeline";
 const mockVertexId = "in";

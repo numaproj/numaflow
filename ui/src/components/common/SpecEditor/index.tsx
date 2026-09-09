@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import YAML from "yaml";
@@ -56,6 +56,10 @@ export interface SpecEditorProps {
   statusIndicator?: StatusIndicator;
   mutationKey?: string;
   editResetKey?: string;
+  initialLine?: number;
+  initialEndLine?: number;
+  onCursorLineChange?: (line: number) => void;
+  onSelectionLineChange?: (startLine: number, endLine: number) => void;
 }
 
 export function SpecEditor({
@@ -71,6 +75,10 @@ export function SpecEditor({
   validationMessage,
   mutationKey,
   editResetKey,
+  initialLine,
+  initialEndLine,
+  onCursorLineChange,
+  onSelectionLineChange,
 }: SpecEditorProps) {
   const { resolvedTheme } = useThemeContext();
   const [editable, setEditable] = useState(viewType === ViewType.EDIT);
@@ -81,6 +89,9 @@ export function SpecEditor({
       : YAML.stringify(initialYaml) || ""
   );
   const [editorRef, setEditorRef] = useState<any>(undefined);
+  const cursorListenerRef = useRef<{ dispose: () => void } | undefined>();
+  const selectionListenerRef = useRef<{ dispose: () => void } | undefined>();
+  const lineDecorationIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (onMutatedChange) {
@@ -143,9 +154,62 @@ export function SpecEditor({
     setMutated(false);
   }, [initialYaml, value]);
 
-  const handleEditorDidMount = useCallback((editor: any) => {
-    setEditorRef(editor);
-  }, []);
+  const handleEditorDidMount = useCallback(
+    (editor: any) => {
+      setEditorRef(editor);
+      const lineCount = editor.getModel?.()?.getLineCount?.() || 0;
+      if (initialLine && initialLine > 0 && initialLine <= lineCount) {
+        const endLine =
+          initialEndLine && initialEndLine >= initialLine && initialEndLine <= lineCount
+            ? initialEndLine
+            : initialLine;
+        editor.setSelection?.(
+          new monaco.Selection(initialLine, 1, endLine, 1)
+        );
+        editor.setPosition?.({ lineNumber: endLine, column: 1 });
+        editor.revealLineInCenter?.(initialLine);
+        lineDecorationIdsRef.current = editor.deltaDecorations?.(
+          lineDecorationIdsRef.current,
+          [
+            {
+              range: new monaco.Range(initialLine, 1, endLine, 1),
+              options: { isWholeLine: true, className: "spec-editor-linked-line" },
+            },
+          ]
+        ) || [];
+      }
+      cursorListenerRef.current?.dispose();
+      cursorListenerRef.current = editor.onDidChangeCursorPosition?.(
+        (event: any) => onCursorLineChange?.(event.position.lineNumber)
+      );
+      selectionListenerRef.current?.dispose();
+      selectionListenerRef.current = editor.onDidChangeCursorSelection?.((event: any) => {
+        const startLine = Math.min(
+          event.selection.startLineNumber,
+          event.selection.endLineNumber
+        );
+        const endLine = Math.max(
+          event.selection.startLineNumber,
+          event.selection.endLineNumber
+        );
+        onSelectionLineChange?.(startLine, endLine);
+      });
+    },
+    [
+      initialLine,
+      initialEndLine,
+      onCursorLineChange,
+      onSelectionLineChange,
+    ]
+  );
+
+  useEffect(
+    () => () => {
+      cursorListenerRef.current?.dispose();
+      selectionListenerRef.current?.dispose();
+    },
+    []
+  );
 
   const handleValueChange = useCallback((newValue: string | undefined) => {
     setValue(newValue ? newValue : "");

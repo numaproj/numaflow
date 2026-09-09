@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import YAML from "yaml";
 import { getAPIResponseError, getBaseHref } from "../../../../../../../utils";
@@ -12,6 +13,7 @@ import {
 import { SpecEditorModalProps } from "../../../..";
 import { AppContextProps } from "../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../App";
+import { replaceObservabilityState } from "../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -44,6 +46,33 @@ export function VertexUpdate({
   const [mutationKey, setMutationKey] = useState<string>("");
   const [currentSpec, setCurrentSpec] = useState<any>(vertexSpec);
   const { host, isReadOnly } = useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const specLineParam = params.get("specLine") || "";
+  const [initialStartLine, initialEndLine] = specLineParam
+    .split("-", 2)
+    .map((line) => Number(line));
+  const isActiveSpecLink =
+    params.get("vertex") === vertexId && params.get("vertexTab") === "spec";
+
+  const handleCursorLineChange = useCallback(
+    (line: number) => {
+      if (!isActiveSpecLink) return;
+      replaceObservabilityState(history, location, { specLine: line });
+    },
+    [history, location, isActiveSpecLink]
+  );
+
+  const handleSelectionLineChange = useCallback(
+    (startLine: number, endLine: number) => {
+      if (!isActiveSpecLink) return;
+      replaceObservabilityState(history, location, {
+        specLine: startLine === endLine ? startLine : `${startLine}-${endLine}`,
+      });
+    },
+    [history, location, isActiveSpecLink]
+  );
 
   // Submit API call
   useEffect(() => {
@@ -241,6 +270,18 @@ export function VertexUpdate({
         onMutatedChange={handleMutationChange}
         statusIndicator={status}
         validationMessage={validationMessage}
+        initialLine={
+          Number.isInteger(initialStartLine) && initialStartLine > 0
+            ? initialStartLine
+            : undefined
+        }
+        initialEndLine={
+          Number.isInteger(initialEndLine) && initialEndLine >= initialStartLine
+            ? initialEndLine
+            : undefined
+        }
+        onCursorLineChange={handleCursorLineChange}
+        onSelectionLineChange={handleSelectionLineChange}
       />
     </Box>
   );

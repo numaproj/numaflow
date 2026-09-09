@@ -9,6 +9,7 @@ import {
   VertexDetailsContextProps,
 } from "../../../SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../types/declarations/pods";
+import { CopyViewLinkButton } from "../../../CopyViewLinkButton";
 
 import "./style.css";
 
@@ -36,6 +37,7 @@ interface MetricsModalProps {
   type: string;
   presets?: any;
   pod?: Pod;
+  shareUrl?: string;
 }
 
 export function MetricsModal({
@@ -49,6 +51,7 @@ export function MetricsModal({
   type,
   presets,
   pod,
+  shareUrl,
 }: MetricsModalProps) {
   const { openMetrics } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
@@ -82,9 +85,12 @@ export function MetricsModal({
       <Box sx={modalStyle}>
         <Box className={"metrics-modal-title-container"}>
           <Box className={"metrics-modal-title"}>{metricDisplayName}</Box>
-          <IconButton onClick={handleCloseModal} aria-label="close">
-            <CloseIcon fontSize="large" />
-          </IconButton>
+          <Box>
+            <CopyViewLinkButton url={shareUrl} />
+            <IconButton onClick={handleCloseModal} aria-label="close">
+              <CloseIcon fontSize="large" />
+            </IconButton>
+          </Box>
         </Box>
         <Box sx={{ height: "calc(100% - 3rem)" }}>
           <Metrics

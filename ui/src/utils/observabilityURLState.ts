@@ -3,6 +3,7 @@ import { History, Location } from "history";
 export const OBSERVABILITY_PARAM_NAMES = [
   "vertex",
   "vertexTab",
+  "specLine",
   "pod",
   "container",
   "logsSearch",
@@ -103,3 +104,12 @@ export const pushObservabilityState = (
 
 export const buildCurrentViewUrl = (location: Location): string =>
   `${window.location.origin}${location.pathname}${location.search}`;
+
+export const buildObservabilityViewUrl = (
+  location: Location,
+  patch: ObservabilityPatch
+): string =>
+  `${window.location.origin}${location.pathname}${updateObservabilitySearch(
+    location.search,
+    patch
+  )}`;
