@@ -2231,6 +2231,7 @@ message TagConditions {
   optional string operator = 1;
 
   // Values tag values for conditional forwarding
+  // +kubebuilder:validation:MinItems=1
   repeated string values = 2;
 }
 
