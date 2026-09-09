@@ -6,17 +6,21 @@ import { toast } from "react-toastify";
 import { useLocation } from "react-router-dom";
 import { buildCurrentViewUrl } from "../../../utils/observabilityURLState";
 
-export function CopyViewLinkButton() {
+export interface CopyViewLinkButtonProps {
+  url?: string;
+}
+
+export function CopyViewLinkButton({ url }: CopyViewLinkButtonProps) {
   const location = useLocation();
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(buildCurrentViewUrl(location));
+      await navigator.clipboard.writeText(url || buildCurrentViewUrl(location));
       toast.success("Link copied");
     } catch {
       toast.error("Unable to copy link");
     }
-  }, [location]);
+  }, [location, url]);
 
   return (
     <Tooltip title="Copy link to this view" placement="top" arrow>

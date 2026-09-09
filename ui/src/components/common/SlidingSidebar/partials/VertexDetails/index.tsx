@@ -239,6 +239,7 @@ export function VertexDetails({
         if (isDeepLinkedVertex) {
           replaceObservabilityState(history, location, {
             vertexTab: TAB_KEY_BY_INDEX[newValue],
+            specLine: newValue === SPEC_TAB_INDEX ? undefined : null,
             ...(newValue === METRICS_TAB_INDEX
               ? {}
               : {
@@ -371,6 +372,8 @@ export function VertexDetails({
           metric: panelId.replace(/-panel$/, ""),
           metricPanels: panelId,
           pod: pod?.name,
+          metricDuration: nextPresets?.duration,
+          metricQuantile: nextPresets?.quantile,
         });
       }
     },

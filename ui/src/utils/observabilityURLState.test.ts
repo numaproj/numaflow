@@ -1,4 +1,5 @@
 import {
+  buildObservabilityViewUrl,
   clearObservabilitySearch,
   parseBooleanParam,
   updateObservabilitySearch,
@@ -9,10 +10,10 @@ describe("observability URL state", () => {
     expect(
       updateObservabilitySearch(
         "?namespace=default&pipeline=demo&type=monoVertex&vertex=input",
-        { vertexTab: "pods", logsPaused: true }
+        { vertexTab: "spec", specLine: 12, logsPaused: true }
       )
     ).toBe(
-      "?namespace=default&pipeline=demo&type=monoVertex&vertex=input&vertexTab=pods&logsPaused=1"
+      "?namespace=default&pipeline=demo&type=monoVertex&vertex=input&vertexTab=spec&specLine=12&logsPaused=1"
     );
   });
 
@@ -31,5 +32,25 @@ describe("observability URL state", () => {
     expect(parseBooleanParam(new URLSearchParams(), "logsWrap", true)).toBe(
       true
     );
+  });
+
+  it("builds a durable metrics URL without changing the current URL", () => {
+    const location = {
+      pathname: "/",
+      search:
+        "?namespace=default&pipeline=demo&type=monoVertex&vertex=demo&vertexTab=processingRates",
+    } as any;
+
+    expect(
+      buildObservabilityViewUrl(location, {
+        vertexTab: "metrics",
+        metric: "monovtx_processing_rate",
+        metricPanels: "monovtx_processing_rate-panel",
+        metricDuration: "5m",
+      })
+    ).toContain(
+      "?namespace=default&pipeline=demo&type=monoVertex&vertex=demo&vertexTab=metrics&metric=monovtx_processing_rate&metricPanels=monovtx_processing_rate-panel&metricDuration=5m"
+    );
+    expect(location.search).toContain("vertexTab=processingRates");
   });
 });
