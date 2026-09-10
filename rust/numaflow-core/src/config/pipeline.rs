@@ -30,12 +30,12 @@ use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Strea
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::error::Error;
+use numaflow_shared::isb::ENV_NUMAFLOW_ISBSVC_TYPE;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
-const ENV_NUMAFLOW_ISBSVC_TYPE: &str = "NUMAFLOW_ISBSVC_TYPE";
 const ENV_NUMAFLOW_ISBSVC_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_ISBSVC_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
@@ -311,7 +311,7 @@ impl PipelineConfig {
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
                 [
-                    ENV_NUMAFLOW_ISBSVC_TYPE,
+                    ENV_NUMAFLOW_ISBSVC_TYPE, // shared: numaflow_shared::isb::ENV_NUMAFLOW_ISBSVC_TYPE
                     ENV_NUMAFLOW_ISBSVC_JETSTREAM_URL,
                     ENV_NUMAFLOW_ISBSVC_JETSTREAM_USER,
                     ENV_NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD,
@@ -538,23 +538,7 @@ impl PipelineConfig {
                 })
         };
 
-        let isb_type = env_vars
-            .get(ENV_NUMAFLOW_ISBSVC_TYPE)
-            .map(|s| s.as_str())
-            .unwrap_or("jetstream");
-        let isb_client_config = match isb_type {
-            "jetstream" => {
-                // Single source of truth for JetStream env parsing (shared with sideinput).
-                let js_cfg = isb::jetstream::ClientConfig::load(env_vars.clone())
-                    .map_err(|e| Error::Config(e.to_string()))?;
-                isb::ISBClientConfig::Jetstream(js_cfg)
-            }
-            other => {
-                return Err(Error::Config(format!(
-                    "Unsupported ISB service type '{other}'. Supported: jetstream"
-                )));
-            }
-        };
+        let isb_client_config = isb::ISBClientConfig::from_env(env_vars.clone())?;
 
         // Determine if ordered processing is enabled for this vertex
         // Logic follows Go's GetEffectiveOrderedConfig():
