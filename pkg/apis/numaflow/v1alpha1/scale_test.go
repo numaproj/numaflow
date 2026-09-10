@@ -71,11 +71,11 @@ func Test_Scale_Parameters(t *testing.T) {
 
 func TestScale_ScaleForDaemonEmbedding(t *testing.T) {
 	scale := Scale{
-		Min:                      ptr.To[int32](2),
-		Max:                      ptr.To[int32](4),
-		LookbackSeconds:          ptr.To[uint32](120),
-		ScaleUpCooldownSeconds:   ptr.To[uint32](30),
-		TargetProcessingSeconds:  ptr.To[uint32](60),
+		Min:                     ptr.To[int32](2),
+		Max:                     ptr.To[int32](4),
+		LookbackSeconds:         ptr.To[uint32](120),
+		ScaleUpCooldownSeconds:  ptr.To[uint32](30),
+		TargetProcessingSeconds: ptr.To[uint32](60),
 	}
 	embedded := scale.ScaleForDaemonEmbedding()
 	assert.Nil(t, embedded.Min)
