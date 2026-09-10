@@ -3,17 +3,13 @@
 //! This module provides a factory for creating JetStream-based ISB readers and writers.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_nats::jetstream::Context;
-use async_nats::{ConnectOptions, jetstream};
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
-use crate::config::pipeline::isb::jetstream::ClientConfig;
 use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
-use crate::error;
 use crate::error::Error;
 use crate::metrics::MetricLabels;
 use crate::pipeline::isb::ISBFactory;
@@ -22,25 +18,6 @@ use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use numaflow_shared::kv::KVStore;
 use numaflow_shared::kv::jetstream::JetstreamKVStore;
-
-/// Creates a jetstream context based on the provided configuration.
-pub(crate) async fn create_js_context(config: ClientConfig) -> Result<Context> {
-    // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.url, opts)
-        .await
-        .map_err(|e| error::Error::Connection(e.to_string()))?;
-
-    Ok(jetstream::new(js_client))
-}
 
 /// Factory for creating JetStream-based ISB readers and writers.
 ///
