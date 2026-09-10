@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -656,4 +657,39 @@ func TestOrdered_IsEnabled(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestPipeline_GetDaemonDeploymentObj_scaleChangeDoesNotChangeHash(t *testing.T) {
+	pl := testPipeline.DeepCopy()
+	pl.Spec.Vertices[0].Scale = Scale{
+		Min:             ptr.To[int32](1),
+		Max:             ptr.To[int32](2),
+		LookbackSeconds: ptr.To[uint32](120),
+	}
+	req := GetDaemonDeploymentReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	deployBefore, err := pl.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedBefore := daemonEmbeddedPipelineObject(deployBefore)
+
+	pl.Spec.Vertices[0].Scale.Min = ptr.To[int32](0)
+	pl.Spec.Vertices[0].Scale.Max = ptr.To[int32](0)
+	deployAfter, err := pl.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedAfter := daemonEmbeddedPipelineObject(deployAfter)
+
+	assert.Equal(t, embeddedBefore, embeddedAfter)
+}
+
+func daemonEmbeddedPipelineObject(deploy *appv1.Deployment) string {
+	for _, env := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == EnvPipelineObject {
+			return env.Value
+		}
+	}
+	return ""
 }

@@ -262,15 +262,7 @@ func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq)
 }
 
 func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Deployment, error) {
-	pipelineCopy := &Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: p.Namespace,
-			Name:      p.Name,
-		},
-		Spec: p.Spec,
-	}
-	pipelineCopy.Spec.Lifecycle = Lifecycle{}
-	plBytes, err := json.Marshal(pipelineCopy)
+	plBytes, err := json.Marshal(p.daemonSimpleCopy())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal pipeline spec")
 	}
@@ -357,6 +349,21 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		},
 		Spec: spec,
 	}, nil
+}
+
+func (p Pipeline) daemonSimpleCopy() Pipeline {
+	pipelineCopy := Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: p.Namespace,
+			Name:      p.Name,
+		},
+		Spec: *p.Spec.DeepCopy(),
+	}
+	pipelineCopy.Spec.Lifecycle = Lifecycle{}
+	for i := range pipelineCopy.Spec.Vertices {
+		pipelineCopy.Spec.Vertices[i].Scale = p.Spec.Vertices[i].Scale.ScaleForDaemonEmbedding()
+	}
+	return pipelineCopy
 }
 
 func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.Container {

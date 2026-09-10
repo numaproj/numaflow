@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -86,37 +85,19 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 // updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
-	var wg sync.WaitGroup
-	// Use atomic operations to safely update the maxActiveIndex across multiple goroutines.
-	var maxActiveIndex atomic.Int32
-	// Initialize maxActiveIndex to -1 to indicate no active pods.
-	maxActiveIndex.Store(int32(-1))
-	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
-			if pt.isActive(podName) {
-				for {
-					// Load the current value of maxActiveIndex atomically.
-					currentMax := maxActiveIndex.Load()
-					// checks if the currentMax is less than index.
-					if int32(index) > currentMax {
-						// checks if maxActiveIndex still holds the value currentMax.
-						// atomically updates maxActiveIndex to the new, higher index and returns true.
-						if maxActiveIndex.CompareAndSwap(currentMax, int32(index)) {
-							break
-						}
-					} else {
-						break
-					}
-				}
-			}
-		}(i)
+	pt.setActivePodsCount(consecutiveActiveMonoVertexPods(pt.monoVertex.Name, pt.isActive))
+}
+
+func consecutiveActiveMonoVertexPods(monoVertexName string, isActive func(podName string) bool) int {
+	maxIndex := -1
+	for i := 0; i < v1alpha1.MaxPodProbeIndex; i++ {
+		podName := fmt.Sprintf("%s-mv-%d", monoVertexName, i)
+		if !isActive(podName) {
+			break
+		}
+		maxIndex = i
 	}
-	wg.Wait()
-	// Update the active pods count based on the maxActiveIndex.
-	pt.setActivePodsCount(int(maxActiveIndex.Load() + 1))
+	return maxIndex + 1
 }
 
 func (pt *PodTracker) isActive(podName string) bool {

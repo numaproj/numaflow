@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -693,4 +694,76 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 		assert.Equal(t, mv.Name, deployment.OwnerReferences[0].Name)
 		assert.Equal(t, MonoVertexGroupVersionKind.Kind, deployment.OwnerReferences[0].Kind)
 	})
+}
+
+func TestMonoVertex_GetDaemonDeploymentObj_scaleChangeDoesNotChangeHash(t *testing.T) {
+	mv := MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-vertex",
+			Namespace: "test-namespace",
+		},
+		Spec: MonoVertexSpec{
+			Scale: Scale{
+				Min:             ptr.To[int32](1),
+				Max:             ptr.To[int32](2),
+				LookbackSeconds: ptr.To[uint32](120),
+			},
+		},
+	}
+	req := GetMonoVertexDaemonDeploymentReq{
+		Image:      "test-image:latest",
+		PullPolicy: corev1.PullAlways,
+	}
+
+	deployBefore, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedBefore := daemonEmbeddedMonoVertexObject(deployBefore)
+
+	mv.Spec.Scale.Min = ptr.To[int32](0)
+	mv.Spec.Scale.Max = ptr.To[int32](0)
+	deployAfter, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedAfter := daemonEmbeddedMonoVertexObject(deployAfter)
+
+	assert.Equal(t, embeddedBefore, embeddedAfter)
+}
+
+func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesHash(t *testing.T) {
+	mv := MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-vertex",
+			Namespace: "test-namespace",
+		},
+		Spec: MonoVertexSpec{
+			Scale: Scale{
+				Min:             ptr.To[int32](1),
+				Max:             ptr.To[int32](2),
+				LookbackSeconds: ptr.To[uint32](120),
+			},
+		},
+	}
+	req := GetMonoVertexDaemonDeploymentReq{
+		Image:      "test-image:latest",
+		PullPolicy: corev1.PullAlways,
+	}
+
+	deployBefore, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedBefore := daemonEmbeddedMonoVertexObject(deployBefore)
+
+	mv.Spec.Scale.LookbackSeconds = ptr.To[uint32](300)
+	deployAfter, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedAfter := daemonEmbeddedMonoVertexObject(deployAfter)
+
+	assert.NotEqual(t, embeddedBefore, embeddedAfter)
+}
+
+func daemonEmbeddedMonoVertexObject(deploy *appv1.Deployment) string {
+	for _, env := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == EnvMonoVertexObject {
+			return env.Value
+		}
+	}
+	return ""
 }

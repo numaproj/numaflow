@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -103,24 +102,23 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 func (pt *PodTracker) updateActivePods() {
-	var wg sync.WaitGroup
-
 	for _, v := range pt.pipeline.Spec.Vertices {
-		for i := range int(v.Scale.GetMaxReplicas()) {
-			wg.Add(1)
-			go func(vertexName string, index int) {
-				defer wg.Done()
-				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-				podKey := pt.getPodKey(index, vertexName)
-				if pt.isActive(vertexName, podName) {
-					pt.activePods.PushBack(podKey)
-				} else {
-					pt.activePods.Remove(podKey)
-				}
-			}(v.Name, i)
+		activeCount := 0
+		for i := 0; i < v1alpha1.MaxPodProbeIndex; i++ {
+			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
+			podKey := pt.getPodKey(i, v.Name)
+			if pt.isActive(v.Name, podName) {
+				pt.activePods.PushBack(podKey)
+				activeCount++
+				continue
+			}
+			pt.activePods.Remove(podKey)
+			break
+		}
+		for i := activeCount; i < v1alpha1.MaxPodProbeIndex; i++ {
+			pt.activePods.Remove(pt.getPodKey(i, v.Name))
 		}
 	}
-	wg.Wait()
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 

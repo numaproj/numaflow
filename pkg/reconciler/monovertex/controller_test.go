@@ -224,6 +224,31 @@ func Test_createOrUpdateDaemonDeployment(t *testing.T) {
 		assert.Equal(t, 1, len(daemonDeployment.Spec.Template.Spec.Containers))
 		assert.Equal(t, dfv1.CtrMain, daemonDeployment.Spec.Template.Spec.Containers[0].Name)
 	})
+
+	t.Run("scale change does not recreate daemon deployment", func(t *testing.T) {
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](1)
+		testObj.Spec.Scale.Max = ptr.To[int32](2)
+		err := r.createOrUpdateDaemonDeployment(context.TODO(), testObj)
+		assert.NoError(t, err)
+
+		var daemonDeployment appv1.Deployment
+		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&daemonDeployment)
+		assert.NoError(t, err)
+		hashBefore := daemonDeployment.Annotations[dfv1.KeyHash]
+
+		testObj.Spec.Scale.Min = ptr.To[int32](0)
+		testObj.Spec.Scale.Max = ptr.To[int32](0)
+		err = r.createOrUpdateDaemonDeployment(context.TODO(), testObj)
+		assert.NoError(t, err)
+
+		var updatedDaemonDeployment appv1.Deployment
+		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&updatedDaemonDeployment)
+		assert.NoError(t, err)
+		assert.Equal(t, hashBefore, updatedDaemonDeployment.Annotations[dfv1.KeyHash])
+	})
 }
 
 func Test_createOrUpdateDaemonService(t *testing.T) {

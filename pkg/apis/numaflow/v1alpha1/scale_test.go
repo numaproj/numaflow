@@ -69,6 +69,22 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, int32(500), s.GetMaxReplicas())
 }
 
+func TestScale_ScaleForDaemonEmbedding(t *testing.T) {
+	scale := Scale{
+		Min:                      ptr.To[int32](2),
+		Max:                      ptr.To[int32](4),
+		LookbackSeconds:          ptr.To[uint32](120),
+		ScaleUpCooldownSeconds:   ptr.To[uint32](30),
+		TargetProcessingSeconds:  ptr.To[uint32](60),
+	}
+	embedded := scale.ScaleForDaemonEmbedding()
+	assert.Nil(t, embedded.Min)
+	assert.Nil(t, embedded.Max)
+	assert.Nil(t, embedded.ScaleUpCooldownSeconds)
+	assert.Nil(t, embedded.TargetProcessingSeconds)
+	assert.Equal(t, uint32(120), *embedded.LookbackSeconds)
+}
+
 func TestCronScheduling_GetTimezone(t *testing.T) {
 	assert.Equal(t, "UTC", (CronScheduling{}).GetTimezone())
 	assert.Equal(t, "America/Los_Angeles", (CronScheduling{Timezone: "America/Los_Angeles"}).GetTimezone())

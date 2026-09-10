@@ -119,6 +119,19 @@ func TestPodTracker_isActive(t *testing.T) {
 	assert.False(t, active)
 }
 
+func TestConsecutiveActiveMonoVertexPods(t *testing.T) {
+	activeUntil := 3
+	isActive := func(podName string) bool {
+		for i := 0; i < activeUntil; i++ {
+			if strings.Contains(podName, fmt.Sprintf("p-mv-%d", i)) {
+				return true
+			}
+		}
+		return false
+	}
+	assert.Equal(t, 3, consecutiveActiveMonoVertexPods("p", isActive))
+}
+
 func TestPodTracker_setActivePodsCount(t *testing.T) {
 	ctx := context.Background()
 	mv := &v1alpha1.MonoVertex{
