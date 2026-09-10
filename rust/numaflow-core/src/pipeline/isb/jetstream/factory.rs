@@ -17,7 +17,8 @@ use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
+use numaflow_shared::kv::KVStoreFactory;
+use numaflow_shared::kv::jetstream::JetstreamKVStoreFactory;
 
 /// Factory for creating JetStream-based ISB readers and writers.
 ///
@@ -25,8 +26,8 @@ use numaflow_shared::kv::jetstream::JetstreamKVStore;
 /// to create readers and writers for specific streams.
 #[derive(Clone)]
 pub struct JetStreamFactory {
-    /// The JetStream context used to create readers and writers
-    context: Context,
+    /// The shared JetStream KV store factory, which also carries the JetStream context
+    kv: JetstreamKVStoreFactory,
 }
 
 impl JetStreamFactory {
@@ -35,7 +36,9 @@ impl JetStreamFactory {
     /// # Arguments
     /// * `context` - The JetStream context to use for creating readers and writers
     pub fn new(context: Context) -> Self {
-        Self { context }
+        Self {
+            kv: JetstreamKVStoreFactory::new(context),
+        }
     }
 
     /// Returns a reference to the underlying JetStream context.
@@ -44,7 +47,7 @@ impl JetStreamFactory {
     /// such as watermark handling.
     #[allow(dead_code)] // May be used for watermark handling or other direct context access
     pub fn context(&self) -> &Context {
-        &self.context
+        self.kv.context()
     }
 }
 
@@ -56,7 +59,7 @@ impl ISBFactory for JetStreamFactory {
         isb_config: Option<&ISBConfig>,
     ) -> Result<ISBReaderRef> {
         Ok(Arc::new(
-            JetStreamReader::new(stream, self.context.clone(), isb_config.cloned()).await?,
+            JetStreamReader::new(stream, self.kv.context().clone(), isb_config.cloned()).await?,
         ))
     }
 
@@ -72,7 +75,7 @@ impl ISBFactory for JetStreamFactory {
         Ok(Arc::new(
             JetStreamWriter::new(
                 stream,
-                self.context.clone(),
+                self.kv.context().clone(),
                 writer_config,
                 compression_type,
                 metric_labels,
@@ -83,12 +86,10 @@ impl ISBFactory for JetStreamFactory {
     }
 
     async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>> {
-        let store =
-            self.context.get_key_value(&bucket).await.map_err(|e| {
-                Error::Connection(format!("Failed to get KV bucket '{bucket}': {e}"))
-            })?;
-        let name: &'static str = Box::leak(bucket.into_boxed_str());
-        Ok(Arc::new(JetstreamKVStore::new(store, name)))
+        self.kv
+            .create_kv_store(bucket)
+            .await
+            .map_err(|e| Error::Connection(e.to_string()))
     }
 }
 
@@ -104,6 +105,6 @@ mod tests {
         let factory = JetStreamFactory::new(context.clone());
 
         // Verify the context is accessible
-        assert!(std::ptr::eq(factory.context(), &factory.context));
+        assert!(std::ptr::eq(factory.context(), factory.context()));
     }
 }
