@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.8.4 (2026-09-10)
+
+ * [85dbc9516](https://github.com/numaproj/numaflow/commit/85dbc9516a1a2f316f7b8dce63e0580c3fe595df) Update manifests to v1.8.4
+ * [8beca6a10](https://github.com/numaproj/numaflow/commit/8beca6a10173b3b4f4a94f638758e31f2cb0102d) fix(isbsvc): use quorum-aware health threshold for JetStream (#3484)
+
+### Contributors
+
+ * Da.Sanchez
+ * Vaibhav Tiwari
+
 ## v1.8.3 (2026-08-07)
 
  * [4db03f0d7](https://github.com/numaproj/numaflow/commit/4db03f0d753e93a7fe39dafe778f634497334e5c) Update manifests to v1.8.3
@@ -19,15 +29,11 @@
 
  * [d5f32d110](https://github.com/numaproj/numaflow/commit/d5f32d11014d3fe131ef57fc710b9caa7b28d37e) Update manifests to v1.8.2
  * [4840682b9](https://github.com/numaproj/numaflow/commit/4840682b90ca3b13f7e5f549ce488ae732d65dde) feat(sqs): utilize nack options for SQS (#3557)
- * [7572b5735](https://github.com/numaproj/numaflow/commit/7572b573568ece4fa8e1fb14ec2b77c5d2c8be89) chore: prepare for release v1.8.2 (#3556) 
 
 ### Contributors
 
  * Ayush Srivastava
- * Surya Pratap Singh
- * Vaibhav Tiwari
- * Vigith Maurice
- * Yashash Lokesh
+ * vtiwari5
 
 ## v1.8.1 (2026-06-17)
 
