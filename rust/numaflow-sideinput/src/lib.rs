@@ -3,12 +3,10 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::manager::SideInputTrigger;
-use numaflow_shared::isb::jetstream::config::ClientConfig;
-use numaflow_shared::isb::jetstream::create_js_context;
+use numaflow_shared::isb::{ISBClientConfig, create_kv_store_factory};
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -51,20 +49,6 @@ fn get_bucket_name(side_input_store: &str) -> &'static str {
     Box::leak(format!("{side_input_store}_SIDE_INPUTS").into_boxed_str())
 }
 
-/// Opens a backend-neutral KV store for the side-input bucket.
-async fn create_side_input_kv_store(
-    env_vars: HashMap<String, String>,
-    bucket: &'static str,
-) -> Result<Arc<dyn KVStore>> {
-    let client_config = ClientConfig::load(env_vars)?;
-    let js_context = create_js_context(client_config).await?;
-    let store = js_context
-        .get_key_value(bucket)
-        .await
-        .map_err(|e| Error::SideInput(format!("Failed to get kv bucket {bucket}: {e}")))?;
-    Ok(Arc::new(JetstreamKVStore::new(store, bucket)))
-}
-
 /// Runs the side-input system in the specified mode.
 pub async fn run(
     mode: SideInputMode,
@@ -72,13 +56,35 @@ pub async fn run(
     env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
+    let backend = ISBClientConfig::from_env(env_vars.clone())?;
+    let kv_factory = create_kv_store_factory(&backend).await?;
+    let bucket = match &mode {
+        SideInputMode::Manager {
+            side_input_store, ..
+        } => get_bucket_name(side_input_store),
+        SideInputMode::Synchronizer {
+            side_input_store, ..
+        } => get_bucket_name(side_input_store),
+    };
+    let store = kv_factory.create_kv_store(bucket.to_string()).await?;
+
+    run_with_store(mode, store, uds_path, env_vars, cancellation_token).await
+}
+
+/// Runs the side-input system in the specified mode against an already-constructed KV store.
+pub(crate) async fn run_with_store(
+    mode: SideInputMode,
+    store: Arc<dyn KVStore>,
+    uds_path: std::path::PathBuf,
+    env_vars: HashMap<String, String>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
     match mode {
         SideInputMode::Manager {
-            side_input_store,
-            server_info_path,
+            server_info_path, ..
         } => {
             start_manager(
-                get_bucket_name(side_input_store),
+                store,
                 uds_path,
                 env_vars,
                 server_info_path,
@@ -88,25 +94,15 @@ pub async fn run(
         }
         SideInputMode::Synchronizer {
             side_inputs,
-            side_input_store,
             mount_path,
             run_once,
-        } => {
-            start_synchronizer(
-                side_inputs,
-                get_bucket_name(side_input_store),
-                mount_path,
-                run_once,
-                env_vars,
-                cancellation_token,
-            )
-            .await
-        }
+            ..
+        } => start_synchronizer(side_inputs, store, mount_path, run_once, cancellation_token).await,
     }
 }
 
 async fn start_manager(
-    side_input_store: &'static str,
+    store: Arc<dyn KVStore>,
     uds_path: std::path::PathBuf,
     env_vars: HashMap<String, String>,
     server_info_path: &'static str,
@@ -122,7 +118,6 @@ async fn start_manager(
     .await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
-    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
 
     manager::SideInputManager::new(trigger.name, client, cancellation_token)
         .run(store, side_input_trigger)
@@ -131,14 +126,11 @@ async fn start_manager(
 
 async fn start_synchronizer(
     side_inputs: Vec<&'static str>,
-    side_input_store: &'static str,
+    store: Arc<dyn KVStore>,
     mount_path: &'static str,
     run_once: bool,
-    env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
-
     let synchronizer = synchronize::SideInputSynchronizer::new(
         side_inputs,
         mount_path,
@@ -196,13 +188,17 @@ mod tests {
             "localhost:4222".to_string(),
         );
 
-        let result = create_side_input_kv_store(env_vars, "non-existent-bucket").await;
+        let backend = ISBClientConfig::from_env(env_vars)?;
+        let factory = create_kv_store_factory(&backend).await?;
+        let result = factory
+            .create_kv_store("non-existent-bucket".to_string())
+            .await;
         assert!(result.is_err(), "Should fail with non-existent bucket");
 
-        if let Err(crate::error::Error::SideInput(msg)) = result {
-            assert!(msg.contains("Failed to get kv bucket"));
+        if let Err(numaflow_shared::error::Error::Jetstream(msg)) = result {
+            assert!(msg.contains("Failed to get KV bucket"));
         } else {
-            panic!("Expected SideInput error");
+            panic!("Expected Jetstream error");
         }
 
         Ok(())
