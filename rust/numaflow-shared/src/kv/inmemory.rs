@@ -49,9 +49,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Factory that produces [`SimpleKVStore`] instances, registered by bucket name.
-///
-/// Returning the same instance per bucket name is load-bearing: watermark
-/// publisher/fetcher must share state.
 #[derive(Default)]
 pub struct InMemoryKVStoreFactory {
     stores: parking_lot::Mutex<HashMap<String, Arc<SimpleKVStore>>>,

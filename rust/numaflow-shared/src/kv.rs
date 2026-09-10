@@ -106,15 +106,8 @@ pub trait KVStore: Send + Sync {
 
 /// Creates KV stores for a backend. Implementations own whatever connection or
 /// state is needed (e.g. a JetStream `Context`) and are shared as `Arc`.
-///
-/// Implementations leak the bucket name to `&'static str` (`Box::leak`), which is
-/// bounded only because buckets are fixed at process startup — callers must not
-/// call `create_kv_store` in a loop over unbounded names.
 #[async_trait]
 pub trait KVStoreFactory: Send + Sync {
     /// Returns a KV store for `bucket`.
-    ///
-    /// Implementations holding local state MUST return the same instance for the
-    /// same bucket name — watermark publisher and fetcher rely on sharing one store.
     async fn create_kv_store(&self, bucket: String) -> crate::error::Result<Arc<dyn KVStore>>;
 }
