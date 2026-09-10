@@ -111,8 +111,23 @@ func (s Scale) GetLookbackSeconds() int {
 	return DefaultLookbackSeconds
 }
 
+// ScaleForDaemonEmbedding returns the scale fields consumed by daemon servers.
+// Max is captured when the daemon is created and bounds pod discovery for that daemon's lifetime.
 func (s Scale) ScaleForDaemonEmbedding() Scale {
-	return Scale{LookbackSeconds: ptr.To(uint32(s.GetLookbackSeconds()))}
+	embedded := Scale{
+		LookbackSeconds: ptr.To(uint32(s.GetLookbackSeconds())),
+	}
+	if s.Max != nil {
+		embedded.Max = ptr.To(*s.Max)
+	}
+	return embedded
+}
+
+// ScaleForDaemonHash returns the scale fields that should trigger daemon recreation.
+func (s Scale) ScaleForDaemonHash() Scale {
+	scale := s.ScaleForDaemonEmbedding()
+	scale.Max = nil
+	return scale
 }
 
 func (s Scale) GetScaleUpCooldownSeconds() int {

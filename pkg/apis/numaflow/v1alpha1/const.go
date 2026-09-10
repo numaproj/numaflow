@@ -190,7 +190,6 @@ const (
 	DefaultCooldownSeconds          = 90  // Default cooldown seconds after a scaling operation
 	DefaultZeroReplicaSleepSeconds  = 120 // Default sleep time in seconds after scaling down to 0, before peeking
 	DefaultMaxReplicas              = 50  // Default max replicas
-	MaxPodProbeIndex                = 500 // Upper bound when daemon servers probe pods by index
 	DefaultTargetProcessingSeconds  = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferAvailability = 50  // Default targeted percentage of buffer availability
 	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once

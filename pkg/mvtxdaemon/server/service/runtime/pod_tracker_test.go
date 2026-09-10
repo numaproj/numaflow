@@ -15,17 +15,22 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 type mockHttpClient struct {
-	podsCount int32
-	lock      *sync.RWMutex
+	podsCount    int32
+	inactivePods map[int]bool
+	lock         *sync.RWMutex
 }
 
 func (m *mockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for i := 0; i < int(m.podsCount); i++ {
+		if m.inactivePods[i] {
+			continue
+		}
 		if strings.Contains(url, "p-mv-"+strconv.Itoa(i)+".p-mv-headless.default.svc:2470/runtime/errors") {
 			return &http.Response{
 				StatusCode: 200,
@@ -98,6 +103,26 @@ func TestPodTracker_updateActivePods(t *testing.T) {
 	assert.Equal(t, 3, pt.GetActivePodsCount())
 }
 
+func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
+	ctx := context.Background()
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{Max: ptr.To[int32](3)},
+		},
+	}
+	pt := NewPodTracker(ctx, mv)
+	pt.httpClient = &mockHttpClient{
+		podsCount:    3,
+		inactivePods: map[int]bool{1: true},
+		lock:         &sync.RWMutex{},
+	}
+
+	pt.updateActivePods()
+
+	assert.Equal(t, 3, pt.GetActivePodsCount())
+}
+
 func TestPodTracker_isActive(t *testing.T) {
 	ctx := context.Background()
 	mv := &v1alpha1.MonoVertex{
@@ -117,19 +142,6 @@ func TestPodTracker_isActive(t *testing.T) {
 	assert.True(t, active)
 	active = pt.isActive("p-mv-3")
 	assert.False(t, active)
-}
-
-func TestConsecutiveActiveMonoVertexPods(t *testing.T) {
-	activeUntil := 3
-	isActive := func(podName string) bool {
-		for i := 0; i < activeUntil; i++ {
-			if strings.Contains(podName, fmt.Sprintf("p-mv-%d", i)) {
-				return true
-			}
-		}
-		return false
-	}
-	assert.Equal(t, 3, consecutiveActiveMonoVertexPods("p", isActive))
 }
 
 func TestPodTracker_setActivePodsCount(t *testing.T) {

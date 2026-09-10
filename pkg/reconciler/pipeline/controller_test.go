@@ -955,7 +955,7 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Scale = dfv1.Scale{
 			Min: ptr.To[int32](1),
-			Max: ptr.To[int32](2),
+			Max: ptr.To[int32](100),
 		}
 		err := scaleR.createOrUpdateDaemonDeployment(ctx, testObj, fakeIsbSvcConfig)
 		assert.NoError(t, err)
@@ -965,6 +965,7 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 			&daemonDeployment)
 		assert.NoError(t, err)
 		hashBefore := daemonDeployment.Annotations[dfv1.KeyHash]
+		embeddedBefore := daemonDeploymentEnvValue(&daemonDeployment, dfv1.EnvPipelineObject)
 
 		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](0)
 		testObj.Spec.Vertices[0].Scale.Max = ptr.To[int32](0)
@@ -976,7 +977,17 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 			&updatedDaemonDeployment)
 		assert.NoError(t, err)
 		assert.Equal(t, hashBefore, updatedDaemonDeployment.Annotations[dfv1.KeyHash])
+		assert.Equal(t, embeddedBefore, daemonDeploymentEnvValue(&updatedDaemonDeployment, dfv1.EnvPipelineObject))
 	})
+}
+
+func daemonDeploymentEnvValue(deployment *appv1.Deployment, name string) string {
+	for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == name {
+			return env.Value
+		}
+	}
+	return ""
 }
 
 func Test_createOrUpdateSIMDeployments(t *testing.T) {

@@ -226,29 +226,42 @@ func Test_createOrUpdateDaemonDeployment(t *testing.T) {
 	})
 
 	t.Run("scale change does not recreate daemon deployment", func(t *testing.T) {
+		scaleCl := fake.NewClientBuilder().Build()
+		scaleR := fakeReconciler(t, scaleCl)
 		testObj := testMonoVtx.DeepCopy()
 		testObj.Spec.Scale.Min = ptr.To[int32](1)
-		testObj.Spec.Scale.Max = ptr.To[int32](2)
-		err := r.createOrUpdateDaemonDeployment(context.TODO(), testObj)
+		testObj.Spec.Scale.Max = ptr.To[int32](100)
+		err := scaleR.createOrUpdateDaemonDeployment(context.TODO(), testObj)
 		assert.NoError(t, err)
 
 		var daemonDeployment appv1.Deployment
-		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+		err = scaleCl.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
 			&daemonDeployment)
 		assert.NoError(t, err)
 		hashBefore := daemonDeployment.Annotations[dfv1.KeyHash]
+		embeddedBefore := daemonDeploymentEnvValue(&daemonDeployment, dfv1.EnvMonoVertexObject)
 
 		testObj.Spec.Scale.Min = ptr.To[int32](0)
 		testObj.Spec.Scale.Max = ptr.To[int32](0)
-		err = r.createOrUpdateDaemonDeployment(context.TODO(), testObj)
+		err = scaleR.createOrUpdateDaemonDeployment(context.TODO(), testObj)
 		assert.NoError(t, err)
 
 		var updatedDaemonDeployment appv1.Deployment
-		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+		err = scaleCl.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
 			&updatedDaemonDeployment)
 		assert.NoError(t, err)
 		assert.Equal(t, hashBefore, updatedDaemonDeployment.Annotations[dfv1.KeyHash])
+		assert.Equal(t, embeddedBefore, daemonDeploymentEnvValue(&updatedDaemonDeployment, dfv1.EnvMonoVertexObject))
 	})
+}
+
+func daemonDeploymentEnvValue(deployment *appv1.Deployment, name string) string {
+	for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == name {
+			return env.Value
+		}
+	}
+	return ""
 }
 
 func Test_createOrUpdateDaemonService(t *testing.T) {

@@ -17,10 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
@@ -696,7 +699,7 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 	})
 }
 
-func TestMonoVertex_GetDaemonDeploymentObj_scaleChangeDoesNotChangeHash(t *testing.T) {
+func TestMonoVertex_GetDaemonDeploymentObj_embedsScaleMax(t *testing.T) {
 	mv := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-vertex",
@@ -705,7 +708,7 @@ func TestMonoVertex_GetDaemonDeploymentObj_scaleChangeDoesNotChangeHash(t *testi
 		Spec: MonoVertexSpec{
 			Scale: Scale{
 				Min:             ptr.To[int32](1),
-				Max:             ptr.To[int32](2),
+				Max:             ptr.To[int32](100),
 				LookbackSeconds: ptr.To[uint32](120),
 			},
 		},
@@ -716,16 +719,19 @@ func TestMonoVertex_GetDaemonDeploymentObj_scaleChangeDoesNotChangeHash(t *testi
 	}
 
 	deployBefore, err := mv.GetDaemonDeploymentObj(req)
-	assert.NoError(t, err)
-	embeddedBefore := daemonEmbeddedMonoVertexObject(deployBefore)
+	require.NoError(t, err)
+	embeddedBefore, err := decodeDaemonEmbeddedMonoVertex(deployBefore)
+	require.NoError(t, err)
+	assert.Equal(t, int32(100), embeddedBefore.Spec.Scale.GetMaxReplicas())
+	assert.Nil(t, embeddedBefore.Spec.Scale.Min)
 
 	mv.Spec.Scale.Min = ptr.To[int32](0)
 	mv.Spec.Scale.Max = ptr.To[int32](0)
 	deployAfter, err := mv.GetDaemonDeploymentObj(req)
-	assert.NoError(t, err)
-	embeddedAfter := daemonEmbeddedMonoVertexObject(deployAfter)
-
-	assert.Equal(t, embeddedBefore, embeddedAfter)
+	require.NoError(t, err)
+	embeddedAfter, err := decodeDaemonEmbeddedMonoVertex(deployAfter)
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), embeddedAfter.Spec.Scale.GetMaxReplicas())
 }
 
 func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesHash(t *testing.T) {
@@ -766,4 +772,14 @@ func daemonEmbeddedMonoVertexObject(deploy *appv1.Deployment) string {
 		}
 	}
 	return ""
+}
+
+func decodeDaemonEmbeddedMonoVertex(deploy *appv1.Deployment) (MonoVertex, error) {
+	decoded, err := base64.StdEncoding.DecodeString(daemonEmbeddedMonoVertexObject(deploy))
+	if err != nil {
+		return MonoVertex{}, err
+	}
+	var monoVertex MonoVertex
+	err = json.Unmarshal(decoded, &monoVertex)
+	return monoVertex, err
 }

@@ -79,10 +79,18 @@ func TestScale_ScaleForDaemonEmbedding(t *testing.T) {
 	}
 	embedded := scale.ScaleForDaemonEmbedding()
 	assert.Nil(t, embedded.Min)
-	assert.Nil(t, embedded.Max)
+	assert.Equal(t, int32(4), *embedded.Max)
 	assert.Nil(t, embedded.ScaleUpCooldownSeconds)
 	assert.Nil(t, embedded.TargetProcessingSeconds)
 	assert.Equal(t, uint32(120), *embedded.LookbackSeconds)
+
+	defaultEmbedded := (Scale{}).ScaleForDaemonEmbedding()
+	assert.Nil(t, defaultEmbedded.Max)
+	assert.Equal(t, int32(DefaultMaxReplicas), defaultEmbedded.GetMaxReplicas())
+
+	hashed := scale.ScaleForDaemonHash()
+	assert.Nil(t, hashed.Max)
+	assert.Equal(t, uint32(120), *hashed.LookbackSeconds)
 }
 
 func TestCronScheduling_GetTimezone(t *testing.T) {

@@ -31,13 +31,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 type trackerMockHttpClient struct {
-	podsCount int32
-	lock      *sync.RWMutex
+	podsCount    int32
+	inactivePods map[int]bool
+	lock         *sync.RWMutex
 }
 
 func (m *trackerMockHttpClient) setPodsCount(count int32) {
@@ -54,6 +56,9 @@ func (m *trackerMockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for i := 0; i < int(m.podsCount); i++ {
+		if m.inactivePods[i] {
+			continue
+		}
 		if strings.Contains(url, "p-v-"+strconv.Itoa(i)+".p-v-headless.default.svc:2469/metrics") {
 			return &http.Response{
 				StatusCode: 200,
@@ -121,6 +126,31 @@ func TestPodTracker_Start(t *testing.T) {
 	assert.NotEmpty(t, tracker.LeastRecentlyUsed())
 	assert.Equal(t, true, tracker.IsActive("p*v*4"))
 	assert.Equal(t, false, tracker.IsActive("p*v*5"))
+}
+
+func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
+	ctx := context.Background()
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{{
+				Name:  "v",
+				Scale: v1alpha1.Scale{Max: ptr.To[int32](3)},
+			}},
+		},
+	}
+	tracker := NewPodTracker(ctx, pipeline)
+	tracker.httpClient = &trackerMockHttpClient{
+		podsCount:    3,
+		inactivePods: map[int]bool{1: true},
+		lock:         &sync.RWMutex{},
+	}
+
+	tracker.updateActivePods()
+
+	assert.True(t, tracker.IsActive("p*v*0"))
+	assert.False(t, tracker.IsActive("p*v*1"))
+	assert.True(t, tracker.IsActive("p*v*2"))
 }
 
 func TestPodTracker_GetPodInfo(t *testing.T) {
