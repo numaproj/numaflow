@@ -175,6 +175,34 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateBufferNameLength(*pl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateBufferNameLength rejects a pipeline whose edges would generate an ISB
+// buffer name longer than the NATS limit. A buffer name is used verbatim as the
+// JetStream stream name and durable consumer name, so an over-long name fails at
+// buffer-creation time with an opaque NATS error; catching it at admission points
+// at the offending edge instead. Edge-owned names embed both vertex names, so this
+// is reachable with long-but-individually-valid namespace, pipeline, and vertex
+// names.
+func validateBufferNameLength(pl dfv1.Pipeline) error {
+	for _, e := range pl.ListAllEdges() {
+		// Partition index only grows the name by a digit or two; the highest index
+		// is the longest, so checking it covers every partition of the edge.
+		// NumOfPartitions returns 0 for an unknown vertex, so floor the index at 0.
+		lastPartition := pl.NumOfPartitions(e.To) - 1
+		if lastPartition < 0 {
+			lastPartition = 0
+		}
+		name := dfv1.GenerateBufferName(pl.Namespace, pl.Name, e.From, e.To, lastPartition)
+		if len(name) > dfv1.MaxBufferNameLength {
+			return fmt.Errorf("the generated buffer name %q for edge %q -> %q is %d characters, over the max limit of %d; shorten the namespace, pipeline, or vertex names", name, e.From, e.To, len(name), dfv1.MaxBufferNameLength)
+		}
+	}
 	return nil
 }
 

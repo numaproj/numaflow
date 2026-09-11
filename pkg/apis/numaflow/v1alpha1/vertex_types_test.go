@@ -898,3 +898,23 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateBufferNameFormat pins the ISB buffer name format.
+//
+// This format is a cross-language contract: the Go controller creates the buffers
+// and the Rust data plane (rust/numaflow-core/src/config/pipeline.rs) derives the
+// JetStream stream names it reads and writes. If the two ever disagree, the
+// controller creates buffers that no pod ever touches and the pipeline hangs at
+// startup with no error. There is an equivalent assertion on the Rust side; change
+// both together or not at all.
+func TestGenerateBufferNameFormat(t *testing.T) {
+	assert.Equal(t, "ns-pl-from-to-0", GenerateBufferName("ns", "pl", "from", "to", 0))
+	assert.Equal(t, "ns-pl-from-to-3", GenerateBufferName("ns", "pl", "from", "to", 3))
+	// Fan-in: each source of a join gets its own buffer.
+	assert.Equal(t, "default-my-pl-s1-join-0", GenerateBufferName("default", "my-pl", "s1", "join", 0))
+	assert.Equal(t, "default-my-pl-s2-join-0", GenerateBufferName("default", "my-pl", "s2", "join", 0))
+
+	assert.Equal(t,
+		[]string{"ns-pl-from-to-0", "ns-pl-from-to-1", "ns-pl-from-to-2"},
+		GenerateBufferNames("ns", "pl", "from", "to", 3))
+}

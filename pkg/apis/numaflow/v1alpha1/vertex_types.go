@@ -855,6 +855,14 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
+// MaxBufferNameLength is the maximum length of an inter-step buffer name. A buffer
+// name is used verbatim as the JetStream stream name (see isbsvc.JetStreamName) and
+// as the durable consumer name, both of which the NATS server caps at JSMaxNameLen
+// (255). Edge-owned buffer names embed both ends of the edge, so they are longer
+// than the old {ns}-{pl}-{to}-{i} form and worth validating at admission rather than
+// failing at buffer-creation time.
+const MaxBufferNameLength = 255
+
 // GenerateBufferName returns the name of the inter-step buffer for an edge.
 // Buffers are owned by the edge (i.e. by the upstream/from vertex) rather than by
 // the downstream/to vertex, so the name includes both ends of the edge. This gives
