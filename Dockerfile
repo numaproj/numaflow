@@ -17,7 +17,7 @@ RUN chmod +x /bin/numaflow
 ####################################################################################################
 # Dependency reuse relies on BuildKit cache mounts below (not cargo-chef layer caching).
 # ENABLE_MEMORY_PROFILING=true builds a dynamically linked glibc binary (required for LD_PRELOAD).
-FROM rust:1.97.1-trixie AS rust-builder
+FROM rust:1.98.1-trixie AS rust-builder
 ARG TARGETPLATFORM
 ARG ENABLE_MEMORY_PROFILING=false
 WORKDIR /numaflow
@@ -71,7 +71,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 ####################################################################################################
 # bytehound (libbytehound.so) — built from source for amd64 and arm64
 ####################################################################################################
-FROM rust:1.97.1-trixie AS bytehound-builder
+FROM rust:1.98.1-trixie AS bytehound-builder
 ARG BYTEHOUND_REF=0.11.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential pkg-config \
