@@ -91,6 +91,32 @@ func (l *UniqueStringList) Remove(value string) {
 	}
 }
 
+// Replace atomically removes values not in the supplied snapshot and appends new values.
+// Existing values retain their relative order.
+func (l *UniqueStringList) Replace(values []string) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	replacement := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		replacement[value] = struct{}{}
+	}
+	for e := l.l.Front(); e != nil; {
+		next := e.Next()
+		value := e.Value.(string)
+		if _, ok := replacement[value]; !ok {
+			l.l.Remove(e)
+			delete(l.m, value)
+		}
+		e = next
+	}
+	for _, value := range values {
+		if _, ok := l.m[value]; !ok {
+			l.m[value] = l.l.PushBack(value)
+		}
+	}
+}
+
 // ToString returns a comma separated string of the list values.
 func (l *UniqueStringList) ToString() string {
 	l.lock.RLock()

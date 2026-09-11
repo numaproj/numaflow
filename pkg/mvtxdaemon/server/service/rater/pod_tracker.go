@@ -23,13 +23,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/poddiscovery"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -44,6 +44,7 @@ type PodTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
 	httpClient      metricsHttpClient
+	resolver        poddiscovery.Resolver
 	activePods      *util.UniqueStringList
 	refreshInterval time.Duration
 }
@@ -59,6 +60,7 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...PodTrac
 			},
 			Timeout: time.Second,
 		},
+		resolver:        poddiscovery.NewResolver(),
 		activePods:      util.NewUniqueStringList(),
 		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
 	}
@@ -78,6 +80,13 @@ func WithRefreshInterval(d time.Duration) PodTrackerOption {
 	}
 }
 
+// WithPodResolver sets the resolver used to discover indexed pods.
+func WithPodResolver(resolver poddiscovery.Resolver) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.resolver = resolver
+	}
+}
+
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 	go pt.trackActivePods(ctx)
@@ -86,7 +95,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
-	pt.updateActivePods()
+	pt.updateActivePods(ctx)
 
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
@@ -96,28 +105,30 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 			pt.log.Infof("Context is cancelled. Stopping tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 			return
 		case <-ticker.C:
-			pt.updateActivePods()
+			pt.updateActivePods(ctx)
 		}
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the activePods set accordingly.
-func (pt *PodTracker) updateActivePods() {
-	var wg sync.WaitGroup
-	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
-			podKey := pt.getPodKey(index)
-			if pt.isActive(podName) {
-				pt.activePods.PushBack(podKey)
-			} else {
-				pt.activePods.Remove(podKey)
-			}
-		}(i)
+// updateActivePods discovers pod candidates and verifies which metrics endpoints are active.
+func (pt *PodTracker) updateActivePods(ctx context.Context) {
+	active, err := poddiscovery.ResolveAndProbe(
+		ctx,
+		pt.resolver,
+		poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPortName),
+		func(index int) bool {
+			return pt.isActive(fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index))
+		},
+	)
+	if err != nil {
+		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod set", err)
+		return
 	}
-	wg.Wait()
+	podKeys := make([]string, 0, len(active))
+	for _, index := range active {
+		podKeys = append(podKeys, pt.getPodKey(index))
+	}
+	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
