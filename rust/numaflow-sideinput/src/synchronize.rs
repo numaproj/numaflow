@@ -318,7 +318,7 @@ mod tests {
     }
 
     /// Test error handling when watching fails after the store is opened.
-    /// Missing-bucket failures are covered by `create_side_input_kv_store` in lib.rs tests.
+    /// Missing-bucket failures are covered by `test_end_to_end_error_scenarios` in lib.rs tests.
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_side_input_synchronizer_error_handling() {

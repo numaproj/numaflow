@@ -45,8 +45,8 @@ pub enum SideInputMode {
 }
 
 /// build the side-input bucket name from the store name.
-fn get_bucket_name(side_input_store: &str) -> &'static str {
-    Box::leak(format!("{side_input_store}_SIDE_INPUTS").into_boxed_str())
+fn get_bucket_name(side_input_store: &str) -> String {
+    format!("{side_input_store}_SIDE_INPUTS")
 }
 
 /// Runs the side-input system in the specified mode.
@@ -56,7 +56,7 @@ pub async fn run(
     env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let backend = ISBClientConfig::from_env(env_vars.clone())?;
+    let backend = ISBClientConfig::from_env(&env_vars)?;
     let kv_factory = create_kv_store_factory(&backend).await?;
     let bucket = match &mode {
         SideInputMode::Manager {
@@ -66,7 +66,7 @@ pub async fn run(
             side_input_store, ..
         } => get_bucket_name(side_input_store),
     };
-    let store = kv_factory.create_kv_store(bucket.to_string()).await?;
+    let store = kv_factory.create_kv_store(bucket).await?;
 
     run_with_store(mode, store, uds_path, env_vars, cancellation_token).await
 }
@@ -190,7 +190,7 @@ mod tests {
             "localhost:4222".to_string(),
         );
 
-        let backend = ISBClientConfig::from_env(env_vars)?;
+        let backend = ISBClientConfig::from_env(&env_vars)?;
         let factory = create_kv_store_factory(&backend).await?;
         let result = factory
             .create_kv_store("non-existent-bucket".to_string())
@@ -294,7 +294,7 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let store_name = "test-manager-run-once-mode-store";
-        let bucket_name = get_bucket_name(store_name);
+        let bucket_name: &'static str = Box::leak(get_bucket_name(store_name).into_boxed_str());
         let _ = js_context.delete_key_value(bucket_name).await; // Clean up if exists
 
         let kv_store = js_context
@@ -459,7 +459,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let store_name = "test-manager-run-once-mode-store-inmemory";
-        let bucket_name = get_bucket_name(store_name);
+        let bucket_name: &'static str = Box::leak(get_bucket_name(store_name).into_boxed_str());
         let store: Arc<dyn KVStore> = Arc::new(SimpleKVStore::new(bucket_name));
 
         // Prepare environment variables for Manager mode

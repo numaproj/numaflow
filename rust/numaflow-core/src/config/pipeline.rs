@@ -538,7 +538,7 @@ impl PipelineConfig {
                 })
         };
 
-        let isb_client_config = isb::ISBClientConfig::from_env(env_vars.clone())?;
+        let isb_client_config = isb::ISBClientConfig::from_env(&env_vars)?;
 
         // Determine if ordered processing is enabled for this vertex
         // Logic follows Go's GetEffectiveOrderedConfig():

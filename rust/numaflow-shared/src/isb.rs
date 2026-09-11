@@ -21,7 +21,7 @@ pub enum ISBClientConfig {
 
 impl ISBClientConfig {
     /// Reads `NUMAFLOW_ISBSVC_TYPE` (default `"jetstream"`); errors on anything else.
-    pub fn from_env(env_vars: HashMap<String, String>) -> Result<Self> {
+    pub fn from_env(env_vars: &HashMap<String, String>) -> Result<Self> {
         let isb_type = env_vars
             .get(ENV_NUMAFLOW_ISBSVC_TYPE)
             .map(|s| s.as_str())
@@ -66,7 +66,7 @@ mod tests {
             "nats://localhost:4222".to_string(),
         );
 
-        let config = ISBClientConfig::from_env(env_vars).unwrap();
+        let config = ISBClientConfig::from_env(&env_vars).unwrap();
         match config {
             ISBClientConfig::Jetstream(cfg) => {
                 assert_eq!(cfg.url, "nats://localhost:4222");
@@ -90,7 +90,7 @@ mod tests {
             "nats://localhost:4222".to_string(),
         );
 
-        let config = ISBClientConfig::from_env(env_vars).unwrap();
+        let config = ISBClientConfig::from_env(&env_vars).unwrap();
         assert!(matches!(config, ISBClientConfig::Jetstream(_)));
     }
 
@@ -99,7 +99,7 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert(ENV_NUMAFLOW_ISBSVC_TYPE.to_string(), "redis".to_string());
 
-        let err = ISBClientConfig::from_env(env_vars).unwrap_err();
+        let err = ISBClientConfig::from_env(&env_vars).unwrap_err();
         assert!(
             err.to_string()
                 .contains("Unsupported ISB service type 'redis'"),
@@ -115,7 +115,7 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert(ENV_NUMAFLOW_ISBSVC_TYPE.to_string(), "inmemory".to_string());
 
-        let err = ISBClientConfig::from_env(env_vars).unwrap_err();
+        let err = ISBClientConfig::from_env(&env_vars).unwrap_err();
         assert!(
             err.to_string()
                 .contains("Unsupported ISB service type 'inmemory'"),
