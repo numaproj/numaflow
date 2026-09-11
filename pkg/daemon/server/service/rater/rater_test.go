@@ -113,7 +113,14 @@ func TestRater_Start(t *testing.T) {
 		},
 	}
 	r := NewRater(ctx, pipeline, WithTaskInterval(time.Second))
-	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
+	podTracker := NewPodTracker(
+		ctx,
+		pipeline,
+		WithRefreshInterval(time.Second),
+		WithPodResolver(&fakePodResolver{
+			indicesByService: map[string][]int{"p-v-headless": {0, 1}},
+		}),
+	)
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.podTracker = podTracker

@@ -121,23 +121,8 @@ func (r *monoVertexRuntimeCache) StartCacheRefresher(ctx context.Context) (err e
 
 // persistRuntimeErrors updates the local cache with the runtime errors
 func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
-	fetchAndPersistErrors := func() {
-		var wg sync.WaitGroup
-
-		for i := range r.podTracker.GetActivePodsCount() {
-			wg.Add(1)
-			go func(podIndex int) {
-				defer wg.Done()
-				r.fetchAndPersistErrorForPod(podIndex)
-			}(i)
-		}
-
-		// Wait for all goroutines to finish
-		wg.Wait()
-	}
-
 	// invoke once and then periodically update the cache
-	fetchAndPersistErrors()
+	r.fetchAndPersistErrors()
 
 	// Set up a ticker to run periodically
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
@@ -145,13 +130,25 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			fetchAndPersistErrors()
+			r.fetchAndPersistErrors()
 		// If the context is done, return.
 		case <-ctx.Done():
 			r.log.Info("Context canceled, stopping PersistRuntimeErrors")
 			return
 		}
 	}
+}
+
+func (r *monoVertexRuntimeCache) fetchAndPersistErrors() {
+	var wg sync.WaitGroup
+	for _, podIndex := range r.podTracker.GetActivePodIndices() {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			r.fetchAndPersistErrorForPod(index)
+		}(podIndex)
+	}
+	wg.Wait()
 }
 
 // fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.

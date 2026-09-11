@@ -23,13 +23,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/poddiscovery"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -44,7 +44,9 @@ type PodTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
 	httpClient      metricsHttpClient
+	resolver        poddiscovery.Resolver
 	activePods      *util.UniqueStringList
+	activeByVertex  map[string][]int
 	refreshInterval time.Duration
 }
 
@@ -58,7 +60,9 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 			},
 			Timeout: time.Second,
 		},
+		resolver:        poddiscovery.NewResolver(),
 		activePods:      util.NewUniqueStringList(),
+		activeByVertex:  make(map[string][]int),
 		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
 	}
 
@@ -79,6 +83,13 @@ func WithRefreshInterval(d time.Duration) PodTrackerOption {
 	}
 }
 
+// WithPodResolver sets the resolver used to discover indexed pods.
+func WithPodResolver(resolver poddiscovery.Resolver) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.resolver = resolver
+	}
+}
+
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for pipeline %s...", pt.pipeline.Name)
 	go pt.trackActivePods(ctx)
@@ -87,7 +98,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
-	pt.updateActivePods()
+	pt.updateActivePods(ctx)
 
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
@@ -97,31 +108,40 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 			pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
 			return
 		case <-ticker.C:
-			pt.updateActivePods()
+			pt.updateActivePods(ctx)
 		}
 	}
 }
 
-func (pt *PodTracker) updateActivePods() {
-	var wg sync.WaitGroup
-
+func (pt *PodTracker) updateActivePods(ctx context.Context) {
+	podKeys := make([]string, 0)
 	for _, v := range pt.pipeline.Spec.Vertices {
-		for i := range int(v.Scale.GetMaxReplicas()) {
-			wg.Add(1)
-			go func(vertexName string, index int) {
-				defer wg.Done()
-				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-				podKey := pt.getPodKey(index, vertexName)
-				if pt.isActive(vertexName, podName) {
-					pt.activePods.PushBack(podKey)
-				} else {
-					pt.activePods.Remove(podKey)
-				}
-			}(v.Name, i)
+		vertexName := v.Name
+		active, err := pt.discoverVertexIndices(ctx, vertexName)
+		if err != nil {
+			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod set", vertexName, err)
+			active = pt.activeByVertex[vertexName]
+		} else {
+			pt.activeByVertex[vertexName] = active
+		}
+		for _, index := range active {
+			podKeys = append(podKeys, pt.getPodKey(index, vertexName))
 		}
 	}
-	wg.Wait()
+	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
+}
+
+func (pt *PodTracker) discoverVertexIndices(ctx context.Context, vertexName string) ([]int, error) {
+	return poddiscovery.ResolveAndProbe(
+		ctx,
+		pt.resolver,
+		poddiscovery.PipelineVertexRequest(pt.pipeline.Name, vertexName, pt.pipeline.Namespace, v1alpha1.VertexMetricsPortName),
+		func(index int) bool {
+			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
+			return pt.isActive(vertexName, podName)
+		},
+	)
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.

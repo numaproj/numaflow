@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/poddiscovery"
 )
 
 // PodTracker tracks the active pods for each vertex in a pipeline.
@@ -35,14 +36,17 @@ type PodTracker struct {
 	pipeline            *v1alpha1.Pipeline
 	log                 *zap.SugaredLogger
 	httpClient          runtimeHTTPClient
-	activePodsCount     map[string]int
+	resolver            poddiscovery.Resolver
+	activePodIndices    map[string][]int
 	activePodsMutex     sync.RWMutex
 	refreshInterval     time.Duration
 	firstPodsUpdateChan chan struct{} // Channel to signal the first active pods update is done
 }
 
+type PodTrackerOption func(*PodTracker)
+
 // NewPodTracker creates a new pod tracker instance.
-func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
+func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline, opts ...PodTrackerOption) *PodTracker {
 	pt := &PodTracker{
 		pipeline: pl,
 		log:      logging.FromContext(ctx).Named("RuntimePodTracker"),
@@ -52,12 +56,25 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePodsCount: make(map[string]int),
+		resolver:         poddiscovery.NewResolver(),
+		activePodIndices: make(map[string][]int),
 		// Default refresh interval for updating the active pod set
 		refreshInterval:     30 * time.Second,
 		firstPodsUpdateChan: make(chan struct{}),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(pt)
+		}
+	}
 	return pt
+}
+
+// WithPodResolver sets the resolver used to discover indexed pods.
+func WithPodResolver(resolver poddiscovery.Resolver) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.resolver = resolver
+	}
 }
 
 // Start starts the pod tracker to track the active pods for the pipeline.
@@ -69,7 +86,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
-	pt.updateActivePods()
+	pt.updateActivePods(ctx)
 	// close the channel to signal first update
 	close(pt.firstPodsUpdateChan)
 	ticker := time.NewTicker(pt.refreshInterval)
@@ -80,48 +97,34 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 			pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
 			return
 		case <-ticker.C:
-			pt.updateActivePods()
+			pt.updateActivePods(ctx)
 		}
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the count of activePods accordingly.
-func (pt *PodTracker) updateActivePods() {
-	var wg sync.WaitGroup
-	// Map to store max active index for each vertex.
-	maxActiveIndex := make(map[string]int)
-	// A local mutex to synchronize access to the maxActiveIndex map.
-	mu := sync.Mutex{}
-
+// updateActivePods discovers pod candidates and verifies which runtime endpoints are active.
+func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		// Initialize maxActiveIndex for this vertex.
-		mu.Lock()
-		maxActiveIndex[vertexName] = -1
-		mu.Unlock()
-
-		for i := range int(v.Scale.GetMaxReplicas()) {
-			wg.Add(1)
-			go func(vertexName string, index int) {
-				defer wg.Done()
-				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-				if pt.isActive(vertexName, podName) {
-					// If the pod is active, update the maxActiveIndex for this vertex.
-					mu.Lock()
-					if index > maxActiveIndex[vertexName] {
-						maxActiveIndex[vertexName] = index
-					}
-					mu.Unlock()
-				}
-			}(vertexName, i)
+		active, err := pt.discoverVertexIndices(ctx, vertexName)
+		if err != nil {
+			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod set", vertexName, err)
+			continue
 		}
+		pt.setActivePodIndices(vertexName, active)
 	}
-	wg.Wait()
+}
 
-	// Update the activePodsCount for all vertices.
-	for vertexName, maxIndex := range maxActiveIndex {
-		pt.setActivePodsCount(vertexName, maxIndex+1)
-	}
+func (pt *PodTracker) discoverVertexIndices(ctx context.Context, vertexName string) ([]int, error) {
+	return poddiscovery.ResolveAndProbe(
+		ctx,
+		pt.resolver,
+		poddiscovery.PipelineVertexRequest(pt.pipeline.Name, vertexName, pt.pipeline.Namespace, v1alpha1.VertexRuntimePortName),
+		func(index int) bool {
+			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
+			return pt.isActive(vertexName, podName)
+		},
+	)
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
@@ -137,17 +140,17 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	return true
 }
 
-// setActivePodsCount sets the activePodsCount for a vertex.
-func (pt *PodTracker) setActivePodsCount(vertexName string, count int) {
+// setActivePodIndices replaces the active pod snapshot for a vertex.
+func (pt *PodTracker) setActivePodIndices(vertexName string, indices []int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
-	pt.log.Debugf("Setting active pods count for vertex %s to %d", vertexName, count)
-	pt.activePodsCount[vertexName] = count
+	pt.log.Debugf("Setting active pod indices for vertex %s to %v", vertexName, indices)
+	pt.activePodIndices[vertexName] = append([]int(nil), indices...)
 }
 
-// GetActivePodsCountForVertex returns the number of active pods for a vertex
-func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
+// GetActivePodIndicesForVertex returns a copy of the active replica indices for a vertex.
+func (pt *PodTracker) GetActivePodIndicesForVertex(vertexName string) []int {
 	pt.activePodsMutex.RLock()
 	defer pt.activePodsMutex.RUnlock()
-	return pt.activePodsCount[vertexName]
+	return append([]int(nil), pt.activePodIndices[vertexName]...)
 }

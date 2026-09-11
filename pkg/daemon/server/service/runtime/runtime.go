@@ -125,36 +125,35 @@ func (r *pipelineRuntimeCache) StartCacheRefresher(ctx context.Context) (err err
 
 // persistRuntimeErrors updates the local cache with the runtime errors
 func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
-	// Define a function to fetch and persist errors
-	fetchAndPersistErrors := func() {
-		var wg sync.WaitGroup
-		for _, vtx := range r.pipeline.Spec.Vertices {
-			for i := range r.podTracker.GetActivePodsCountForVertex(vtx.Name) {
-				wg.Add(1)
-				go func(vtxName string, podIndex int) {
-					defer wg.Done()
-					r.fetchAndPersistErrorForPod(vtxName, podIndex)
-				}(vtx.Name, i)
-			}
-		}
-		wg.Wait()
-	}
-
 	// invoke once and then periodically update the cache
-	fetchAndPersistErrors()
+	r.fetchAndPersistErrors()
 	// Set up a ticker to run periodically
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			fetchAndPersistErrors()
+			r.fetchAndPersistErrors()
 		// If the context is done, return.
 		case <-ctx.Done():
 			r.log.Info("Context canceled, stopping PersistRuntimeErrors")
 			return
 		}
 	}
+}
+
+func (r *pipelineRuntimeCache) fetchAndPersistErrors() {
+	var wg sync.WaitGroup
+	for _, vtx := range r.pipeline.Spec.Vertices {
+		for _, podIndex := range r.podTracker.GetActivePodIndicesForVertex(vtx.Name) {
+			wg.Add(1)
+			go func(vtxName string, podIndex int) {
+				defer wg.Done()
+				r.fetchAndPersistErrorForPod(vtxName, podIndex)
+			}(vtx.Name, podIndex)
+		}
+	}
+	wg.Wait()
 }
 
 // fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.
