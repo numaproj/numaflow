@@ -517,10 +517,14 @@ impl PipelineConfig {
                 .map(|i| {
                     let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
                     let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let from: &'static str = Box::leak(edge.from.clone().into_boxed_str());
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    // Buffers are edge-owned: the name embeds both ends of the edge so
+                    // each source of a join reads its own physical buffer. Must match
+                    // the Go controller's GenerateBufferName, which creates them.
                     let name: &'static str =
-                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
+                        Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
+                    Stream::new(name, from, to, i)
                 })
                 .collect();
 
@@ -543,10 +547,12 @@ impl PipelineConfig {
                 .map(|i| {
                     let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
                     let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let from: &'static str = Box::leak(edge.from.clone().into_boxed_str());
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    // For an outgoing edge the "from" end is this vertex itself.
                     let name: &'static str =
-                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
+                        Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
+                    Stream::new(name, from, to, i)
                 })
                 .collect();
 
@@ -809,7 +815,7 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -983,7 +989,7 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
@@ -1040,7 +1046,7 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
@@ -1146,7 +1152,7 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-in-map-0", "in", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -1205,5 +1211,65 @@ mod tests {
             pipeline_config.graceful_shutdown_time,
             Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS)
         );
+    }
+
+    /// Pins the ISB buffer/stream name format.
+    ///
+    /// This format is a cross-language contract: the Go controller creates the
+    /// buffers (see GenerateBufferName in pkg/apis/numaflow/v1alpha1/vertex_types.go)
+    /// and this config derives the JetStream stream names the pod reads and writes.
+    /// If the two ever disagree, the controller creates buffers that no pod touches
+    /// and the pipeline hangs at startup with no error. There is an equivalent
+    /// assertion on the Go side; change both together or not at all.
+    #[test]
+    fn test_isb_stream_name_format() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiam9pbi1waXBlbGluZS1tYXAiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJtYXAiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoiam9pbi1waXBlbGluZSIsImludGVyU3RlcEJ1ZmZlclNlcnZpY2VOYW1lIjoiIiwicmVwbGljYXMiOjAsImZyb21FZGdlcyI6W3siZnJvbSI6InMxIiwidG8iOiJtYXAiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX0seyJmcm9tIjoiczIiLCJ0byI6Im1hcCIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiTWFwIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        // {namespace}-{pipeline}-{from}-{to}-{partition}
+        let names: Vec<&str> = config
+            .from_vertex_config
+            .iter()
+            .flat_map(|f| f.reader_config.streams.iter().map(|s| s.name))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "default-join-pipeline-s1-map-0",
+                "default-join-pipeline-s2-map-0"
+            ]
+        );
+    }
+
+    /// A join must read from every ingress edge's buffer.
+    ///
+    /// Before buffers were edge-owned, both sources of a join wrote into one shared
+    /// buffer named for the destination, so reading the first ingress edge happened
+    /// to read both sources' data. Now each edge has its own physical buffer, so
+    /// anything that looks at only the first edge silently drops every other source.
+    /// This guards the config layer; the forwarders iterate all of these entries.
+    #[test]
+    fn test_join_has_a_distinct_buffer_per_ingress_edge() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiam9pbi1waXBlbGluZS1tYXAiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJtYXAiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoiam9pbi1waXBlbGluZSIsImludGVyU3RlcEJ1ZmZlclNlcnZpY2VOYW1lIjoiIiwicmVwbGljYXMiOjAsImZyb21FZGdlcyI6W3siZnJvbSI6InMxIiwidG8iOiJtYXAiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX0seyJmcm9tIjoiczIiLCJ0byI6Im1hcCIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiTWFwIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        // Two sources => two ingress edges, each with its own buffer.
+        assert_eq!(config.from_vertex_config.len(), 2);
+        assert_eq!(config.from_vertex_config[0].name, "s1");
+        assert_eq!(config.from_vertex_config[1].name, "s2");
+
+        let s1 = &config.from_vertex_config[0].reader_config.streams;
+        let s2 = &config.from_vertex_config[1].reader_config.streams;
+        assert_eq!(s1.len(), 1);
+        assert_eq!(s2.len(), 1);
+        // The two sources must not collide on one physical buffer.
+        assert_ne!(s1[0].name, s2[0].name);
+        // Each stream knows which edge it came from.
+        assert_eq!(s1[0].from_vertex, "s1");
+        assert_eq!(s2[0].from_vertex, "s2");
+        assert_eq!(s1[0].vertex, "map");
+        assert_eq!(s2[0].vertex, "map");
     }
 }

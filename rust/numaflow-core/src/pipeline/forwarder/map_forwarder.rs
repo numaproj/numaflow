@@ -1,7 +1,6 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::PipelineConfig;
-use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::metrics::{
@@ -113,13 +112,20 @@ pub async fn start_map_forwarder(
         None
     };
 
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
+    if config.from_vertex_config.is_empty() {
+        return Err(Error::Config("No from vertex config found".to_string()));
+    }
 
-    let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
+    // Partition indices of this vertex's ingress buffers. Every ingress edge of a
+    // vertex resolves to the same partition count (the controller derives it from
+    // this vertex), so the widest edge covers them all.
+    let from_partitions: Vec<u16> = (0..config
+        .from_vertex_config
+        .iter()
+        .map(|f| f.reader_config.streams.len())
+        .max()
+        .unwrap_or(0) as u16)
+        .collect();
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
@@ -165,7 +171,7 @@ pub async fn start_map_forwarder(
             run_all_map_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &map_vtx_config,
-                reader_config,
+                &config.from_vertex_config,
                 buffer_writer,
                 watermark_handle.clone(),
                 Some(redis_config.throttling_config),
@@ -177,7 +183,7 @@ pub async fn start_map_forwarder(
             run_all_map_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &map_vtx_config,
-                reader_config,
+                &config.from_vertex_config,
                 buffer_writer,
                 watermark_handle.clone(),
                 Some(in_mem_config.throttling_config),
@@ -188,7 +194,7 @@ pub async fn start_map_forwarder(
         run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
-            reader_config,
+            &config.from_vertex_config,
             buffer_writer,
             watermark_handle.clone(),
             None,
@@ -225,11 +231,18 @@ pub async fn start_map_forwarder(
     Ok(())
 }
 
-/// Starts map forwarder for all the streams.
+/// Starts map forwarder for all the streams across all ingress edges.
+///
+/// Buffers are edge-owned, so a vertex with several ingress edges (a join) reads a
+/// distinct set of buffers per edge. Each (edge, partition) stream gets its own
+/// independent forwarder pipeline, exactly as multiple partitions of a single edge
+/// already did. That independence is what gives a join per-source backpressure: each
+/// reader holds its own `max_ack_pending` semaphore, so a fast source fills and
+/// throttles on its own buffer without stalling the slow one.
 async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
-    reader_config: &BufferReaderConfig,
+    from_vertex_config: &[FromVertexConfig],
     buffer_writer: ISBWriter,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
@@ -242,40 +255,46 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
     let mut mapper_handle = None;
 
-    for stream in reader_config.streams.clone() {
-        info!("Creating buffer reader for stream {:?}", stream);
+    for from_vertex in from_vertex_config {
+        let reader_config = &from_vertex.reader_config;
+        for stream in reader_config.streams.clone() {
+            info!(
+                from_vertex = from_vertex.name,
+                "Creating buffer reader for stream {:?}", stream
+            );
 
-        let mapper = create_components::create_mapper(
-            context.config.batch_size,
-            context.config.read_timeout,
-            context.config.graceful_shutdown_time,
-            map_vtx_config.clone(),
-            context.tracker.clone(),
-            context.cln_token.clone(),
-        )
-        .await?;
+            let mapper = create_components::create_mapper(
+                context.config.batch_size,
+                context.config.read_timeout,
+                context.config.graceful_shutdown_time,
+                map_vtx_config.clone(),
+                context.tracker.clone(),
+                context.cln_token.clone(),
+            )
+            .await?;
 
-        if mapper_handle.is_none() {
-            mapper_handle = Some(mapper.clone());
+            if mapper_handle.is_none() {
+                mapper_handle = Some(mapper.clone());
+            }
+
+            let reader_components = ISBReaderComponents::new(
+                stream,
+                reader_config.clone(),
+                watermark_handle.clone(),
+                context,
+            );
+
+            let (task, reader) = run_map_forwarder_for_stream::<C>(
+                reader_components,
+                mapper,
+                buffer_writer.clone(),
+                rate_limiter.clone(),
+            )
+            .await?;
+
+            forwarder_tasks.push(task);
+            isb_lag_readers.push(reader);
         }
-
-        let reader_components = ISBReaderComponents::new(
-            stream,
-            reader_config.clone(),
-            watermark_handle.clone(),
-            context,
-        );
-
-        let (task, reader) = run_map_forwarder_for_stream::<C>(
-            reader_components,
-            mapper,
-            buffer_writer.clone(),
-            rate_limiter.clone(),
-        )
-        .await?;
-
-        forwarder_tasks.push(task);
-        isb_lag_readers.push(reader);
     }
 
     let pending_reader = shared::metrics::create_pending_reader(

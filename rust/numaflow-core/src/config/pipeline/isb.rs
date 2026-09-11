@@ -34,6 +34,10 @@ pub(crate) mod jetstream {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Stream {
     pub(crate) name: &'static str,
+    /// The upstream vertex this stream carries data from. Buffers are edge-owned, so
+    /// a vertex with several ingress edges reads a distinct set of streams per edge;
+    /// this is what attributes a message back to the edge it arrived on.
+    pub(crate) from_vertex: &'static str,
     pub(crate) vertex: &'static str,
     pub(crate) partition: u16,
 }
@@ -42,6 +46,7 @@ impl Default for Stream {
     fn default() -> Self {
         Stream {
             name: "",
+            from_vertex: "",
             vertex: "",
             partition: DEFAULT_PARTITION_IDX,
         }
@@ -49,9 +54,15 @@ impl Default for Stream {
 }
 
 impl Stream {
-    pub(crate) fn new(name: &'static str, vertex: &'static str, partition: u16) -> Self {
+    pub(crate) fn new(
+        name: &'static str,
+        from_vertex: &'static str,
+        vertex: &'static str,
+        partition: u16,
+    ) -> Self {
         Stream {
             name,
+            from_vertex,
             vertex,
             partition,
         }
@@ -121,7 +132,12 @@ pub(crate) struct BufferReaderConfig {
 impl Default for BufferReaderConfig {
     fn default() -> Self {
         BufferReaderConfig {
-            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
+            streams: vec![Stream::new(
+                "default-0",
+                "default",
+                "default",
+                DEFAULT_PARTITION_IDX,
+            )],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
             max_ack_pending: DEFAULT_MAX_ACK_PENDING,
         }
@@ -173,7 +189,12 @@ mod tests {
     #[test]
     fn test_default_buffer_reader_config() {
         let expected = BufferReaderConfig {
-            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
+            streams: vec![Stream::new(
+                "default-0",
+                "default",
+                "default",
+                DEFAULT_PARTITION_IDX,
+            )],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
             ..Default::default()
         };

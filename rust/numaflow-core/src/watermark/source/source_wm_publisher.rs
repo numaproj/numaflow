@@ -78,6 +78,9 @@ impl SourceWatermarkPublisher {
             .publish_watermark(
                 &Stream {
                     name: "source",
+                    // A source reads from the external source, not from an ISB edge,
+                    // so this pseudo stream has no upstream vertex.
+                    from_vertex: "",
                     vertex: self.source_config.vertex,
                     // in source, input partition is considered as a separate processor entity and this
                     // partition represents the isb partition.
