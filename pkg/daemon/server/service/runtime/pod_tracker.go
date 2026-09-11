@@ -88,37 +88,34 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 // updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-	// Map to store max active index for each vertex.
-	maxActiveIndex := make(map[string]int)
-	// A local mutex to synchronize access to the maxActiveIndex map.
-	mu := sync.Mutex{}
+	maxActiveIndex := make(map[string]int, len(pt.pipeline.Spec.Vertices))
+	var maxActiveIndexMutex sync.Mutex
 
 	for _, v := range pt.pipeline.Spec.Vertices {
+		maxActiveIndex[v.Name] = -1
+	}
+	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		// Initialize maxActiveIndex for this vertex.
-		mu.Lock()
-		maxActiveIndex[vertexName] = -1
-		mu.Unlock()
-
-		for i := range int(v.Scale.GetMaxReplicas()) {
+		maxReplicas := int(v.Scale.GetMaxReplicas())
+		pt.log.Debugf("Discovering pods for vertex %s with scale.max=%d", vertexName, maxReplicas)
+		for index := range maxReplicas {
 			wg.Add(1)
-			go func(vertexName string, index int) {
+			go func() {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-				if pt.isActive(vertexName, podName) {
-					// If the pod is active, update the maxActiveIndex for this vertex.
-					mu.Lock()
-					if index > maxActiveIndex[vertexName] {
-						maxActiveIndex[vertexName] = index
-					}
-					mu.Unlock()
+				if !pt.isActive(vertexName, podName) {
+					return
 				}
-			}(vertexName, i)
+				maxActiveIndexMutex.Lock()
+				if index > maxActiveIndex[vertexName] {
+					maxActiveIndex[vertexName] = index
+				}
+				maxActiveIndexMutex.Unlock()
+			}()
 		}
 	}
 	wg.Wait()
 
-	// Update the activePodsCount for all vertices.
 	for vertexName, maxIndex := range maxActiveIndex {
 		pt.setActivePodsCount(vertexName, maxIndex+1)
 	}

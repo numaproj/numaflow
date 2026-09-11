@@ -478,7 +478,17 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 		pl.Status.MarkDeployFailed("BuildDaemonDeployFailed", err.Error())
 		return fmt.Errorf("failed to build daemon deployment spec, %w", err)
 	}
-	deployHash := sharedutil.MustHash(deploy.Spec)
+	hashPipeline := pl.DeepCopy()
+	for index := range hashPipeline.Spec.Vertices {
+		hashPipeline.Spec.Vertices[index].Scale = pl.Spec.Vertices[index].Scale.ScaleForDaemonHash()
+	}
+	hashDeploy, err := hashPipeline.GetDaemonDeploymentObj(req)
+	if err != nil {
+		pl.Status.MarkDeployFailed("BuildDaemonDeployHashFailed", err.Error())
+		return fmt.Errorf("failed to build daemon deployment hash spec, %w", err)
+	}
+	// The daemon retains each vertex's initial maximum for pod discovery, while later scale changes do not recreate it.
+	deployHash := sharedutil.MustHash(hashDeploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
 	existingDeploy := &appv1.Deployment{}
 	needToCreate := false

@@ -104,9 +104,11 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
+	maxReplicas := int(pt.monoVertex.Spec.Scale.GetMaxReplicas())
+	pt.log.Infof("Discovering MonoVertex pods with scale.max=%d", maxReplicas)
+	for index := range maxReplicas {
 		wg.Add(1)
-		go func(index int) {
+		go func() {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			podKey := pt.getPodKey(index)
@@ -115,7 +117,7 @@ func (pt *PodTracker) updateActivePods() {
 			} else {
 				pt.activePods.Remove(podKey)
 			}
-		}(i)
+		}()
 	}
 	wg.Wait()
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())

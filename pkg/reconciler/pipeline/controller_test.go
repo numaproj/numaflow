@@ -948,6 +948,46 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 		assert.Len(t, deployList.Items, 1)
 		assert.Equal(t, "test-pl-daemon", deployList.Items[0].Name)
 	})
+
+	t.Run("vertex scale change does not recreate daemon deployment", func(t *testing.T) {
+		scaleCl := fake.NewClientBuilder().Build()
+		scaleR := fakeReconciler(t, scaleCl)
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale = dfv1.Scale{
+			Min: ptr.To[int32](1),
+			Max: ptr.To[int32](100),
+		}
+		err := scaleR.createOrUpdateDaemonDeployment(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+
+		var daemonDeployment appv1.Deployment
+		err = scaleCl.Get(ctx, client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&daemonDeployment)
+		assert.NoError(t, err)
+		hashBefore := daemonDeployment.Annotations[dfv1.KeyHash]
+		embeddedBefore := daemonDeploymentEnvValue(&daemonDeployment, dfv1.EnvPipelineObject)
+
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](0)
+		testObj.Spec.Vertices[0].Scale.Max = ptr.To[int32](0)
+		err = scaleR.createOrUpdateDaemonDeployment(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+
+		var updatedDaemonDeployment appv1.Deployment
+		err = scaleCl.Get(ctx, client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&updatedDaemonDeployment)
+		assert.NoError(t, err)
+		assert.Equal(t, hashBefore, updatedDaemonDeployment.Annotations[dfv1.KeyHash])
+		assert.Equal(t, embeddedBefore, daemonDeploymentEnvValue(&updatedDaemonDeployment, dfv1.EnvPipelineObject))
+	})
+}
+
+func daemonDeploymentEnvValue(deployment *appv1.Deployment, name string) string {
+	for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == name {
+			return env.Value
+		}
+	}
+	return ""
 }
 
 func Test_createOrUpdateSIMDeployments(t *testing.T) {

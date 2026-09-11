@@ -230,7 +230,7 @@ func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
 }
 
 func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq) (*appv1.Deployment, error) {
-	mvVtxCopyBytes, err := json.Marshal(mv.simpleCopy())
+	mvVtxCopyBytes, err := json.Marshal(mv.daemonSimpleCopy())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal mono vertex spec")
 	}
@@ -360,6 +360,12 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	}
 	m.Spec.UpdateStrategy = UpdateStrategy{}
 	m.Spec.Lifecycle = MonoVertexLifecycle{}
+	return m
+}
+
+func (mv MonoVertex) daemonSimpleCopy() MonoVertex {
+	m := mv.simpleCopy()
+	m.Spec.Scale = mv.Spec.Scale.ScaleForDaemonEmbedding()
 	return m
 }
 

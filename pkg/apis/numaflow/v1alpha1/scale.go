@@ -16,6 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
+import (
+	"k8s.io/utils/ptr"
+)
+
 // CronScheduling defines cron-based autoscaling overrides.
 type CronScheduling struct {
 	// Timezone for interpreting cron expressions. IANA Time Zone Database format. Defaults to UTC.
@@ -105,6 +109,25 @@ func (s Scale) GetLookbackSeconds() int {
 		return min(MaxLookbackSeconds, int(*s.LookbackSeconds))
 	}
 	return DefaultLookbackSeconds
+}
+
+// ScaleForDaemonEmbedding returns the scale fields consumed by daemon servers.
+// Max is captured when the daemon is created and bounds pod discovery for that daemon's lifetime.
+func (s Scale) ScaleForDaemonEmbedding() Scale {
+	embedded := Scale{
+		LookbackSeconds: ptr.To(uint32(s.GetLookbackSeconds())),
+	}
+	if s.Max != nil {
+		embedded.Max = ptr.To(*s.Max)
+	}
+	return embedded
+}
+
+// ScaleForDaemonHash returns the scale fields that should trigger daemon recreation.
+func (s Scale) ScaleForDaemonHash() Scale {
+	scale := s.ScaleForDaemonEmbedding()
+	scale.Max = nil
+	return scale
 }
 
 func (s Scale) GetScaleUpCooldownSeconds() int {

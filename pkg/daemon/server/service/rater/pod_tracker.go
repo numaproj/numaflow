@@ -104,11 +104,13 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-
 	for _, v := range pt.pipeline.Spec.Vertices {
-		for i := range int(v.Scale.GetMaxReplicas()) {
+		vertexName := v.Name
+		maxReplicas := int(v.Scale.GetMaxReplicas())
+		pt.log.Debugf("Discovering pods for vertex %s with scale.max=%d", vertexName, maxReplicas)
+		for index := range maxReplicas {
 			wg.Add(1)
-			go func(vertexName string, index int) {
+			go func() {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 				podKey := pt.getPodKey(index, vertexName)
@@ -117,7 +119,7 @@ func (pt *PodTracker) updateActivePods() {
 				} else {
 					pt.activePods.Remove(podKey)
 				}
-			}(v.Name, i)
+			}()
 		}
 	}
 	wg.Wait()

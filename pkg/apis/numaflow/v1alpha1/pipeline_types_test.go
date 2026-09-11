@@ -17,10 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -656,4 +660,52 @@ func TestOrdered_IsEnabled(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestPipeline_GetDaemonDeploymentObj_embedsVertexScaleMax(t *testing.T) {
+	pl := testPipeline.DeepCopy()
+	pl.Spec.Vertices[0].Scale = Scale{
+		Min:             ptr.To[int32](1),
+		Max:             ptr.To[int32](100),
+		LookbackSeconds: ptr.To[uint32](120),
+	}
+	req := GetDaemonDeploymentReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	deployBefore, err := pl.GetDaemonDeploymentObj(req)
+	require.NoError(t, err)
+	embeddedBefore, err := decodeDaemonEmbeddedPipeline(deployBefore)
+	require.NoError(t, err)
+	assert.Equal(t, int32(100), embeddedBefore.Spec.Vertices[0].Scale.GetMaxReplicas())
+	assert.Nil(t, embeddedBefore.Spec.Vertices[0].Scale.Min)
+
+	pl.Spec.Vertices[0].Scale.Min = ptr.To[int32](0)
+	pl.Spec.Vertices[0].Scale.Max = ptr.To[int32](0)
+	deployAfter, err := pl.GetDaemonDeploymentObj(req)
+	require.NoError(t, err)
+	embeddedAfter, err := decodeDaemonEmbeddedPipeline(deployAfter)
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), embeddedAfter.Spec.Vertices[0].Scale.GetMaxReplicas())
+}
+
+func daemonEmbeddedPipelineObject(deploy *appv1.Deployment) string {
+	for _, env := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == EnvPipelineObject {
+			return env.Value
+		}
+	}
+	return ""
+}
+
+func decodeDaemonEmbeddedPipeline(deploy *appv1.Deployment) (Pipeline, error) {
+	decoded, err := base64.StdEncoding.DecodeString(daemonEmbeddedPipelineObject(deploy))
+	if err != nil {
+		return Pipeline{}, err
+	}
+	var pipeline Pipeline
+	err = json.Unmarshal(decoded, &pipeline)
+	return pipeline, err
 }
