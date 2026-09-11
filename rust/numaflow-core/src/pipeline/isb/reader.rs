@@ -607,7 +607,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_jetstream_read", "test", 0);
+        let stream = Stream::new("test_jetstream_read", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context
@@ -722,7 +722,7 @@ mod tests {
         let context = jetstream::new(client);
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let js_stream = Stream::new("test-ack", "test", 0);
+        let js_stream = Stream::new("test-ack", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(js_stream.name).await;
         context
@@ -846,7 +846,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_compression_empty", "test", 0);
+        let stream = Stream::new("test_compression_empty", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context

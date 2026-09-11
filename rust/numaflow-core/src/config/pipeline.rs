@@ -815,7 +815,12 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-in-out-0",
+                        "in",
+                        "out",
+                        0,
+                    )],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -989,7 +994,12 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-in-out-0",
+                        "in",
+                        "out",
+                        0,
+                    )],
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
@@ -1046,7 +1056,12 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "in", "out", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-in-out-0",
+                        "in",
+                        "out",
+                        0,
+                    )],
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
@@ -1152,7 +1167,12 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-map-0", "in", "map", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-in-map-0",
+                        "in",
+                        "map",
+                        0,
+                    )],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },

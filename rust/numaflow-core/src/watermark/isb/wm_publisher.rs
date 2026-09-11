@@ -288,12 +288,14 @@ mod tests {
 
         let stream_partition_0 = Stream {
             name: "v1-0",
+            from_vertex: "from-test",
             vertex: "v1",
             partition: 0,
         };
 
         let stream_partition_1 = Stream {
             name: "v1-1",
+            from_vertex: "from-test",
             vertex: "v1",
             partition: 1,
         };
@@ -433,12 +435,14 @@ mod tests {
 
         let stream1 = Stream {
             name: "v1-0",
+            from_vertex: "from-test",
             vertex: "v1",
             partition: 0,
         };
 
         let stream2 = Stream {
             name: "v2-0",
+            from_vertex: "from-test",
             vertex: "v2",
             partition: 0,
         };
@@ -541,6 +545,7 @@ mod tests {
 
         let stream = Stream {
             name: "v1-0",
+            from_vertex: "from-test",
             vertex: "v1",
             partition: 0,
         };

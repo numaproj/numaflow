@@ -506,7 +506,7 @@ mod tests {
                 name: "to_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    streams: vec![Stream::new("test_stream", "from-test", "to_vertex", 0)],
                     ..Default::default()
                 },
                 conditions: None,
@@ -531,6 +531,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
+                    from_vertex: "from-test",
                     vertex: "to_vertex",
                     partition: 0,
                 },
@@ -580,6 +581,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
+                    from_vertex: "from-test",
                     vertex: "to_vertex",
                     partition: 0,
                 },
@@ -675,7 +677,7 @@ mod tests {
                 name: "from_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("test_stream", "from_vertex", 0)],
+                    streams: vec![Stream::new("test_stream", "from-test", "from_vertex", 0)],
                     ..Default::default()
                 },
                 conditions: None,
@@ -707,6 +709,7 @@ mod tests {
                     .publish_watermark(
                         Stream {
                             name: "test_stream",
+                            from_vertex: "from-test",
                             vertex: "from_vertex",
                             partition: 0,
                         },
@@ -835,7 +838,7 @@ mod tests {
                 name: "to_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    streams: vec![Stream::new("test_stream", "from-test", "to_vertex", 0)],
                     ..Default::default()
                 },
                 conditions: None,
@@ -947,7 +950,7 @@ mod tests {
                 name: "from_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("test_stream", "from_vertex", 0)],
+                    streams: vec![Stream::new("test_stream", "from-test", "from_vertex", 0)],
                     ..Default::default()
                 },
                 conditions: None,
@@ -977,6 +980,7 @@ mod tests {
                 .publish_watermark(
                     Stream {
                         name: "test_stream",
+                        from_vertex: "from-test",
                         vertex: "from_vertex",
                         partition: 0,
                     },

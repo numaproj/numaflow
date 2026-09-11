@@ -932,7 +932,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_unaligned_session_basic", "test", 0);
+        let stream = Stream::new("test_unaligned_session_basic", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 
@@ -1167,7 +1167,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_unaligned_session_multi_keys", "test", 0);
+        let stream = Stream::new("test_unaligned_session_multi_keys", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 
@@ -1459,7 +1459,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_unaligned_accumulator_basic", "test", 0);
+        let stream = Stream::new("test_unaligned_accumulator_basic", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 
@@ -1671,7 +1671,12 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_unaligned_accumulator_multi_keys", "test", 0);
+        let stream = Stream::new(
+            "test_unaligned_accumulator_multi_keys",
+            "from-test",
+            "test",
+            0,
+        );
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 
@@ -1915,7 +1920,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_unaligned_session_merging", "test", 0);
+        let stream = Stream::new("test_unaligned_session_merging", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 

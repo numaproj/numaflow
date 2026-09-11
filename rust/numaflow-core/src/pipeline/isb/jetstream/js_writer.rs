@@ -385,7 +385,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test-buffer-info", "temp", 0);
+        let stream = Stream::new("test-buffer-info", "from-test", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let mut js_stream = context
@@ -441,7 +441,7 @@ mod tests {
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
 
-        let stream = Stream::new("test-write-full", "temp", 0);
+        let stream = Stream::new("test-write-full", "from-test", "temp", 0);
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {

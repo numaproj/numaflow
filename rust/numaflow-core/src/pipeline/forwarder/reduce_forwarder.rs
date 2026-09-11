@@ -634,8 +634,18 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create input and output streams
-        let input_stream = Stream::new("test_aligned_reduce_forwarder_input", "test", 0);
-        let output_stream = Stream::new("test_aligned_reduce_forwarder_output", "test", 0);
+        let input_stream = Stream::new(
+            "test_aligned_reduce_forwarder_input",
+            "from-test",
+            "test",
+            0,
+        );
+        let output_stream = Stream::new(
+            "test_aligned_reduce_forwarder_output",
+            "from-test",
+            "test",
+            0,
+        );
 
         // Delete streams if they exist
         let _ = js_context.delete_stream(input_stream.name).await;
@@ -972,8 +982,18 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create input and output streams
-        let input_stream = Stream::new("test_unaligned_reduce_forwarder_input", "test", 0);
-        let output_stream = Stream::new("test_unaligned_reduce_forwarder_output", "test", 0);
+        let input_stream = Stream::new(
+            "test_unaligned_reduce_forwarder_input",
+            "from-test",
+            "test",
+            0,
+        );
+        let output_stream = Stream::new(
+            "test_unaligned_reduce_forwarder_output",
+            "from-test",
+            "test",
+            0,
+        );
         let ot_bucket = "test_unaligned_reduce_forwarder_ot";
         let hb_bucket = "test_unaligned_reduce_forwarder_hb";
 

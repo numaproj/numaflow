@@ -208,7 +208,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_pbq_read_without_wal", "test", 0);
+        let stream = Stream::new("test_pbq_read_without_wal", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context
@@ -341,7 +341,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let wal_path = temp_dir.path().to_path_buf();
 
-        let stream = Stream::new("test_pbq_read_with_wal", "test", 0);
+        let stream = Stream::new("test_pbq_read_with_wal", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context
@@ -537,7 +537,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let wal_path = temp_dir.path().to_path_buf();
 
-        let stream = Stream::new("test_pbq_replay_wal", "test", 0);
+        let stream = Stream::new("test_pbq_replay_wal", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context

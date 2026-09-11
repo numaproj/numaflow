@@ -230,7 +230,7 @@ mod tests {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_stream", "from-test", "test_vertex", 0);
         let to_vertex_config = ToVertexConfig {
             name: "test_vertex",
             partitions: 1,
@@ -261,7 +261,7 @@ mod tests {
     async fn test_fetch_idle_offset() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_stream", "from-test", "test_vertex", 0);
 
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
@@ -301,7 +301,7 @@ mod tests {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_stream", "from-test", "test_vertex", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
         let _stream = js_context
@@ -347,7 +347,7 @@ mod tests {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let stream = Stream::new("test_stream", "from-test", "test_vertex", 0);
         let to_vertex_config = ToVertexConfig {
             name: "test_vertex",
             partitions: 1,

@@ -725,7 +725,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_aligned_reducer_fixed", "test", 0);
+        let stream = Stream::new("test_aligned_reducer_fixed", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
 
@@ -985,7 +985,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_aligned_reducer_sliding", "test", 0);
+        let stream = Stream::new("test_aligned_reducer_sliding", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
         let _stream = js_context
@@ -1246,7 +1246,7 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
-        let stream = Stream::new("test_aligned_reducer_multi_keys", "test", 0);
+        let stream = Stream::new("test_aligned_reducer_multi_keys", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = js_context.delete_stream(stream.name).await;
         let _stream = js_context

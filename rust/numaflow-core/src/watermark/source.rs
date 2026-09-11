@@ -636,6 +636,7 @@ mod tests {
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream {
                         name: "edge_stream",
+                        from_vertex: "from-test",
                         vertex: "edge_vertex",
                         partition: 0,
                     }],
@@ -658,6 +659,7 @@ mod tests {
 
         let stream = Stream {
             name: "edge_stream",
+            from_vertex: "from-test",
             vertex: "edge_vertex",
             partition: 0,
         };
@@ -737,6 +739,7 @@ mod tests {
             writer_config: BufferWriterConfig {
                 streams: vec![Stream {
                     name: "edge_stream",
+                    from_vertex: "from-test",
                     vertex: "edge_vertex",
                     partition: 0,
                 }],
@@ -931,6 +934,7 @@ mod tests {
             writer_config: BufferWriterConfig {
                 streams: vec![Stream {
                     name: "edge_stream",
+                    from_vertex: "from-test",
                     vertex: "edge_vertex",
                     partition: 0,
                 }],

@@ -288,7 +288,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_direct_fetch", "test", 0);
+        let stream = Stream::new("test_direct_fetch", "from-test", "test", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         context

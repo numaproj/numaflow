@@ -540,7 +540,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test-streaming", "temp", 0);
+        let stream = Stream::new("test-streaming", "from-test", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -649,7 +649,7 @@ mod tests {
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
 
-        let stream = Stream::new("test-streaming-cancel", "temp", 0);
+        let stream = Stream::new("test-streaming-cancel", "from-test", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -762,11 +762,11 @@ mod tests {
 
         // Create multiple streams for different vertices
         let vertex1_streams = vec![
-            Stream::new("test-multi-v1-0", "vertex1", 0),
-            Stream::new("test-multi-v1-1", "vertex1", 1),
+            Stream::new("test-multi-v1-0", "from-test", "vertex1", 0),
+            Stream::new("test-multi-v1-1", "from-test", "vertex1", 1),
         ];
-        let vertex2_streams = vec![Stream::new("test-multi-v2-0", "vertex2", 0)];
-        let vertex3_streams = vec![Stream::new("test-multi-v3-0", "vertex3", 0)];
+        let vertex2_streams = vec![Stream::new("test-multi-v2-0", "from-test", "vertex2", 0)];
+        let vertex3_streams = vec![Stream::new("test-multi-v3-0", "from-test", "vertex3", 0)];
 
         let (_, _) = create_streams_and_consumers(&context, &vertex1_streams).await;
         let (_, _) = create_streams_and_consumers(&context, &vertex2_streams).await;

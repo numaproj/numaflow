@@ -1,7 +1,5 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::{
-    FromVertexConfig, PipelineConfig, ServingStoreType, SinkVtxConfig,
-};
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig, ServingStoreType, SinkVtxConfig};
 use crate::error::Error;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
@@ -341,11 +339,36 @@ mod tests {
     async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
-            Stream::new("default-test-forwarder-for-sink-vertex-out-0", "test", 0),
-            Stream::new("default-test-forwarder-for-sink-vertex-out-1", "test", 1),
-            Stream::new("default-test-forwarder-for-sink-vertex-out-2", "test", 2),
-            Stream::new("default-test-forwarder-for-sink-vertex-out-3", "test", 3),
-            Stream::new("default-test-forwarder-for-sink-vertex-out-4", "test", 4),
+            Stream::new(
+                "default-test-forwarder-for-sink-vertex-out-0",
+                "from-test",
+                "test",
+                0,
+            ),
+            Stream::new(
+                "default-test-forwarder-for-sink-vertex-out-1",
+                "from-test",
+                "test",
+                1,
+            ),
+            Stream::new(
+                "default-test-forwarder-for-sink-vertex-out-2",
+                "from-test",
+                "test",
+                2,
+            ),
+            Stream::new(
+                "default-test-forwarder-for-sink-vertex-out-3",
+                "from-test",
+                "test",
+                3,
+            ),
+            Stream::new(
+                "default-test-forwarder-for-sink-vertex-out-4",
+                "from-test",
+                "test",
+                4,
+            ),
         ];
 
         let js_url = "localhost:4222";
