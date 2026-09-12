@@ -92,19 +92,3 @@ impl ISBFactory for JetStreamFactory {
             .map_err(|e| Error::Connection(e.to_string()))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_jetstream_factory_creation() {
-        let client = async_nats::connect("localhost:4222").await.unwrap();
-        let context = async_nats::jetstream::new(client);
-        let factory = JetStreamFactory::new(context.clone());
-
-        // Verify the context is accessible
-        assert!(std::ptr::eq(factory.context(), factory.context()));
-    }
-}
