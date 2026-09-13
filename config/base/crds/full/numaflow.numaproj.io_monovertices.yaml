@@ -2874,7 +2874,6 @@ spec:
               priorityClassName:
                 type: string
               replicas:
-                default: 1
                 format: int32
                 type: integer
               resourceClaims:
