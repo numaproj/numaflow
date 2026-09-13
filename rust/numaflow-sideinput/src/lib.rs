@@ -3,12 +3,10 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::manager::SideInputTrigger;
-use numaflow_shared::isb::jetstream::config::ClientConfig;
-use numaflow_shared::isb::jetstream::create_js_context;
+use numaflow_shared::isb::{ISBClientConfig, create_kv_store_factory};
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -47,22 +45,8 @@ pub enum SideInputMode {
 }
 
 /// build the side-input bucket name from the store name.
-fn get_bucket_name(side_input_store: &str) -> &'static str {
-    Box::leak(format!("{side_input_store}_SIDE_INPUTS").into_boxed_str())
-}
-
-/// Opens a backend-neutral KV store for the side-input bucket.
-async fn create_side_input_kv_store(
-    env_vars: HashMap<String, String>,
-    bucket: &'static str,
-) -> Result<Arc<dyn KVStore>> {
-    let client_config = ClientConfig::load(env_vars)?;
-    let js_context = create_js_context(client_config).await?;
-    let store = js_context
-        .get_key_value(bucket)
-        .await
-        .map_err(|e| Error::SideInput(format!("Failed to get kv bucket {bucket}: {e}")))?;
-    Ok(Arc::new(JetstreamKVStore::new(store, bucket)))
+fn get_bucket_name(side_input_store: &str) -> String {
+    format!("{side_input_store}_SIDE_INPUTS")
 }
 
 /// Runs the side-input system in the specified mode.
@@ -72,13 +56,35 @@ pub async fn run(
     env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
+    let backend = ISBClientConfig::from_env(&env_vars)?;
+    let kv_factory = create_kv_store_factory(&backend).await?;
+    let bucket = match &mode {
+        SideInputMode::Manager {
+            side_input_store, ..
+        } => get_bucket_name(side_input_store),
+        SideInputMode::Synchronizer {
+            side_input_store, ..
+        } => get_bucket_name(side_input_store),
+    };
+    let store = kv_factory.create_kv_store(bucket).await?;
+
+    run_with_store(mode, store, uds_path, env_vars, cancellation_token).await
+}
+
+/// Runs the side-input system in the specified mode against an already-constructed KV store.
+pub(crate) async fn run_with_store(
+    mode: SideInputMode,
+    store: Arc<dyn KVStore>,
+    uds_path: std::path::PathBuf,
+    env_vars: HashMap<String, String>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
     match mode {
         SideInputMode::Manager {
-            side_input_store,
-            server_info_path,
+            server_info_path, ..
         } => {
             start_manager(
-                get_bucket_name(side_input_store),
+                store,
                 uds_path,
                 env_vars,
                 server_info_path,
@@ -88,25 +94,15 @@ pub async fn run(
         }
         SideInputMode::Synchronizer {
             side_inputs,
-            side_input_store,
             mount_path,
             run_once,
-        } => {
-            start_synchronizer(
-                side_inputs,
-                get_bucket_name(side_input_store),
-                mount_path,
-                run_once,
-                env_vars,
-                cancellation_token,
-            )
-            .await
-        }
+            ..
+        } => start_synchronizer(side_inputs, store, mount_path, run_once, cancellation_token).await,
     }
 }
 
 async fn start_manager(
-    side_input_store: &'static str,
+    store: Arc<dyn KVStore>,
     uds_path: std::path::PathBuf,
     env_vars: HashMap<String, String>,
     server_info_path: &'static str,
@@ -122,7 +118,6 @@ async fn start_manager(
     .await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
-    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
 
     manager::SideInputManager::new(trigger.name, client, cancellation_token)
         .run(store, side_input_trigger)
@@ -131,14 +126,11 @@ async fn start_manager(
 
 async fn start_synchronizer(
     side_inputs: Vec<&'static str>,
-    side_input_store: &'static str,
+    store: Arc<dyn KVStore>,
     mount_path: &'static str,
     run_once: bool,
-    env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let store = create_side_input_kv_store(env_vars, side_input_store).await?;
-
     let synchronizer = synchronize::SideInputSynchronizer::new(
         side_inputs,
         mount_path,
@@ -157,6 +149,8 @@ mod tests {
     use base64::Engine;
     use numaflow::sideinput;
     use numaflow::sideinput::SideInputer;
+    use numaflow_shared::kv::inmemory::SimpleKVStore;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -196,16 +190,73 @@ mod tests {
             "localhost:4222".to_string(),
         );
 
-        let result = create_side_input_kv_store(env_vars, "non-existent-bucket").await;
+        let backend = ISBClientConfig::from_env(&env_vars)?;
+        let factory = create_kv_store_factory(&backend).await?;
+        let result = factory
+            .create_kv_store("non-existent-bucket".to_string())
+            .await;
         assert!(result.is_err(), "Should fail with non-existent bucket");
 
-        if let Err(crate::error::Error::SideInput(msg)) = result {
-            assert!(msg.contains("Failed to get kv bucket"));
+        if let Err(numaflow_shared::error::Error::Jetstream(msg)) = result {
+            assert!(msg.contains("Failed to get KV bucket"));
         } else {
-            panic!("Expected SideInput error");
+            panic!("Expected Jetstream error");
         }
 
         Ok(())
+    }
+
+    /// In-memory twin of `test_end_to_end_error_scenarios`.
+    ///
+    /// `SimpleKVStore` / `InMemoryKVStoreFactory` create buckets on demand, so there is no
+    /// "non-existent bucket" failure mode to reproduce for this backend (see task 006 brief,
+    /// option (a)). Instead this exercises the same *shape* of failure -- a KV boundary
+    /// operation being forced to fail -- via `KVErrorInjector`, and asserts the failure
+    /// propagates as an error, same as the JetStream case.
+    #[tokio::test]
+    async fn test_end_to_end_error_scenarios_inmemory() {
+        let store = SimpleKVStore::new("test-end-to-end-error-scenarios-inmemory");
+        store.error_injector().fail_gets(1);
+
+        let result = store.get("some-key").await;
+        assert!(
+            result.is_err(),
+            "Should fail when the KV boundary operation is forced to error"
+        );
+    }
+
+    /// Shared assertion: after Manager mode has generated a side input, it should be visible
+    /// in the KV store.
+    async fn assert_side_input_stored(store: &Arc<dyn KVStore>, key: &str) {
+        let stored_value = store.get(key).await.unwrap();
+        assert!(
+            stored_value.is_some(),
+            "Side input should be stored in KV store"
+        );
+
+        let value = stored_value.unwrap();
+        let value_str = String::from_utf8(value.to_vec()).unwrap();
+        assert!(
+            value_str.starts_with("test-data-"),
+            "Stored value should contain test data, got: {value_str}",
+        );
+    }
+
+    /// Shared assertion: after Synchronizer mode has processed the initial values
+    /// (run_once=true), the side input file should exist at the mount path with content
+    /// matching what was stored in the KV store.
+    fn assert_side_input_file_written(mount_path: &std::path::Path, key: &str) {
+        let side_input_file_path = mount_path.join(key);
+        assert!(
+            side_input_file_path.exists(),
+            "Side input file should be created at mount path"
+        );
+
+        let file_content = std::fs::read_to_string(&side_input_file_path).unwrap();
+        assert!(
+            file_content.starts_with("test-data-"),
+            "File content should match KV store content, got: {file_content}",
+        );
     }
 
     /// Test both Manager and Synchronizer modes with the run function
@@ -243,7 +294,7 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let store_name = "test-manager-run-once-mode-store";
-        let bucket_name = get_bucket_name(store_name);
+        let bucket_name: &'static str = Box::leak(get_bucket_name(store_name).into_boxed_str());
         let _ = js_context.delete_key_value(bucket_name).await; // Clean up if exists
 
         let kv_store = js_context
@@ -253,6 +304,9 @@ mod tests {
             })
             .await
             .unwrap();
+        // Used purely for verification below, via the backend-agnostic `KVStore` trait.
+        let store: Arc<dyn KVStore> =
+            Arc::new(JetstreamKVStore::new(kv_store.clone(), bucket_name));
 
         // Prepare environment variables for Manager mode
         let side_input_spec = numaflow_models::models::SideInput {
@@ -316,18 +370,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Verify that data was stored in the KV store
-        let stored_value = kv_store.get("test-side-input-run-once").await.unwrap();
-        assert!(
-            stored_value.is_some(),
-            "Side input should be stored in KV store"
-        );
-
-        let value = stored_value.unwrap();
-        let value_str = String::from_utf8(value.to_vec()).unwrap();
-        assert!(
-            value_str.starts_with("test-data-"),
-            "Stored value should contain test data, got: {value_str}",
-        );
+        assert_side_input_stored(&store, "test-side-input-run-once").await;
 
         // Test Synchronizer mode - read from KV store and write to files
         let sync_tmp_dir = TempDir::new().unwrap();
@@ -364,19 +407,9 @@ mod tests {
             "Synchronizer should complete when run_once=true"
         );
 
-        // Verify that the side input file was created in the mount path
-        let side_input_file_path = sync_tmp_dir.path().join("test-side-input-run-once");
-        assert!(
-            side_input_file_path.exists(),
-            "Side input file should be created at mount path"
-        );
-
-        // Verify the content of the side input file matches what was stored in KV
-        let file_content = std::fs::read_to_string(&side_input_file_path).unwrap();
-        assert!(
-            file_content.starts_with("test-data-"),
-            "File content should match KV store content, got: {file_content}",
-        );
+        // Verify that the side input file was created in the mount path, with content
+        // matching what was stored in KV
+        assert_side_input_file_written(sync_tmp_dir.path(), "test-side-input-run-once");
 
         // Cleanup
         cancel_token.cancel();
@@ -390,6 +423,163 @@ mod tests {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
         let _ = js_context.delete_key_value(bucket_name).await;
+
+        Ok(())
+    }
+
+    /// In-memory twin of `test_manager_and_synchronizer_modes_with_run_function`.
+    ///
+    /// Uses `run_with_store` (not `run`, which builds its own backend from env) so that
+    /// Manager mode and Synchronizer mode share the exact same `SimpleKVStore` instance --
+    /// proving the same store-sharing behaviour that the JetStream test proves via a single
+    /// NATS bucket.
+    #[tokio::test]
+    async fn test_manager_and_synchronizer_modes_with_run_function_inmemory() -> Result<()> {
+        // Setup temporary directories and files
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sideinput.sock");
+        let server_info_file = tmp_dir.path().join("sideinput-server-info");
+
+        // Setup side-input server
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        // Start the side-input server
+        let server_handle = tokio::spawn(async move {
+            sideinput::Server::new(SideInputHandler::new())
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let store_name = "test-manager-run-once-mode-store-inmemory";
+        let bucket_name: &'static str = Box::leak(get_bucket_name(store_name).into_boxed_str());
+        let store: Arc<dyn KVStore> = Arc::new(SimpleKVStore::new(bucket_name));
+
+        // Prepare environment variables for Manager mode
+        let side_input_spec = numaflow_models::models::SideInput {
+            container: Box::new(numaflow_models::models::Container {
+                args: None,
+                command: None,
+                env: None,
+                env_from: None,
+                image: None,
+                image_pull_policy: None,
+                liveness_probe: None,
+                ports: None,
+                readiness_probe: None,
+                resources: None,
+                security_context: None,
+                volume_mounts: None,
+            }),
+            name: "test-side-input-run-once".to_string(),
+            trigger: Box::from(numaflow_models::models::SideInputTrigger {
+                schedule: "* * * * * *".to_string(), // Every second
+                timezone: Some("UTC".to_string()),
+            }),
+            volumes: None,
+        };
+
+        let spec_json = serde_json::to_string(&side_input_spec).unwrap();
+        let encoded_spec = base64::prelude::BASE64_STANDARD.encode(spec_json);
+
+        let mut env_vars = HashMap::new();
+        env_vars.insert("NUMAFLOW_SIDE_INPUT_OBJECT".to_string(), encoded_spec);
+
+        let cancel_token = CancellationToken::new();
+        let server_info_path = Box::leak(
+            server_info_file
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+        let mode = SideInputMode::Manager {
+            side_input_store: store_name,
+            server_info_path,
+        };
+
+        // Start the manager in a background task, sharing the same store instance
+        let manager_cancel = cancel_token.clone();
+        let sock_file_clone = sock_file.clone();
+        let env_vars_clone = env_vars.clone();
+        let manager_store = Arc::clone(&store);
+        let manager_handle = tokio::spawn(async move {
+            run_with_store(
+                mode,
+                manager_store,
+                sock_file_clone,
+                env_vars_clone,
+                manager_cancel,
+            )
+            .await
+            .unwrap();
+        });
+
+        // Give manager time to do initial generation
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify that data was stored in the KV store
+        assert_side_input_stored(&store, "test-side-input-run-once").await;
+
+        // Test Synchronizer mode - read from KV store and write to files
+        let sync_tmp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            sync_tmp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let sync_cancel_token = CancellationToken::new();
+        let sync_mode = SideInputMode::Synchronizer {
+            side_inputs: vec!["test-side-input-run-once"],
+            side_input_store: store_name,
+            mount_path,
+            run_once: true, // Run once to process initial values and stop
+        };
+
+        // Start the synchronizer in a background task, sharing the same store instance
+        let sync_store = Arc::clone(&store);
+        let sync_handle = tokio::spawn(async move {
+            run_with_store(
+                sync_mode,
+                sync_store,
+                sock_file,
+                env_vars,
+                sync_cancel_token,
+            )
+            .await
+            .unwrap();
+        });
+
+        // Give synchronizer time to process and complete (run_once=true should make it finish)
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify that the synchronizer task completed (since run_once=true)
+        let sync_result = tokio::time::timeout(Duration::from_millis(100), sync_handle).await;
+        assert!(
+            sync_result.is_ok(),
+            "Synchronizer should complete when run_once=true"
+        );
+
+        // Verify that the side input file was created in the mount path, with content
+        // matching what was stored in KV
+        assert_side_input_file_written(sync_tmp_dir.path(), "test-side-input-run-once");
+
+        // Cleanup
+        cancel_token.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(5), manager_handle).await;
+
+        // Shutdown server
+        shutdown_tx.send(()).unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(5), server_handle).await;
 
         Ok(())
     }

@@ -17,7 +17,7 @@ use crate::metrics::{MetricLabels, pipeline_partition_metric_labels};
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::inmemory::InMemoryFactory;
 use crate::pipeline::isb::jetstream::JetStreamFactory;
-use crate::pipeline::isb::jetstream::factory::create_js_context;
+use numaflow_shared::isb::jetstream::create_js_context;
 use numaflow_shared::kv::KVStore;
 
 /// Trait for creating ISB readers and writers.

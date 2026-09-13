@@ -32,7 +32,7 @@ fn add_processor_subcommand() -> Command {
         )
         .arg(
             arg!(--"isbsvc-type" <ISBSVC_TYPE> "Type of the ISB service")
-                .value_parser(["jetstream", "redis", ""])
+                .value_parser(["jetstream", ""])
                 .required(false),
         )
         .subcommand(sideinput::add_sideinput_subcommand())

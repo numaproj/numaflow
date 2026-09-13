@@ -14,14 +14,7 @@ const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 const DEFAULT_BUFFER_READER_INFLIGHT_CAP: usize = 500;
 
 /// ISB backend client configuration selected at startup via `NUMAFLOW_ISBSVC_TYPE`.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ISBClientConfig {
-    Jetstream(jetstream::ClientConfig),
-    /// In-memory backend for local testing only. Intentionally NOT constructible from the
-    /// env/k8s loader (config/pipeline.rs only accepts "jetstream") — programmatic use only.
-    #[allow(dead_code)] // selected via create_isb_factory; not reached from k8s env loader
-    InMemory,
-}
+pub(crate) use numaflow_shared::isb::ISBClientConfig;
 
 pub(crate) mod jetstream {
     /// Re-export the shared JetStream client config as the single source of truth
