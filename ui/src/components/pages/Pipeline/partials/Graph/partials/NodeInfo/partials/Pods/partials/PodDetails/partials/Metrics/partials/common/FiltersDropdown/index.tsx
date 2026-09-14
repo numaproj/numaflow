@@ -63,7 +63,10 @@ const FiltersDropdown = ({
   const [podsData, setPodsData] = useState<any[]>([]);
 
   useEffect(() => {
-    setSelectedFilters((initialFilters || "").split(",").filter(Boolean));
+    const next = (initialFilters || "").split(",").filter(Boolean);
+    setSelectedFilters((prev) =>
+      prev.join(",") === next.join(",") ? prev : next
+    );
   }, [initialFilters]);
 
   useEffect(() => {

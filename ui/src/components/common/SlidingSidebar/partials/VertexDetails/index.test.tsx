@@ -282,9 +282,7 @@ describe("VertexDetails", () => {
     fireEvent.click(screen.getByTestId("pods-tab"));
     fireEvent.click(screen.getByTestId("metrics-tab"));
     await waitFor(() => {
-      expect(screen.getByTestId("metrics-pod")).toHaveTextContent(
-        "vertex-wide"
-      );
+      expect(screen.getByTestId("metrics-pod")).toHaveTextContent("test-pod");
       expect(screen.getByTestId("metrics-expanded")).toHaveTextContent("true");
     });
   });
@@ -613,5 +611,38 @@ describe("VertexDetails", () => {
     expect(actions).toBeInTheDocument();
     expect(actions).toContainElement(screen.getByTestId("copy-view-link"));
     expect(screen.getByTestId("copy-view-link")).toHaveTextContent("Copy View");
+  });
+
+  it("hides the header copy action on Metrics and restores it on another tab", async () => {
+    render(
+      <AppContext.Provider
+        value={{ addError: jest.fn(), disableMetricsCharts: false } as any}
+      >
+        <BrowserRouter>
+          <VertexDetails
+            namespaceId="test-namespace"
+            pipelineId="test-pipeline"
+            vertexId="test-vertex"
+            vertexSpecs={{}}
+            vertexMetrics={{}}
+            buffers={[]}
+            type="sink"
+            setModalOnClose={jest.fn()}
+            refresh={jest.fn()}
+          />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+
+    expect(screen.getByTestId("copy-view-link")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("metrics-tab"));
+    await waitFor(() => {
+      expect(screen.getByText("Mocked metrics")).toBeInTheDocument();
+      expect(screen.queryByTestId("copy-view-link")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("spec-tab"));
+    await waitFor(() => {
+      expect(screen.getByTestId("copy-view-link")).toBeInTheDocument();
+    });
   });
 });

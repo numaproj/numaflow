@@ -32,7 +32,11 @@ import {
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
-import { replaceObservabilityState } from "../../../../../../../../../../../../../utils/observabilityURLState";
+import { CopyViewLinkButton } from "../../../../../../../../../../../../common/CopyViewLinkButton";
+import {
+  buildObservabilityViewUrl,
+  replaceObservabilityState,
+} from "../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -125,6 +129,14 @@ export function Metrics({
         metricPanels: remaining.join(",") || null,
       });
     };
+
+  const buildMetricViewUrl = (metricName: string, panelId: string) =>
+    // Shared controls stay on the URL; they belong to metric=, not each panel.
+    buildObservabilityViewUrl(location, {
+      vertexTab: "metrics",
+      metric: metricName,
+      metricPanels: panelId,
+    });
 
   if (discoveredMetricsLoading) {
     return (
@@ -226,22 +238,35 @@ export function Metrics({
               id={`${metric?.metric_name}-header`}
             >
               <Box className={"metrics-accordion-summary"}>
-                {metric?.display_name || metric?.metric_name}
-                <Tooltip
-                  title={
-                    <Typography className={"metrics-accordion-summary-tooltip"}>
-                      {metric?.metric_description ||
-                        metric?.display_name ||
-                        metric?.metric_name}
-                    </Typography>
-                  }
-                  arrow
-                  placement={"top-start"}
-                >
-                  <Box>
-                    <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
-                  </Box>
-                </Tooltip>
+                <Box className={"metrics-accordion-summary-title"}>
+                  {metric?.display_name || metric?.metric_name}
+                  <Tooltip
+                    title={
+                      <Typography className={"metrics-accordion-summary-tooltip"}>
+                        {metric?.metric_description ||
+                          metric?.display_name ||
+                          metric?.metric_name}
+                      </Typography>
+                    }
+                    arrow
+                    placement={"top-start"}
+                  >
+                    <Box>
+                      <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
+                    </Box>
+                  </Tooltip>
+                </Box>
+                <CopyViewLinkButton
+                  iconOnly
+                  url={buildMetricViewUrl(metric?.metric_name, panelId)}
+                  ariaLabel={`Copy ${
+                    metric?.display_name || metric?.metric_name
+                  } view`}
+                  idleTooltip={`Copy ${
+                    metric?.display_name || metric?.metric_name
+                  } view`}
+                  testId={`copy-metric-view-${metric?.metric_name}`}
+                />
               </Box>
             </AccordionSummary>
             <AccordionDetails>

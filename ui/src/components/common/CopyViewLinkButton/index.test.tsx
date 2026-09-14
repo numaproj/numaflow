@@ -78,4 +78,52 @@ describe("CopyViewLinkButton", () => {
       "Preparing link…"
     );
   });
+
+  it("copies an explicit URL from the icon-only control and reports Copied", async () => {
+    writeText.mockResolvedValue(undefined);
+    render(
+      <MemoryRouter initialEntries={["/?namespace=default"]}>
+        <CopyViewLinkButton
+          iconOnly
+          url="https://example.test/?metric=rate_b&metricPanels=rate_b-panel"
+          ariaLabel="Copy Rate B view"
+          idleTooltip="Copy Rate B view"
+          testId="copy-metric-view-rate_b"
+        />
+      </MemoryRouter>
+    );
+
+    const button = screen.getByTestId("copy-metric-view-rate_b");
+    expect(button).toHaveAttribute("aria-label", "Copy Rate B view");
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "https://example.test/?metric=rate_b&metricPanels=rate_b-panel"
+      );
+      expect(button).toHaveAttribute("aria-label", "Copy Rate B view copied");
+      expect(screen.getByText("Link copied")).toBeInTheDocument();
+    });
+  });
+
+  it("reports failure from the icon-only control when the clipboard rejects", async () => {
+    writeText.mockRejectedValue(new Error("denied"));
+    render(
+      <MemoryRouter>
+        <CopyViewLinkButton
+          iconOnly
+          ariaLabel="Copy Rate A view"
+          testId="copy-metric-view-rate_a"
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByTestId("copy-metric-view-rate_a"));
+    await waitFor(() => {
+      expect(screen.getByTestId("copy-metric-view-rate_a")).toHaveAttribute(
+        "aria-label",
+        "Copy Rate A view failed"
+      );
+      expect(screen.getByText("Unable to copy link")).toBeInTheDocument();
+    });
+  });
 });

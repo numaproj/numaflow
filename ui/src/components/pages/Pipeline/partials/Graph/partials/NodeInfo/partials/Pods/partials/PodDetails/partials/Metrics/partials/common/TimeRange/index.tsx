@@ -41,6 +41,18 @@ const TimeSelector = ({
   };
 
   useEffect(() => {
+    if (initialStart || initialEnd) return;
+    setMetricReq((prev: any) => {
+      if (prev.start_time && prev.end_time) return prev;
+      return {
+        ...prev,
+        start_time: startDate.format(),
+        end_time: endDate.format(),
+      };
+    });
+  }, [initialStart, initialEnd, startDate, endDate, setMetricReq]);
+
+  useEffect(() => {
     if (!initialStart || !initialEnd) return;
     const nextStart = moment(initialStart);
     const nextEnd = moment(initialEnd);

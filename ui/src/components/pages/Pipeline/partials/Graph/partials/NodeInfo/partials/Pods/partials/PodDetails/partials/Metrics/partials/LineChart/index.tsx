@@ -334,32 +334,24 @@ const LineChartComponent = ({
     const { req: nextReq, filters: nextFilters } = readMetricRequestFromSearch(
       location.search
     );
-    const reqChanged = (Object.keys(nextReq) as (keyof typeof nextReq)[]).some(
-      (key) => metricsReq[key] !== nextReq[key]
-    );
-    const filtersChanged =
-      nextFilters !== undefined &&
-      serializeMetricFilters(filters) !== serializeMetricFilters(nextFilters);
-    if (!reqChanged && !filtersChanged) return;
-
-    applyingUrlRef.current = true;
-    if (reqChanged) {
-      setMetricsReq((prev: any) => ({ ...prev, ...nextReq }));
+    setMetricsReq((prev: any) => {
+      const reqChanged = (
+        Object.keys(nextReq) as (keyof typeof nextReq)[]
+      ).some((key) => prev[key] !== nextReq[key]);
+      if (!reqChanged) return prev;
+      applyingUrlRef.current = true;
+      return { ...prev, ...nextReq };
+    });
+    if (nextFilters !== undefined) {
+      setFilters((prev: any) => {
+        if (serializeMetricFilters(prev) === serializeMetricFilters(nextFilters)) {
+          return prev;
+        }
+        applyingUrlRef.current = true;
+        return nextFilters;
+      });
     }
-    if (filtersChanged && nextFilters) {
-      setFilters(nextFilters);
-    }
-  }, [
-    fromModal,
-    metric?.metric_name,
-    metricParams,
-    metricsReq.dimension,
-    metricsReq.quantile,
-    metricsReq.duration,
-    metricsReq.start_time,
-    metricsReq.end_time,
-    filters,
-  ]);
+  }, [fromModal, metric?.metric_name, metricParams, location.search]);
 
   useEffect(() => {
     const selectedMetric = metricParams.get("metric");
@@ -575,10 +567,11 @@ const LineChartComponent = ({
     if (
       Array.isArray(label) &&
       label.length === 1 &&
-      label[0] === "container"
+      label[0] === "container" &&
+      pod?.containers
     ) {
       filteredChartData = filteredChartData?.filter((item) => {
-        return pod?.containers?.includes(item?.metric?.["container"]);
+        return pod.containers.includes(item?.metric?.["container"]);
       });
     }
 
@@ -724,9 +717,14 @@ const LineChartComponent = ({
                   field={param?.name}
                   setMetricReq={setMetricsReq}
                   presets={presets}
-                  urlValue={metricParams.get(
-                    `metric${param?.name.charAt(0).toUpperCase()}${param?.name.slice(1)}`
-                  )}
+                  urlValue={
+                    !metricParams.get("metric") ||
+                    metricParams.get("metric") === metric?.metric_name
+                      ? metricParams.get(
+                          `metric${param?.name.charAt(0).toUpperCase()}${param?.name.slice(1)}`
+                        )
+                      : undefined
+                  }
                 />
               </Box>
             );
@@ -760,7 +758,12 @@ const LineChartComponent = ({
               isFilterFocused={isFilterFocused}
               setFilterFocused={setFilterFocused}
               metric={metric}
-              initialFilters={metricParams.get("metricFilter")}
+              initialFilters={
+                !metricParams.get("metric") ||
+                metricParams.get("metric") === metric?.metric_name
+                  ? metricParams.get("metricFilter")
+                  : undefined
+              }
             />
           </Box>
         )}
