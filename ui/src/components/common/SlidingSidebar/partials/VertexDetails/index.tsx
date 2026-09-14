@@ -256,10 +256,6 @@ export function VertexDetails({
 
   const applyVertexTab = useCallback(
     (newValue: number) => {
-      if (newValue === METRICS_TAB_INDEX) {
-        setMetricsPod(undefined);
-        setPresets(undefined);
-      }
       setTabValue(newValue);
       syncVertexTabToUrl(newValue);
     },
@@ -429,9 +425,11 @@ export function VertexDetails({
       >
         <Box className="vertex-details-header">
           {header}
-          <Box className="vertex-details-header-actions">
-            <CopyViewLinkButton />
-          </Box>
+          {tabValue !== METRICS_TAB_INDEX && (
+            <Box className="vertex-details-header-actions">
+              <CopyViewLinkButton />
+            </Box>
+          )}
         </Box>
         <Box
           sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
