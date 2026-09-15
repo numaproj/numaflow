@@ -11,6 +11,37 @@ use std::task::Poll;
 use std::time::Duration;
 use tracing::{error, warn};
 
+/// async-nats logs all connection events at INFO by default unless an
+/// event_callback is registered, which hides real errors from OTEL sampling.
+pub async fn log_nats_event(event: async_nats::Event) {
+    match event {
+        async_nats::Event::Disconnected => {
+            error!(kind = "disconnected", %event, "NATS connection event")
+        }
+        async_nats::Event::ServerError(_) => {
+            error!(kind = "server_error", %event, "NATS connection event")
+        }
+        async_nats::Event::ClientError(_) => {
+            error!(kind = "client_error", %event, "NATS connection event")
+        }
+        async_nats::Event::LameDuckMode => {
+            warn!(kind = "lame_duck_mode", %event, "NATS connection event")
+        }
+        async_nats::Event::SlowConsumer(_) => {
+            warn!(kind = "slow_consumer", %event, "NATS connection event")
+        }
+        async_nats::Event::Connected => {
+            tracing::info!(kind = "connected", %event, "NATS connection event")
+        }
+        async_nats::Event::Draining => {
+            tracing::info!(kind = "draining", %event, "NATS connection event")
+        }
+        async_nats::Event::Closed => {
+            tracing::info!(kind = "closed", %event, "NATS connection event")
+        }
+    }
+}
+
 /// JetstreamWatcher is a wrapper around the Watcher that automatically recreates the watcher
 /// when it fails. You can call [futures::Stream::poll_next] on it.
 pub struct JetstreamWatcher {
@@ -115,7 +146,8 @@ pub async fn create_js_context(config: config::ClientConfig) -> Result<Context> 
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
+        .retry_on_initial_connect()
+        .event_callback(log_nats_event);
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
         opts = opts.user_and_password(user, password);
