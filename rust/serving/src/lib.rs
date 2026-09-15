@@ -105,7 +105,8 @@ pub async fn run(config: Settings) -> Result<()> {
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
+        .retry_on_initial_connect()
+        .event_callback(numaflow_shared::isb::jetstream::log_nats_event);
 
     if let Some((user, password)) = config.nats_basic_auth.as_ref().cloned() {
         opts = opts.user_and_password(user, password);

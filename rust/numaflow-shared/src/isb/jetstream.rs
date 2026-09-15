@@ -11,6 +11,99 @@ use std::task::Poll;
 use std::time::Duration;
 use tracing::{error, warn};
 
+fn event_kind(event: &async_nats::Event) -> &'static str {
+    match event {
+        async_nats::Event::Connected => "connected",
+        async_nats::Event::Disconnected => "disconnected",
+        async_nats::Event::LameDuckMode => "lame_duck_mode",
+        async_nats::Event::Draining => "draining",
+        async_nats::Event::Closed => "closed",
+        async_nats::Event::SlowConsumer(_) => "slow_consumer",
+        async_nats::Event::ServerError(_) => "server_error",
+        async_nats::Event::ClientError(_) => "client_error",
+    }
+}
+
+/// async-nats logs all connection events at INFO by default unless an
+/// event_callback is registered, which hides real errors from OTEL sampling.
+pub async fn log_nats_event(event: async_nats::Event) {
+    let kind = event_kind(&event);
+    match event {
+        async_nats::Event::Disconnected
+        | async_nats::Event::ServerError(_)
+        | async_nats::Event::ClientError(_) => {
+            error!(kind, %event, "NATS connection event")
+        }
+        async_nats::Event::LameDuckMode | async_nats::Event::SlowConsumer(_) => {
+            warn!(kind, %event, "NATS connection event")
+        }
+        async_nats::Event::Connected | async_nats::Event::Draining | async_nats::Event::Closed => {
+            tracing::info!(kind, %event, "NATS connection event")
+        }
+    }
+}
+
+#[cfg(test)]
+mod log_nats_event_tests {
+    use super::log_nats_event;
+    use async_nats::{ClientError, Event, ServerError};
+    use std::sync::{Arc, Mutex};
+    use tracing::span::{Attributes, Id, Record};
+    use tracing::{Level, Metadata};
+
+    #[derive(Clone, Default)]
+    struct RecordingSubscriber {
+        levels: Arc<Mutex<Vec<Level>>>,
+    }
+
+    impl tracing::Subscriber for RecordingSubscriber {
+        fn enabled(&self, _metadata: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _span: &Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+        fn record(&self, _span: &Id, _values: &Record<'_>) {}
+        fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            self.levels.lock().unwrap().push(*event.metadata().level());
+        }
+        fn enter(&self, _span: &Id) {}
+        fn exit(&self, _span: &Id) {}
+    }
+
+    fn level_for(event: Event) -> Level {
+        let recorder = RecordingSubscriber::default();
+        let levels = recorder.levels.clone();
+        tracing::subscriber::with_default(recorder, || {
+            futures::executor::block_on(log_nats_event(event));
+        });
+        let levels = levels.lock().unwrap();
+        assert_eq!(levels.len(), 1, "expected exactly one log event");
+        levels[0]
+    }
+
+    #[test]
+    fn logs_at_the_expected_level_per_event() {
+        assert_eq!(
+            level_for(Event::ServerError(ServerError::Other(
+                "Maximum Payload Violation".to_string()
+            ))),
+            Level::ERROR
+        );
+        assert_eq!(level_for(Event::Disconnected), Level::ERROR);
+        assert_eq!(
+            level_for(Event::ClientError(ClientError::MaxReconnects)),
+            Level::ERROR
+        );
+        assert_eq!(level_for(Event::LameDuckMode), Level::WARN);
+        assert_eq!(level_for(Event::SlowConsumer(42)), Level::WARN);
+        assert_eq!(level_for(Event::Connected), Level::INFO);
+        assert_eq!(level_for(Event::Draining), Level::INFO);
+        assert_eq!(level_for(Event::Closed), Level::INFO);
+    }
+}
+
 /// JetstreamWatcher is a wrapper around the Watcher that automatically recreates the watcher
 /// when it fails. You can call [futures::Stream::poll_next] on it.
 pub struct JetstreamWatcher {
@@ -115,7 +208,8 @@ pub async fn create_js_context(config: config::ClientConfig) -> Result<Context> 
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
+        .retry_on_initial_connect()
+        .event_callback(log_nats_event);
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
         opts = opts.user_and_password(user, password);
