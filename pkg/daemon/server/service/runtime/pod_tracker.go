@@ -104,7 +104,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		indices, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
+		replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
 			pt.pipeline.Name, vertexName, pt.pipeline.Namespace,
 		))
 		if err != nil {
@@ -115,7 +115,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 		var wg sync.WaitGroup
 		var maxActiveIndex atomic.Int32
 		maxActiveIndex.Store(int32(-1))
-		for _, index := range indices {
+		for index := range replicaCount {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()

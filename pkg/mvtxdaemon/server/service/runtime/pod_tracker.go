@@ -101,7 +101,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 // updateActivePods discovers replicas from DNS and verifies which runtime endpoints are active.
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
-	indices, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
+	replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
 	if err != nil {
 		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod count", err)
 		return
@@ -110,7 +110,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	var wg sync.WaitGroup
 	var maxActiveIndex atomic.Int32
 	maxActiveIndex.Store(int32(-1))
-	for _, index := range indices {
+	for index := range replicaCount {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()

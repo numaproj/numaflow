@@ -42,10 +42,10 @@ func TestDNSResolverResolve(t *testing.T) {
 	resolver := &dnsResolver{lookup: lookup, timeout: time.Second}
 	req := PipelineVertexRequest("pipeline", "vertex", "default")
 
-	indices, err := resolver.Resolve(context.Background(), req)
+	count, err := resolver.Resolve(context.Background(), req)
 
 	require.NoError(t, err)
-	assert.Equal(t, []int{0, 1, 2}, indices)
+	assert.Equal(t, 3, count)
 	assert.Equal(t, "pipeline-vertex-headless.default.svc", lookup.host)
 }
 
@@ -65,10 +65,10 @@ func TestDNSResolverResolveNoPods(t *testing.T) {
 				timeout: time.Second,
 			}
 
-			indices, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+			count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
 
 			require.NoError(t, err)
-			assert.Empty(t, indices)
+			assert.Zero(t, count)
 		})
 	}
 }
@@ -79,10 +79,10 @@ func TestDNSResolverResolveError(t *testing.T) {
 		timeout: time.Second,
 	}
 
-	indices, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+	count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
 
 	assert.Error(t, err)
-	assert.Nil(t, indices)
+	assert.Zero(t, count)
 }
 
 func TestDNSResolverResolveTimeout(t *testing.T) {
@@ -91,8 +91,8 @@ func TestDNSResolverResolveTimeout(t *testing.T) {
 		timeout: time.Millisecond,
 	}
 
-	indices, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+	count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
 
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Nil(t, indices)
+	assert.Zero(t, count)
 }

@@ -118,7 +118,7 @@ func TestRater_Start(t *testing.T) {
 		pipeline,
 		WithRefreshInterval(time.Second),
 		WithPodResolver(&fakePodResolver{
-			indicesByService: map[string][]int{"p-v-headless": {0, 1}},
+			countByService: map[string]int{"p-v-headless": 2},
 		}),
 	)
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}

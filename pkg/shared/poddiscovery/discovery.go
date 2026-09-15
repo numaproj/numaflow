@@ -52,10 +52,10 @@ func PipelineVertexRequest(pipelineName, vertexName, namespace string) ResolveRe
 	}
 }
 
-// Resolver discovers replica indices from a headless Service's DNS records.
-// Replica indices are assumed to be contiguous from 0 to len(ips)-1.
+// Resolver discovers the replica count from a headless Service's DNS records.
+// Replicas are assumed to be contiguous from 0 to count-1.
 type Resolver interface {
-	Resolve(ctx context.Context, req ResolveRequest) ([]int, error)
+	Resolve(ctx context.Context, req ResolveRequest) (int, error)
 }
 
 type hostLookup interface {
@@ -75,7 +75,7 @@ func NewResolver() Resolver {
 	}
 }
 
-func (r *dnsResolver) Resolve(ctx context.Context, req ResolveRequest) ([]int, error) {
+func (r *dnsResolver) Resolve(ctx context.Context, req ResolveRequest) (int, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
@@ -85,15 +85,11 @@ func (r *dnsResolver) Resolve(ctx context.Context, req ResolveRequest) ([]int, e
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
-			return []int{}, nil
+			return 0, nil
 		}
-		return nil, fmt.Errorf("failed to resolve host %s: %w", host, err)
+		return 0, fmt.Errorf("failed to resolve host %s: %w", host, err)
 	}
 
-	indices := make([]int, len(ips))
-	for i := range indices {
-		indices[i] = i
-	}
-	discoveryLog.Debugf("DNS resolve returned %d replicas for service=%s", len(indices), host)
-	return indices, nil
+	discoveryLog.Debugf("DNS resolve returned %d replicas for service=%s", len(ips), host)
+	return len(ips), nil
 }

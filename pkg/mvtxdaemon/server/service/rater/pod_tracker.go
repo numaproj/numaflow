@@ -111,13 +111,13 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
-	indices, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
+	count, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
 	if err != nil {
 		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod set", err)
 		return
 	}
-	podKeys := make([]string, 0, len(indices))
-	for _, index := range indices {
+	podKeys := make([]string, 0, count)
+	for index := range count {
 		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 		if pt.isActive(podName) {
 			podKeys = append(podKeys, pt.getPodKey(index))

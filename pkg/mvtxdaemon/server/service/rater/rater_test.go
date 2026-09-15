@@ -109,7 +109,7 @@ func TestRater_Start(t *testing.T) {
 		ctx,
 		pipeline,
 		WithRefreshInterval(time.Second),
-		WithPodResolver(&fakePodResolver{indices: []int{0, 1}}),
+		WithPodResolver(&fakePodResolver{count: 2}),
 	)
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
@@ -325,7 +325,7 @@ func TestRater_Start_MultiplePartitions(t *testing.T) {
 		ctx,
 		pipeline,
 		WithRefreshInterval(time.Second),
-		WithPodResolver(&fakePodResolver{indices: []int{0, 1}}),
+		WithPodResolver(&fakePodResolver{count: 2}),
 	)
 	podTracker.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}

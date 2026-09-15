@@ -41,13 +41,13 @@ const podInfoSeparator = "*"
 // PodTracker maintains a set of active pods for a pipeline
 // It periodically sends http requests to pods to check if they are still active
 type PodTracker struct {
-	pipeline        *v1alpha1.Pipeline
-	log             *zap.SugaredLogger
-	httpClient      metricsHttpClient
-	resolver        poddiscovery.Resolver
-	activePods      *util.UniqueStringList
-	activeByVertex  map[string][]int
-	refreshInterval time.Duration
+	pipeline             *v1alpha1.Pipeline
+	log                  *zap.SugaredLogger
+	httpClient           metricsHttpClient
+	resolver             poddiscovery.Resolver
+	activePods           *util.UniqueStringList
+	replicaCountByVertex map[string]int
+	refreshInterval      time.Duration
 }
 
 func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTrackerOption) *PodTracker {
@@ -60,10 +60,10 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 			},
 			Timeout: time.Second,
 		},
-		resolver:        poddiscovery.NewResolver(),
-		activePods:      util.NewUniqueStringList(),
-		activeByVertex:  make(map[string][]int),
-		refreshInterval: 30 * time.Second,
+		resolver:             poddiscovery.NewResolver(),
+		activePods:           util.NewUniqueStringList(),
+		replicaCountByVertex: make(map[string]int),
+		refreshInterval:      30 * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -117,16 +117,16 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	podKeys := make([]string, 0)
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		indices, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
+		count, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
 			pt.pipeline.Name, vertexName, pt.pipeline.Namespace,
 		))
 		if err != nil {
 			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod set", vertexName, err)
-			indices = pt.activeByVertex[vertexName]
+			count = pt.replicaCountByVertex[vertexName]
 		} else {
-			pt.activeByVertex[vertexName] = indices
+			pt.replicaCountByVertex[vertexName] = count
 		}
-		for _, index := range indices {
+		for index := range count {
 			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 			if pt.isActive(vertexName, podName) {
 				podKeys = append(podKeys, pt.getPodKey(index, vertexName))

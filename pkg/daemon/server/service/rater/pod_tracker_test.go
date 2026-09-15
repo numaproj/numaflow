@@ -65,20 +65,12 @@ func (m *trackerMockHttpClient) Head(url string) (*http.Response, error) {
 }
 
 type fakePodResolver struct {
-	indicesByService map[string][]int
-	errorsByService  map[string]error
+	countByService  map[string]int
+	errorsByService map[string]error
 }
 
-func (f *fakePodResolver) Resolve(_ context.Context, req poddiscovery.ResolveRequest) ([]int, error) {
-	return append([]int(nil), f.indicesByService[req.HeadlessService]...), f.errorsByService[req.HeadlessService]
-}
-
-func replicaIndices(count int) []int {
-	indices := make([]int, count)
-	for index := range indices {
-		indices[index] = index
-	}
-	return indices
+func (f *fakePodResolver) Resolve(_ context.Context, req poddiscovery.ResolveRequest) (int, error) {
+	return f.countByService[req.HeadlessService], f.errorsByService[req.HeadlessService]
 }
 
 func TestPodTracker_Start(t *testing.T) {
@@ -100,7 +92,7 @@ func TestPodTracker_Start(t *testing.T) {
 		},
 	}
 	resolver := &fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(10)},
+		countByService: map[string]int{"p-v-headless": 10},
 	}
 	tracker := NewPodTracker(
 		ctx,
@@ -130,7 +122,7 @@ func TestPodTracker_Start(t *testing.T) {
 		}
 	}
 
-	resolver.indicesByService["p-v-headless"] = replicaIndices(5)
+	resolver.countByService["p-v-headless"] = 5
 	tracker.httpClient = &trackerMockHttpClient{
 		podsCount: 5,
 		lock:      &sync.RWMutex{},
@@ -163,7 +155,7 @@ func TestPodTracker_updateActivePods(t *testing.T) {
 		},
 	}
 	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(3)},
+		countByService: map[string]int{"p-v-headless": 3},
 	}))
 	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 
@@ -186,7 +178,7 @@ func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
 		},
 	}
 	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(3)},
+		countByService: map[string]int{"p-v-headless": 3},
 	}))
 	tracker.httpClient = &trackerMockHttpClient{
 		podsCount:    3,
@@ -208,9 +200,9 @@ func TestPodTrackerResolverFailureIsIsolatedByVertex(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: "v"}, {Name: "other"}}},
 	}
 	resolver := &fakePodResolver{
-		indicesByService: map[string][]int{
-			"p-v-headless":     replicaIndices(3),
-			"p-other-headless": replicaIndices(1),
+		countByService: map[string]int{
+			"p-v-headless":     3,
+			"p-other-headless": 1,
 		},
 		errorsByService: make(map[string]error),
 	}
@@ -218,9 +210,9 @@ func TestPodTrackerResolverFailureIsIsolatedByVertex(t *testing.T) {
 	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	tracker.updateActivePods(ctx)
 
-	resolver.indicesByService["p-v-headless"] = nil
+	resolver.countByService["p-v-headless"] = 0
 	resolver.errorsByService["p-v-headless"] = fmt.Errorf("temporary DNS failure")
-	resolver.indicesByService["p-other-headless"] = nil
+	resolver.countByService["p-other-headless"] = 0
 	tracker.updateActivePods(ctx)
 
 	assert.Equal(t, 3, tracker.GetActivePodsCount())

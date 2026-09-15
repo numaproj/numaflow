@@ -46,20 +46,12 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 }
 
 type fakePodResolver struct {
-	indices []int
-	err     error
+	count int
+	err   error
 }
 
-func (f *fakePodResolver) Resolve(context.Context, poddiscovery.ResolveRequest) ([]int, error) {
-	return append([]int(nil), f.indices...), f.err
-}
-
-func replicaIndices(count int) []int {
-	indices := make([]int, count)
-	for index := range indices {
-		indices[index] = index
-	}
-	return indices
+func (f *fakePodResolver) Resolve(context.Context, poddiscovery.ResolveRequest) (int, error) {
+	return f.count, f.err
 }
 
 type recordingHTTPClient struct {
@@ -105,7 +97,7 @@ func TestPodTracker_Start(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{indices: replicaIndices(10)}))
+	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{count: 10}))
 	pt.httpClient = &mockHttpClient{
 		podsCount: 10,
 		lock:      &sync.RWMutex{},
@@ -127,7 +119,7 @@ func TestPodTracker_updateActivePods(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{indices: replicaIndices(3)}))
+	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{count: 3}))
 	pt.httpClient = &mockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	pt.updateActivePods(ctx)
 	assert.Equal(t, 3, pt.GetActivePodsCount())
@@ -138,7 +130,7 @@ func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
 	mv := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
 	}
-	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{indices: replicaIndices(3)}))
+	pt := NewPodTracker(ctx, mv, WithPodResolver(&fakePodResolver{count: 3}))
 	pt.httpClient = &mockHttpClient{
 		podsCount:    3,
 		inactivePods: map[int]bool{1: true},
@@ -158,12 +150,12 @@ func TestPodTrackerRetainsPreviousSnapshotOnResolverError(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	resolver := &fakePodResolver{indices: replicaIndices(3)}
+	resolver := &fakePodResolver{count: 3}
 	pt := NewPodTracker(ctx, mv, WithPodResolver(resolver))
 	pt.httpClient = &mockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	pt.updateActivePods(ctx)
 	resolver.err = fmt.Errorf("temporary DNS failure")
-	resolver.indices = nil
+	resolver.count = 0
 
 	pt.updateActivePods(ctx)
 
@@ -173,11 +165,11 @@ func TestPodTrackerRetainsPreviousSnapshotOnResolverError(t *testing.T) {
 func TestPodTrackerEmptyDNSAnswerClearsSnapshot(t *testing.T) {
 	ctx := context.Background()
 	mv := &v1alpha1.MonoVertex{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"}}
-	resolver := &fakePodResolver{indices: replicaIndices(1)}
+	resolver := &fakePodResolver{count: 1}
 	pt := NewPodTracker(ctx, mv, WithPodResolver(resolver))
 	pt.httpClient = &mockHttpClient{podsCount: 1, lock: &sync.RWMutex{}}
 	pt.updateActivePods(ctx)
-	resolver.indices = nil
+	resolver.count = 0
 
 	pt.updateActivePods(ctx)
 

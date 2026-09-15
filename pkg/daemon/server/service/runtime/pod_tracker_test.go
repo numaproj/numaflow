@@ -47,20 +47,12 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 }
 
 type fakePodResolver struct {
-	indicesByService map[string][]int
-	errorsByService  map[string]error
+	countByService  map[string]int
+	errorsByService map[string]error
 }
 
-func (f *fakePodResolver) Resolve(_ context.Context, req poddiscovery.ResolveRequest) ([]int, error) {
-	return append([]int(nil), f.indicesByService[req.HeadlessService]...), f.errorsByService[req.HeadlessService]
-}
-
-func replicaIndices(count int) []int {
-	indices := make([]int, count)
-	for index := range indices {
-		indices[index] = index
-	}
-	return indices
+func (f *fakePodResolver) Resolve(_ context.Context, req poddiscovery.ResolveRequest) (int, error) {
+	return f.countByService[req.HeadlessService], f.errorsByService[req.HeadlessService]
 }
 
 type recordingHTTPClient struct {
@@ -121,7 +113,7 @@ func TestPodTracker_Start(t *testing.T) {
 		},
 	}
 	pt := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(10)},
+		countByService: map[string]int{"p-v-headless": 10},
 	}))
 	pt.httpClient = &mockHttpClient{
 		podsCount: 10,
@@ -147,7 +139,7 @@ func TestPodTracker_updateActivePods(t *testing.T) {
 		},
 	}
 	pt := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(3)},
+		countByService: map[string]int{"p-v-headless": 3},
 	}))
 	pt.httpClient = &mockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 
@@ -167,7 +159,7 @@ func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
 		},
 	}
 	pt := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
-		indicesByService: map[string][]int{"p-v-headless": replicaIndices(3)},
+		countByService: map[string]int{"p-v-headless": 3},
 	}))
 	pt.httpClient = &mockHttpClient{
 		podsCount:    3,
@@ -187,18 +179,18 @@ func TestPodTrackerResolverFailureIsIsolatedByVertex(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: "v"}, {Name: "other"}}},
 	}
 	resolver := &fakePodResolver{
-		indicesByService: map[string][]int{
-			"p-v-headless":     replicaIndices(3),
-			"p-other-headless": replicaIndices(1),
+		countByService: map[string]int{
+			"p-v-headless":     3,
+			"p-other-headless": 1,
 		},
 		errorsByService: make(map[string]error),
 	}
 	pt := NewPodTracker(ctx, pipeline, WithPodResolver(resolver))
 	pt.httpClient = &mockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	pt.updateActivePods(ctx)
-	resolver.indicesByService["p-v-headless"] = nil
+	resolver.countByService["p-v-headless"] = 0
 	resolver.errorsByService["p-v-headless"] = fmt.Errorf("temporary DNS failure")
-	resolver.indicesByService["p-other-headless"] = nil
+	resolver.countByService["p-other-headless"] = 0
 
 	pt.updateActivePods(ctx)
 
