@@ -145,12 +145,12 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 func (r *pipelineRuntimeCache) fetchAndPersistErrors() {
 	var wg sync.WaitGroup
 	for _, vtx := range r.pipeline.Spec.Vertices {
-		for _, podIndex := range r.podTracker.GetActivePodIndicesForVertex(vtx.Name) {
+		for i := range r.podTracker.GetActivePodsCountForVertex(vtx.Name) {
 			wg.Add(1)
 			go func(vtxName string, podIndex int) {
 				defer wg.Done()
 				r.fetchAndPersistErrorForPod(vtxName, podIndex)
-			}(vtx.Name, podIndex)
+			}(vtx.Name, i)
 		}
 	}
 	wg.Wait()

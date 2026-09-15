@@ -62,7 +62,7 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...PodTrac
 		},
 		resolver:        poddiscovery.NewResolver(),
 		activePods:      util.NewUniqueStringList(),
-		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
+		refreshInterval: 30 * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -110,23 +110,18 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	}
 }
 
-// updateActivePods discovers pod candidates and verifies which metrics endpoints are active.
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
-	active, err := poddiscovery.ResolveAndProbe(
-		ctx,
-		pt.resolver,
-		poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPortName),
-		func(index int) bool {
-			return pt.isActive(fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index))
-		},
-	)
+	indices, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
 	if err != nil {
 		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod set", err)
 		return
 	}
-	podKeys := make([]string, 0, len(active))
-	for _, index := range active {
-		podKeys = append(podKeys, pt.getPodKey(index))
+	podKeys := make([]string, 0, len(indices))
+	for _, index := range indices {
+		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
+		if pt.isActive(podName) {
+			podKeys = append(podKeys, pt.getPodKey(index))
+		}
 	}
 	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating MonoVertex active pod set: %v", pt.activePods.ToString())

@@ -42,12 +42,6 @@ type trackerMockHttpClient struct {
 	lock         *sync.RWMutex
 }
 
-func (m *trackerMockHttpClient) setPodsCount(count int32) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.podsCount = count
-}
-
 func (m *trackerMockHttpClient) Get(url string) (*http.Response, error) {
 	return nil, nil
 }
@@ -99,11 +93,12 @@ func TestPodTracker_Start(t *testing.T) {
 			Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
 		},
 	}
+	resolver := &fakePodResolver{indices: replicaIndices(10)}
 	tracker := NewPodTracker(
 		ctx,
 		pipeline,
 		WithRefreshInterval(time.Second),
-		WithPodResolver(&fakePodResolver{indices: replicaIndices(10)}),
+		WithPodResolver(resolver),
 	)
 	tracker.httpClient = &trackerMockHttpClient{
 		podsCount: 10,
@@ -127,7 +122,11 @@ func TestPodTracker_Start(t *testing.T) {
 		}
 	}
 
-	tracker.httpClient.(*trackerMockHttpClient).setPodsCount(5)
+	resolver.indices = replicaIndices(5)
+	tracker.httpClient = &trackerMockHttpClient{
+		podsCount: 5,
+		lock:      &sync.RWMutex{},
+	}
 
 	for tracker.GetActivePodsCount() != 5 {
 		select {
@@ -145,12 +144,28 @@ func TestPodTracker_Start(t *testing.T) {
 	assert.Equal(t, false, tracker.IsActive("p*5"))
 }
 
+func TestPodTracker_updateActivePods(t *testing.T) {
+	ctx := context.Background()
+	monoVertex := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+	}
+	tracker := NewPodTracker(ctx, monoVertex, WithPodResolver(&fakePodResolver{indices: replicaIndices(3)}))
+	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
+
+	tracker.updateActivePods(ctx)
+
+	assert.Equal(t, 3, tracker.GetActivePodsCount())
+	assert.True(t, tracker.IsActive("p*0"))
+	assert.True(t, tracker.IsActive("p*1"))
+	assert.True(t, tracker.IsActive("p*2"))
+}
+
 func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
 	ctx := context.Background()
 	monoVertex := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
 	}
-	tracker := NewPodTracker(ctx, monoVertex, WithPodResolver(&fakePodResolver{indices: []int{0, 1, 2}}))
+	tracker := NewPodTracker(ctx, monoVertex, WithPodResolver(&fakePodResolver{indices: replicaIndices(3)}))
 	tracker.httpClient = &trackerMockHttpClient{
 		podsCount:    3,
 		inactivePods: map[int]bool{1: true},
@@ -169,7 +184,7 @@ func TestPodTrackerResolverErrorRetainsAndEmptyAnswerClears(t *testing.T) {
 	monoVertex := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
 	}
-	resolver := &fakePodResolver{indices: []int{0, 2}}
+	resolver := &fakePodResolver{indices: replicaIndices(3)}
 	tracker := NewPodTracker(ctx, monoVertex, WithPodResolver(resolver))
 	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	tracker.updateActivePods(ctx)
@@ -177,8 +192,7 @@ func TestPodTrackerResolverErrorRetainsAndEmptyAnswerClears(t *testing.T) {
 	resolver.indices = nil
 	resolver.err = fmt.Errorf("temporary DNS failure")
 	tracker.updateActivePods(ctx)
-	assert.True(t, tracker.IsActive("p*0"))
-	assert.True(t, tracker.IsActive("p*2"))
+	assert.Equal(t, 3, tracker.GetActivePodsCount())
 
 	resolver.err = nil
 	tracker.updateActivePods(ctx)

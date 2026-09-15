@@ -63,7 +63,7 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 		resolver:        poddiscovery.NewResolver(),
 		activePods:      util.NewUniqueStringList(),
 		activeByVertex:  make(map[string][]int),
-		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
+		refreshInterval: 30 * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -117,31 +117,24 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	podKeys := make([]string, 0)
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		active, err := pt.discoverVertexIndices(ctx, vertexName)
+		indices, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
+			pt.pipeline.Name, vertexName, pt.pipeline.Namespace,
+		))
 		if err != nil {
 			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod set", vertexName, err)
-			active = pt.activeByVertex[vertexName]
+			indices = pt.activeByVertex[vertexName]
 		} else {
-			pt.activeByVertex[vertexName] = active
+			pt.activeByVertex[vertexName] = indices
 		}
-		for _, index := range active {
-			podKeys = append(podKeys, pt.getPodKey(index, vertexName))
+		for _, index := range indices {
+			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
+			if pt.isActive(vertexName, podName) {
+				podKeys = append(podKeys, pt.getPodKey(index, vertexName))
+			}
 		}
 	}
 	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating pipeline active pod set: %v", pt.activePods.ToString())
-}
-
-func (pt *PodTracker) discoverVertexIndices(ctx context.Context, vertexName string) ([]int, error) {
-	return poddiscovery.ResolveAndProbe(
-		ctx,
-		pt.resolver,
-		poddiscovery.PipelineVertexRequest(pt.pipeline.Name, vertexName, pt.pipeline.Namespace, v1alpha1.VertexMetricsPortName),
-		func(index int) bool {
-			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-			return pt.isActive(vertexName, podName)
-		},
-	)
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.

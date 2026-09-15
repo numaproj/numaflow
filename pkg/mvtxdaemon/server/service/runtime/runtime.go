@@ -141,12 +141,12 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 
 func (r *monoVertexRuntimeCache) fetchAndPersistErrors() {
 	var wg sync.WaitGroup
-	for _, podIndex := range r.podTracker.GetActivePodIndices() {
+	for i := range r.podTracker.GetActivePodsCount() {
 		wg.Add(1)
-		go func(index int) {
+		go func(podIndex int) {
 			defer wg.Done()
-			r.fetchAndPersistErrorForPod(index)
-		}(podIndex)
+			r.fetchAndPersistErrorForPod(podIndex)
+		}(i)
 	}
 	wg.Wait()
 }

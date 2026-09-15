@@ -21,10 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -34,46 +30,40 @@ var discoveryLog = logging.NewLogger().Named("PodDiscovery")
 
 const defaultLookupTimeout = 2 * time.Second
 
-// ResolveRequest identifies the SRV records and indexed pod hostnames to discover.
+// ResolveRequest identifies the headless service to discover replicas from.
 type ResolveRequest struct {
 	HeadlessService string
 	Namespace       string
-	PortName        string
-	PodNamePrefix   string
 }
 
 // MonoVertexRequest returns the DNS discovery request for a MonoVertex.
-func MonoVertexRequest(name, namespace, portName string) ResolveRequest {
+func MonoVertexRequest(name, namespace string) ResolveRequest {
 	return ResolveRequest{
 		HeadlessService: fmt.Sprintf("%s-mv-headless", name),
 		Namespace:       namespace,
-		PortName:        portName,
-		PodNamePrefix:   fmt.Sprintf("%s-mv-", name),
 	}
 }
 
 // PipelineVertexRequest returns the DNS discovery request for a Pipeline vertex.
-func PipelineVertexRequest(pipelineName, vertexName, namespace, portName string) ResolveRequest {
-	prefix := fmt.Sprintf("%s-%s-", pipelineName, vertexName)
+func PipelineVertexRequest(pipelineName, vertexName, namespace string) ResolveRequest {
 	return ResolveRequest{
-		HeadlessService: prefix + "headless",
+		HeadlessService: fmt.Sprintf("%s-%s-headless", pipelineName, vertexName),
 		Namespace:       namespace,
-		PortName:        portName,
-		PodNamePrefix:   prefix,
 	}
 }
 
-// Resolver discovers replica indices from a headless Service's SRV records.
+// Resolver discovers replica indices from a headless Service's DNS records.
+// Replica indices are assumed to be contiguous from 0 to len(ips)-1.
 type Resolver interface {
 	Resolve(ctx context.Context, req ResolveRequest) ([]int, error)
 }
 
-type srvLookup interface {
-	LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error)
+type hostLookup interface {
+	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
 type dnsResolver struct {
-	lookup  srvLookup
+	lookup  hostLookup
 	timeout time.Duration
 }
 
@@ -89,80 +79,21 @@ func (r *dnsResolver) Resolve(ctx context.Context, req ResolveRequest) ([]int, e
 	lookupCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
-	serviceName := fmt.Sprintf("%s.%s.svc", req.HeadlessService, req.Namespace)
-	_, records, err := r.lookup.LookupSRV(lookupCtx, req.PortName, "tcp", serviceName)
+	host := fmt.Sprintf("%s.%s.svc", req.HeadlessService, req.Namespace)
+	discoveryLog.Debugf("Resolving replicas for service=%s", host)
+	ips, err := r.lookup.LookupHost(lookupCtx, host)
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
 			return []int{}, nil
 		}
-		return nil, fmt.Errorf("failed to resolve SRV records for %s: %w", serviceName, err)
+		return nil, fmt.Errorf("failed to resolve host %s: %w", host, err)
 	}
 
-	indices := make(map[int]struct{}, len(records))
-	for _, record := range records {
-		hostname := strings.SplitN(strings.TrimSuffix(record.Target, "."), ".", 2)[0]
-		replica := strings.TrimPrefix(hostname, req.PodNamePrefix)
-		if replica == hostname {
-			continue
-		}
-		index, err := strconv.Atoi(replica)
-		if err != nil || index < 0 {
-			continue
-		}
-		indices[index] = struct{}{}
+	indices := make([]int, len(ips))
+	for i := range indices {
+		indices[i] = i
 	}
-	if len(records) > 0 && len(indices) == 0 {
-		return nil, fmt.Errorf("SRV records for %s did not contain indexed pods with prefix %q", serviceName, req.PodNamePrefix)
-	}
-
-	result := make([]int, 0, len(indices))
-	for index := range indices {
-		result = append(result, index)
-	}
-	sort.Ints(result)
-	return result, nil
-}
-
-// ResolveAndProbe discovers replica candidates and returns indices that pass the probe.
-func ResolveAndProbe(ctx context.Context, resolver Resolver, req ResolveRequest, probe func(index int) bool) ([]int, error) {
-	serviceName := fmt.Sprintf("%s.%s.svc", req.HeadlessService, req.Namespace)
-	discoveryLog.Debugf(
-		"Starting pod discovery for service=%s port=%s podPrefix=%q",
-		serviceName, req.PortName, req.PodNamePrefix,
-	)
-	candidates, err := resolver.Resolve(ctx, req)
-	if err != nil {
-		discoveryLog.Debugf("DNS resolve failed for service=%s port=%s: %v", serviceName, req.PortName, err)
-		return nil, err
-	}
-	discoveryLog.Debugf("DNS resolve returned candidate indices %v for service=%s port=%s", candidates, serviceName, req.PortName)
-	active := probeActive(candidates, probe)
-	discoveryLog.Debugf(
-		"HTTP probe returned active indices %v for service=%s port=%s (candidates=%v)",
-		active, serviceName, req.PortName, candidates,
-	)
-	return active, nil
-}
-
-func probeActive(indices []int, probe func(index int) bool) []int {
-	activeByPosition := make([]bool, len(indices))
-	var wg sync.WaitGroup
-	wg.Add(len(indices))
-	for position, index := range indices {
-		go func() {
-			defer wg.Done()
-			activeByPosition[position] = probe(index)
-		}()
-	}
-	wg.Wait()
-
-	active := make([]int, 0, len(indices))
-	for position, isActive := range activeByPosition {
-		if isActive {
-			active = append(active, indices[position])
-		}
-	}
-	sort.Ints(active)
-	return active
+	discoveryLog.Debugf("DNS resolve returned %d replicas for service=%s", len(indices), host)
+	return indices, nil
 }
