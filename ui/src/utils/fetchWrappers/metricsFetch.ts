@@ -19,6 +19,8 @@ export const useMetricsFetch = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchData = async () => {
       setIsLoading(true);
       if (
@@ -36,8 +38,10 @@ export const useMetricsFetch = ({
               filters,
               display_name: undefined,
             }),
+            signal: controller.signal,
           });
           const data = await response.json();
+          if (controller.signal.aborted) return;
           if (data?.data === null) {
             setChartData(null);
             setError(data?.errMsg);
@@ -46,6 +50,7 @@ export const useMetricsFetch = ({
             setError(null);
           }
         } catch (e) {
+          if (controller.signal.aborted) return;
           console.error("Error fetching data:", e);
           if (e instanceof Error) {
             setError(e);
@@ -53,14 +58,20 @@ export const useMetricsFetch = ({
             setError(null);
           }
         } finally {
-          setIsLoading(false);
+          if (!controller.signal.aborted) {
+            setIsLoading(false);
+          }
         }
       } else {
         setIsLoading(false);
       }
     };
-    fetchData();
-  }, [metricReq, filters]);
+    void fetchData();
+
+    return () => {
+      controller.abort();
+    };
+  }, [metricReq, filters, urlPath]);
 
   return { chartData, error, isLoading };
 };

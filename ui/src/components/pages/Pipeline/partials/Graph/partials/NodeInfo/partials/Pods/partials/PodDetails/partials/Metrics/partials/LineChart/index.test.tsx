@@ -94,6 +94,12 @@ describe("LineChart URL restore", () => {
     expect(latest.filters.mvtx_name).toBe("simple-mono-vertex");
     expect(latest.metricReq.start_time).toBeTruthy();
     expect(latest.metricReq.end_time).toBeTruthy();
+    expect(new Date(latest.metricReq.start_time).toISOString()).toBe(
+      latest.metricReq.start_time
+    );
+    expect(new Date(latest.metricReq.end_time).toISOString()).toBe(
+      latest.metricReq.end_time
+    );
     const startMs = new Date(latest.metricReq.start_time).getTime();
     const endMs = new Date(latest.metricReq.end_time).getTime();
     expect(endMs - startMs).toBeGreaterThanOrEqual(55 * 60 * 1000);
