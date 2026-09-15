@@ -129,7 +129,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 		podKeys = append(podKeys, pt.getPodKey(index))
 	}
 	pt.activePods.Replace(podKeys)
-	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
+	pt.log.Debugf("Finished updating MonoVertex active pod set: %v", pt.activePods.ToString())
 }
 
 func (pt *PodTracker) getPodKey(index int) string {

@@ -26,7 +26,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
+
+var discoveryLog = logging.NewLogger().Named("PodDiscovery")
 
 const defaultLookupTimeout = 2 * time.Second
 
@@ -122,11 +126,23 @@ func (r *dnsResolver) Resolve(ctx context.Context, req ResolveRequest) ([]int, e
 
 // ResolveAndProbe discovers replica candidates and returns indices that pass the probe.
 func ResolveAndProbe(ctx context.Context, resolver Resolver, req ResolveRequest, probe func(index int) bool) ([]int, error) {
+	serviceName := fmt.Sprintf("%s.%s.svc", req.HeadlessService, req.Namespace)
+	discoveryLog.Debugf(
+		"Starting pod discovery for service=%s port=%s podPrefix=%q",
+		serviceName, req.PortName, req.PodNamePrefix,
+	)
 	candidates, err := resolver.Resolve(ctx, req)
 	if err != nil {
+		discoveryLog.Debugf("DNS resolve failed for service=%s port=%s: %v", serviceName, req.PortName, err)
 		return nil, err
 	}
-	return probeActive(candidates, probe), nil
+	discoveryLog.Debugf("DNS resolve returned candidate indices %v for service=%s port=%s", candidates, serviceName, req.PortName)
+	active := probeActive(candidates, probe)
+	discoveryLog.Debugf(
+		"HTTP probe returned active indices %v for service=%s port=%s (candidates=%v)",
+		active, serviceName, req.PortName, candidates,
+	)
+	return active, nil
 }
 
 func probeActive(indices []int, probe func(index int) bool) []int {

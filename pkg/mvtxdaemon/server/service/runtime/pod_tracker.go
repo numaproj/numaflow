@@ -115,6 +115,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 		return
 	}
 	pt.setActivePodIndices(active)
+	pt.log.Debugf("Finished updating MonoVertex runtime active pod indices: %v", active)
 }
 
 func (pt *PodTracker) isActive(podName string) bool {

@@ -112,6 +112,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 			continue
 		}
 		pt.setActivePodIndices(vertexName, active)
+		pt.log.Debugf("Finished updating runtime active pod indices for vertex %s: %v", vertexName, active)
 	}
 }
 

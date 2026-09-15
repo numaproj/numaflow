@@ -129,7 +129,7 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 		}
 	}
 	pt.activePods.Replace(podKeys)
-	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
+	pt.log.Debugf("Finished updating pipeline active pod set: %v", pt.activePods.ToString())
 }
 
 func (pt *PodTracker) discoverVertexIndices(ctx context.Context, vertexName string) ([]int, error) {
