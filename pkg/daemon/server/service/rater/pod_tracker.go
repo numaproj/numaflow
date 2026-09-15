@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -114,6 +115,8 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	podKeys := make([]string, 0)
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
@@ -127,12 +130,19 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 			pt.replicaCountByVertex[vertexName] = count
 		}
 		for index := range count {
-			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-			if pt.isActive(vertexName, podName) {
-				podKeys = append(podKeys, pt.getPodKey(index, vertexName))
-			}
+			wg.Add(1)
+			go func(vertexName string, index int) {
+				defer wg.Done()
+				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
+				if pt.isActive(vertexName, podName) {
+					mu.Lock()
+					podKeys = append(podKeys, pt.getPodKey(index, vertexName))
+					mu.Unlock()
+				}
+			}(vertexName, index)
 		}
 	}
+	wg.Wait()
 	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating pipeline active pod set: %v", pt.activePods.ToString())
 }

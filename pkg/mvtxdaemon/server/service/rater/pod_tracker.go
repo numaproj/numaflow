@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -116,13 +117,22 @@ func (pt *PodTracker) updateActivePods(ctx context.Context) {
 		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod set", err)
 		return
 	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	podKeys := make([]string, 0, count)
 	for index := range count {
-		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
-		if pt.isActive(podName) {
-			podKeys = append(podKeys, pt.getPodKey(index))
-		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
+			if pt.isActive(podName) {
+				mu.Lock()
+				podKeys = append(podKeys, pt.getPodKey(index))
+				mu.Unlock()
+			}
+		}(index)
 	}
+	wg.Wait()
 	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating MonoVertex active pod set: %v", pt.activePods.ToString())
 }
