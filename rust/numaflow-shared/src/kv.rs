@@ -55,9 +55,9 @@ pub type KVWatchStream = Pin<Box<dyn Stream<Item = KVEntry> + Send>>;
 
 /// Outcome of a compare-and-set [`KVStore::put_if`].
 ///
-/// Under at-least-once delivery a losing writer is an *expected* outcome, not a
-/// failure, so a conflict is modelled as a value rather than a [`KVError`]. Only
-/// genuine transport/store failures surface as `Err(KVError)`.
+/// Under at-least-once delivery a losing writer is an *expected* outcome,
+/// so a conflict is modelled as a value. Only genuine transport/store 
+/// failures surface as `Err(KVError)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasResult {
     /// The write committed. Carries the new revision of the key.
