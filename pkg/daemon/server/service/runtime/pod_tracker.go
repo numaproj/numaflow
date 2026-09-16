@@ -104,9 +104,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
-			pt.pipeline.Name, vertexName, pt.pipeline.Namespace,
-		))
+		replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(pt.pipeline, vertexName))
 		if err != nil {
 			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod count", vertexName, err)
 			continue

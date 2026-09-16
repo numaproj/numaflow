@@ -42,13 +42,13 @@ const podInfoSeparator = "*"
 // PodTracker maintains a set of active pods for a pipeline
 // It periodically sends http requests to pods to check if they are still active
 type PodTracker struct {
-	pipeline             *v1alpha1.Pipeline
-	log                  *zap.SugaredLogger
-	httpClient           metricsHttpClient
-	resolver             poddiscovery.Resolver
-	activePods           *util.UniqueStringList
-	replicaCountByVertex map[string]int
-	refreshInterval      time.Duration
+	pipeline           *v1alpha1.Pipeline
+	log                *zap.SugaredLogger
+	httpClient         metricsHttpClient
+	resolver           poddiscovery.Resolver
+	activePods         *util.UniqueStringList
+	activeKeysByVertex map[string][]string
+	refreshInterval    time.Duration
 }
 
 func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTrackerOption) *PodTracker {
@@ -61,10 +61,10 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 			},
 			Timeout: time.Second,
 		},
-		resolver:             poddiscovery.NewResolver(),
-		activePods:           util.NewUniqueStringList(),
-		replicaCountByVertex: make(map[string]int),
-		refreshInterval:      30 * time.Second,
+		resolver:           poddiscovery.NewResolver(),
+		activePods:         util.NewUniqueStringList(),
+		activeKeysByVertex: make(map[string][]string),
+		refreshInterval:    30 * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -117,32 +117,40 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	podKeys := make([]string, 0)
+	resolved := make(map[string][]string)
 	for _, v := range pt.pipeline.Spec.Vertices {
 		vertexName := v.Name
-		count, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(
-			pt.pipeline.Name, vertexName, pt.pipeline.Namespace,
-		))
+		replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.PipelineVertexRequest(pt.pipeline, vertexName))
 		if err != nil {
-			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previous active pod set", vertexName, err)
-			count = pt.replicaCountByVertex[vertexName]
-		} else {
-			pt.replicaCountByVertex[vertexName] = count
+			pt.log.Warnf("Failed to discover pods for vertex %s: %v; retaining its previously tracked active pods", vertexName, err)
+			continue
 		}
-		for index := range count {
+		mu.Lock()
+		resolved[vertexName] = nil
+		mu.Unlock()
+		for index := range replicaCount {
 			wg.Add(1)
 			go func(vertexName string, index int) {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 				if pt.isActive(vertexName, podName) {
 					mu.Lock()
-					podKeys = append(podKeys, pt.getPodKey(index, vertexName))
+					resolved[vertexName] = append(resolved[vertexName], pt.getPodKey(index, vertexName))
 					mu.Unlock()
 				}
 			}(vertexName, index)
 		}
 	}
 	wg.Wait()
+
+	for vertexName, keys := range resolved {
+		pt.activeKeysByVertex[vertexName] = keys
+	}
+
+	podKeys := make([]string, 0)
+	for _, v := range pt.pipeline.Spec.Vertices {
+		podKeys = append(podKeys, pt.activeKeysByVertex[v.Name]...)
+	}
 	pt.activePods.Replace(podKeys)
 	pt.log.Debugf("Finished updating pipeline active pod set: %v", pt.activePods.ToString())
 }

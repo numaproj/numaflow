@@ -23,6 +23,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -37,18 +38,18 @@ type ResolveRequest struct {
 }
 
 // MonoVertexRequest returns the DNS discovery request for a MonoVertex.
-func MonoVertexRequest(name, namespace string) ResolveRequest {
+func MonoVertexRequest(mv *v1alpha1.MonoVertex) ResolveRequest {
 	return ResolveRequest{
-		HeadlessService: fmt.Sprintf("%s-mv-headless", name),
-		Namespace:       namespace,
+		HeadlessService: mv.GetHeadlessServiceName(),
+		Namespace:       mv.Namespace,
 	}
 }
 
 // PipelineVertexRequest returns the DNS discovery request for a Pipeline vertex.
-func PipelineVertexRequest(pipelineName, vertexName, namespace string) ResolveRequest {
+func PipelineVertexRequest(pl *v1alpha1.Pipeline, vertexName string) ResolveRequest {
 	return ResolveRequest{
-		HeadlessService: fmt.Sprintf("%s-%s-headless", pipelineName, vertexName),
-		Namespace:       namespace,
+		HeadlessService: pl.GetVertexHeadlessServiceName(vertexName),
+		Namespace:       pl.Namespace,
 	}
 }
 

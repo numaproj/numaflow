@@ -112,7 +112,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 func (pt *PodTracker) updateActivePods(ctx context.Context) {
-	count, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex.Name, pt.monoVertex.Namespace))
+	count, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex))
 	if err != nil {
 		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod set", err)
 		return

@@ -8,6 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 type fakeHostLookup struct {
@@ -27,20 +30,29 @@ func (f *fakeHostLookup) LookupHost(ctx context.Context, host string) ([]string,
 }
 
 func TestResolveRequests(t *testing.T) {
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-mv", Namespace: "test"},
+	}
+	pl := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-pipeline", Namespace: "test"},
+	}
 	assert.Equal(t, ResolveRequest{
 		HeadlessService: "my-mv-mv-headless",
 		Namespace:       "test",
-	}, MonoVertexRequest("my-mv", "test"))
+	}, MonoVertexRequest(mv))
 	assert.Equal(t, ResolveRequest{
 		HeadlessService: "my-pipeline-my-vertex-headless",
 		Namespace:       "test",
-	}, PipelineVertexRequest("my-pipeline", "my-vertex", "test"))
+	}, PipelineVertexRequest(pl, "my-vertex"))
 }
 
 func TestDNSResolverResolve(t *testing.T) {
 	lookup := &fakeHostLookup{ips: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}}
 	resolver := &dnsResolver{lookup: lookup, timeout: time.Second}
-	req := PipelineVertexRequest("pipeline", "vertex", "default")
+	pl := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "pipeline", Namespace: "default"},
+	}
+	req := PipelineVertexRequest(pl, "vertex")
 
 	count, err := resolver.Resolve(context.Background(), req)
 
@@ -50,6 +62,9 @@ func TestDNSResolverResolve(t *testing.T) {
 }
 
 func TestDNSResolverResolveNoPods(t *testing.T) {
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "mono", Namespace: "default"},
+	}
 	tests := []struct {
 		name string
 		ips  []string
@@ -65,7 +80,7 @@ func TestDNSResolverResolveNoPods(t *testing.T) {
 				timeout: time.Second,
 			}
 
-			count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+			count, err := resolver.Resolve(context.Background(), MonoVertexRequest(mv))
 
 			require.NoError(t, err)
 			assert.Zero(t, count)
@@ -74,24 +89,30 @@ func TestDNSResolverResolveNoPods(t *testing.T) {
 }
 
 func TestDNSResolverResolveError(t *testing.T) {
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "mono", Namespace: "default"},
+	}
 	resolver := &dnsResolver{
 		lookup:  &fakeHostLookup{err: &net.DNSError{Err: "server misbehaving", IsTemporary: true}},
 		timeout: time.Second,
 	}
 
-	count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+	count, err := resolver.Resolve(context.Background(), MonoVertexRequest(mv))
 
 	assert.Error(t, err)
 	assert.Zero(t, count)
 }
 
 func TestDNSResolverResolveTimeout(t *testing.T) {
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "mono", Namespace: "default"},
+	}
 	resolver := &dnsResolver{
 		lookup:  &fakeHostLookup{wait: true},
 		timeout: time.Millisecond,
 	}
 
-	count, err := resolver.Resolve(context.Background(), MonoVertexRequest("mono", "default"))
+	count, err := resolver.Resolve(context.Background(), MonoVertexRequest(mv))
 
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Zero(t, count)

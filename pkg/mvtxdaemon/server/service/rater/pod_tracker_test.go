@@ -42,6 +42,12 @@ type trackerMockHttpClient struct {
 	lock         *sync.RWMutex
 }
 
+func (m *trackerMockHttpClient) setPodsCount(count int32) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.podsCount = count
+}
+
 func (m *trackerMockHttpClient) Get(url string) (*http.Response, error) {
 	return nil, nil
 }
@@ -64,12 +70,27 @@ func (m *trackerMockHttpClient) Head(url string) (*http.Response, error) {
 }
 
 type fakePodResolver struct {
+	lock  sync.RWMutex
 	count int
 	err   error
 }
 
 func (f *fakePodResolver) Resolve(context.Context, poddiscovery.ResolveRequest) (int, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
 	return f.count, f.err
+}
+
+func (f *fakePodResolver) setCount(count int) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.count = count
+}
+
+func (f *fakePodResolver) setErr(err error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.err = err
 }
 
 func TestPodTracker_Start(t *testing.T) {
@@ -92,10 +113,11 @@ func TestPodTracker_Start(t *testing.T) {
 		WithRefreshInterval(time.Second),
 		WithPodResolver(resolver),
 	)
-	tracker.httpClient = &trackerMockHttpClient{
+	mockClient := &trackerMockHttpClient{
 		podsCount: 10,
 		lock:      &sync.RWMutex{},
 	}
+	tracker.httpClient = mockClient
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -114,11 +136,8 @@ func TestPodTracker_Start(t *testing.T) {
 		}
 	}
 
-	resolver.count = 5
-	tracker.httpClient = &trackerMockHttpClient{
-		podsCount: 5,
-		lock:      &sync.RWMutex{},
-	}
+	resolver.setCount(5)
+	mockClient.setPodsCount(5)
 
 	for tracker.GetActivePodsCount() != 5 {
 		select {
@@ -181,12 +200,12 @@ func TestPodTrackerResolverErrorRetainsAndEmptyAnswerClears(t *testing.T) {
 	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
 	tracker.updateActivePods(ctx)
 
-	resolver.count = 0
-	resolver.err = fmt.Errorf("temporary DNS failure")
+	resolver.setCount(0)
+	resolver.setErr(fmt.Errorf("temporary DNS failure"))
 	tracker.updateActivePods(ctx)
 	assert.Equal(t, 3, tracker.GetActivePodsCount())
 
-	resolver.err = nil
+	resolver.setErr(nil)
 	tracker.updateActivePods(ctx)
 	assert.Equal(t, 0, tracker.GetActivePodsCount())
 }
