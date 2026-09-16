@@ -150,7 +150,6 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 			// Fetch the MonoVertex metrics, these are required for deriving the
 			// health status
 			mvtxMetrics, _ := mvs.fetchMonoVertexMetrics(ctx)
-			// Calculate the data criticality
 			criticality, err := mvs.healthChecker.getMonoVertexDataCriticality(ctx, mvtxMetrics.Metrics, mvs.rater.GetActivePodsCount())
 			logger.Debugw("MonoVertex Health check", zap.Any("criticality", criticality))
 			if err != nil {

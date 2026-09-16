@@ -18,6 +18,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -142,6 +143,53 @@ func TestGetDesiredReplicaNoRateAvailable(t *testing.T) {
 
 	_, err := hc.getDesiredReplica(metrics, 4)
 	assert.Error(t, err)
+}
+
+func TestGetDesiredReplicaNoActivePods(t *testing.T) {
+	targetProcessingSeconds := uint32(5)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 500},
+		},
+	}
+
+	_, err := hc.getDesiredReplica(metrics, 0)
+	assert.Error(t, err)
+}
+
+func TestGetDesiredReplicaOverflowClamped(t *testing.T) {
+	targetProcessingSeconds := uint32(1)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 0.001},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 1_000_000_000_000},
+		},
+	}
+
+	result, err := hc.getDesiredReplica(metrics, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int(math.MaxInt32), result)
 }
 
 func TestGetDesiredReplicaPendingNotAvailable(t *testing.T) {

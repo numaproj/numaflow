@@ -330,7 +330,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	return result
 }
 
-// GetActivePodsCount returns the number of active MonoVertex pods discovered by the pod tracker.
+// GetActivePodsCount returns the number of HEAD-active pods tracked by the rater pod tracker.
 func (r *Rater) GetActivePodsCount() int {
 	return r.podTracker.GetActivePodsCount()
 }
