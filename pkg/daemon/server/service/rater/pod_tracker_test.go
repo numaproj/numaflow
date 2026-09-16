@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/poddiscovery"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -36,8 +37,9 @@ import (
 )
 
 type trackerMockHttpClient struct {
-	podsCount int32
-	lock      *sync.RWMutex
+	podsCount    int32
+	inactivePods map[int]bool
+	lock         *sync.RWMutex
 }
 
 func (m *trackerMockHttpClient) setPodsCount(count int32) {
@@ -54,7 +56,11 @@ func (m *trackerMockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for i := 0; i < int(m.podsCount); i++ {
-		if strings.Contains(url, "p-v-"+strconv.Itoa(i)+".p-v-headless.default.svc:2469/metrics") {
+		if m.inactivePods[i] {
+			continue
+		}
+		if strings.Contains(url, "-"+strconv.Itoa(i)+".") &&
+			strings.Contains(url, ".default.svc:2469/metrics") {
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
@@ -62,6 +68,30 @@ func (m *trackerMockHttpClient) Head(url string) (*http.Response, error) {
 	}
 
 	return nil, fmt.Errorf("pod not found")
+}
+
+type fakePodResolver struct {
+	lock            sync.RWMutex
+	countByService  map[string]int
+	errorsByService map[string]error
+}
+
+func (f *fakePodResolver) Resolve(_ context.Context, req poddiscovery.ResolveRequest) (int, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+	return f.countByService[req.HeadlessService], f.errorsByService[req.HeadlessService]
+}
+
+func (f *fakePodResolver) setCount(headlessService string, count int) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.countByService[headlessService] = count
+}
+
+func (f *fakePodResolver) setErr(headlessService string, err error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.errorsByService[headlessService] = err
 }
 
 func TestPodTracker_Start(t *testing.T) {
@@ -82,11 +112,20 @@ func TestPodTracker_Start(t *testing.T) {
 			},
 		},
 	}
-	tracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second))
-	tracker.httpClient = &trackerMockHttpClient{
+	resolver := &fakePodResolver{
+		countByService: map[string]int{"p-v-headless": 10},
+	}
+	tracker := NewPodTracker(
+		ctx,
+		pipeline,
+		WithRefreshInterval(time.Second),
+		WithPodResolver(resolver),
+	)
+	mockClient := &trackerMockHttpClient{
 		podsCount: 10,
 		lock:      &sync.RWMutex{},
 	}
+	tracker.httpClient = mockClient
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -105,7 +144,8 @@ func TestPodTracker_Start(t *testing.T) {
 		}
 	}
 
-	tracker.httpClient.(*trackerMockHttpClient).setPodsCount(5)
+	resolver.setCount("p-v-headless", 5)
+	mockClient.setPodsCount(5)
 
 	for tracker.GetActivePodsCount() != 5 {
 		select {
@@ -121,6 +161,107 @@ func TestPodTracker_Start(t *testing.T) {
 	assert.NotEmpty(t, tracker.LeastRecentlyUsed())
 	assert.Equal(t, true, tracker.IsActive("p*v*4"))
 	assert.Equal(t, false, tracker.IsActive("p*v*5"))
+}
+
+func TestPodTracker_updateActivePods(t *testing.T) {
+	ctx := context.Background()
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{{
+				Name: "v",
+			}},
+		},
+	}
+	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
+		countByService: map[string]int{"p-v-headless": 3},
+	}))
+	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
+
+	tracker.updateActivePods(ctx)
+
+	assert.Equal(t, 3, tracker.GetActivePodsCount())
+	assert.True(t, tracker.IsActive("p*v*0"))
+	assert.True(t, tracker.IsActive("p*v*1"))
+	assert.True(t, tracker.IsActive("p*v*2"))
+}
+
+func TestPodTracker_updateActivePodsToleratesInactiveGap(t *testing.T) {
+	ctx := context.Background()
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{{
+				Name: "v",
+			}},
+		},
+	}
+	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(&fakePodResolver{
+		countByService: map[string]int{"p-v-headless": 3},
+	}))
+	tracker.httpClient = &trackerMockHttpClient{
+		podsCount:    3,
+		inactivePods: map[int]bool{1: true},
+		lock:         &sync.RWMutex{},
+	}
+
+	tracker.updateActivePods(ctx)
+
+	assert.True(t, tracker.IsActive("p*v*0"))
+	assert.False(t, tracker.IsActive("p*v*1"))
+	assert.True(t, tracker.IsActive("p*v*2"))
+}
+
+func TestPodTrackerResolverDNSErrorRetainsWithoutReprobe(t *testing.T) {
+	ctx := context.Background()
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: "v"}}},
+	}
+	resolver := &fakePodResolver{
+		countByService:  map[string]int{"p-v-headless": 3},
+		errorsByService: make(map[string]error),
+	}
+	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(resolver))
+	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
+	tracker.updateActivePods(ctx)
+
+	resolver.setErr("p-v-headless", fmt.Errorf("temporary DNS failure"))
+	tracker.httpClient = &trackerMockHttpClient{podsCount: 0, lock: &sync.RWMutex{}}
+	tracker.updateActivePods(ctx)
+
+	assert.Equal(t, 3, tracker.GetActivePodsCount())
+	assert.True(t, tracker.IsActive("p*v*0"))
+	assert.True(t, tracker.IsActive("p*v*1"))
+	assert.True(t, tracker.IsActive("p*v*2"))
+}
+
+func TestPodTrackerResolverFailureIsIsolatedByVertex(t *testing.T) {
+	ctx := context.Background()
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: "v"}, {Name: "other"}}},
+	}
+	resolver := &fakePodResolver{
+		countByService: map[string]int{
+			"p-v-headless":     3,
+			"p-other-headless": 1,
+		},
+		errorsByService: make(map[string]error),
+	}
+	tracker := NewPodTracker(ctx, pipeline, WithPodResolver(resolver))
+	tracker.httpClient = &trackerMockHttpClient{podsCount: 3, lock: &sync.RWMutex{}}
+	tracker.updateActivePods(ctx)
+
+	resolver.setCount("p-v-headless", 0)
+	resolver.setErr("p-v-headless", fmt.Errorf("temporary DNS failure"))
+	resolver.setCount("p-other-headless", 0)
+	tracker.updateActivePods(ctx)
+
+	assert.Equal(t, 3, tracker.GetActivePodsCount())
+	assert.True(t, tracker.IsActive("p*v*0"))
+	assert.True(t, tracker.IsActive("p*v*2"))
+	assert.False(t, tracker.IsActive("p*other*0"))
 }
 
 func TestPodTracker_GetPodInfo(t *testing.T) {

@@ -223,6 +223,12 @@ func (p Pipeline) GetDaemonServiceName() string {
 	return fmt.Sprintf("%s-daemon-svc", p.Name)
 }
 
+// GetVertexHeadlessServiceName returns the headless Service name of a vertex in this pipeline.
+// It must stay in sync with Vertex.GetHeadlessServiceName, which is applied to the Service object.
+func (p Pipeline) GetVertexHeadlessServiceName(vertexName string) string {
+	return fmt.Sprintf("%s-%s-headless", p.Name, vertexName)
+}
+
 func (p Pipeline) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-daemon", p.Name)
 }
