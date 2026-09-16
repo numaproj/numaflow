@@ -51,6 +51,7 @@ type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
 	GetPending() map[string]*wrapperspb.Int64Value
+	GetActivePodsCount() int
 }
 
 var _ MonoVtxRatable = (*Rater)(nil)
@@ -327,6 +328,11 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	}
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
+}
+
+// GetActivePodsCount returns the number of active MonoVertex pods discovered by the pod tracker.
+func (r *Rater) GetActivePodsCount() int {
+	return r.podTracker.GetActivePodsCount()
 }
 
 func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
