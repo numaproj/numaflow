@@ -92,6 +92,7 @@ export function SpecEditor({
   const cursorListenerRef = useRef<{ dispose: () => void } | undefined>();
   const selectionListenerRef = useRef<{ dispose: () => void } | undefined>();
   const lineDecorationIdsRef = useRef<string[]>([]);
+  const applyingLinkedLineRef = useRef(false);
 
   useEffect(() => {
     if (onMutatedChange) {
@@ -154,36 +155,69 @@ export function SpecEditor({
     setMutated(false);
   }, [initialYaml, value]);
 
-  const handleEditorDidMount = useCallback(
+  const applyLinkedLine = useCallback(
     (editor: any) => {
-      setEditorRef(editor);
+      if (!editor) return;
       const lineCount = editor.getModel?.()?.getLineCount?.() || 0;
       if (initialLine && initialLine > 0 && initialLine <= lineCount) {
         const endLine =
           initialEndLine && initialEndLine >= initialLine && initialEndLine <= lineCount
             ? initialEndLine
             : initialLine;
-        editor.setSelection?.(
-          new monaco.Selection(initialLine, 1, endLine, 1)
-        );
-        editor.setPosition?.({ lineNumber: endLine, column: 1 });
-        editor.revealLineInCenter?.(initialLine);
-        lineDecorationIdsRef.current = editor.deltaDecorations?.(
-          lineDecorationIdsRef.current,
-          [
+        const current = editor.getSelection?.();
+        const currentStart = current
+          ? Math.min(current.startLineNumber, current.endLineNumber)
+          : undefined;
+        const currentEnd = current
+          ? Math.max(current.startLineNumber, current.endLineNumber)
+          : undefined;
+        lineDecorationIdsRef.current =
+          editor.deltaDecorations?.(lineDecorationIdsRef.current, [
             {
               range: new monaco.Range(initialLine, 1, endLine, 1),
-              options: { isWholeLine: true, className: "spec-editor-linked-line" },
+              options: {
+                isWholeLine: true,
+                className: "spec-editor-linked-line",
+              },
             },
-          ]
-        ) || [];
+          ]) || [];
+        if (currentStart === initialLine && currentEnd === endLine) {
+          return;
+        }
+        const endColumn =
+          editor.getModel?.()?.getLineMaxColumn?.(endLine) ||
+          Number.MAX_SAFE_INTEGER;
+        applyingLinkedLineRef.current = true;
+        try {
+          editor.setSelection?.(
+            new monaco.Selection(initialLine, 1, endLine, endColumn)
+          );
+          editor.revealLineInCenter?.(initialLine);
+        } finally {
+          applyingLinkedLineRef.current = false;
+        }
+        return;
       }
+      lineDecorationIdsRef.current =
+        editor.deltaDecorations?.(lineDecorationIdsRef.current, []) || [];
+    },
+    [initialLine, initialEndLine]
+  );
+
+  const handleEditorDidMount = useCallback(
+    (editor: any) => {
+      setEditorRef(editor);
+      applyLinkedLine(editor);
       cursorListenerRef.current?.dispose();
       cursorListenerRef.current = editor.onDidChangeCursorPosition?.(
-        (event: any) => onCursorLineChange?.(event.position.lineNumber)
+        (event: any) => {
+          if (applyingLinkedLineRef.current) return;
+          onCursorLineChange?.(event.position.lineNumber);
+        }
       );
       selectionListenerRef.current?.dispose();
       selectionListenerRef.current = editor.onDidChangeCursorSelection?.((event: any) => {
+        if (applyingLinkedLineRef.current) return;
         const startLine = Math.min(
           event.selection.startLineNumber,
           event.selection.endLineNumber
@@ -195,13 +229,12 @@ export function SpecEditor({
         onSelectionLineChange?.(startLine, endLine);
       });
     },
-    [
-      initialLine,
-      initialEndLine,
-      onCursorLineChange,
-      onSelectionLineChange,
-    ]
+    [applyLinkedLine, onCursorLineChange, onSelectionLineChange]
   );
+
+  useEffect(() => {
+    applyLinkedLine(editorRef);
+  }, [applyLinkedLine, editorRef]);
 
   useEffect(
     () => () => {

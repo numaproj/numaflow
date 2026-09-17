@@ -85,10 +85,10 @@ export function MetricsModal({
       <Box sx={modalStyle}>
         <Box className={"metrics-modal-title-container"}>
           <Box className={"metrics-modal-title"}>{metricDisplayName}</Box>
-          <Box>
-            <CopyViewLinkButton url={shareUrl} />
+          <Box className="metrics-modal-actions">
+            <CopyViewLinkButton url={shareUrl} disabled={!shareUrl} />
             <IconButton onClick={handleCloseModal} aria-label="close">
-              <CloseIcon fontSize="large" />
+              <CloseIcon fontSize="medium" />
             </IconButton>
           </Box>
         </Box>
