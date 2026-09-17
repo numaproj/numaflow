@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
+import { BrowserRouter } from "react-router-dom";
 import { PodLogs } from "./index";
 import { NO_LOGS_MATCHING_SEARCH } from "./constants";
+
+const render = (ui: any) => renderBase(ui, { wrapper: BrowserRouter });
 
 Object.assign(global, { TextDecoder, TextEncoder });
 

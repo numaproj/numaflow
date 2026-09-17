@@ -1,5 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen, waitFor } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import NodeInfo from "./index";
+
+const render = (ui: any) => renderBase(ui, { wrapper: BrowserRouter });
 
 describe("NodeInfo", () => {
   const node = {

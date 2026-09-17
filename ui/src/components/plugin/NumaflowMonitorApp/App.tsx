@@ -60,7 +60,8 @@ function App(props: AppProps) {
     const ns = query.get("namespace") || "";
 
     if (location.pathname === "/" && ns !== namespace) {
-      history.push(`?namespace=${namespace}`);
+      query.set("namespace", namespace);
+      history.push(`?${query.toString()}`);
     }
   }, [location, history, namespace]);
 

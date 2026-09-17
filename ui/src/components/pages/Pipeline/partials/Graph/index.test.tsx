@@ -1,8 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import fetchMock from "jest-fetch-mock";
+import { BrowserRouter } from "react-router-dom";
 
 import Graph from "./index";
 
@@ -10,6 +11,9 @@ import { AppContext } from "../../../../../App";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { GraphData } from "../../../../../types/declarations/pipeline";
 import { Position } from "@xyflow/react";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 window.ResizeObserver = class ResizeObserver {
   observe() {
