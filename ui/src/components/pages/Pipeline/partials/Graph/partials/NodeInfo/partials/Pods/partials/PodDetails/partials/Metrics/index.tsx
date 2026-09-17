@@ -32,7 +32,6 @@ import {
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
-import { CopyViewLinkButton } from "../../../../../../../../../../../../common/CopyViewLinkButton";
 import { replaceObservabilityState } from "../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
@@ -62,6 +61,7 @@ export interface MetricsProps {
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
   pod?: Pod;
+  podName?: string;
 }
 
 export function Metrics({
@@ -71,9 +71,11 @@ export function Metrics({
   vertexId,
   metricDisplayName,
   pod,
+  podName,
   setMetricsFound,
   presets,
 }: MetricsProps) {
+  const resolvedPodName = pod?.name || podName;
   const location = useLocation();
   const history = useHistory();
   const {
@@ -112,14 +114,15 @@ export function Metrics({
   const handleAccordionChange =
     (panel: string) => (_: any, isExpanded: boolean) => {
       setPresets(undefined);
-      setExpanded((prevExpanded) => {
-        const newExpanded = new Set(prevExpanded);
-        isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
-        return newExpanded;
-      });
+      const newExpanded = new Set(expanded);
+      isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
+      setExpanded(newExpanded);
+      const remaining = Array.from(newExpanded);
       replaceObservabilityState(history, location, {
-        metric: isExpanded ? panel.replace(/-panel$/, "") : null,
-        metricPanels: isExpanded ? panel : null,
+        metric: isExpanded
+          ? panel.replace(/-panel$/, "")
+          : remaining[0]?.replace(/-panel$/, "") || null,
+        metricPanels: remaining.join(",") || null,
       });
     };
 
@@ -174,6 +177,7 @@ export function Metrics({
           presets={presets}
           fromModal
           pod={pod}
+          podName={resolvedPodName}
         />
       );
     } else {
@@ -188,11 +192,6 @@ export function Metrics({
 
   return (
     <Box sx={{ height: "100%" }}>
-      {!metricDisplayName && (
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <CopyViewLinkButton />
-        </Box>
-      )}
       {discoveredMetrics?.data?.map((metric: any) => {
         if (!shouldShowMetric(metric)) return null;
 
@@ -255,6 +254,7 @@ export function Metrics({
                   vertexId={vertexId}
                   presets={presetsFromContext}
                   pod={pod}
+                  podName={resolvedPodName}
                 />
               )}
             </AccordionDetails>

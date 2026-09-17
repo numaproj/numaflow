@@ -57,7 +57,7 @@ const Dropdown = ({
       default:
         return "";
     }
-  }, [field, initialDimensionValue, quantileOptions, durationOptions, presets]);
+  }, [field, initialDimensionValue, quantileOptions, durationOptions, presets, urlValue]);
 
   const [value, setValue] = useState<string>(getInitialValue);
 
@@ -70,6 +70,13 @@ const Dropdown = ({
   useEffect(() => {
     setMetricReq((prev: any) => ({ ...prev, [field]: getInitialValue }));
   }, [getInitialValue, field, setMetricReq]);
+
+  useEffect(() => {
+    if (urlValue && urlValue !== value) {
+      setValue(urlValue);
+      setMetricReq((prev: any) => ({ ...prev, [field]: urlValue }));
+    }
+  }, [urlValue, field, setMetricReq, value]);
 
   const getDropDownEntries = useMemo(() => {
     switch (field) {

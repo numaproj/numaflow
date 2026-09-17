@@ -1,7 +1,8 @@
 import { fireEvent, render as renderBase, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react-test-renderer";
 import { TextEncoder, TextDecoder } from "util";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, Router } from "react-router-dom";
+import { createMemoryHistory } from "history";
 import { PodLogs } from "./index";
 import { NO_LOGS_MATCHING_SEARCH } from "./constants";
 
@@ -100,6 +101,7 @@ describe("PodLogs", () => {
       "PodLogs-icon-btn--active"
     );
     expect(screen.getByTestId("focus-logs-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("copy-view-link")).not.toBeInTheDocument();
     expect(screen.getByTestId("color-mode-button")).not.toHaveClass(
       "PodLogs-icon-btn--active"
     );
@@ -544,6 +546,10 @@ describe("PodLogs", () => {
     expect(within(dialog).getByTestId("focus-logs-button")).toHaveClass(
       "PodLogs-icon-btn--active"
     );
+    expect(within(dialog).getByTestId("copy-view-link")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("copy-view-link")).toHaveTextContent(
+      "Copy View"
+    );
     // Still a single PodLogs instance / stream — no second fetch from opening focus.
     expect(mockedFetch).toBeCalledTimes(1);
 
@@ -559,6 +565,7 @@ describe("PodLogs", () => {
     expect(screen.getByTestId("focus-logs-button")).not.toHaveClass(
       "PodLogs-icon-btn--active"
     );
+    expect(screen.queryByTestId("copy-view-link")).not.toBeInTheDocument();
     expect(mockedFetch).toBeCalledTimes(1);
   });
 
@@ -694,5 +701,59 @@ describe("PodLogs", () => {
     expect(
       screen.queryByTestId("logs-focus-controls-probe")
     ).not.toBeInTheDocument();
+  });
+
+  it("restores log controls from the URL and follows later navigation", async () => {
+    const history = createMemoryHistory({
+      initialEntries: [
+        "/?vertex=in&logsSearch=error&logsNegate=1&logsWrap=0&logsFocus=1&logsTail=500",
+      ],
+    });
+    const mRes = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      ok: true,
+    };
+    (global as any).fetch = jest.fn().mockResolvedValue(mRes as any);
+
+    await act(async () => {
+      renderBase(
+        <Router history={history}>
+          <PodLogs
+            namespaceId={"numaflow-system"}
+            containerName={"numa"}
+            podName={"simple-pipeline-in-0-abcde"}
+          />
+        </Router>
+      );
+    });
+
+    expect(screen.getByPlaceholderText("Search logs")).toHaveValue("error");
+    expect(screen.getByLabelText("Negate search")).toBeChecked();
+    expect(screen.getByTestId("wrap-lines-button")).not.toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("log-tail-size-button")).toHaveTextContent(
+      "500 lines"
+    );
+
+    await act(async () => {
+      history.replace({
+        pathname: "/",
+        search: "?vertex=in&logsSearch=warning&logsWrap=1",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Search logs")).toHaveValue("warning");
+      expect(screen.getByTestId("wrap-lines-button")).toHaveClass(
+        "PodLogs-icon-btn--active"
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });
