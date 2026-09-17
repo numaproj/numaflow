@@ -41,8 +41,19 @@ const TimeSelector = ({
   };
 
   useEffect(() => {
-    handleCallback(startDate, endDate);
-  }, []);
+    if (!initialStart || !initialEnd) return;
+    const nextStart = moment(initialStart);
+    const nextEnd = moment(initialEnd);
+    if (!nextStart.isValid() || !nextEnd.isValid()) return;
+    if (nextStart.isSame(startDate) && nextEnd.isSame(endDate)) return;
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+    setMetricReq((prev: any) => ({
+      ...prev,
+      start_time: nextStart.format(),
+      end_time: nextEnd.format(),
+    }));
+  }, [initialStart, initialEnd, startDate, endDate, setMetricReq]);
 
   const ranges: { [key: string]: [moment.Moment, moment.Moment] } = {
     "Last 10 Minutes": [moment().subtract(10, "minutes"), moment()],

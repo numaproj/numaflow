@@ -16,6 +16,7 @@ import {
 import { AppContextProps } from "../../../../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../../../../App";
 import { getBaseHref } from "../../../../../../../../../../../../../../../../utils";
+import { parseMetricFilters } from "../../../../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -62,13 +63,11 @@ const FiltersDropdown = ({
   const [podsData, setPodsData] = useState<any[]>([]);
 
   useEffect(() => {
-    const filtersMap = selectedFilters.reduce((acc, filter) => {
-      const [key, value] = filter.split(":");
-      if (key && value) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {});
+    setSelectedFilters((initialFilters || "").split(",").filter(Boolean));
+  }, [initialFilters]);
+
+  useEffect(() => {
+    const filtersMap = parseMetricFilters(selectedFilters.join(","));
 
     setFilters((prevState: any) => ({
       ...prevState,
