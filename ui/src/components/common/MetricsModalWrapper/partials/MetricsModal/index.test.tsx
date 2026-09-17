@@ -59,6 +59,7 @@ describe("MetricsModal", () => {
           type="udf"
           presets={presets}
           pod={pod}
+          shareUrl="https://example.test/?vertex=test-vertex&vertexTab=metrics"
         />
       </VertexDetailsContext.Provider>
     );

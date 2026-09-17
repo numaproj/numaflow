@@ -2,7 +2,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 3rem;
+    min-height: 3.2rem;
+    gap: 1.2rem;
+}
+
+.metrics-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .metrics-modal-title {

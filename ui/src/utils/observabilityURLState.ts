@@ -50,6 +50,67 @@ export const parseBooleanParam = (
   return value === null ? defaultValue : value === "1";
 };
 
+export const parseMetricFilters = (
+  value: string | null | undefined
+): Record<string, string> =>
+  (value || "")
+    .split(",")
+    .filter(Boolean)
+    .reduce((result, item) => {
+      const separator = item.indexOf(":");
+      if (separator <= 0) return result;
+      const key = item.slice(0, separator);
+      const filterValue = item.slice(separator + 1);
+      return filterValue ? { ...result, [key]: filterValue } : result;
+    }, {} as Record<string, string>);
+
+export const serializeMetricFilters = (
+  filters: Record<string, string>
+): string =>
+  Object.entries(filters)
+    .filter(([, filterValue]) => filterValue)
+    .map(([key, filterValue]) => `${key}:${filterValue}`)
+    .join(",");
+
+const METRIC_REQ_PARAMS = {
+  metricDimension: "dimension",
+  metricQuantile: "quantile",
+  metricDuration: "duration",
+  metricStart: "start_time",
+  metricEnd: "end_time",
+} as const;
+
+export type MetricRequestFromUrl = {
+  dimension?: string;
+  quantile?: string;
+  duration?: string;
+  start_time?: string;
+  end_time?: string;
+};
+
+// Missing params stay unset so chart dropdown defaults are not wiped.
+export const readMetricRequestFromSearch = (
+  search: string
+): { req: MetricRequestFromUrl; filters?: Record<string, string> } => {
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search
+  );
+  const req: MetricRequestFromUrl = {};
+  (Object.entries(METRIC_REQ_PARAMS) as [
+    keyof typeof METRIC_REQ_PARAMS,
+    keyof MetricRequestFromUrl
+  ][]).forEach(([param, field]) => {
+    const value = params.get(param);
+    if (value) req[field] = value;
+  });
+  return {
+    req,
+    filters: params.has("metricFilter")
+      ? parseMetricFilters(params.get("metricFilter"))
+      : undefined,
+  };
+};
+
 export const updateObservabilitySearch = (
   search: string,
   patch: ObservabilityPatch

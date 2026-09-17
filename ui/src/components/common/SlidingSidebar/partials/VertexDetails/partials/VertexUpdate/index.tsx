@@ -56,14 +56,6 @@ export function VertexUpdate({
   const isActiveSpecLink =
     params.get("vertex") === vertexId && params.get("vertexTab") === "spec";
 
-  const handleCursorLineChange = useCallback(
-    (line: number) => {
-      if (!isActiveSpecLink) return;
-      replaceObservabilityState(history, location, { specLine: line });
-    },
-    [history, location, isActiveSpecLink]
-  );
-
   const handleSelectionLineChange = useCallback(
     (startLine: number, endLine: number) => {
       if (!isActiveSpecLink) return;
@@ -280,7 +272,6 @@ export function VertexUpdate({
             ? initialEndLine
             : undefined
         }
-        onCursorLineChange={handleCursorLineChange}
         onSelectionLineChange={handleSelectionLineChange}
       />
     </Box>
