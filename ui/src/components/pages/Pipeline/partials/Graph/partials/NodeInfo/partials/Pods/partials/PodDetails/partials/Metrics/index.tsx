@@ -62,6 +62,7 @@ export interface MetricsProps {
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
   pod?: Pod;
+  podName?: string;
 }
 
 export function Metrics({
