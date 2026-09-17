@@ -17,8 +17,12 @@ limitations under the License.
 package service
 
 import (
+	"context"
+	"math"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -62,6 +66,11 @@ func TestConvertMonoVtxStateToHealthResp(t *testing.T) {
 			expected: newDataHealthResponse(v1alpha1.MonoVertexStatusHealthy, "MonoVertex data flow is healthy", "D1"),
 		},
 		{
+			name:     "Warning State",
+			state:    newMonoVtxState("vertex1", v1alpha1.MonoVertexStatusWarning),
+			expected: newDataHealthResponse(v1alpha1.MonoVertexStatusWarning, "MonoVertex data flow is in a warning state for vertex1", "D2"),
+		},
+		{
 			name:     "Critical State",
 			state:    newMonoVtxState("vertex1", v1alpha1.MonoVertexStatusCritical),
 			expected: newDataHealthResponse(v1alpha1.MonoVertexStatusCritical, "MonoVertex data flow is in a critical state for vertex1", "D3"),
@@ -84,7 +93,6 @@ func TestGetDesiredReplica(t *testing.T) {
 		Spec: v1alpha1.MonoVertexSpec{
 			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
 		},
-		Status: v1alpha1.MonoVertexStatus{Replicas: 4},
 	}
 	hc := NewHealthChecker(monoVertex)
 
@@ -98,20 +106,32 @@ func TestGetDesiredReplica(t *testing.T) {
 		},
 	}
 
-	expected := int(4)
-	result, err := hc.getDesiredReplica(metrics)
-	if err != nil {
-		t.Fatal(err)
+	result, err := hc.getDesiredReplica(metrics, 4)
+	require.NoError(t, err)
+	assert.Equal(t, 4, result)
+}
+
+func TestGetDesiredReplicaZeroRateUsesActivePods(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 0},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 100},
+		},
 	}
-	if result != expected {
-		t.Errorf("Expected %d, got %d", expected, result)
-	}
+
+	result, err := hc.getDesiredReplica(metrics, 3)
+	require.NoError(t, err)
+	assert.Equal(t, 3, result)
 }
 
 func TestGetDesiredReplicaNoRateAvailable(t *testing.T) {
-	monoVertex := &v1alpha1.MonoVertex{
-		Status: v1alpha1.MonoVertexStatus{Replicas: 4},
-	}
+	monoVertex := &v1alpha1.MonoVertex{}
 	hc := NewHealthChecker(monoVertex)
 
 	metrics := &mvtxdaemon.MonoVertexMetrics{
@@ -121,10 +141,55 @@ func TestGetDesiredReplicaNoRateAvailable(t *testing.T) {
 		},
 	}
 
-	_, err := hc.getDesiredReplica(metrics)
-	if err == nil {
-		t.Errorf("Expected error for no rate information, got nil")
+	_, err := hc.getDesiredReplica(metrics, 4)
+	assert.Error(t, err)
+}
+
+func TestGetDesiredReplicaNoActivePods(t *testing.T) {
+	targetProcessingSeconds := uint32(5)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
 	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 500},
+		},
+	}
+
+	_, err := hc.getDesiredReplica(metrics, 0)
+	assert.Error(t, err)
+}
+
+func TestGetDesiredReplicaOverflowClamped(t *testing.T) {
+	targetProcessingSeconds := uint32(1)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 0.001},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 1_000_000_000_000},
+		},
+	}
+
+	result, err := hc.getDesiredReplica(metrics, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int(math.MaxInt32), result)
 }
 
 func TestGetDesiredReplicaPendingNotAvailable(t *testing.T) {
@@ -138,8 +203,54 @@ func TestGetDesiredReplicaPendingNotAvailable(t *testing.T) {
 		},
 	}
 
-	_, err := hc.getDesiredReplica(metrics)
-	if err == nil {
-		t.Errorf("Expected error for no pending information, got nil")
+	_, err := hc.getDesiredReplica(metrics, 1)
+	assert.Error(t, err)
+}
+
+func TestGetMonoVertexDataCriticalityHealthy(t *testing.T) {
+	targetProcessingSeconds := uint32(5)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
 	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 500},
+		},
+	}
+
+	state, err := hc.getMonoVertexDataCriticality(context.Background(), metrics, 4)
+	require.NoError(t, err)
+	assert.Equal(t, v1alpha1.MonoVertexStatusHealthy, state.State)
+}
+
+func TestGetMonoVertexDataCriticalityWarning(t *testing.T) {
+	targetProcessingSeconds := uint32(5)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 1000},
+		},
+	}
+
+	state, err := hc.getMonoVertexDataCriticality(context.Background(), metrics, 4)
+	require.NoError(t, err)
+	assert.Equal(t, v1alpha1.MonoVertexStatusWarning, state.State)
 }
