@@ -41,8 +41,8 @@ func TestGetPipelineISBStreamsVertexScoped(t *testing.T) {
 	require.Len(t, got.Data.Streams, 2)
 	assert.Equal(t, "cat", got.Data.Streams[0].Vertex)
 	assert.Equal(t, 0, got.Data.Streams[0].Partition)
-	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "cat", 0), got.Data.Streams[0].Stream)
-	assert.Equal(t, []string{dfv1.GenerateBufferName("ns", "pl", "cat", 0)}, got.Data.Streams[0].Subjects)
+	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "in", "cat", 0), got.Data.Streams[0].Stream)
+	assert.Equal(t, []string{dfv1.GenerateBufferName("ns", "pl", "in", "cat", 0)}, got.Data.Streams[0].Subjects)
 	assert.Equal(t, uint64(10), got.Data.Streams[0].Messages)
 	assert.Equal(t, int64(100000), got.Data.Streams[0].MaxMessages)
 	assert.Equal(t, "file", got.Data.Streams[0].Storage)
@@ -76,8 +76,8 @@ func TestGetPipelineISBConsumersEdgeScoped(t *testing.T) {
 	assert.Equal(t, "cat", consumer.To)
 	assert.Equal(t, 1, consumer.Partition)
 	assert.Equal(t, "targetVertex", consumer.Scope)
-	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "cat", 1), consumer.Stream)
-	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "cat", 1), consumer.Consumer)
+	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "in", "cat", 1), consumer.Stream)
+	assert.Equal(t, dfv1.GenerateBufferName("ns", "pl", "in", "cat", 1), consumer.Consumer)
 	assert.Equal(t, "explicit", consumer.AckPolicy)
 	assert.Equal(t, float64(30), consumer.AckWaitSeconds)
 	assert.Equal(t, 7, consumer.NumAckPending)
@@ -90,7 +90,7 @@ func TestGetPipelineISBConsumersEdgeScoped(t *testing.T) {
 func TestGetPipelineISBConsumersIncludesDirectConsumers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	jsInfo := testPipelineISBJSInfo()
-	cat1 := dfv1.GenerateBufferName("ns", "pl", "cat", 1)
+	cat1 := dfv1.GenerateBufferName("ns", "pl", "in", "cat", 1)
 	jsInfo.AccountDetails[0].Streams[1].DirectConsumer = []*natsserver.ConsumerInfo{
 		{
 			Stream: cat1,
@@ -162,7 +162,7 @@ func TestGetPipelineISBStreamsPrefersLeaderSnapshot(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	leaderSnapshot := testPipelineISBJSInfo()
 	followerSnapshot := testPipelineISBJSInfo()
-	cat0 := dfv1.GenerateBufferName("ns", "pl", "cat", 0)
+	cat0 := dfv1.GenerateBufferName("ns", "pl", "in", "cat", 0)
 	leaderSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 10, 100, 0)
 	leaderSnapshot.AccountDetails[0].Streams[0].Cluster.Leader = "js-1"
 	followerSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 99, 990, 0)
@@ -192,7 +192,7 @@ func TestGetPipelineISBConsumersPrefersLeaderSnapshot(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	leaderSnapshot := testPipelineISBJSInfo()
 	followerSnapshot := testPipelineISBJSInfo()
-	cat0 := dfv1.GenerateBufferName("ns", "pl", "cat", 0)
+	cat0 := dfv1.GenerateBufferName("ns", "pl", "in", "cat", 0)
 	leaderSnapshot.AccountDetails[0].Streams[0] = testPipelineISBStreamDetail(cat0, 10, 100, 0)
 	leaderSnapshot.AccountDetails[0].Streams[0].Consumer[0].Cluster.Leader = "js-1"
 	leaderSnapshot.AccountDetails[0].Streams[0].Consumer[0].NumRedelivered = 1
@@ -364,9 +364,9 @@ func testPipelineISBDebugPipeline() *dfv1.Pipeline {
 }
 
 func testPipelineISBJSInfo() natsserver.JSInfo {
-	cat0 := dfv1.GenerateBufferName("ns", "pl", "cat", 0)
-	cat1 := dfv1.GenerateBufferName("ns", "pl", "cat", 1)
-	out0 := dfv1.GenerateBufferName("ns", "pl", "out", 0)
+	cat0 := dfv1.GenerateBufferName("ns", "pl", "in", "cat", 0)
+	cat1 := dfv1.GenerateBufferName("ns", "pl", "in", "cat", 1)
+	out0 := dfv1.GenerateBufferName("ns", "pl", "cat", "out", 0)
 	inCatBucket := isbsvc.JetStreamOTKVName(dfv1.GenerateEdgeBucketName("ns", "pl", "in", "cat"))
 	catOutBucket := isbsvc.JetStreamOTKVName(dfv1.GenerateEdgeBucketName("ns", "pl", "cat", "out"))
 	return natsserver.JSInfo{

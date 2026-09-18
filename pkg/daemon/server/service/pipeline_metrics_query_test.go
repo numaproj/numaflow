@@ -109,9 +109,17 @@ func TestGetVertexMetrics(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	vertexName := "cat"
 	vertexPartition := int32(1)
+	// Buffers are edge-owned, so the vertex needs an incoming edge for its input
+	// buffers to exist; rates and pending are measured on those.
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
-		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in", Source: &v1alpha1.Source{}},
+				{Name: vertexName, Partitions: &vertexPartition},
+			},
+			Edges: []v1alpha1.Edge{{From: "in", To: vertexName}},
+		},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(jsc)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), client, pipeline, &mockRater_TestGetVertexMetrics{}, nil)
@@ -119,10 +127,10 @@ func TestGetVertexMetrics(t *testing.T) {
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
 # TYPE vertex_pending_messages gauge
-vertex_pending_messages{period="15m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
-vertex_pending_messages{period="1m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
-vertex_pending_messages{period="5m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
-vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
+vertex_pending_messages{period="15m",partition_name="-simple-pipeline-in-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",partition_name="-simple-pipeline-in-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",partition_name="-simple-pipeline-in-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",partition_name="-simple-pipeline-in-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	ioReader := io.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
@@ -185,7 +193,7 @@ func TestGetBuffer(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
-	bufferName := "numaflow-system-simple-pipeline-cat-0"
+	bufferName := "numaflow-system-simple-pipeline-in-cat-0"
 
 	req := &daemon.GetBufferRequest{Pipeline: pipelineName, Buffer: bufferName}
 
