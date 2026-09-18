@@ -488,6 +488,7 @@ func (sp ServingPipeline) getStoreSidecarContainerSpec(req getContainerReq) []co
 			TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.Container.LivenessProbe, UDContainerLivezTimeoutSeconds),
 			FailureThreshold:    GetProbeFailureThresholdOr(x.Container.LivenessProbe, UDContainerLivezFailureThreshold),
 		}
+		container.StartupProbe = startupProbeFrom(x.Container.StartupProbe, container.LivenessProbe)
 		return []corev1.Container{container}
 	}
 	return nil

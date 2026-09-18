@@ -105,6 +105,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		TimeoutSeconds:      timeoutSeconds,
 		FailureThreshold:    failureThreshold,
 	}
+	container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	return container
 }
 
@@ -150,6 +151,9 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		PeriodSeconds:       periodSeconds,
 		TimeoutSeconds:      timeoutSeconds,
 		FailureThreshold:    failureThreshold,
+	}
+	if x := s.UDSource.Container; x != nil {
+		container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	}
 	return container
 }

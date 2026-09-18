@@ -117,3 +117,31 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 	})
 }
+
+func Test_getUDFContainer_startupProbe(t *testing.T) {
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		x := UDF{Container: &Container{Image: "my-image"}}
+		c := x.getUDFContainer(getContainerReq{image: "main-image"})
+		assert.Nil(t, c.StartupProbe)
+	})
+
+	t.Run("runs the sidecar liveness check on its own schedule", func(t *testing.T) {
+		x := UDF{
+			Container: &Container{
+				Image: "my-image",
+				StartupProbe: &Probe{
+					PeriodSeconds:    ptr.To[int32](10),
+					FailureThreshold: ptr.To[int32](60),
+				},
+			},
+		}
+		c := x.getUDFContainer(getContainerReq{image: "main-image"})
+		assert.NotNil(t, c.StartupProbe)
+		assert.Equal(t, c.LivenessProbe.ProbeHandler, c.StartupProbe.ProbeHandler)
+		assert.Equal(t, int32(10), c.StartupProbe.PeriodSeconds)
+		assert.Equal(t, int32(60), c.StartupProbe.FailureThreshold)
+		assert.Equal(t, int32(UDContainerLivezInitialDelaySeconds), c.StartupProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(UDContainerLivezTimeoutSeconds), c.StartupProbe.TimeoutSeconds)
+		assert.Equal(t, int32(UDContainerLivezFailureThreshold), c.LivenessProbe.FailureThreshold)
+	})
+}

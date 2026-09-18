@@ -1103,6 +1103,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"startupProbe": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StartupProbe runs the same check as the liveness probe, but only until the container has started successfully, giving a slow first start its own budget. No startup probe is configured unless this is set.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe"),
+						},
+					},
 				},
 			},
 		},
@@ -1169,6 +1175,12 @@ func schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref common.ReferenceCal
 					"livenessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe"),
+						},
+					},
+					"startupProbe": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StartupProbe runs the same check as the liveness probe, but only until the container has started successfully, giving a slow first start its own budget. No startup probe is configured unless this is set.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe"),
 						},
 					},
 				},

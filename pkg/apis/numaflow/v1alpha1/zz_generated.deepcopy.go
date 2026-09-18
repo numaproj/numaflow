@@ -551,6 +551,11 @@ func (in *Container) DeepCopyInto(out *Container) {
 		*out = make([]v1.ContainerPort, len(*in))
 		copy(*out, *in)
 	}
+	if in.StartupProbe != nil {
+		in, out := &in.StartupProbe, &out.StartupProbe
+		*out = new(Probe)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -594,6 +599,11 @@ func (in *ContainerTemplate) DeepCopyInto(out *ContainerTemplate) {
 	}
 	if in.LivenessProbe != nil {
 		in, out := &in.LivenessProbe, &out.LivenessProbe
+		*out = new(Probe)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.StartupProbe != nil {
+		in, out := &in.StartupProbe, &out.StartupProbe
 		*out = new(Probe)
 		(*in).DeepCopyInto(*out)
 	}

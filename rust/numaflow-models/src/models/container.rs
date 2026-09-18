@@ -42,6 +42,8 @@ pub struct Container {
     pub resources: Option<k8s_openapi::api::core::v1::ResourceRequirements>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
     pub security_context: Option<k8s_openapi::api::core::v1::SecurityContext>,
+    #[serde(rename = "startupProbe", skip_serializing_if = "Option::is_none")]
+    pub startup_probe: Option<Box<crate::models::Probe>>,
     #[serde(rename = "volumeMounts", skip_serializing_if = "Option::is_none")]
     pub volume_mounts: Option<Vec<k8s_openapi::api::core::v1::VolumeMount>>,
 }
@@ -61,6 +63,7 @@ impl Container {
             readiness_probe: None,
             resources: None,
             security_context: None,
+            startup_probe: None,
             volume_mounts: None,
         }
     }

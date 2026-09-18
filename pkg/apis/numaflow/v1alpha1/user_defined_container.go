@@ -49,4 +49,9 @@ type Container struct {
 	// +listMapKey=containerPort
 	// +listMapKey=protocol
 	Ports []corev1.ContainerPort `json:"ports,omitempty" patchStrategy:"merge" patchMergeKey:"containerPort" protobuf:"bytes,12,rep,name=ports"`
+	// StartupProbe runs the same check as the liveness probe, but only until the container has
+	// started successfully, giving a slow first start its own budget. No startup probe is
+	// configured unless this is set.
+	// +optional
+	StartupProbe *Probe `json:"startupProbe,omitempty" protobuf:"bytes,13,opt,name=startupProbe"`
 }

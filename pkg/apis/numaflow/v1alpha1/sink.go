@@ -117,6 +117,7 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, UDContainerLivezTimeoutSeconds),
 		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, UDContainerLivezFailureThreshold),
 	}
+	container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	return container
 }
 
@@ -152,6 +153,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, UDContainerLivezTimeoutSeconds),
 		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, UDContainerLivezFailureThreshold),
 	}
+	container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	return container
 }
 
@@ -187,6 +189,7 @@ func (s Sink) getOnSuccessUDSinkContainer(mainContainerReq getContainerReq) core
 		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, UDContainerLivezTimeoutSeconds),
 		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, UDContainerLivezFailureThreshold),
 	}
+	container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	return container
 }
 
