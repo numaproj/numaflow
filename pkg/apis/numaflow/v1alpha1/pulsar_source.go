@@ -24,4 +24,12 @@ type PulsarSource struct {
 	// Consumer level dead letter policy.
 	// +optional
 	DeadLetterPolicy *PulsarDeadLetterPolicy `json:"deadLetterPolicy,omitempty" protobuf:"bytes,7,opt,name=deadLetterPolicy"`
+
+	// TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+	// broker CA. Only server-authentication (one-way TLS) is supported today:
+	// CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+	// since the underlying pulsar-rs client does not currently support presenting
+	// a client certificate.
+	// +optional
+	TLS *TLS `json:"tls,omitempty" protobuf:"bytes,8,opt,name=tls"`
 }

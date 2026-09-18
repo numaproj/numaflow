@@ -1,8 +1,6 @@
-# Pulsar Source
+# Pulsar Sink
 
-#### NOTE: 1.5 Feature, not available Numaflow version < 1.5
-
-A `Pulsar` source is used to ingest the messages from a Pulsar topic.
+A `Pulsar` sink is used to write the messages to a Pulsar topic.
 
 ```yaml
 apiVersion: v1
@@ -20,13 +18,12 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: in
-      source:
+    - name: out
+      sink:
         pulsar:
-          serverAddr: "pulsar+ssl://borker.example.com:6651"
-          consumerName: my_consumer
+          serverAddr: "pulsar+ssl://broker.example.com:6651"
           topic: my_topic
-          subscriptionName: my_subscription
+          producerName: my_producer
           auth: # Optional
             token: # Optional, pointing to a secret reference which contains the JWT Token.
               name: pulsar
@@ -34,8 +31,6 @@ spec:
 ```
 
 We have only tested the 4.0.x LTS version of Pulsar. The implementation supports [JWT token](https://pulsar.apache.org/docs/4.0.x/security-jwt/) and [HTTP basic](https://pulsar.apache.org/docs/4.0.x/security-basic-auth/) authentication via the `auth` field (`auth.token` or `auth.basicAuth`). If `auth` is not specified, Numaflow will connect to the Pulsar servers without authentication.
-
-More authentication mechanisms and the ability to customize Pulsar consumer will be added in the future.
 
 ## TLS
 
@@ -59,13 +54,12 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: in
-      source:
+    - name: out
+      sink:
         pulsar:
           serverAddr: "pulsar+ssl://broker.example.com:6651"
-          consumerName: my_consumer
           topic: my_topic
-          subscriptionName: my_subscription
+          producerName: my_producer
           tls: # Optional.
             insecureSkipVerify: false # Optional, whether to skip TLS verification. Default to false.
             caCertSecret: # Optional, a secret reference which contains the CA certificate.
@@ -75,7 +69,6 @@ spec:
 
 Only server-authentication (one-way TLS) is supported: `caCertSecret` lets the
 client trust a custom CA. `certSecret`/`keySecret` (mutual TLS) are **not**
-supported for Pulsar, unlike the [Kafka source](../sources/kafka.md)'s `tls`
-block - the underlying Pulsar client does not currently support presenting a
-client certificate to the broker.
-
+supported for Pulsar, unlike the [Kafka sink](kafka.md)'s `tls` block - the
+underlying Pulsar client does not currently support presenting a client
+certificate to the broker.

@@ -9737,6 +9737,30 @@ Auth information
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS configuration for the Pulsar client, e.g. to trust a
+custom/self-signed broker CA. Only server-authentication (one-way TLS)
+is supported today: CACertSecret is honored, but CertSecret/KeySecret
+(mutual TLS) are not, since the underlying pulsar-rs client does not
+currently support presenting a client certificate.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9885,6 +9909,30 @@ PulsarDeadLetterPolicy </a> </em>
 <p>
 
 Consumer level dead letter policy.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS configuration for the Pulsar client, e.g. to trust a
+custom/self-signed broker CA. Only server-authentication (one-way TLS)
+is supported today: CACertSecret is honored, but CertSecret/KeySecret
+(mutual TLS) are not, since the underlying pulsar-rs client does not
+currently support presenting a client certificate.
 </p>
 
 </td>
@@ -13721,6 +13769,8 @@ TLS
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink">PulsarSink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">RedisSentinelConfig</a>)
 </p>
 

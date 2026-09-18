@@ -2287,6 +2287,11 @@ func (in *PulsarSink) DeepCopyInto(out *PulsarSink) {
 		*out = new(PulsarAuth)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.TLS != nil {
+		in, out := &in.TLS, &out.TLS
+		*out = new(TLS)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -2312,6 +2317,11 @@ func (in *PulsarSource) DeepCopyInto(out *PulsarSource) {
 		in, out := &in.DeadLetterPolicy, &out.DeadLetterPolicy
 		*out = new(PulsarDeadLetterPolicy)
 		**out = **in
+	}
+	if in.TLS != nil {
+		in, out := &in.TLS, &out.TLS
+		*out = new(TLS)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

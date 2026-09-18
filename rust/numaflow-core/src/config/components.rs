@@ -283,6 +283,42 @@ fn parse_pulsar_auth_config(
     Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()))
 }
 
+/// Parses a Pulsar source/sink `tls` block into `numaflow_pulsar::TlsConfig`.
+///
+/// Only server-authentication (one-way TLS) is supported: `caCertSecret` is
+/// honored, but `certSecret`/`keySecret` (mutual TLS) are rejected with a
+/// config error, since the underlying `pulsar` crate's client builder does
+/// not currently expose a way to present a client certificate.
+fn parse_pulsar_tls_config(
+    tls_config: Option<Box<numaflow_models::models::Tls>>,
+) -> crate::Result<Option<numaflow_pulsar::TlsConfig>> {
+    let Some(tls_config) = tls_config else {
+        return Ok(None);
+    };
+
+    if tls_config.cert_secret.is_some() || tls_config.key_secret.is_some() {
+        return Err(Error::Config(
+            "Pulsar TLS does not support certSecret/keySecret (mutual TLS); only \
+             caCertSecret and insecureSkipVerify are supported"
+                .into(),
+        ));
+    }
+
+    let ca_cert = tls_config
+        .ca_cert_secret
+        .map(|ca_cert_secret| {
+            get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key)
+                .map(|secret| secret.into_bytes())
+                .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
+        })
+        .transpose()?;
+
+    Ok(Some(numaflow_pulsar::TlsConfig {
+        ca_cert,
+        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
+    }))
+}
+
 #[cfg(test)]
 mod kafka_tests {
     use super::sink::SinkType;
