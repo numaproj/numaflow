@@ -562,7 +562,6 @@ type VertexSpec struct {
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`
 	// +optional
 	InterStepBufferServiceName string `json:"interStepBufferServiceName" protobuf:"bytes,3,opt,name=interStepBufferServiceName"`
-	// +kubebuilder:default=1
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional

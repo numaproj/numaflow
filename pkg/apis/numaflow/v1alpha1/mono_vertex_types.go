@@ -494,7 +494,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 }
 
 type MonoVertexSpec struct {
-	// +kubebuilder:default=1
 	// +optional
 	Replicas *int32  `json:"replicas,omitempty" protobuf:"varint,1,opt,name=replicas"`
 	Source   *Source `json:"source,omitempty" protobuf:"bytes,2,opt,name=source"`
