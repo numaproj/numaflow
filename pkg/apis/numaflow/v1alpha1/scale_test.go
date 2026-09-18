@@ -87,9 +87,6 @@ func TestScale_ScaleForDaemonEmbedding(t *testing.T) {
 	defaultEmbedded := (Scale{}).ScaleForDaemonEmbedding()
 	assert.Nil(t, defaultEmbedded.Max)
 	assert.Equal(t, uint32(DefaultLookbackSeconds), *defaultEmbedded.LookbackSeconds)
-
-	hashed := scale.ScaleForDaemonHash()
-	assert.Equal(t, embedded, hashed)
 }
 
 func TestCronScheduling_GetTimezone(t *testing.T) {

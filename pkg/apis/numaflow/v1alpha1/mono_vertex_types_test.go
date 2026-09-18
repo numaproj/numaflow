@@ -696,7 +696,7 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 	})
 }
 
-func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesHash(t *testing.T) {
+func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesEmbeddedObject(t *testing.T) {
 	mv := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-vertex",

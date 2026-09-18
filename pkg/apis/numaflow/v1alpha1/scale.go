@@ -118,12 +118,6 @@ func (s Scale) ScaleForDaemonEmbedding() Scale {
 	}
 }
 
-// ScaleForDaemonHash returns the scale fields that should trigger daemon recreation.
-// Scale min/max/cooldown changes do not affect the hash; only lookbackSeconds does.
-func (s Scale) ScaleForDaemonHash() Scale {
-	return s.ScaleForDaemonEmbedding()
-}
-
 func (s Scale) GetScaleUpCooldownSeconds() int {
 	if s.ScaleUpCooldownSeconds != nil {
 		return int(*s.ScaleUpCooldownSeconds)

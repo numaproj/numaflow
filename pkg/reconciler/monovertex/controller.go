@@ -542,14 +542,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	if err != nil {
 		return fmt.Errorf("failed to build mono vertex daemon deployment spec: %w", err)
 	}
-	hashMonoVtx := monoVtx.DeepCopy()
-	hashMonoVtx.Spec.Scale = monoVtx.Spec.Scale.ScaleForDaemonHash()
-	hashDeploy, err := hashMonoVtx.GetDaemonDeploymentObj(req)
-	if err != nil {
-		return fmt.Errorf("failed to build mono vertex daemon deployment hash spec: %w", err)
-	}
-	// Scale min/max changes do not affect the daemon deployment hash; only lookbackSeconds triggers recreation.
-	deployHash := sharedutil.MustHash(hashDeploy.Spec)
+	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
 	existingDeploy := &appv1.Deployment{}
 	needToCreate := false
