@@ -1,6 +1,5 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::isb::BufferReaderConfig;
-use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig};
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig, ServingStoreType, SinkVtxConfig};
 use crate::error::Error;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
@@ -100,17 +99,26 @@ pub async fn start_sink_forwarder(
         None
     };
 
-    let from_vertex_config = config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?;
+    if config.from_vertex_config.is_empty() {
+        return Err(Error::Config("No from vertex config found".to_string()));
+    }
 
-    let reader_config = &from_vertex_config.reader_config;
-
-    // Extract partition indices from the streams in the reader config
+    // Extract partition indices from the streams in the reader configs
     // When ordered processing is enabled, this will contain only the replica's partition
     // When disabled, this will contain all partitions
-    let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
+    // Buffers are edge-owned, so a sink with several ingress edges has one set of
+    // partitioned streams per edge; every edge of a vertex resolves to the same
+    // partition count, so dedupe the indices across edges.
+    let from_partitions: Vec<u16> = {
+        let mut p: Vec<u16> = config
+            .from_vertex_config
+            .iter()
+            .flat_map(|f| f.reader_config.streams.iter().map(|s| s.partition))
+            .collect();
+        p.sort_unstable();
+        p.dedup();
+        p
+    };
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     // Sink is terminal — no ISB writers; idle detector gets an empty map.
@@ -159,7 +167,7 @@ pub async fn start_sink_forwarder(
                 run_all_sink_forwarders::<WithRedisRateLimiter>(
                     &context,
                     &sink,
-                    reader_config,
+                    &config.from_vertex_config,
                     watermark_handle.clone(),
                     serving_store,
                     Some(redis_config.throttling_config),
@@ -180,7 +188,7 @@ pub async fn start_sink_forwarder(
                 run_all_sink_forwarders::<WithInMemoryRateLimiter>(
                     &context,
                     &sink,
-                    reader_config,
+                    &config.from_vertex_config,
                     watermark_handle.clone(),
                     serving_store,
                     Some(in_mem_config.throttling_config),
@@ -198,7 +206,7 @@ pub async fn start_sink_forwarder(
             run_all_sink_forwarders::<WithoutRateLimiter>(
                 &context,
                 &sink,
-                reader_config,
+                &config.from_vertex_config,
                 watermark_handle.clone(),
                 serving_store,
                 None,
@@ -235,11 +243,15 @@ pub async fn start_sink_forwarder(
     Ok(())
 }
 
-/// Starts sink forwarder for all the streams.
+/// Starts sink forwarder for all the streams across all ingress edges.
+///
+/// Buffers are edge-owned, so a sink with several ingress edges reads a distinct set
+/// of buffers per edge. Each (edge, partition) stream gets its own independent
+/// forwarder pipeline, exactly as multiple partitions of a single edge already did.
 async fn run_all_sink_forwarders<C>(
     context: &PipelineContext<'_, C>,
     sink: &SinkVtxConfig,
-    reader_config: &BufferReaderConfig,
+    from_vertex_config: &[FromVertexConfig],
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     serving_store: Option<ServingStore>,
     rate_limiter: Option<C::RateLimiter>,
@@ -255,46 +267,49 @@ where
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut first_sink_writer = None;
 
-    // The streams are already filtered based on ordered processing at config creation time
-    for stream in &reader_config.streams {
-        info!(
-            "Creating sink writer and buffer reader for stream {:?}",
-            stream
-        );
+    for from_vertex in from_vertex_config {
+        let reader_config = &from_vertex.reader_config;
+        // The streams are already filtered based on ordered processing at config creation time
+        for stream in &reader_config.streams {
+            info!(
+                from_vertex = from_vertex.name,
+                "Creating sink writer and buffer reader for stream {:?}", stream
+            );
 
-        let sink_writer = create_components::create_sink_writer(
-            context.config.batch_size,
-            context.config.read_timeout,
-            sink.sink_config.clone(),
-            sink.fb_sink_config.clone(),
-            sink.on_success_sink_config.clone(),
-            serving_store.clone(),
-            &context.cln_token,
-            None,
-        )
-        .await?;
+            let sink_writer = create_components::create_sink_writer(
+                context.config.batch_size,
+                context.config.read_timeout,
+                sink.sink_config.clone(),
+                sink.fb_sink_config.clone(),
+                sink.on_success_sink_config.clone(),
+                serving_store.clone(),
+                &context.cln_token,
+                None,
+            )
+            .await?;
 
-        if first_sink_writer.is_none() {
-            first_sink_writer = Some(sink_writer.clone());
+            if first_sink_writer.is_none() {
+                first_sink_writer = Some(sink_writer.clone());
+            }
+
+            let reader_components = ISBReaderComponents::new::<C>(
+                stream.clone(),
+                reader_config.clone(),
+                watermark_handle.clone(),
+                context,
+            );
+
+            let (task, reader) = run_sink_forwarder_for_stream::<C>(
+                reader_components,
+                sink_writer,
+                rate_limiter.clone(),
+                context.factory(),
+            )
+            .await?;
+
+            forwarder_tasks.push(task);
+            isb_lag_readers.push(reader);
         }
-
-        let reader_components = ISBReaderComponents::new::<C>(
-            stream.clone(),
-            reader_config.clone(),
-            watermark_handle.clone(),
-            context,
-        );
-
-        let (task, reader) = run_sink_forwarder_for_stream::<C>(
-            reader_components,
-            sink_writer,
-            rate_limiter.clone(),
-            context.factory(),
-        )
-        .await?;
-
-        forwarder_tasks.push(task);
-        isb_lag_readers.push(reader);
     }
 
     let pending_reader = shared::metrics::create_pending_reader(

@@ -2,6 +2,7 @@ use crate::config::components::reduce::{
     AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
     UnalignedWindowType,
 };
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::{PipelineConfig, ReduceVtxConfig};
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{
@@ -148,20 +149,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     )
     .await?;
 
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // reduce pod always reads from a single stream (pod per partition)
-    let stream = reader_config
-        .streams
-        .get(*get_vertex_replica() as usize)
-        .cloned()
-        .ok_or_else(|| {
-            crate::error::Error::Config("No stream found for reduce vertex".to_string())
-        })?;
+    let (reader_config, stream) = reduce_reader_config_and_stream(&config)?;
 
     let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
@@ -288,20 +276,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     )
     .await?;
 
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // reduce pod always reads from a single stream (pod per partition)
-    let stream = reader_config
-        .streams
-        .get(*get_vertex_replica() as usize)
-        .cloned()
-        .ok_or_else(|| {
-            crate::error::Error::Config("No stream found for reduce vertex".to_string())
-        })?;
+    let (reader_config, stream) = reduce_reader_config_and_stream(&config)?;
 
     let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
@@ -381,6 +356,43 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
+}
+
+/// Resolves the single ingress stream a reduce pod reads.
+///
+/// A reduce pod reads one partition (the one matching its replica id) so that a given
+/// key is drained by exactly one pod. With edge-owned buffers each ingress edge has
+/// its own buffer, so a reduce *join* has one such stream per source and reading only
+/// the first would silently drop every other source's data. Reject that configuration
+/// rather than lose data: multi-edge reduce needs the PBQ to consume several readers,
+/// which is not implemented yet.
+fn reduce_reader_config_and_stream(
+    config: &PipelineConfig,
+) -> Result<(&crate::config::pipeline::isb::BufferReaderConfig, Stream)> {
+    if config.from_vertex_config.len() > 1 {
+        return Err(crate::error::Error::Config(format!(
+            "reduce vertex has {} incoming edges; a reduce join is not supported with \
+             edge-owned buffers yet",
+            config.from_vertex_config.len()
+        )));
+    }
+
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // reduce pod always reads from a single stream (pod per partition)
+    let stream = reader_config
+        .streams
+        .get(*get_vertex_replica() as usize)
+        .cloned()
+        .ok_or_else(|| {
+            crate::error::Error::Config("No stream found for reduce vertex".to_string())
+        })?;
+
+    Ok((reader_config, stream))
 }
 
 /// Starts reduce forwarder.
