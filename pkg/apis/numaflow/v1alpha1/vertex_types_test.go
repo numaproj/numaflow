@@ -1078,3 +1078,66 @@ func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
 	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
 	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
 }
+
+func TestGetPodSpecStartupProbe(t *testing.T) {
+	req := GetVertexPodSpecReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{}
+		spec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Nil(t, spec.Containers[0].StartupProbe)
+	})
+
+	t.Run("numa container gets one from the container template", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			StartupProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](0),
+				PeriodSeconds:       ptr.To[int32](10),
+				FailureThreshold:    ptr.To[int32](60),
+			},
+		}
+		spec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		startup := spec.Containers[0].StartupProbe
+		assert.NotNil(t, startup)
+		assert.Equal(t, "/livez", startup.HTTPGet.Path)
+		assert.Equal(t, int32(0), startup.InitialDelaySeconds)
+		assert.Equal(t, int32(10), startup.PeriodSeconds)
+		assert.Equal(t, int32(60), startup.FailureThreshold)
+		// The liveness probe keeps its own steady-state settings.
+		assert.Equal(t, int32(NumaContainerLivezFailureThreshold), spec.Containers[0].LivenessProbe.FailureThreshold)
+		assert.Equal(t, int32(NumaContainerLivezPeriodSeconds), spec.Containers[0].LivenessProbe.PeriodSeconds)
+	})
+
+	t.Run("udf sidecar gets its own", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &UDF{
+			Container: &Container{
+				Image:        "my-image",
+				StartupProbe: &Probe{FailureThreshold: ptr.To[int32](10)},
+			},
+			GroupBy: nil,
+		}
+		spec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		var udf *corev1.Container
+		for i := range spec.InitContainers {
+			if spec.InitContainers[i].Name == CtrUdf {
+				udf = &spec.InitContainers[i]
+			}
+		}
+		assert.NotNil(t, udf)
+		assert.NotNil(t, udf.StartupProbe)
+		assert.Equal(t, "/sidecar-livez", udf.StartupProbe.HTTPGet.Path)
+		assert.Equal(t, int32(10), udf.StartupProbe.FailureThreshold)
+		assert.Equal(t, int32(UDContainerLivezPeriodSeconds), udf.StartupProbe.PeriodSeconds)
+	})
+}

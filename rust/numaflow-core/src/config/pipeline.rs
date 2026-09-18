@@ -1179,6 +1179,7 @@ mod tests {
                 readiness_probe: None,
                 resources: None,
                 security_context: None,
+                startup_probe: None,
                 volume_mounts: None,
             })),
             group_by: None,

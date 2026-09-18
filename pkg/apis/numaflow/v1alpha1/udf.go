@@ -91,6 +91,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 		TimeoutSeconds:      timeoutSeconds,
 		FailureThreshold:    failureThreshold,
 	}
+	container.StartupProbe = startupProbeFrom(x.StartupProbe, container.LivenessProbe)
 	return container
 }
 

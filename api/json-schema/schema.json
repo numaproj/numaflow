@@ -19979,6 +19979,10 @@
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecurityContext"
         },
+        "startupProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe",
+          "description": "StartupProbe runs the same check as the liveness probe, but only until the container has started successfully, giving a slow first start its own budget. No startup probe is configured unless this is set."
+        },
         "volumeMounts": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.VolumeMount"
@@ -20017,6 +20021,10 @@
         },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecurityContext"
+        },
+        "startupProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe",
+          "description": "StartupProbe runs the same check as the liveness probe, but only until the container has started successfully, giving a slow first start its own budget. No startup probe is configured unless this is set."
         }
       },
       "type": "object"
