@@ -1230,6 +1230,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#tls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1708,6 +1719,34 @@
     
   
     Kafka Sink
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sinks/pulsar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pulsar Sink
   
 
     
@@ -5134,6 +5173,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#tls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5184,8 +5234,45 @@
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">token</span>
 </code></pre></div>
-<p>We have only tested the 4.0.x LTS version of Pulsar. Currently, the implementation only supports <a href="https://pulsar.apache.org/docs/4.0.x/security-jwt/">JWT token</a> based authentication. If the <code>auth</code> field is not specified, Numaflow will connect to the Pulsar servers without authentication. </p>
+<p>We have only tested the 4.0.x LTS version of Pulsar. The implementation supports <a href="https://pulsar.apache.org/docs/4.0.x/security-jwt/">JWT token</a> and <a href="https://pulsar.apache.org/docs/4.0.x/security-basic-auth/">HTTP basic</a> authentication via the <code>auth</code> field (<code>auth.token</code> or <code>auth.basicAuth</code>). If <code>auth</code> is not specified, Numaflow will connect to the Pulsar servers without authentication.</p>
 <p>More authentication mechanisms and the ability to customize Pulsar consumer will be added in the future.</p>
+<h2 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">&para;</a></h2>
+<p>If the Pulsar broker's certificate is signed by a custom/internal CA (not in
+the pod's default trust store), point <code>tls.caCertSecret</code> at a Secret
+containing the CA certificate:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar-ca</span>
+<span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ca.crt</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base64-encoded PEM CA certificate&gt;</span>
+
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">pulsar</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">serverAddr</span><span class="p">:</span><span class="w"> </span><span class="s">"pulsar+ssl://broker.example.com:6651"</span>
+<span class="w">          </span><span class="nt">consumerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_consumer</span>
+<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_topic</span>
+<span class="w">          </span><span class="nt">subscriptionName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_subscription</span>
+<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
+<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
+<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference which contains the CA certificate.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar-ca</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca.crt</span>
+</code></pre></div>
+<p>Only server-authentication (one-way TLS) is supported: <code>caCertSecret</code> lets the
+client trust a custom CA. <code>certSecret</code>/<code>keySecret</code> (mutual TLS) are <strong>not</strong>
+supported for Pulsar, unlike the <a href="../kafka/">Kafka source</a>'s <code>tls</code>
+block - the underlying Pulsar client does not currently support presenting a
+client certificate to the broker.</p>
 
 
 

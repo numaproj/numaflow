@@ -9,28 +9,28 @@
       
       
       
-        <link rel="prev" href="../authentication/">
+        <link rel="prev" href="../kafka/">
       
       
-        <link rel="next" href="../local-users/">
+        <link rel="next" href="../log/">
       
       
         
       
       
-      <link rel="icon" href="../../../../assets/numaproj.svg">
+      <link rel="icon" href="../../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>SSO with Dex - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Pulsar Sink - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,7 +49,7 @@
       
     
     
-    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dex-server" class="md-skip">
+        <a href="#pulsar-sink" class="md-skip">
           Skip to content
         </a>
       
@@ -100,9 +100,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              SSO with Dex
+              Pulsar Sink
             
           </span>
         </div>
@@ -224,7 +224,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -245,7 +245,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../quick-start/" class="md-tabs__link">
+        <a href="../../../quick-start/" class="md-tabs__link">
           
   
   
@@ -261,6 +261,8 @@
   
   
   
+    
+  
   
     
     
@@ -268,11 +270,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../../../core-concepts/overview/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../../core-concepts/overview/" class="md-tabs__link">
           
   
   
@@ -291,13 +295,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../releases/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../operations/releases/" class="md-tabs__link">
           
   
   
@@ -317,7 +319,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../development/development/" class="md-tabs__link">
+        <a href="../../../development/development/" class="md-tabs__link">
           
   
   
@@ -376,9 +378,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../../assets/logo.png" alt="logo">
 
     </a>
     Numaflow - Data/streaming processing platform on Kubernetes
@@ -405,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -482,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../quick-start/" class="md-nav__link">
+      <a href="../../../quick-start/" class="md-nav__link">
         
   
   
@@ -510,7 +512,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/prerequisites-and-installation/" class="md-nav__link">
+      <a href="../../../getting-started/prerequisites-and-installation/" class="md-nav__link">
         
   
   
@@ -538,7 +540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/monovertex/" class="md-nav__link">
+      <a href="../../../getting-started/monovertex/" class="md-nav__link">
         
   
   
@@ -566,7 +568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/pipeline/" class="md-nav__link">
+      <a href="../../../getting-started/pipeline/" class="md-nav__link">
         
   
   
@@ -594,7 +596,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting-started/whats-next/" class="md-nav__link">
+      <a href="../../../getting-started/whats-next/" class="md-nav__link">
         
   
   
@@ -626,24 +628,29 @@
       
   
   
+    
   
   
+  
     
     
     
     
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -661,7 +668,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -729,7 +736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/overview/" class="md-nav__link">
+      <a href="../../../core-concepts/overview/" class="md-nav__link">
         
   
   
@@ -757,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/pipeline/" class="md-nav__link">
+      <a href="../../../core-concepts/pipeline/" class="md-nav__link">
         
   
   
@@ -785,7 +792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/monovertex/" class="md-nav__link">
+      <a href="../../../core-concepts/monovertex/" class="md-nav__link">
         
   
   
@@ -813,7 +820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/serving/" class="md-nav__link">
+      <a href="../../../core-concepts/serving/" class="md-nav__link">
         
   
   
@@ -841,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/vertex/" class="md-nav__link">
+      <a href="../../../core-concepts/vertex/" class="md-nav__link">
         
   
   
@@ -869,7 +876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer/" class="md-nav__link">
+      <a href="../../../core-concepts/inter-step-buffer/" class="md-nav__link">
         
   
   
@@ -897,7 +904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
+      <a href="../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
         
   
   
@@ -925,7 +932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/streaming/" class="md-nav__link">
+      <a href="../../../core-concepts/streaming/" class="md-nav__link">
         
   
   
@@ -953,7 +960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/watermarks/" class="md-nav__link">
+      <a href="../../../core-concepts/watermarks/" class="md-nav__link">
         
   
   
@@ -1039,7 +1046,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/overview/" class="md-nav__link">
+      <a href="../../sources/overview/" class="md-nav__link">
         
   
   
@@ -1067,7 +1074,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/generator/" class="md-nav__link">
+      <a href="../../sources/generator/" class="md-nav__link">
         
   
   
@@ -1095,7 +1102,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/http/" class="md-nav__link">
+      <a href="../../sources/http/" class="md-nav__link">
         
   
   
@@ -1123,7 +1130,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/kafka/" class="md-nav__link">
+      <a href="../../sources/kafka/" class="md-nav__link">
         
   
   
@@ -1151,7 +1158,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/pulsar/" class="md-nav__link">
+      <a href="../../sources/pulsar/" class="md-nav__link">
         
   
   
@@ -1179,7 +1186,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/nats/" class="md-nav__link">
+      <a href="../../sources/nats/" class="md-nav__link">
         
   
   
@@ -1207,7 +1214,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/jetstream/" class="md-nav__link">
+      <a href="../../sources/jetstream/" class="md-nav__link">
         
   
   
@@ -1235,7 +1242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/sqs/" class="md-nav__link">
+      <a href="../../sources/sqs/" class="md-nav__link">
         
   
   
@@ -1263,7 +1270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+      <a href="../../sources/user-defined-sources/" class="md-nav__link">
         
   
   
@@ -1341,7 +1348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/overview/" class="md-nav__link">
+      <a href="../../sources/transformer/overview/" class="md-nav__link">
         
   
   
@@ -1419,7 +1426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/" class="md-nav__link">
         
   
   
@@ -1447,7 +1454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/filter/" class="md-nav__link">
         
   
   
@@ -1475,7 +1482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         
   
   
@@ -1503,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         
   
   
@@ -1552,6 +1559,8 @@
                 
   
   
+    
+  
   
   
     
@@ -1562,11 +1571,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
@@ -1587,7 +1596,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1605,7 +1614,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         
   
   
@@ -1633,7 +1642,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/kafka/" class="md-nav__link">
+      <a href="../kafka/" class="md-nav__link">
         
   
   
@@ -1658,10 +1667,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/pulsar/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pulsar Sink
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1677,6 +1713,37 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1689,7 +1756,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/log/" class="md-nav__link">
+      <a href="../log/" class="md-nav__link">
         
   
   
@@ -1717,7 +1784,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/blackhole/" class="md-nav__link">
+      <a href="../blackhole/" class="md-nav__link">
         
   
   
@@ -1745,7 +1812,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/sqs/" class="md-nav__link">
+      <a href="../sqs/" class="md-nav__link">
         
   
   
@@ -1773,7 +1840,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
+      <a href="../user-defined-sinks/" class="md-nav__link">
         
   
   
@@ -1801,7 +1868,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/fallback/" class="md-nav__link">
+      <a href="../fallback/" class="md-nav__link">
         
   
   
@@ -1829,7 +1896,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/on-success/" class="md-nav__link">
+      <a href="../on-success/" class="md-nav__link">
         
   
   
@@ -1857,7 +1924,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/retry-strategy/" class="md-nav__link">
+      <a href="../retry-strategy/" class="md-nav__link">
         
   
   
@@ -1943,7 +2010,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
+      <a href="../../user-defined-functions/user-defined-functions/" class="md-nav__link">
         
   
   
@@ -2021,7 +2088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/map/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/map/" class="md-nav__link">
         
   
   
@@ -2099,7 +2166,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/" class="md-nav__link">
         
   
   
@@ -2127,7 +2194,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         
   
   
@@ -2155,7 +2222,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         
   
   
@@ -2191,7 +2258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/examples/" class="md-nav__link">
+      <a href="../../user-defined-functions/map/examples/" class="md-nav__link">
         
   
   
@@ -2277,7 +2344,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/reduce/" class="md-nav__link">
         
   
   
@@ -2355,7 +2422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
         
   
   
@@ -2383,7 +2450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
         
   
   
@@ -2411,7 +2478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
         
   
   
@@ -2439,7 +2506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/session/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/session/" class="md-nav__link">
         
   
   
@@ -2467,7 +2534,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
         
   
   
@@ -2503,7 +2570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/examples/" class="md-nav__link">
+      <a href="../../user-defined-functions/reduce/examples/" class="md-nav__link">
         
   
   
@@ -2597,7 +2664,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/overview/" class="md-nav__link">
+      <a href="../../sdks/overview/" class="md-nav__link">
         
   
   
@@ -2625,7 +2692,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/compatibility/" class="md-nav__link">
+      <a href="../../sdks/compatibility/" class="md-nav__link">
         
   
   
@@ -2653,7 +2720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/features/" class="md-nav__link">
+      <a href="../../sdks/features/" class="md-nav__link">
         
   
   
@@ -2739,7 +2806,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/message-headers/" class="md-nav__link">
+      <a href="../../../core-concepts/message-headers/" class="md-nav__link">
         
   
   
@@ -2767,7 +2834,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/tracing/" class="md-nav__link">
+      <a href="../../reference/tracing/" class="md-nav__link">
         
   
   
@@ -2795,7 +2862,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/pipeline-tuning/" class="md-nav__link">
+      <a href="../../reference/pipeline-tuning/" class="md-nav__link">
         
   
   
@@ -2823,7 +2890,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/autoscaling/" class="md-nav__link">
+      <a href="../../reference/autoscaling/" class="md-nav__link">
         
   
   
@@ -2851,7 +2918,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/conditional-forwarding/" class="md-nav__link">
+      <a href="../../reference/conditional-forwarding/" class="md-nav__link">
         
   
   
@@ -2879,7 +2946,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/pipeline-operations/" class="md-nav__link">
+      <a href="../../reference/pipeline-operations/" class="md-nav__link">
         
   
   
@@ -2907,7 +2974,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/gpu/" class="md-nav__link">
+      <a href="../../reference/gpu/" class="md-nav__link">
         
   
   
@@ -2935,7 +3002,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/join-vertex/" class="md-nav__link">
+      <a href="../../reference/join-vertex/" class="md-nav__link">
         
   
   
@@ -2963,7 +3030,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/multi-partition/" class="md-nav__link">
+      <a href="../../reference/multi-partition/" class="md-nav__link">
         
   
   
@@ -2991,7 +3058,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/ordered-processing/" class="md-nav__link">
+      <a href="../../reference/ordered-processing/" class="md-nav__link">
         
   
   
@@ -3019,7 +3086,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/side-inputs/" class="md-nav__link">
+      <a href="../../reference/side-inputs/" class="md-nav__link">
         
   
   
@@ -3047,7 +3114,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/mvtx-tuning/" class="md-nav__link">
+      <a href="../../reference/mvtx-tuning/" class="md-nav__link">
         
   
   
@@ -3075,7 +3142,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/mvtx-operations/" class="md-nav__link">
+      <a href="../../reference/mvtx-operations/" class="md-nav__link">
         
   
   
@@ -3103,7 +3170,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/mvtx-streaming/" class="md-nav__link">
+      <a href="../../reference/mvtx-streaming/" class="md-nav__link">
         
   
   
@@ -3131,7 +3198,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/distributed-throttling/" class="md-nav__link">
+      <a href="../../reference/distributed-throttling/" class="md-nav__link">
         
   
   
@@ -3159,7 +3226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/monovertex-bypass/" class="md-nav__link">
+      <a href="../../reference/monovertex-bypass/" class="md-nav__link">
         
   
   
@@ -3187,7 +3254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/per-message-nack/" class="md-nav__link">
+      <a href="../../reference/per-message-nack/" class="md-nav__link">
         
   
   
@@ -3215,7 +3282,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/memory-profiling/" class="md-nav__link">
+      <a href="../../reference/memory-profiling/" class="md-nav__link">
         
   
   
@@ -3293,7 +3360,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/pod-specifications/" class="md-nav__link">
+      <a href="../../reference/configuration/pod-specifications/" class="md-nav__link">
         
   
   
@@ -3321,7 +3388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/container-resources/" class="md-nav__link">
+      <a href="../../reference/configuration/container-resources/" class="md-nav__link">
         
   
   
@@ -3349,7 +3416,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/volumes/" class="md-nav__link">
+      <a href="../../reference/configuration/volumes/" class="md-nav__link">
         
   
   
@@ -3377,7 +3444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/environment-variables/" class="md-nav__link">
+      <a href="../../reference/configuration/environment-variables/" class="md-nav__link">
         
   
   
@@ -3405,7 +3472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../../reference/configuration/labels-and-annotations/" class="md-nav__link">
         
   
   
@@ -3433,7 +3500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/init-containers/" class="md-nav__link">
+      <a href="../../reference/configuration/init-containers/" class="md-nav__link">
         
   
   
@@ -3461,7 +3528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../../reference/configuration/sidecar-containers/" class="md-nav__link">
         
   
   
@@ -3489,7 +3556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../../reference/configuration/liveness-and-readiness/" class="md-nav__link">
         
   
   
@@ -3517,7 +3584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../../reference/configuration/pipeline-customization/" class="md-nav__link">
         
   
   
@@ -3545,7 +3612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/dra/" class="md-nav__link">
+      <a href="../../reference/configuration/dra/" class="md-nav__link">
         
   
   
@@ -3573,7 +3640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/istio/" class="md-nav__link">
+      <a href="../../reference/configuration/istio/" class="md-nav__link">
         
   
   
@@ -3601,7 +3668,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
+      <a href="../../reference/configuration/max-message-size/" class="md-nav__link">
         
   
   
@@ -3629,7 +3696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/update-strategy/" class="md-nav__link">
+      <a href="../../reference/configuration/update-strategy/" class="md-nav__link">
         
   
   
@@ -3665,7 +3732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/kustomize/kustomize/" class="md-nav__link">
+      <a href="../../reference/kustomize/kustomize/" class="md-nav__link">
         
   
   
@@ -3693,7 +3760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../APIs/" class="md-nav__link">
+      <a href="../../../APIs/" class="md-nav__link">
         
   
   
@@ -3779,7 +3846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/use-cases/overview/" class="md-nav__link">
+      <a href="../../use-cases/overview/" class="md-nav__link">
         
   
   
@@ -3807,7 +3874,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
+      <a href="../../use-cases/monitoring-and-observability/" class="md-nav__link">
         
   
   
@@ -3893,7 +3960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/overview/" class="md-nav__link">
+      <a href="../../UI/overview/" class="md-nav__link">
         
   
   
@@ -3921,7 +3988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/errors/" class="md-nav__link">
+      <a href="../../UI/errors/" class="md-nav__link">
         
   
   
@@ -3949,7 +4016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/logs/" class="md-nav__link">
+      <a href="../../UI/logs/" class="md-nav__link">
         
   
   
@@ -3977,7 +4044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/metrics-tab/" class="md-nav__link">
+      <a href="../../UI/metrics-tab/" class="md-nav__link">
         
   
   
@@ -4005,7 +4072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/pods-view/" class="md-nav__link">
+      <a href="../../UI/pods-view/" class="md-nav__link">
         
   
   
@@ -4041,7 +4108,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/FAQ/" class="md-nav__link">
+      <a href="../../FAQ/" class="md-nav__link">
         
   
   
@@ -4073,29 +4140,24 @@
       
   
   
-    
   
   
-  
     
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -4113,7 +4175,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4131,7 +4193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../releases/" class="md-nav__link">
+      <a href="../../../operations/releases/" class="md-nav__link">
         
   
   
@@ -4159,7 +4221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../installation/" class="md-nav__link">
+      <a href="../../../operations/installation/" class="md-nav__link">
         
   
   
@@ -4187,7 +4249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../validating-webhook/" class="md-nav__link">
+      <a href="../../../operations/validating-webhook/" class="md-nav__link">
         
   
   
@@ -4212,8 +4274,6 @@
                 
   
   
-    
-  
   
   
     
@@ -4224,11 +4284,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
           <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
@@ -4249,7 +4309,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4267,7 +4327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../controller-configmap/" class="md-nav__link">
+      <a href="../../../operations/controller-configmap/" class="md-nav__link">
         
   
   
@@ -4292,8 +4352,6 @@
                 
   
   
-    
-  
   
   
     
@@ -4304,11 +4362,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4_2" >
         
           
           <label class="md-nav__link" for="__nav_4_4_2" id="__nav_4_4_2_label" tabindex="0">
@@ -4329,7 +4387,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_4_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_4_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_4_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4347,7 +4405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ui-access-path/" class="md-nav__link">
+      <a href="../../../operations/ui/ui-access-path/" class="md-nav__link">
         
   
   
@@ -4372,8 +4430,6 @@
                 
   
   
-    
-  
   
   
     
@@ -4384,11 +4440,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4_2_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4_2_2" >
         
           
           <label class="md-nav__link" for="__nav_4_4_2_2" id="__nav_4_4_2_2_label" tabindex="0">
@@ -4409,7 +4465,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_4_2_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_4_2_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_4_2_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4427,7 +4483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../../operations/ui/authn/authentication/" class="md-nav__link">
         
   
   
@@ -4452,37 +4508,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    SSO with Dex
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../operations/ui/authn/dex/" class="md-nav__link">
         
   
   
@@ -4498,59 +4527,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-register-application-for-github" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Register application for Github
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-configuring-numaflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Configuring Numaflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-restarting-pods" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Restarting Pods
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -4563,7 +4539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../local-users/" class="md-nav__link">
+      <a href="../../../operations/ui/authn/local-users/" class="md-nav__link">
         
   
   
@@ -4599,7 +4575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../authz/rbac/" class="md-nav__link">
+      <a href="../../../operations/ui/authz/rbac/" class="md-nav__link">
         
   
   
@@ -4635,7 +4611,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../metrics/metrics/" class="md-nav__link">
+      <a href="../../../operations/metrics/metrics/" class="md-nav__link">
         
   
   
@@ -4663,7 +4639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../grafana/" class="md-nav__link">
+      <a href="../../../operations/grafana/" class="md-nav__link">
         
   
   
@@ -4699,7 +4675,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../security/" class="md-nav__link">
+      <a href="../../../operations/security/" class="md-nav__link">
         
   
   
@@ -4784,7 +4760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/development/" class="md-nav__link">
+      <a href="../../../development/development/" class="md-nav__link">
         
   
   
@@ -4862,7 +4838,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/overview/" class="md-nav__link">
+      <a href="../../../specifications/overview/" class="md-nav__link">
         
   
   
@@ -4890,7 +4866,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/controllers/" class="md-nav__link">
+      <a href="../../../specifications/controllers/" class="md-nav__link">
         
   
   
@@ -4918,7 +4894,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/autoscaling/" class="md-nav__link">
+      <a href="../../../specifications/autoscaling/" class="md-nav__link">
         
   
   
@@ -4946,7 +4922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/edges-buffers-buckets/" class="md-nav__link">
+      <a href="../../../specifications/edges-buffers-buckets/" class="md-nav__link">
         
   
   
@@ -4974,7 +4950,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/side-inputs/" class="md-nav__link">
+      <a href="../../../specifications/side-inputs/" class="md-nav__link">
         
   
   
@@ -5002,7 +4978,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/authorization/" class="md-nav__link">
+      <a href="../../../specifications/authorization/" class="md-nav__link">
         
   
   
@@ -5038,7 +5014,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/debugging/" class="md-nav__link">
+      <a href="../../../development/debugging/" class="md-nav__link">
         
   
   
@@ -5066,7 +5042,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/static-code-analysis/" class="md-nav__link">
+      <a href="../../../development/static-code-analysis/" class="md-nav__link">
         
   
   
@@ -5094,7 +5070,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/releasing/" class="md-nav__link">
+      <a href="../../../development/releasing/" class="md-nav__link">
         
   
   
@@ -5176,32 +5152,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-register-application-for-github" class="md-nav__link">
+  <a href="#tls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Register application for Github
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-configuring-numaflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Configuring Numaflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-restarting-pods" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Restarting Pods
+        TLS
       
     </span>
   </a>
@@ -5228,65 +5182,71 @@
   
 
 
-<h1 id="dex-server">Dex Server<a class="headerlink" href="#dex-server" title="Permanent link">&para;</a></h1>
-<p>Numaflow comes with a <a href="https://github.com/dexidp/dex">Dex</a> Server for authentication integration. Currently,
-the supported identity provider is Github. SSO configuration of Numaflow UI will require editing some configuration
-detailed below.</p>
-<h2 id="1-register-application-for-github">1. Register application for Github<a class="headerlink" href="#1-register-application-for-github" title="Permanent link">&para;</a></h2>
-<p>In Github, register a new OAuth application. The callback address should be the homepage of your Numaflow UI + <code>/dex/callback</code>.</p>
-<p>After registering this application, you will be given a client ID. You will need this value and also generate
-a new client secret.</p>
-<p><img alt="Register OAuth App" src="../../../../assets/creating-application-github.png" title="Register OAuth App" /></p>
-<h2 id="2-configuring-numaflow">2. Configuring Numaflow<a class="headerlink" href="#2-configuring-numaflow" title="Permanent link">&para;</a></h2>
-<p>First we need to configure <code>server.disable.auth</code> to <code>false</code> in the ConfigMap <code>numaflow-cmd-params-config</code>. This will 
-enable authentication and authorization for the UX server.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
-<span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
-<span class="nt">data</span><span class="p">:</span>
-<span class="w">  </span><span class="c1">### Whether to disable authentication and authorization for the UX server, defaults to false.</span>
-<span class="w">  </span><span class="nt">server.disable.auth</span><span class="p">:</span><span class="w"> </span><span class="s">"false"</span>
-<span class="w">  </span><span class="c1">#</span>
-</code></pre></div>
-<p>Next we need to configure the <code>numaflow-dex-server-config</code> ConfigMap. Change <code>&lt;ORG_NAME&gt;</code> to your organization you 
-created the application under and include the correct teams. This file will be read by the init container of the Dex 
-server and generate the config it will server.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
-<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-dex-server-config</span>
-<span class="nt">data</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<span class="w">    </span><span class="no">connectors:</span>
-<span class="w">    </span><span class="no">- type: github</span>
-<span class="w">      </span><span class="no"># https://dexidp.io/docs/connectors/github/</span>
-<span class="w">      </span><span class="no">id: github</span>
-<span class="w">      </span><span class="no">name: GitHub</span>
-<span class="w">      </span><span class="no">config:</span>
-<span class="w">        </span><span class="no">clientID: $GITHUB_CLIENT_ID</span>
-<span class="w">        </span><span class="no">clientSecret: $GITHUB_CLIENT_SECRET</span>
-<span class="w">        </span><span class="no">orgs:</span>
-<span class="w">        </span><span class="no">- name: &lt;ORG_NAME&gt;</span>
-<span class="w">          </span><span class="no">teams:</span>
-<span class="w">          </span><span class="no">- admin</span>
-<span class="w">          </span><span class="no">- readonly</span>
-</code></pre></div>
-<p>Finally we will need to create/update the <code>numaflow-dex-secrets</code> Secret. You will need to add the client ID and secret 
-you created earlier for the application here.</p>
+<h1 id="pulsar-sink">Pulsar Sink<a class="headerlink" href="#pulsar-sink" title="Permanent link">&para;</a></h1>
+<p>A <code>Pulsar</code> sink is used to write the messages to a Pulsar topic.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
 <span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-dex-secrets</span>
-<span class="nt">stringData</span><span class="p">:</span>
-<span class="w">  </span><span class="c1"># https://dexidp.io/docs/connectors/github/</span>
-<span class="w">  </span><span class="nt">dex-github-client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;GITHUB_CLIENT_ID&gt;</span>
-<span class="w">  </span><span class="nt">dex-github-client-secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;GITHUB_CLIENT_SECRET&gt;</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar</span>
+<span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ZXlKaGJHY2lPaUpJVXpJMU5pSjkuZXlKemRXSWlPaUowWlhOMExYVnpaWElpZlEuZkRTWFFOcEdBWUN4anN1QlZzSDRTM2VLOVlZdHpwejhfdkFZcUxwVHAybwo=</span>
+
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">pulsar</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">serverAddr</span><span class="p">:</span><span class="w"> </span><span class="s">"pulsar+ssl://broker.example.com:6651"</span>
+<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_topic</span>
+<span class="w">          </span><span class="nt">producerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_producer</span>
+<span class="w">          </span><span class="nt">auth</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional</span>
+<span class="w">            </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the JWT Token.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">token</span>
 </code></pre></div>
-<h2 id="3-restarting-pods">3. Restarting Pods<a class="headerlink" href="#3-restarting-pods" title="Permanent link">&para;</a></h2>
-<p>If you are enabling/disabling authorization and authentication for the Numaflow server, it will need to be restarted.</p>
-<p>Any changes or additions to the connectors in the <code>numaflow-dex-server-config</code> ConfigMap will need to be read and
-generated again requiring a restart as well.</p>
+<p>We have only tested the 4.0.x LTS version of Pulsar. The implementation supports <a href="https://pulsar.apache.org/docs/4.0.x/security-jwt/">JWT token</a> and <a href="https://pulsar.apache.org/docs/4.0.x/security-basic-auth/">HTTP basic</a> authentication via the <code>auth</code> field (<code>auth.token</code> or <code>auth.basicAuth</code>). If <code>auth</code> is not specified, Numaflow will connect to the Pulsar servers without authentication.</p>
+<h2 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">&para;</a></h2>
+<p>If the Pulsar broker's certificate is signed by a custom/internal CA (not in
+the pod's default trust store), point <code>tls.caCertSecret</code> at a Secret
+containing the CA certificate:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar-ca</span>
+<span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ca.crt</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base64-encoded PEM CA certificate&gt;</span>
+
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">pulsar</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">serverAddr</span><span class="p">:</span><span class="w"> </span><span class="s">"pulsar+ssl://broker.example.com:6651"</span>
+<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_topic</span>
+<span class="w">          </span><span class="nt">producerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_producer</span>
+<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
+<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
+<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference which contains the CA certificate.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pulsar-ca</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca.crt</span>
+</code></pre></div>
+<p>Only server-authentication (one-way TLS) is supported: <code>caCertSecret</code> lets the
+client trust a custom CA. <code>certSecret</code>/<code>keySecret</code> (mutual TLS) are <strong>not</strong>
+supported for Pulsar, unlike the <a href="../kafka/">Kafka sink</a>'s <code>tls</code> block - the
+underlying Pulsar client does not currently support presenting a client
+certificate to the broker.</p>
 
 
 
@@ -5346,10 +5306,10 @@ generated again requiring a restart as well.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
