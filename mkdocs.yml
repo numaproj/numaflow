@@ -80,6 +80,7 @@ nav:
       - Sinks:
           - Overview: "user-guide/sinks/overview.md"
           - user-guide/sinks/kafka.md
+          - user-guide/sinks/pulsar.md
           - user-guide/sinks/log.md
           - user-guide/sinks/blackhole.md
           - user-guide/sinks/sqs.md

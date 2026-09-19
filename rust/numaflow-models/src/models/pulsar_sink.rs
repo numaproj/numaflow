@@ -24,6 +24,8 @@ pub struct PulsarSink {
     pub producer_name: String,
     #[serde(rename = "serverAddr")]
     pub server_addr: String,
+    #[serde(rename = "tls", skip_serializing_if = "Option::is_none")]
+    pub tls: Option<Box<crate::models::Tls>>,
     #[serde(rename = "topic")]
     pub topic: String,
 }
@@ -34,6 +36,7 @@ impl PulsarSink {
             auth: None,
             producer_name,
             server_addr,
+            tls: None,
             topic,
         }
     }

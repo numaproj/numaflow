@@ -4513,12 +4513,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"),
 						},
 					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "producerName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -4575,12 +4581,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"),
 						},
 					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "consumerName", "subscriptionName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 

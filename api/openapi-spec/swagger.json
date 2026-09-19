@@ -21840,6 +21840,10 @@
         "serverAddr": {
           "type": "string"
         },
+        "tls": {
+          "description": "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
+        },
         "topic": {
           "type": "string"
         }
@@ -21875,6 +21879,10 @@
         },
         "subscriptionName": {
           "type": "string"
+        },
+        "tls": {
+          "description": "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
         },
         "topic": {
           "type": "string"
