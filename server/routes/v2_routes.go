@@ -55,8 +55,11 @@ func V2AuthRouteMap(baseHref string) (authz.RouteMap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load API v2 OpenAPI contract: %w", err)
 	}
+	if spec.Paths == nil {
+		return nil, fmt.Errorf("API v2 OpenAPI contract has no paths")
+	}
 	result := authz.RouteMap{}
-	for path, item := range spec.Paths {
+	for path, item := range spec.Paths.Map() {
 		for method, operation := range operations(item) {
 			object, ok := extensionValue[string](operation.Extensions[v2AuthzObjectExtension])
 			if !ok || object == "" {
