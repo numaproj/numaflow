@@ -23,6 +23,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	v2 "github.com/numaproj/numaflow/server/apis/v2"
+	"github.com/numaproj/numaflow/server/application/podview"
 	"github.com/numaproj/numaflow/server/authz"
 )
 
@@ -33,6 +35,7 @@ type SystemInfo struct {
 	DisableMetricsCharts bool   `json:"disableMetricsCharts"`
 	Version              string `json:"version"`
 	DaemonClientProtocol string `json:"daemonClientProtocol"`
+	PodViewV2Mode        string `json:"-"`
 }
 
 type AuthInfo struct {
@@ -86,6 +89,20 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
+
+	v2Handler, err := v2.NewClusterHandler(podview.Mode(sysInfo.PodViewV2Mode))
+	if err != nil {
+		panic(err)
+	}
+	r2Group := r.Group(baseHref + "api/v2")
+	if !authInfo.DisableAuth {
+		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
+		if err != nil {
+			panic(err)
+		}
+		r2Group.Use(v2AuthMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
+	}
+	registerV2Routes(r2Group, v2Handler)
 }
 
 func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {

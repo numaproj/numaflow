@@ -55,6 +55,7 @@ type ServerOptions struct {
 	CorsAllowedOrigins   string
 	ReadOnly             bool
 	DaemonClientProtocol string
+	PodViewV2Mode        string
 }
 
 type server struct {
@@ -85,7 +86,7 @@ func (s *server) Start(ctx context.Context) {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     allowedOrigins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
+			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 			AllowCredentials: true,
 		}))
 	}
@@ -109,6 +110,7 @@ func (s *server) Start(ctx context.Context) {
 			DisableMetricsCharts: true, // defaults to true
 			Version:              numaflow.GetVersion().String(),
 			DaemonClientProtocol: s.options.DaemonClientProtocol,
+			PodViewV2Mode:        s.options.PodViewV2Mode,
 		},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
@@ -176,7 +178,7 @@ func UrlRewrite(r *gin.Engine) gin.HandlerFunc {
 // For example, "GET:/api/v1/namespaces" becomes "GET:/baseHref/api/v1/namespaces".
 // The value is a RouteInfo object.
 func CreateAuthRouteMap(baseHref string) authz.RouteMap {
-	return authz.RouteMap{
+	routeMap := authz.RouteMap{
 		"GET:" + baseHref + "api/v1/sysinfo":                                                              authz.NewRouteInfo(authz.ObjectPipeline, false),
 		"GET:" + baseHref + "api/v1/authinfo":                                                             authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/namespaces":                                                           authz.NewRouteInfo(authz.ObjectEvents, false),
@@ -218,4 +220,12 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"POST:" + baseHref + "api/v1/metrics-proxy":                                                       authz.NewRouteInfo(authz.ObjectAll, true),
 		"GET:" + baseHref + "api/v1/metrics-discovery/object/:object":                                     authz.NewRouteInfo(authz.ObjectAll, true),
 	}
+	v2RouteMap, err := routes.V2AuthRouteMap(baseHref)
+	if err != nil {
+		panic(err)
+	}
+	for key, routeInfo := range v2RouteMap {
+		routeMap[key] = routeInfo
+	}
+	return routeMap
 }
