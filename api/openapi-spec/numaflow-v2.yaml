@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: Numaflow API v2
+  version: 2.0.0-alpha.1
+  description: Task-oriented API contracts for Numaflow user interfaces and agents.
+servers:
+  - url: /api/v2
+security:
+  - cookieAuth: []
+paths:
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      summary: Get capabilities available to the current caller
+      tags: [Discovery]
+      x-numaflow-authz-object: "*"
+      x-numaflow-requires-authz: false
+      responses:
+        "200":
+          description: Effective API and Pod View capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: numaflow-login
+  responses:
+    Unauthorized:
+      description: The caller could not be authenticated
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalServerError:
+      description: The request could not be completed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Capabilities:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, podView, operations, limits]
+      properties:
+        apiVersion:
+          type: string
+          example: v2
+        podView:
+          $ref: "#/components/schemas/PodViewCapability"
+        operations:
+          type: array
+          items:
+            type: string
+          example:
+            - getCapabilities
+        limits:
+          $ref: "#/components/schemas/ApiLimits"
+    PodViewCapability:
+      type: object
+      additionalProperties: false
+      required: [mode, eligible, defaultExperience, allowClassicFallback]
+      properties:
+        mode:
+          $ref: "#/components/schemas/PodViewMode"
+        eligible:
+          type: boolean
+        defaultExperience:
+          $ref: "#/components/schemas/PodViewExperience"
+        allowClassicFallback:
+          type: boolean
+    PodViewMode:
+      type: string
+      enum: [disabled, optIn, default, required]
+    PodViewExperience:
+      type: string
+      enum: [classic, next]
+    ApiLimits:
+      type: object
+      additionalProperties: false
+      required: [defaultPageSize, maximumPageSize, maximumLogLines, maximumMetricPoints]
+      properties:
+        defaultPageSize:
+          type: integer
+          minimum: 1
+          example: 50
+        maximumPageSize:
+          type: integer
+          minimum: 1
+          example: 200
+        maximumLogLines:
+          type: integer
+          minimum: 1
+          example: 1000
+        maximumMetricPoints:
+          type: integer
+          minimum: 1
+          example: 2000
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+        retryable:
+          type: boolean
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+    Violation:
+      type: object
+      additionalProperties: false
+      required: [field, reason, message]
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+        allowedValues:
+          type: array
+          items:
+            type: string

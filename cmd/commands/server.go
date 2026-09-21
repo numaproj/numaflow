@@ -40,6 +40,7 @@ func NewServerCommand() *cobra.Command {
 		corsAllowedOrigins   string
 		readOnly             bool
 		daemonClientProtocol string
+		podViewV2Mode        string
 	)
 
 	command := &cobra.Command{
@@ -64,6 +65,7 @@ func NewServerCommand() *cobra.Command {
 				CorsAllowedOrigins:   corsAllowedOrigins,
 				ReadOnly:             readOnly,
 				DaemonClientProtocol: daemonClientProtocol,
+				PodViewV2Mode:        podViewV2Mode,
 			}
 			server := svrcmd.NewServer(opts)
 			log := logging.NewLogger().Named("server")
@@ -80,5 +82,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	command.Flags().StringVar(&corsAllowedOrigins, "cors-allowed-origins", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), "The values for allowed cors AllowOrigins header field, separated by comma.")
 	command.Flags().StringVar(&daemonClientProtocol, "daemon-client-protocol", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL", "grpc"), "The protocol used to connect to the Pipeline daemon service from Numaflow UX server, defaults to 'grpc'.")
+	command.Flags().StringVar(&podViewV2Mode, "pod-view-v2-mode", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_POD_VIEW_V2_MODE", "disabled"), "Pod View v2 rollout mode: disabled, optIn, default, or required.")
 	return command
 }
