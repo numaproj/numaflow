@@ -37,7 +37,7 @@ type Handler struct {
 // NewHandler builds the API v2 HTTP adapter around the Pod View application service.
 func NewHandler(service PodViewService) (*Handler, error) {
 	if service == nil {
-		return nil, fmt.Errorf("Pod View service is required")
+		return nil, fmt.Errorf("pod View service is required")
 	}
 	return &Handler{service: service}, nil
 }
