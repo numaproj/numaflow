@@ -1765,4 +1765,96 @@ mod tests {
         assert_eq!(s1[0].vertex, "map");
         assert_eq!(s2[0].vertex, "map");
     }
+
+    /// An unordered join reads every partition of every ingress edge.
+    ///
+    /// x and y both join into z, which has 3 partitions, so there are 3+3=6 physical
+    /// buffers. The forwarder spawns one independent reader per (edge, partition), so
+    /// this count is also the number of forwarders. Reading fewer would strand data
+    /// in whichever buffers went unread.
+    #[test]
+    fn test_unordered_join_reads_every_partition_of_every_edge() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoianAiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJ4IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19LHsiZnJvbSI6InkiLCJ0byI6InoiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjMsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert!(!config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 2);
+
+        let x: Vec<&str> = config.from_vertex_config[0]
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.name)
+            .collect();
+        let y: Vec<&str> = config.from_vertex_config[1]
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.name)
+            .collect();
+
+        assert_eq!(
+            x,
+            vec!["default-jp-x-z-0", "default-jp-x-z-1", "default-jp-x-z-2"]
+        );
+        assert_eq!(
+            y,
+            vec!["default-jp-y-z-0", "default-jp-y-z-1", "default-jp-y-z-2"]
+        );
+
+        // 3 partitions x 2 ingress edges = 6 readers/forwarders.
+        let total: usize = config
+            .from_vertex_config
+            .iter()
+            .map(|f| f.reader_config.streams.len())
+            .sum();
+        assert_eq!(total, 6);
+    }
+
+    /// An ordered join is co-partitioned: replica i reads partition i of every edge.
+    ///
+    /// The writers hash by key into the same number of partitions on every ingress
+    /// edge, so a given key lands on index i of both x->z and y->z. Replica i must
+    /// therefore read x_i AND y_i - and nothing else - for both sides of a key to be
+    /// processed by one pod. Reading a partition other than the replica's would send
+    /// the same key to two pods; reading only one edge would drop the other side.
+    ///
+    /// This asserts the replica-0 pod. NUMAFLOW_REPLICA is a process-wide OnceLock so
+    /// a single test process only observes one replica; the shared partition index is
+    /// what makes the pairing hold for every replica.
+    #[test]
+    fn test_ordered_join_is_co_partitioned_per_replica() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoianAiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJ4IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19LHsiZnJvbSI6InkiLCJ0byI6InoiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjMsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9LCJvcmRlcmVkIjp7ImVuYWJsZWQiOnRydWV9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 2);
+
+        let replica = config.replica;
+        for from_vertex in &config.from_vertex_config {
+            let streams = &from_vertex.reader_config.streams;
+            // Exactly one partition per edge: this replica's.
+            assert_eq!(
+                streams.len(),
+                1,
+                "edge {} should read one stream",
+                from_vertex.name
+            );
+            assert_eq!(streams[0].partition, replica);
+            assert_eq!(
+                streams[0].name,
+                format!("default-jp-{}-z-{}", from_vertex.name, replica)
+            );
+        }
+
+        // Both sides of the join, same partition index: x_i and y_i on one pod.
+        let partitions: Vec<u16> = config
+            .from_vertex_config
+            .iter()
+            .map(|f| f.reader_config.streams[0].partition)
+            .collect();
+        assert_eq!(partitions, vec![replica, replica]);
+    }
 }
