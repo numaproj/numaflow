@@ -19,7 +19,6 @@ package v2
 import "github.com/numaproj/numaflow/server/application/podview"
 
 // NewClusterHandler assembles the API v2 handler from server configuration.
-// PR1 does not require a Kubernetes client because capabilities are static.
 func NewClusterHandler(mode podview.Mode) (*Handler, error) {
 	service, err := podview.NewService(mode)
 	if err != nil {
