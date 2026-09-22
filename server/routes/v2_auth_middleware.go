@@ -18,57 +18,40 @@ package routes
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v2 "github.com/numaproj/numaflow/server/apis/v2"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
-	"github.com/numaproj/numaflow/server/common"
 )
 
 // v2AuthMiddleware authenticates existing browser cookie sessions and applies
 // route-specific authorization while returning API v2 Problem responses on failure.
 // Bearer-token support is intentionally deferred to a later API v2 auth change.
 func v2AuthMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localUsersAuthenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		log := logging.FromContext(ctx)
-		loginType, err := c.Cookie(common.LoginCookieName)
-		if err != nil {
-			v2.WriteProblem(c, http.StatusUnauthorized, "authentication_failed", "Request authentication failed", fmt.Sprintf("failed to get login type: %v", err), nil)
-			return
-		}
-
-		var userInfo *authn.UserInfo
-		switch loginType {
-		case "dex":
-			userInfo, err = dexAuthenticator.Authenticate(c)
-		case "local":
-			userInfo, err = localUsersAuthenticator.Authenticate(c)
-		default:
-			v2.WriteProblem(c, http.StatusUnauthorized, "authentication_failed", "Request authentication failed", fmt.Sprintf("unidentified login type received: %v", loginType), nil)
-			return
-		}
-		if err != nil {
-			v2.WriteProblem(c, http.StatusUnauthorized, "authentication_failed", "Request authentication failed", fmt.Sprintf("failed to authenticate user: %v", err), nil)
-			return
-		}
-
-		// The OpenAPI-derived map determines whether this authenticated route also
-		// requires a Casbin authorization decision.
-		routeInfo := authRouteMap.GetRouteFromContext(c)
-		if routeInfo == nil {
-			log.Errorw("route not present in routeMap", "route", authz.GetRouteMapKey(c))
-			v2.WriteProblem(c, http.StatusForbidden, "route_not_authorized", "Request authorization failed", "Invalid route", nil)
-			return
-		}
-		if routeInfo.RequiresAuthZ && !authorizer.Authorize(c, userInfo) {
-			v2.WriteProblem(c, http.StatusForbidden, "authorization_denied", "Request authorization failed", "user is not authorized to execute the requested action", nil)
-			return
-		}
-		c.Next()
-	}
+	return authenticationAuthorizationMiddleware(
+		ctx,
+		authorizer,
+		dexAuthenticator,
+		localUsersAuthenticator,
+		authRouteMap,
+		func(c *gin.Context, failure authFailure) {
+			status := http.StatusUnauthorized
+			code := "authentication_failed"
+			title := "Request authentication failed"
+			if failure.kind == authFailureMissingRoute {
+				status = http.StatusForbidden
+				code = "route_not_authorized"
+				title = "Request authorization failed"
+			}
+			if failure.kind == authFailureAuthorizationDenied {
+				status = http.StatusForbidden
+				code = "authorization_denied"
+				title = "Request authorization failed"
+			}
+			v2.WriteProblem(c, status, code, title, failure.v2Detail(), nil)
+		},
+	)
 }

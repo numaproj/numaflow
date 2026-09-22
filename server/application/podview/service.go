@@ -22,7 +22,7 @@ type Service struct {
 	mode Mode
 }
 
-// NewService creates the Pod View capability service for the configured rollout mode.
+// NewService creates the Pod View capability service for the configured availability mode.
 // An omitted mode is treated as disabled so new deployments retain the classic experience.
 func NewService(mode Mode) (*Service, error) {
 	if mode == "" {
@@ -34,10 +34,10 @@ func NewService(mode Mode) (*Service, error) {
 	return &Service{mode: mode}, nil
 }
 
-// Valid reports whether m is a rollout mode supported by the API v2 contract.
+// Valid reports whether m is an availability mode supported by the API v2 contract.
 func (m Mode) Valid() bool {
 	switch m {
-	case ModeDisabled, ModeOptIn, ModeDefault, ModeRequired:
+	case ModeDisabled, ModeEnabled:
 		return true
 	default:
 		return false

@@ -320,6 +320,32 @@ func TestCleanResponseMiddleware_HandlerChain(t *testing.T) {
 	})
 }
 
+func TestCleanResponseMiddlewareAppliesToV2Group(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	v2Group := router.Group("/api/v2")
+	v2Group.Use(cleanResponseMiddleware())
+	v2Group.GET("/summary", func(c *gin.Context) {
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name":          "vertex",
+				"managedFields": "remove",
+			},
+		})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/summary", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	var response map[string]interface{}
+	assert.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	metadata := response["metadata"].(map[string]interface{})
+	assert.Equal(t, "vertex", metadata["name"])
+	assert.NotContains(t, metadata, "managedFields")
+}
+
 func TestCleanResponseMiddleware_CustomResponseWriter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

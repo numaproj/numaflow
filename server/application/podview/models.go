@@ -20,9 +20,7 @@ type Mode string
 
 const (
 	ModeDisabled Mode = "disabled"
-	ModeOptIn    Mode = "optIn"
-	ModeDefault  Mode = "default"
-	ModeRequired Mode = "required"
+	ModeEnabled  Mode = "enabled"
 )
 
 type Experience string

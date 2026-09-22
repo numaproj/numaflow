@@ -67,6 +67,14 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	// disable metrics charts if metric config or prometheus client is not set.
 	sysInfo.DisableMetricsCharts = promQlServiceObj.DisableMetricsChart()
 
+	var authorizer authz.Authorizer
+	if !authInfo.DisableAuth {
+		authorizer, err = authz.NewCasbinObject(ctx, authRouteMap)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj, localUsersAuthObj)
@@ -76,10 +84,6 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	r1Group := r.Group(baseHref + "api/v1")
 	r1Group.Use(cleanResponseMiddleware())
 	if !authInfo.DisableAuth {
-		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
-		if err != nil {
-			panic(err)
-		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
 		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
@@ -95,11 +99,8 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		panic(err)
 	}
 	r2Group := r.Group(baseHref + "api/v2")
+	r2Group.Use(cleanResponseMiddleware())
 	if !authInfo.DisableAuth {
-		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
-		if err != nil {
-			panic(err)
-		}
 		r2Group.Use(v2AuthMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
 	}
 	registerV2Routes(r2Group, v2Handler)

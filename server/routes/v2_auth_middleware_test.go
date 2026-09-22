@@ -72,3 +72,50 @@ func TestV2AuthMiddlewareAuthenticatesCookie(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
 }
+
+func TestV2AuthMiddlewareRejectsUnknownRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	user := createTestUserInfo("user@example.com", nil)
+	dexAuth := &mockAuthenticator{authenticateFunc: func(*gin.Context) (*authn.UserInfo, error) {
+		return user, nil
+	}}
+	router := gin.New()
+	router.Use(v2AuthMiddleware(context.Background(), &mockAuthorizer{}, dexAuth, &mockAuthenticator{}, authz.RouteMap{}))
+	router.GET("/api/v2/capabilities", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/capabilities", nil)
+	request.AddCookie(&http.Cookie{Name: common.LoginCookieName, Value: "dex"})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	var problem map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
+	assert.Equal(t, "route_not_authorized", problem["code"])
+}
+
+func TestV2AuthMiddlewareRejectsUnauthorizedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	user := createTestUserInfo("user@example.com", nil)
+	dexAuth := &mockAuthenticator{authenticateFunc: func(*gin.Context) (*authn.UserInfo, error) {
+		return user, nil
+	}}
+	routeMap := authz.RouteMap{"GET:/api/v2/capabilities": authz.NewRouteInfo(authz.ObjectAll, true)}
+	router := gin.New()
+	router.Use(v2AuthMiddleware(context.Background(), &mockAuthorizer{}, dexAuth, &mockAuthenticator{}, routeMap))
+	router.GET("/api/v2/capabilities", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/capabilities", nil)
+	request.AddCookie(&http.Cookie{Name: common.LoginCookieName, Value: "dex"})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	var problem map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
+	assert.Equal(t, "authorization_denied", problem["code"])
+}
