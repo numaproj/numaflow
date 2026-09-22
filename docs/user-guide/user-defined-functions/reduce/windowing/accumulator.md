@@ -230,7 +230,7 @@ therefore holds the watermark in place: the window timeout is measured against t
 Nothing reports an error; the only symptom is a processing lag that keeps growing.
 
 **If your UDF filters out every message for a key that keeps receiving data, emit something back for that key** — for
-example a message tagged to be dropped — so that the watermark can progress.
+example a message tagged to be dropped (e.g., `MessageToDrop` / `to_drop()`) — so that the watermark can progress.
 
 !!! note "Behavior change in v1.8.1"
 
