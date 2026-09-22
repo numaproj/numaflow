@@ -5666,19 +5666,24 @@ persisted state (WAL), release the tracked messages, and let the watermark advan
 <code>Outbound(Watermark) - 1</code> (see <a href="#data-retention">Data Retention</a>).</p>
 <h3 id="dropping-or-skipping-messages">Dropping or skipping messages<a class="headerlink" href="#dropping-or-skipping-messages" title="Permanent link">&para;</a></h3>
 <p>Because the Accumulator is a reduce-family operation — a stream of <code>Datum</code> in, a stream of <code>Datum</code> out — there is <strong>no
-requirement for a one-to-one mapping between input and output</strong>. If you do not want to forward a particular <code>Datum</code>,
-simply do not emit it; you do <strong>not</strong> need to emit an explicit "drop" message to account for it.</p>
+requirement for a one-to-one mapping between input and output</strong>. Individual <code>Datum</code>s can be skipped by simply not
+emitting them.</p>
+<p>There is one caveat. The outbound watermark of the vertex cannot move past the oldest event time the vertex is still
+tracking, and a tracked event time is released only by a response from the UDF for that key — a <code>Datum</code>, a dropped
+message, or the EOF that follows a window close. A key that keeps receiving data while the UDF emits nothing for it
+therefore holds the watermark in place: the window timeout is measured against the watermark (see
+<a href="#timeout"><code>timeout</code></a>), so the window never closes, no EOF is produced, and the state for that key keeps growing.
+Nothing reports an error; the only symptom is a processing lag that keeps growing.</p>
+<p><strong>If your UDF filters out every message for a key that keeps receiving data, emit something back for that key</strong> — for
+example a message tagged to be dropped (e.g., <code>MessageToDrop</code> / <code>to_drop()</code>) — so that the watermark can progress.</p>
 <div class="admonition note">
 <p class="admonition-title">Behavior change in v1.8.1</p>
 <p>Before <strong>v1.8.1</strong>, an accumulator window's persisted state was cleaned up only once the UDF emitted at least one
-output message for that window. A UDF that filtered out (dropped) every message for a window would leave that
-window's state uncollected, causing unbounded memory and WAL growth. This is why an explicit drop helper (for
-example, <code>MessageToDrop</code> / <code>to_drop()</code>) was previously considered necessary — to "account for" every input.</p>
-<p>As of <strong>v1.8.1</strong> (<a href="https://github.com/numaproj/numaflow/pull/3461">numaflow#3461</a>), window cleanup is driven by the
-internal EOF described <a href="#how-windows-are-closed-internal-eof">above</a> and no longer depends on the UDF emitting
-output. You can safely skip messages by simply not emitting them; the window and its state are cleaned up
-automatically once the window closes after the <code>timeout</code>. Explicitly emitting drops is no longer required. (Some
-SDKs, such as Python, still expose a <code>to_drop()</code> helper, but it is optional and unnecessary for cleanup.)</p>
+output message for that window. As of <strong>v1.8.1</strong>
+(<a href="https://github.com/numaproj/numaflow/pull/3461">numaflow#3461</a>), cleanup is driven by the internal EOF described
+<a href="#how-windows-are-closed-internal-eof">above</a> instead.</p>
+<p>This covers keys that fall idle: once a key stops receiving data, the watermark moves past it, the window closes
+and its state is collected. It does not cover a key that keeps receiving data and never emits, as described above.</p>
 </div>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <p>Here's an <a href="https://github.com/numaproj/numaflow/blob/main/examples/13-accumulator-window.yaml">example</a> of using an
