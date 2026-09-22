@@ -35,6 +35,8 @@ Create a file named `sqs-pl.yaml` with either of the following content.
 |---|---|---|
 | `queueName` | source spec | **Read** this one queue |
 | `queueNames` | source spec | **Read** these queues (XOR with `queueName`) |
+| `deadLetterQueues` | source spec | Native SQS DLQs, positionally mapped to source queues |
+| `maxReceiveCount` | source spec | Receives before SQS moves a message to its DLQ (default `10`) |
 | `queue_name` | **system** metadata, group `sqs` | **Origin** of this message (single- or multi-queue) |
 | `queueName` | sink spec | **Write** dest (builtin SQS sink; unchanged by origin) |
 
@@ -136,6 +138,64 @@ accounts, regions, credentials, or tuning, configure separate source vertices.
 
 Messages from all configured queues are merged without a cross-queue ordering
 guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-queue-origin).
+
+### Native Dead-Letter Queues
+
+Set `deadLetterQueues` to have Numaflow configure each source queue's native AWS
+SQS `RedrivePolicy` during source startup. AWS SQS—not Numaflow—then moves a
+message to the corresponding DLQ after it has been received more than
+`maxReceiveCount` times. Numaflow does not copy failed messages or maintain a
+separate receive counter.
+
+For a single source queue, the existing `queueName` form remains supported:
+
+```yaml
+source:
+  sqs:
+    queueName: "orders-queue"
+    deadLetterQueues: "orders-dlq"
+    maxReceiveCount: 5
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+```
+
+For multiple queues, entries map by position. In this example, `orders-queue`
+uses `orders-dlq`, `refunds-queue` uses `refunds-dlq`, and `replay-queue` uses
+`replay-dlq`:
+
+```yaml
+source:
+  sqs:
+    queueNames: "orders-queue,refunds-queue,replay-queue"
+    deadLetterQueues: "orders-dlq,refunds-dlq,replay-dlq"
+    maxReceiveCount: 10
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+```
+
+`maxReceiveCount` defaults to `10` when `deadLetterQueues` is present and must
+be from `1` through `1000`. The number of DLQs must exactly match the number of
+source queues. A source cannot name itself as its DLQ, although several sources
+may share the same DLQ. Each source/DLQ pair must have the same queue type:
+standard with standard, or FIFO with FIFO. Because queue names are resolved
+using the source's configured AWS account and region, the DLQs must be in that
+same account and region.
+
+In addition to the permissions used for normal message consumption, the pod or
+assumed IAM role needs:
+
+- `sqs:GetQueueUrl` for every configured source and DLQ
+- `sqs:GetQueueAttributes` for every configured DLQ
+- `sqs:SetQueueAttributes` for every configured source queue
+
+Amazon SQS does not support granting
+[`SetQueueAttributes`](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SetQueueAttributes.html)
+through cross-account queue permissions. For a source queue owned by another
+AWS account, configure `assumeRole` (or equivalent credentials) for a role in
+the queue owner's account that has this permission.
+
+Startup fails before actors begin polling if a source or DLQ cannot be resolved,
+if a DLQ has no `QueueArn`, or if a redrive policy cannot be applied.
 
 #### Read and Failure Behavior
 
