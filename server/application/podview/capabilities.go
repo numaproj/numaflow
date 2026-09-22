@@ -21,16 +21,9 @@ package podview
 func (s *Service) GetCapabilities() Capabilities {
 	podView := Capability{
 		Mode:                 s.mode,
-		Eligible:             true,
+		Eligible:             s.mode == ModeEnabled,
 		DefaultExperience:    ExperienceClassic,
 		AllowClassicFallback: true,
-	}
-	switch s.mode {
-	case ModeDefault:
-		podView.DefaultExperience = ExperienceNext
-	case ModeRequired:
-		podView.DefaultExperience = ExperienceNext
-		podView.AllowClassicFallback = false
 	}
 
 	return Capabilities{

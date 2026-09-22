@@ -28,10 +28,8 @@ const (
 
 // Defines values for PodViewMode.
 const (
-	Default  PodViewMode = "default"
 	Disabled PodViewMode = "disabled"
-	OptIn    PodViewMode = "optIn"
-	Required PodViewMode = "required"
+	Enabled  PodViewMode = "enabled"
 )
 
 // ApiLimits defines model for ApiLimits.
@@ -54,14 +52,18 @@ type Capabilities struct {
 type PodViewCapability struct {
 	AllowClassicFallback bool              `json:"allowClassicFallback"`
 	DefaultExperience    PodViewExperience `json:"defaultExperience"`
-	Eligible             bool              `json:"eligible"`
-	Mode                 PodViewMode       `json:"mode"`
+
+	// Eligible Whether Pod View v2 is enabled by the server and available for a user to select.
+	Eligible bool `json:"eligible"`
+
+	// Mode Server-wide Pod View v2 availability.
+	Mode PodViewMode `json:"mode"`
 }
 
 // PodViewExperience defines model for PodViewExperience.
 type PodViewExperience string
 
-// PodViewMode defines model for PodViewMode.
+// PodViewMode Server-wide Pod View v2 availability.
 type PodViewMode string
 
 // Problem defines model for Problem.
@@ -155,23 +157,24 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

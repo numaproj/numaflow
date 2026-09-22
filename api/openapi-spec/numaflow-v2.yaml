@@ -73,13 +73,15 @@ components:
           $ref: "#/components/schemas/PodViewMode"
         eligible:
           type: boolean
+          description: Whether Pod View v2 is enabled by the server and available for a user to select.
         defaultExperience:
           $ref: "#/components/schemas/PodViewExperience"
         allowClassicFallback:
           type: boolean
     PodViewMode:
       type: string
-      enum: [disabled, optIn, default, required]
+      description: Server-wide Pod View v2 availability.
+      enum: [disabled, enabled]
     PodViewExperience:
       type: string
       enum: [classic, next]

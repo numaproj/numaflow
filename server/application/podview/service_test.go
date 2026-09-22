@@ -25,14 +25,11 @@ import (
 
 func TestCapabilities(t *testing.T) {
 	tests := []struct {
-		mode            Mode
-		defaultView     Experience
-		classicFallback bool
+		mode     Mode
+		eligible bool
 	}{
-		{ModeDisabled, ExperienceClassic, true},
-		{ModeOptIn, ExperienceClassic, true},
-		{ModeDefault, ExperienceNext, true},
-		{ModeRequired, ExperienceNext, false},
+		{ModeDisabled, false},
+		{ModeEnabled, true},
 	}
 
 	for _, test := range tests {
@@ -43,9 +40,9 @@ func TestCapabilities(t *testing.T) {
 			capabilities := service.GetCapabilities()
 			assert.Equal(t, "v2", capabilities.APIVersion)
 			assert.Equal(t, test.mode, capabilities.PodView.Mode)
-			assert.True(t, capabilities.PodView.Eligible)
-			assert.Equal(t, test.defaultView, capabilities.PodView.DefaultExperience)
-			assert.Equal(t, test.classicFallback, capabilities.PodView.AllowClassicFallback)
+			assert.Equal(t, test.eligible, capabilities.PodView.Eligible)
+			assert.Equal(t, ExperienceClassic, capabilities.PodView.DefaultExperience)
+			assert.True(t, capabilities.PodView.AllowClassicFallback)
 			assert.Equal(t, []string{"getCapabilities"}, capabilities.Operations)
 			assert.Equal(t, Limits{
 				DefaultPageSize:     50,
@@ -64,6 +61,10 @@ func TestNewServiceUsesDisabledModeByDefault(t *testing.T) {
 }
 
 func TestNewServiceRejectsUnsupportedMode(t *testing.T) {
-	_, err := NewService(Mode("invalid"))
-	require.Error(t, err)
+	for _, mode := range []Mode{"invalid", "optIn", "default", "required"} {
+		t.Run(string(mode), func(t *testing.T) {
+			_, err := NewService(mode)
+			require.Error(t, err)
+		})
+	}
 }

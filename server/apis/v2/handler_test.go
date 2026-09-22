@@ -34,17 +34,17 @@ func TestGetCapabilities(t *testing.T) {
 	service := &fakePodViewService{capabilities: podview.Capabilities{
 		APIVersion: "v2",
 		PodView: podview.Capability{
-			Mode:                 podview.ModeOptIn,
+			Mode:                 podview.ModeEnabled,
 			Eligible:             true,
 			DefaultExperience:    podview.ExperienceClassic,
 			AllowClassicFallback: true,
 		},
-		Operations: []string{"getCapabilities"},
+		Operations: []string{"getCapabilities", "getVertexSummary"},
 		Limits: podview.Limits{
-			DefaultPageSize:     50,
-			MaximumPageSize:     200,
-			MaximumLogLines:     1000,
-			MaximumMetricPoints: 2000,
+			DefaultPageSize:     11,
+			MaximumPageSize:     22,
+			MaximumLogLines:     33,
+			MaximumMetricPoints: 44,
 		},
 	}}
 	router := testRouter(t, service)
@@ -55,9 +55,22 @@ func TestGetCapabilities(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var response generated.Capabilities
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	assert.Equal(t, "v2", response.ApiVersion)
-	assert.Equal(t, generated.OptIn, response.PodView.Mode)
-	assert.Equal(t, []string{"getCapabilities"}, response.Operations)
+	assert.Equal(t, generated.Capabilities{
+		ApiVersion: "v2",
+		PodView: generated.PodViewCapability{
+			Mode:                 generated.Enabled,
+			Eligible:             true,
+			DefaultExperience:    generated.Classic,
+			AllowClassicFallback: true,
+		},
+		Operations: []string{"getCapabilities", "getVertexSummary"},
+		Limits: generated.ApiLimits{
+			DefaultPageSize:     11,
+			MaximumPageSize:     22,
+			MaximumLogLines:     33,
+			MaximumMetricPoints: 44,
+		},
+	}, response)
 }
 
 func TestNewHandlerRejectsNilService(t *testing.T) {

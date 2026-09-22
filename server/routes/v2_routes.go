@@ -55,17 +55,29 @@ func V2AuthRouteMap(baseHref string) (authz.RouteMap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load API v2 OpenAPI contract: %w", err)
 	}
+	return v2AuthRouteMap(spec, baseHref)
+}
+
+func v2AuthRouteMap(spec *openapi3.T, baseHref string) (authz.RouteMap, error) {
 	if spec.Paths == nil {
 		return nil, fmt.Errorf("API v2 OpenAPI contract has no paths")
 	}
 	result := authz.RouteMap{}
 	for path, item := range spec.Paths.Map() {
-		for method, operation := range operations(item) {
-			object, ok := extensionValue[string](operation.Extensions[v2AuthzObjectExtension])
+		for method, operation := range item.Operations() {
+			objectValue, present := operation.Extensions[v2AuthzObjectExtension]
+			if !present {
+				return nil, fmt.Errorf("%s %s is missing %s", method, path, v2AuthzObjectExtension)
+			}
+			object, ok := extensionValue[string](objectValue)
 			if !ok || object == "" {
 				return nil, fmt.Errorf("%s %s is missing %s", method, path, v2AuthzObjectExtension)
 			}
-			requiresAuthz, ok := extensionValue[bool](operation.Extensions[v2RequiresAuthzExtension])
+			requiresAuthzValue, present := operation.Extensions[v2RequiresAuthzExtension]
+			if !present {
+				return nil, fmt.Errorf("%s %s is missing %s", method, path, v2RequiresAuthzExtension)
+			}
+			requiresAuthz, ok := extensionValue[bool](requiresAuthzValue)
 			if !ok {
 				return nil, fmt.Errorf("%s %s is missing %s", method, path, v2RequiresAuthzExtension)
 			}
@@ -80,37 +92,19 @@ func V2AuthRouteMap(baseHref string) (authz.RouteMap, error) {
 // extensionValue decodes OpenAPI extension values because the loader may expose
 // them as generic JSON values instead of the requested Go type.
 func extensionValue[T any](value any) (T, bool) {
+	var zero T
+	if value == nil {
+		return zero, false
+	}
 	if typed, ok := value.(T); ok {
 		return typed, true
 	}
-	var result T
 	data, err := json.Marshal(value)
 	if err != nil {
-		return result, false
+		return zero, false
 	}
-	if err = json.Unmarshal(data, &result); err != nil {
-		return result, false
+	if err = json.Unmarshal(data, &zero); err != nil {
+		return zero, false
 	}
-	return result, true
-}
-
-// operations returns every HTTP operation declared for one OpenAPI path item.
-func operations(item *openapi3.PathItem) map[string]*openapi3.Operation {
-	result := map[string]*openapi3.Operation{}
-	if item.Get != nil {
-		result[http.MethodGet] = item.Get
-	}
-	if item.Post != nil {
-		result[http.MethodPost] = item.Post
-	}
-	if item.Put != nil {
-		result[http.MethodPut] = item.Put
-	}
-	if item.Patch != nil {
-		result[http.MethodPatch] = item.Patch
-	}
-	if item.Delete != nil {
-		result[http.MethodDelete] = item.Delete
-	}
-	return result
+	return zero, true
 }
