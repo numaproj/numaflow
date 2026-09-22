@@ -2211,6 +2211,17 @@ message SqsSource {
   // Mutually exclusive with queueName.
   // +optional
   optional string queueNames = 11;
+
+  // DeadLetterQueues is a comma-separated list of SQS dead-letter queue names.
+  // Entries correspond positionally to the configured source queues.
+  // +optional
+  optional string deadLetterQueues = 12;
+
+  // MaxReceiveCount is the maximum number of receives before SQS moves a
+  // message to its configured dead-letter queue. Valid values: 1-1000.
+  // Defaults to 10 when deadLetterQueues is configured.
+  // +optional
+  optional int32 maxReceiveCount = 13;
 }
 
 // Status is a common structure which can be used for Status field.

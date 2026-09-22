@@ -423,6 +423,8 @@ pub mod tests {
         let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "12345678912",
             visibility_timeout: None,
             max_number_of_messages: None,

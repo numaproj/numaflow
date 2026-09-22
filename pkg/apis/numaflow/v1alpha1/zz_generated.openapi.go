@@ -6216,6 +6216,20 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"deadLetterQueues": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"maxReceiveCount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"awsRegion", "queueOwnerAWSAccountID"},
 			},

@@ -22757,12 +22757,21 @@
           "description": "AWSRegion is the AWS Region where the SQS queue is located",
           "type": "string"
         },
+        "deadLetterQueues": {
+          "description": "DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.",
+          "type": "string"
+        },
         "endpointUrl": {
           "description": "EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.",
           "type": "string"
         },
         "maxNumberOfMessages": {
           "description": "MaxNumberOfMessages is the maximum number of messages to return in a single poll. Valid values: 1-10 Defaults to 1",
+          "format": "int32",
+          "type": "integer"
+        },
+        "maxReceiveCount": {
+          "description": "MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.",
           "format": "int32",
           "type": "integer"
         },

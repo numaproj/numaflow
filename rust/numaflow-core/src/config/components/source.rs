@@ -21,6 +21,23 @@ use tracing::warn;
 pub(crate) const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
+const DEFAULT_SQS_MAX_RECEIVE_COUNT: i32 = 10;
+
+fn parse_sqs_queue_list(field_name: &str, value: String) -> Result<Vec<String>> {
+    value
+        .split(',')
+        .enumerate()
+        .map(|(idx, name)| {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(Error::Config(format!(
+                    "{field_name} contains empty queue name at position {idx}"
+                )));
+            }
+            Ok(name.to_string())
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SourceConfig {
@@ -159,7 +176,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
 impl TryFrom<Box<SqsSource>> for SourceType {
     type Error = Error;
 
-    fn try_from(value: Box<SqsSource>) -> Result<Self> {
+    fn try_from(mut value: Box<SqsSource>) -> Result<Self> {
         if let Some(timeout) = value.visibility_timeout
             && !(0..=43200).contains(&timeout)
         {
@@ -212,7 +229,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
         }
 
         // Both API forms collapse to a name list. queueName is a one-element Vec.
-        let queue_names = match (value.queue_name, value.queue_names) {
+        let queue_names = match (value.queue_name.take(), value.queue_names.take()) {
             (Some(_), Some(queue_names)) if !queue_names.is_empty() => {
                 return Err(Error::Config(
                     "'queueNames' is mutually exclusive with 'queueName' for SQS source"
@@ -220,19 +237,9 @@ impl TryFrom<Box<SqsSource>> for SourceType {
                 ));
             }
             (Some(queue_name), _) if !queue_name.is_empty() => vec![queue_name],
-            (None, Some(queue_names)) if !queue_names.is_empty() => queue_names
-                .split(',')
-                .enumerate()
-                .map(|(idx, name)| {
-                    let name = name.trim();
-                    if name.is_empty() {
-                        return Err(Error::Config(format!(
-                            "queueNames contains empty queue name at position {idx}"
-                        )));
-                    }
-                    Ok(name.to_string())
-                })
-                .collect::<Result<Vec<_>>>()?,
+            (None, Some(queue_names)) if !queue_names.is_empty() => {
+                parse_sqs_queue_list("queueNames", queue_names)?
+            }
             _ => {
                 return Err(Error::Config(
                     "either 'queueName' or 'queueNames' must be specified for SQS source"
@@ -250,12 +257,66 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             }
         }
 
+        let dead_letter_queue_names = match value.dead_letter_queues.take() {
+            Some(dead_letter_queues) if !dead_letter_queues.is_empty() => {
+                parse_sqs_queue_list("deadLetterQueues", dead_letter_queues)?
+            }
+            _ => Vec::new(),
+        };
+
+        let max_receive_count = if dead_letter_queue_names.is_empty() {
+            if value.max_receive_count.is_some() {
+                return Err(Error::Config(
+                    "maxReceiveCount requires deadLetterQueues for SQS source".to_string(),
+                ));
+            }
+            None
+        } else {
+            if dead_letter_queue_names.len() != queue_names.len() {
+                return Err(Error::Config(format!(
+                    "deadLetterQueues must contain exactly one queue for each SQS source queue: expected {}, got {}",
+                    queue_names.len(),
+                    dead_letter_queue_names.len()
+                )));
+            }
+
+            for (queue_name, dead_letter_queue_name) in
+                queue_names.iter().zip(&dead_letter_queue_names)
+            {
+                if queue_name == dead_letter_queue_name {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} cannot be its own dead-letter queue"
+                    )));
+                }
+                if queue_name.ends_with(".fifo") != dead_letter_queue_name.ends_with(".fifo") {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} and dead-letter queue {dead_letter_queue_name:?} must both be FIFO queues or both be standard queues"
+                    )));
+                }
+            }
+
+            let max_receive_count = value
+                .max_receive_count
+                .unwrap_or(DEFAULT_SQS_MAX_RECEIVE_COUNT);
+            if !(1..=1000).contains(&max_receive_count) {
+                return Err(Error::Config(format!(
+                    "maxReceiveCount must be between 1 and 1000 for SQS source, got {max_receive_count}"
+                )));
+            }
+            Some(max_receive_count)
+        };
+
         let sqs_source_config = SqsSourceConfig {
             region: Box::leak(value.aws_region.into_boxed_str()),
             queue_names: queue_names
                 .into_iter()
                 .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
                 .collect(),
+            dead_letter_queue_names: dead_letter_queue_names
+                .into_iter()
+                .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
+                .collect(),
+            max_receive_count,
             queue_owner_aws_account_id: Box::leak(
                 value.queue_owner_aws_account_id.into_boxed_str(),
             ),
@@ -1278,6 +1339,107 @@ mod nats_source_tests {
         };
 
         assert_eq!(config.queue_names, vec!["orders-queue", "refunds-queue"]);
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queues_are_mapped_and_defaulted() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some(" orders-dlq , refunds-dlq ".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(
+            config.dead_letter_queue_names,
+            vec!["orders-dlq", "refunds-dlq"]
+        );
+        assert_eq!(config.max_receive_count, Some(10));
+    }
+
+    #[test]
+    fn test_sqs_source_legacy_queue_supports_explicit_dead_letter_policy() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+        source.max_receive_count = Some(4);
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.dead_letter_queue_names, vec!["orders-dlq"]);
+        assert_eq!(config.max_receive_count, Some(4));
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queue_count_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("shared-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("exactly one queue"));
+    }
+
+    #[test]
+    fn test_sqs_source_empty_dead_letter_queue_entry_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq,   ".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("deadLetterQueues contains empty queue name")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_cannot_use_itself_as_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot be its own dead-letter queue")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_and_dead_letter_queue_types_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders.fifo".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("must both be FIFO queues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_requires_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.max_receive_count = Some(4);
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("requires deadLetterQueues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_is_bounded() {
+        for invalid in [0, 1001] {
+            let mut source = base_sqs_source();
+            source.queue_name = Some("orders-queue".to_string());
+            source.dead_letter_queues = Some("orders-dlq".to_string());
+            source.max_receive_count = Some(invalid);
+
+            let err = SourceType::try_from(Box::new(source)).unwrap_err();
+            assert!(err.to_string().contains("between 1 and 1000"));
+        }
     }
 
     #[test]

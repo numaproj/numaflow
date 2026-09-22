@@ -13,6 +13,7 @@ tokio-util.workspace = true
 
 bytes.workspace = true
 chrono.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 aws-config = "1.6.2"
 aws-sdk-sqs = "1.65.0"
