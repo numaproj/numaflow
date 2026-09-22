@@ -222,7 +222,7 @@ Because the Accumulator is a reduce-family operation — a stream of `Datum` in,
 requirement for a one-to-one mapping between input and output**. Individual `Datum`s can be skipped by simply not
 emitting them.
 
-There is one exception. The outbound watermark of the vertex cannot move past the oldest event time the vertex is still
+There is one caveat. The outbound watermark of the vertex cannot move past the oldest event time the vertex is still
 tracking, and a tracked event time is released only by a response from the UDF for that key — a `Datum`, a dropped
 message, or the EOF that follows a window close. A key that keeps receiving data while the UDF emits nothing for it
 therefore holds the watermark in place: the window timeout is measured against the watermark (see
