@@ -7,7 +7,7 @@ import {
   act,
 } from "@testing-library/react";
 import { VertexDetails } from "./index";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, useLocation } from "react-router-dom";
 import { AppContext } from "../../../../../App";
 
 import "@testing-library/jest-dom";
@@ -94,7 +94,7 @@ jest.mock(
           <div>
             <div>Mocked metrics</div>
             <div data-testid="metrics-pod">
-              {props.pod?.name || "vertex-wide"}
+              {props.pod?.name || props.podName || "vertex-wide"}
             </div>
             <div data-testid="metrics-expanded">
               {context.expanded.has("test-panel").toString()}
@@ -114,6 +114,11 @@ jest.mock(
     };
   }
 );
+
+const SearchProbe = () => {
+  const location = useLocation();
+  return <div data-testid="location-search">{location.search}</div>;
+};
 
 describe("VertexDetails", () => {
   beforeEach(() => {
@@ -482,5 +487,131 @@ describe("VertexDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("Mocked processingrates")).toBeInTheDocument();
     });
+  });
+
+  it("writes the confirmed tab to the URL after leaving a dirty Spec", async () => {
+    render(
+      <AppContext.Provider
+        value={{ addError: jest.fn(), disableMetricsCharts: false } as any}
+      >
+        <MemoryRouter initialEntries={["/?vertex=test-vertex&vertexTab=spec&specLine=12"]}>
+          <SearchProbe />
+          <VertexDetails
+            namespaceId="test-namespace"
+            pipelineId="test-pipeline"
+            vertexId="test-vertex"
+            vertexSpecs={{}}
+            vertexMetrics={{}}
+            buffers={[]}
+            type="sink"
+            setModalOnClose={jest.fn()}
+            refresh={jest.fn()}
+          />
+        </MemoryRouter>
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Mocked vertexupdate")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("set-update-modal-open"));
+    fireEvent.click(screen.getByTestId("pr-tab"));
+    fireEvent.click(await screen.findByTestId("close-modal-confirm"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Mocked processingrates")).toBeInTheDocument();
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "vertexTab=processingRates"
+      );
+      expect(screen.getByTestId("location-search")).not.toHaveTextContent(
+        "specLine"
+      );
+    });
+  });
+
+  it("restores a deep-linked metrics tab and pod name", async () => {
+    render(
+      <AppContext.Provider
+        value={{ addError: jest.fn(), disableMetricsCharts: false } as any}
+      >
+        <MemoryRouter
+          initialEntries={[
+            "/?vertex=test-vertex&vertexTab=metrics&pod=shared-pod",
+          ]}
+        >
+          <VertexDetails
+            namespaceId="test-namespace"
+            pipelineId="test-pipeline"
+            vertexId="test-vertex"
+            vertexSpecs={{}}
+            vertexMetrics={{}}
+            buffers={[]}
+            type="sink"
+            setModalOnClose={jest.fn()}
+            refresh={jest.fn()}
+          />
+        </MemoryRouter>
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Mocked metrics")).toBeInTheDocument();
+      expect(screen.getByTestId("metrics-pod")).toHaveTextContent("shared-pod");
+    });
+  });
+
+  it("falls back from an unavailable buffers tab and rewrites the URL", async () => {
+    render(
+      <AppContext.Provider
+        value={{ addError: jest.fn(), disableMetricsCharts: false } as any}
+      >
+        <MemoryRouter initialEntries={["/?vertex=test-vertex&vertexTab=buffers"]}>
+          <SearchProbe />
+          <VertexDetails
+            namespaceId="test-namespace"
+            pipelineId="test-pipeline"
+            vertexId="test-vertex"
+            vertexSpecs={{}}
+            vertexMetrics={{}}
+            buffers={null}
+            type="sink"
+            setModalOnClose={jest.fn()}
+            refresh={jest.fn()}
+          />
+        </MemoryRouter>
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.queryByTestId("buffers-tab")).not.toBeInTheDocument();
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "vertexTab=pods"
+      );
+    });
+  });
+
+  it("keeps the copy action in the header exclusion zone", async () => {
+    render(
+      <VertexDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        vertexId="test-vertex"
+        vertexSpecs={{}}
+        vertexMetrics={{}}
+        buffers={[]}
+        type="sink"
+        setModalOnClose={jest.fn()}
+        refresh={jest.fn()}
+      />,
+      { wrapper: BrowserRouter }
+    );
+
+    const header = document.querySelector(".vertex-details-header");
+    const actions = document.querySelector(".vertex-details-header-actions");
+    expect(header).toBeInTheDocument();
+    expect(actions).toBeInTheDocument();
+    expect(actions).toContainElement(screen.getByTestId("copy-view-link"));
+    expect(screen.getByTestId("copy-view-link")).toHaveTextContent("Copy View");
   });
 });

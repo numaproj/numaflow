@@ -1,0 +1,29 @@
+.copy-view-link-button {
+  height: 3.2rem !important;
+  min-width: 11.2rem !important;
+  padding: 0 1.2rem !important;
+  text-transform: none !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+.copy-view-link-button .MuiButton-startIcon {
+  margin-right: 0.6rem;
+}
+
+.copy-view-link-button .MuiSvgIcon-root {
+  font-size: 1.6rem;
+}
+
+.copy-view-link-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

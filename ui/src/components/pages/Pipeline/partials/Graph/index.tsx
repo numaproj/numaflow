@@ -935,6 +935,7 @@ export default function Graph(props: GraphProps) {
           metricStart: null,
           metricEnd: null,
           metricFilter: null,
+          specLine: null,
         });
         openNodeSidebar(node);
       }
