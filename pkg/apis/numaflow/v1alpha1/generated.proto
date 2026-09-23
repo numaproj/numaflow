@@ -1111,7 +1111,6 @@ message MonoVertexList {
 }
 
 message MonoVertexSpec {
-  // +kubebuilder:default=1
   // +optional
   optional int32 replicas = 1;
 
@@ -2411,7 +2410,6 @@ message VertexSpec {
   // +optional
   optional string interStepBufferServiceName = 3;
 
-  // +kubebuilder:default=1
   // +optional
   optional int32 replicas = 4;
 
