@@ -16,7 +16,7 @@ use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-use crate::{Error, PulsarAuth, Result};
+use crate::{Error, PulsarAuth, Result, TlsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulsarDeadLetterPolicy {
@@ -35,6 +35,9 @@ pub struct PulsarSourceConfig {
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
 
     pub auth: Option<PulsarAuth>,
+
+    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    pub tls: Option<TlsConfig>,
 }
 
 enum ConsumerActorMessage {
@@ -81,9 +84,21 @@ impl ConsumerReaderActor {
             "Pulsar connection details"
         );
 
-        // Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
-        // The `with_allow_insecure_connection()` option has no effect
+        // NOTE: `with_allow_insecure_connection()` has historically had no effect against
+        // rustls (see https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912),
+        // so `tls.insecure_skip_verify` below is best-effort. To trust a self-signed/custom
+        // CA, prefer `tls.ca_cert`, which uses `with_certificate_chain()` - this adds the
+        // provided CA to the client's trust root rather than disabling verification, and is
+        // confirmed to work as of the `pulsar` crate version pinned in Cargo.toml.
         let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
+        if let Some(tls) = &config.tls {
+            if let Some(ca_cert) = &tls.ca_cert {
+                pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+            }
+            if tls.insecure_skip_verify {
+                pulsar = pulsar.with_allow_insecure_connection(true);
+            }
+        }
         match config.auth {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {

@@ -1546,6 +1546,14 @@ message PulsarSink {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
+
+  // TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+  // broker CA. Only server-authentication (one-way TLS) is supported today:
+  // CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+  // since the underlying pulsar-rs client does not currently support presenting
+  // a client certificate.
+  // +optional
+  optional TLS tls = 7;
 }
 
 message PulsarSource {
@@ -1567,6 +1575,14 @@ message PulsarSource {
   // Consumer level dead letter policy.
   // +optional
   optional PulsarDeadLetterPolicy deadLetterPolicy = 7;
+
+  // TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+  // broker CA. Only server-authentication (one-way TLS) is supported today:
+  // CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+  // since the underlying pulsar-rs client does not currently support presenting
+  // a client certificate.
+  // +optional
+  optional TLS tls = 8;
 }
 
 message RateLimit {
@@ -2138,7 +2154,9 @@ message SqsSource {
   // AWSRegion is the AWS Region where the SQS queue is located
   optional string awsRegion = 1;
 
-  // QueueName is the name of the SQS queue
+  // QueueName is the name of the SQS queue.
+  // Mutually exclusive with queueNames.
+  // +optional
   optional string queueName = 2;
 
   // QueueOwnerAWSAccountID is the queue owner aws account id
@@ -2186,6 +2204,12 @@ message SqsSource {
   // When specified, the SQS client will assume the specified role for authentication.
   // +optional
   optional AWSAssumeRole assumeRole = 10;
+
+  // QueueNames is a comma-separated list of SQS queue names to consume from.
+  // All queues must live in the configured awsRegion and queueOwnerAWSAccountID.
+  // Mutually exclusive with queueName.
+  // +optional
+  optional string queueNames = 11;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -2222,6 +2246,7 @@ message TagConditions {
   optional string operator = 1;
 
   // Values tag values for conditional forwarding
+  // +kubebuilder:validation:MinItems=1
   repeated string values = 2;
 }
 

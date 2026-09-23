@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderBase, screen, waitFor } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import "@testing-library/jest-dom";
 import { ContainerInfo } from "./index";
 import {
@@ -6,6 +7,8 @@ import {
   PodContainerSpec,
   PodSpecificInfoProps,
 } from "../../../../../../../../../../../../../types/declarations/pods";
+
+const render = (ui: any) => renderBase(ui, { wrapper: BrowserRouter });
 
 const podContainerSpec: PodContainerSpec = {
   name: "numa",

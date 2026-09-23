@@ -21,8 +21,10 @@ type SqsSource struct {
 	// AWSRegion is the AWS Region where the SQS queue is located
 	AWSRegion string `json:"awsRegion" protobuf:"bytes,1,name=awsRegion"`
 
-	// QueueName is the name of the SQS queue
-	QueueName string `json:"queueName" protobuf:"bytes,2,name=queueName"`
+	// QueueName is the name of the SQS queue.
+	// Mutually exclusive with queueNames.
+	// +optional
+	QueueName string `json:"queueName,omitempty" protobuf:"bytes,2,opt,name=queueName"`
 
 	// QueueOwnerAWSAccountID is the queue owner aws account id
 	QueueOwnerAWSAccountID string `json:"queueOwnerAWSAccountID" protobuf:"bytes,3,name=queueOwnerAWSAccountID"`
@@ -69,4 +71,10 @@ type SqsSource struct {
 	// When specified, the SQS client will assume the specified role for authentication.
 	// +optional
 	AssumeRole *AWSAssumeRole `json:"assumeRole,omitempty" protobuf:"bytes,10,opt,name=assumeRole"`
+
+	// QueueNames is a comma-separated list of SQS queue names to consume from.
+	// All queues must live in the configured awsRegion and queueOwnerAWSAccountID.
+	// Mutually exclusive with queueName.
+	// +optional
+	QueueNames string `json:"queueNames,omitempty" protobuf:"bytes,11,opt,name=queueNames"`
 }

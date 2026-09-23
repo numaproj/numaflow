@@ -1,0 +1,36 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: map-retry-recover
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http: {}
+    - name: udf
+      udf:
+        container:
+          # Fails a non-"fail" body FAIL_COUNT times, then passes it through.
+          image: quay.io/numaio/numaflow-rs/map-conditional-fail:stable
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FAIL_COUNT
+              value: "2"
+        retryStrategy:
+          backoff:
+            interval: 1s
+            steps: 5
+            factor: 1
+            cap: 5s
+            jitter: 0
+          onFailure: "retry"
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: udf
+    - from: udf
+      to: out

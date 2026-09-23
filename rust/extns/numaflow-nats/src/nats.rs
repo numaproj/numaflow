@@ -70,7 +70,8 @@ impl NatsActor {
                 std::time::Duration::from_millis(std::cmp::min((attempts * 10) as u64, 1000))
             })
             .ping_interval(Duration::from_secs(3))
-            .retry_on_initial_connect(); // run in background
+            .retry_on_initial_connect() // run in background
+            .event_callback(numaflow_shared::isb::jetstream::log_nats_event);
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {

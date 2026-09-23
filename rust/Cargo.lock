@@ -2688,6 +2688,7 @@ dependencies = [
  "backoff",
  "bytes",
  "chrono",
+ "numaflow-shared",
  "rustls 0.23.31",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",

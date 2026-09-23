@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Select from "@mui/material/Select";
@@ -50,6 +51,11 @@ import { filterLogs } from "./filterLogs";
 import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
 import { useLogSearchNavigation } from "./useLogSearchNavigation";
 import { usePodLogStream } from "./usePodLogStream";
+import { CopyViewLinkButton } from "../../../../../../../../../../../../common/CopyViewLinkButton";
+import {
+  parseBooleanParam,
+  replaceObservabilityState,
+} from "../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -109,28 +115,42 @@ export function PodLogs({
   type,
   focusControls,
 }: PodLogsProps) {
-  const [search, setSearch] = useState<string>("");
-  const [negateSearch, setNegateSearch] = useState<boolean>(false);
-  const [wrapLines, setWrapLines] = useState<boolean>(true);
-  const [paused, setPaused] = useState<boolean>(false);
-  const [colorMode, setColorMode] = useState<string>("light");
-  const [logsOrder, setLogsOrder] = useState<string>("desc");
-  const [enableTimestamp, setEnableTimestamp] = useState<boolean>(false);
-  const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [showPreviousLogs, setShowPreviousLogs] = useState(false);
-  const [tailLines, setTailLines] = useState(DEFAULT_LOG_TAIL_SIZE);
+  const history = useHistory();
+  const location = useLocation();
+  const initialParams = useMemo(() => new URLSearchParams(location.search), []);
+  const initialTailLines = Number(initialParams.get("logsTail"));
+  const [search, setSearch] = useState<string>(initialParams.get("logsSearch") || "");
+  const [negateSearch, setNegateSearch] = useState<boolean>(() => parseBooleanParam(initialParams, "logsNegate"));
+  const [wrapLines, setWrapLines] = useState<boolean>(() => parseBooleanParam(initialParams, "logsWrap", true));
+  const [paused, setPaused] = useState<boolean>(() => parseBooleanParam(initialParams, "logsPaused"));
+  const [colorMode, setColorMode] = useState<string>(initialParams.get("logsColor") === "dark" ? "dark" : "light");
+  const [logsOrder, setLogsOrder] = useState<string>(initialParams.get("logsOrder") === "asc" ? "asc" : "desc");
+  const [enableTimestamp, setEnableTimestamp] = useState<boolean>(() => parseBooleanParam(initialParams, "logsTimestamps"));
+  const [levelFilter, setLevelFilter] = useState<string>(initialParams.get("logsLevel") || "all");
+  const [showPreviousLogs, setShowPreviousLogs] = useState(() => parseBooleanParam(initialParams, "logsPrevious"));
+  const [tailLines, setTailLines] = useState(
+    LOG_TAIL_SIZES.includes(initialTailLines) ? initialTailLines : DEFAULT_LOG_TAIL_SIZE
+  );
   const [tailMenuAnchor, setTailMenuAnchor] = useState<null | HTMLElement>(
     null
   );
-  const [focused, setFocused] = useState(false);
+  const [focused, setFocused] = useState(() => parseBooleanParam(initialParams, "logsFocus"));
   const { host } = useContext<AppContextProps>(AppContext);
+  const previousLogContext = useRef(`${namespaceId}-${podName}-${containerName}`);
 
   // New container/pod: resume live with the default tail window.
   useEffect(() => {
+    const nextContext = `${namespaceId}-${podName}-${containerName}`;
+    if (previousLogContext.current === nextContext) return;
+    previousLogContext.current = nextContext;
     setPaused(false);
     setTailLines(DEFAULT_LOG_TAIL_SIZE);
     setTailMenuAnchor(null);
-  }, [namespaceId, podName, containerName]);
+    replaceObservabilityState(history, location, {
+      logsPaused: false,
+      logsTail: DEFAULT_LOG_TAIL_SIZE,
+    });
+  }, [namespaceId, podName, containerName, history, location]);
 
   // Close the tail menu when resuming live.
   useEffect(() => {
@@ -195,14 +215,17 @@ export function PodLogs({
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      setSearch(event.target.value);
+      const value = event.target.value;
+      setSearch(value);
+      replaceObservabilityState(history, location, { logsSearch: value });
     },
-    []
+    [history, location]
   );
 
   const handleSearchClear = useCallback(() => {
     setSearch("");
-  }, []);
+    replaceObservabilityState(history, location, { logsSearch: null });
+  }, [history, location]);
 
   const handleSearchNavigation = useCallback(
     (navigate: () => number | null) => {
@@ -270,32 +293,49 @@ export function PodLogs({
 
   const handleNegateSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      setNegateSearch(event.target.checked);
+      const value = event.target.checked;
+      setNegateSearch(value);
+      replaceObservabilityState(history, location, { logsNegate: value });
     },
-    []
+    [history, location]
   );
 
   const handleWrapLines = useCallback(() => {
-    setWrapLines((prev) => !prev);
-  }, []);
+    setWrapLines((prev) => {
+      const value = !prev;
+      replaceObservabilityState(history, location, { logsWrap: value });
+      return value;
+    });
+  }, [history, location]);
 
   const handlePause = useCallback(() => {
     if (paused) {
       // Resuming live: always restart with the default tail window.
       setTailLines(DEFAULT_LOG_TAIL_SIZE);
       setPaused(false);
+      replaceObservabilityState(history, location, {
+        logsPaused: false,
+        logsTail: DEFAULT_LOG_TAIL_SIZE,
+      });
       return;
     }
     setPaused(true);
-  }, [paused]);
+    replaceObservabilityState(history, location, { logsPaused: true });
+  }, [paused, history, location]);
 
   const handleColorMode = useCallback(() => {
     setColorMode(colorMode === "light" ? "dark" : "light");
-  }, [colorMode]);
+    replaceObservabilityState(history, location, {
+      logsColor: colorMode === "light" ? "dark" : "light",
+    });
+  }, [colorMode, history, location]);
 
   const handleOrder = useCallback(() => {
     setLogsOrder(logsOrder === "asc" ? "desc" : "asc");
-  }, [logsOrder]);
+    replaceObservabilityState(history, location, {
+      logsOrder: logsOrder === "asc" ? "desc" : "asc",
+    });
+  }, [logsOrder, history, location]);
 
   const handleLogsDownload = useCallback(() => {
     const blob = new Blob([logs.join("\n")], {
@@ -317,12 +357,17 @@ export function PodLogs({
   }, [logs, podName, containerName]);
 
   const handleTimestamps = useCallback(() => {
-    setEnableTimestamp((prev) => !prev);
-  }, []);
+    setEnableTimestamp((prev) => {
+      const value = !prev;
+      replaceObservabilityState(history, location, { logsTimestamps: value });
+      return value;
+    });
+  }, [history, location]);
 
   const handleLevelChange = useCallback((e) => {
     setLevelFilter(e.target.value);
-  }, []);
+    replaceObservabilityState(history, location, { logsLevel: e.target.value });
+  }, [history, location]);
 
   const handleSelectTailLines = useCallback(
     (size: number) => {
@@ -331,13 +376,17 @@ export function PodLogs({
         return;
       }
       setTailLines(size);
+      replaceObservabilityState(history, location, {
+        logsTail: size,
+        logsPaused: !showPreviousLogs && !paused ? true : paused,
+      });
       // Current logs: changing window size freezes to an absolute snapshot.
       // Previous logs: only update tailLines; the previous effect refetches.
       if (!showPreviousLogs && !paused) {
         setPaused(true);
       }
     },
-    [paused, showPreviousLogs, tailLines]
+    [paused, showPreviousLogs, tailLines, history, location]
   );
 
   const handleOpenTailMenu = useCallback(
@@ -353,22 +402,31 @@ export function PodLogs({
       if (prev) {
         setTailLines(DEFAULT_LOG_TAIL_SIZE);
         setPaused(false);
+        replaceObservabilityState(history, location, {
+          logsPrevious: false,
+          logsPaused: false,
+          logsTail: DEFAULT_LOG_TAIL_SIZE,
+        });
+      } else {
+        replaceObservabilityState(history, location, { logsPrevious: true });
       }
       return !prev;
     });
-  }, []);
+  }, [history, location]);
 
   const handleOpenFocus = useCallback(() => {
     scrollOffsetRef.current =
       logVirtualListRef.current?.getScrollOffset() ?? 0;
     setFocused(true);
-  }, []);
+    replaceObservabilityState(history, location, { logsFocus: true });
+  }, [history, location]);
 
   const handleCloseFocus = useCallback(() => {
     scrollOffsetRef.current =
       logVirtualListRef.current?.getScrollOffset() ?? 0;
     setFocused(false);
-  }, []);
+    replaceObservabilityState(history, location, { logsFocus: false });
+  }, [history, location]);
 
   const logSourceLabel = `${getShortPodName(podName)}/${containerName}`;
   const tailSelectorTooltip = showPreviousLogs
@@ -465,6 +523,7 @@ export function PodLogs({
             >
               {focused ? <CloseFullscreen /> : <OpenInFull />}
             </ToolbarIconButton>
+            <CopyViewLinkButton />
           </div>
         </div>
         <div className="PodLogs-controls">

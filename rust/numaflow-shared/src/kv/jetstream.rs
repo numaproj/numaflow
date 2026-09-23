@@ -2,13 +2,14 @@
 //!
 //! This module provides a JetStream-backed implementation of [`KVStore`].
 
-use super::{KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
+use super::{KVEntry, KVError, KVStore, KVStoreFactory, KVWatchOp, KVWatchStream};
 use crate::isb::jetstream::JetstreamWatcher;
 use async_nats::jetstream::kv::{Entry, Store};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt, TryStreamExt};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 /// Convert a JetStream entry to a KVEntry
@@ -117,6 +118,36 @@ impl KVStore for JetstreamKVStore {
             .map_err(|e| Box::new(e) as KVError)?;
 
         Ok(Box::pin(ResilientJetstreamWatchAdapter { inner: watcher }))
+    }
+}
+
+/// Factory that produces [`JetstreamKVStore`] instances backed by a shared JetStream
+/// `Context`.
+#[derive(Clone)]
+pub struct JetstreamKVStoreFactory {
+    context: async_nats::jetstream::Context,
+}
+
+impl JetstreamKVStoreFactory {
+    /// Create a new factory backed by the given JetStream context.
+    pub fn new(context: async_nats::jetstream::Context) -> Self {
+        Self { context }
+    }
+
+    /// Core's `JetStreamFactory` still needs the raw context for readers/writers.
+    pub fn context(&self) -> &async_nats::jetstream::Context {
+        &self.context
+    }
+}
+
+#[async_trait]
+impl KVStoreFactory for JetstreamKVStoreFactory {
+    async fn create_kv_store(&self, bucket: String) -> crate::error::Result<Arc<dyn KVStore>> {
+        let store = self.context.get_key_value(&bucket).await.map_err(|e| {
+            crate::error::Error::Jetstream(format!("Failed to get KV bucket '{bucket}': {e}"))
+        })?;
+        let name: &'static str = Box::leak(bucket.into_boxed_str());
+        Ok(Arc::new(JetstreamKVStore::new(store, name)))
     }
 }
 
@@ -287,6 +318,22 @@ mod tests {
         assert_eq!(entry.key, "key1");
         assert_eq!(entry.value, Bytes::from("value1"));
         assert_eq!(entry.operation, KVWatchOp::Put);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_factory_creates_store() {
+        let bucket_name = "test-kv-factory";
+        let (js, _store) = setup_test_kv(bucket_name).await;
+
+        let factory = JetstreamKVStoreFactory::new(js.clone());
+        let kv_store = factory
+            .create_kv_store(bucket_name.to_string())
+            .await
+            .unwrap();
+        assert_eq!(kv_store.name(), bucket_name);
 
         cleanup_test_kv(&js, bucket_name).await;
     }

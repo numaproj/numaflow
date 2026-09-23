@@ -2,6 +2,10 @@
 
 The **Pods View** in the Numaflow UI provides a comprehensive overview of the pods associated with a vertex. This view is designed to help users monitor the status, resource usage, and other key details of the pods in their application. It also allows users to perform actions such as filtering and inspecting individual pods.
 
+Open a pipeline vertex or MonoVertex to see the vertex details panel. **Pods View** is the first tab. The **[Metrics](./metrics-tab.md)** tab is directly next to it in the same tab bar (**Pods View** | **Metrics** | **Spec** | **Processing Rates** | **K8s Events** | **Errors**).
+
+![Vertex tabs with Pods View and Metrics](../../assets/metrics/mono-vertex-tabs-pods-view.png)
+
 ---
 
 ## Features of the Pods View
@@ -78,7 +82,8 @@ Provides detailed information about the selected pod, including:
 
 ### 7. Metrics Tab
 
-- The **Pods View** includes a **Metrics Tab** located next to the Logs Tab.
-- For a detailed discussion about the Metrics Tab, refer to the [Metrics](./metrics-tab.md) section.
+- The **[Metrics](./metrics-tab.md)** tab sits next to **Pods View** in the vertex details panel.
+- Switch to **Metrics** to view Prometheus charts for the selected vertex or MonoVertex.
+- For details, refer to the [Metrics Tab](./metrics-tab.md) guide.
 
 ---

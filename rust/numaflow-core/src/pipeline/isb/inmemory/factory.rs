@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use numaflow_shared::kv::KVStore;
-use numaflow_shared::kv::inmemory::SimpleKVStore;
+use numaflow_shared::kv::KVStoreFactory;
+use numaflow_shared::kv::inmemory::InMemoryKVStoreFactory;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -18,6 +19,7 @@ use crate::Result;
 use crate::config::pipeline::isb::{
     BufferWriterConfig, DEFAULT_MAX_LENGTH, DEFAULT_USAGE_LIMIT, ISBConfig, Stream,
 };
+use crate::error::Error;
 use crate::metrics::MetricLabels;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
@@ -31,7 +33,7 @@ use crate::pipeline::isb::inmemory::adapter::{SimpleReaderAdapter, SimpleWriterA
 /// same bucket) share state.
 pub(crate) struct InMemoryFactory {
     buffers: Mutex<HashMap<String, SimpleBuffer>>,
-    kv_stores: Mutex<HashMap<String, Arc<SimpleKVStore>>>,
+    kv: InMemoryKVStoreFactory,
 }
 
 impl InMemoryFactory {
@@ -42,7 +44,7 @@ impl InMemoryFactory {
         );
         Self {
             buffers: Mutex::new(HashMap::new()),
-            kv_stores: Mutex::new(HashMap::new()),
+            kv: InMemoryKVStoreFactory::new(),
         }
     }
 
@@ -115,14 +117,10 @@ impl ISBFactory for InMemoryFactory {
     /// Returning the same instance per bucket name is load-bearing: watermark
     /// publisher/fetcher must share state.
     async fn create_kv_store(&self, bucket: String) -> Result<Arc<dyn KVStore>> {
-        let mut stores = self.kv_stores.lock();
-        if let Some(existing) = stores.get(&bucket) {
-            return Ok(Arc::clone(existing) as Arc<dyn KVStore>);
-        }
-        let leaked_name: &'static str = Box::leak(bucket.clone().into_boxed_str());
-        let store = Arc::new(SimpleKVStore::new(leaked_name));
-        stores.insert(bucket, Arc::clone(&store));
-        Ok(store as Arc<dyn KVStore>)
+        self.kv
+            .create_kv_store(bucket)
+            .await
+            .map_err(|e| Error::Connection(e.to_string()))
     }
 }
 

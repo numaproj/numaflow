@@ -21848,6 +21848,10 @@
         "serverAddr": {
           "type": "string"
         },
+        "tls": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate."
+        },
         "topic": {
           "type": "string"
         }
@@ -21882,6 +21886,10 @@
         },
         "subscriptionName": {
           "type": "string"
+        },
+        "tls": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate."
         },
         "topic": {
           "type": "string"
@@ -22766,7 +22774,11 @@
           "type": "array"
         },
         "queueName": {
-          "description": "QueueName is the name of the SQS queue",
+          "description": "QueueName is the name of the SQS queue. Mutually exclusive with queueNames.",
+          "type": "string"
+        },
+        "queueNames": {
+          "description": "QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.",
           "type": "string"
         },
         "queueOwnerAWSAccountID": {
@@ -22786,7 +22798,6 @@
       },
       "required": [
         "awsRegion",
-        "queueName",
         "queueOwnerAWSAccountID"
       ],
       "type": "object"

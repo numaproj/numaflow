@@ -4513,12 +4513,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"),
 						},
 					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "producerName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -4575,12 +4581,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"),
 						},
 					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed broker CA. Only server-authentication (one-way TLS) is supported today: CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not, since the underlying pulsar-rs client does not currently support presenting a client certificate.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "consumerName", "subscriptionName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarDeadLetterPolicy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -6120,8 +6132,7 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 					},
 					"queueName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "QueueName is the name of the SQS queue",
-							Default:     "",
+							Description: "QueueName is the name of the SQS queue. Mutually exclusive with queueNames.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6198,8 +6209,15 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"),
 						},
 					},
+					"queueNames": {
+						SchemaProps: spec.SchemaProps{
+							Description: "QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"awsRegion", "queueName", "queueOwnerAWSAccountID"},
+				Required: []string{"awsRegion", "queueOwnerAWSAccountID"},
 			},
 		},
 		Dependencies: []string{

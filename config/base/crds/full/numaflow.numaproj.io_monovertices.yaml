@@ -506,6 +506,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -526,6 +527,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -546,6 +548,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -4044,6 +4047,50 @@ spec:
                             type: string
                           serverAddr:
                             type: string
+                          tls:
+                            properties:
+                              caCertSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              certSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              insecureSkipVerify:
+                                type: boolean
+                              keySecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           topic:
                             type: string
                         required:
@@ -4982,6 +5029,50 @@ spec:
                             type: string
                           serverAddr:
                             type: string
+                          tls:
+                            properties:
+                              caCertSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              certSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              insecureSkipVerify:
+                                type: boolean
+                              keySecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           topic:
                             type: string
                         required:
@@ -5374,6 +5465,50 @@ spec:
                         type: string
                       serverAddr:
                         type: string
+                      tls:
+                        properties:
+                          caCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          certSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          insecureSkipVerify:
+                            type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       topic:
                         type: string
                     required:
@@ -6368,6 +6503,50 @@ spec:
                         type: string
                       subscriptionName:
                         type: string
+                      tls:
+                        properties:
+                          caCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          certSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          insecureSkipVerify:
+                            type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       topic:
                         type: string
                     required:
@@ -6417,6 +6596,8 @@ spec:
                         type: array
                       queueName:
                         type: string
+                      queueNames:
+                        type: string
                       queueOwnerAWSAccountID:
                         type: string
                       visibilityTimeout:
@@ -6427,7 +6608,6 @@ spec:
                         type: integer
                     required:
                     - awsRegion
-                    - queueName
                     - queueOwnerAWSAccountID
                     type: object
                   transformer:

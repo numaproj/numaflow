@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import {
   CartesianGrid,
   Line,
@@ -50,6 +51,7 @@ import {
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 import { Pod } from "../../../../../../../../../../../../../../../types/declarations/pods";
+import { replaceObservabilityState } from "../../../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -269,20 +271,41 @@ const LineChartComponent = ({
   pod,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
+  const initialMetricParams = useMemo(
+    () => new URLSearchParams(location.search),
+    []
+  );
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
     pattern_name: metric?.pattern_name,
     display_name: metric?.display_name,
+    dimension: initialMetricParams.get("metricDimension") || undefined,
+    quantile: initialMetricParams.get("metricQuantile") || undefined,
+    duration: initialMetricParams.get("metricDuration") || undefined,
+    start_time: initialMetricParams.get("metricStart") || undefined,
+    end_time: initialMetricParams.get("metricEnd") || undefined,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
-  const [filters, setFilters] = useState<any>({});
-  const [previousDimension, setPreviousDimension] = useState<string>(
-    metricsReq?.dimension
+  const [filters, setFilters] = useState<any>(() =>
+    (initialMetricParams.get("metricFilter") || "")
+      .split(",")
+      .filter(Boolean)
+      .reduce((result, item) => {
+        const [key, ...value] = item.split(":");
+        return key && value.length
+          ? { ...result, [key]: value.join(":") }
+          : result;
+      }, {})
   );
+  // Start empty so the initial URL-provided dimension also populates its
+  // required filters before the first metrics request.
+  const [previousDimension, setPreviousDimension] = useState<string>();
   const [pinnedTooltip, setPinnedTooltip] = useState<any>(null);
   const [tooltipX, setTooltipX] = useState<number | undefined>(undefined);
   const [tooltipY, setTooltipY] = useState<number | undefined>(undefined);
@@ -301,6 +324,35 @@ const LineChartComponent = ({
     setTooltipX(undefined);
     setTooltipY(undefined);
   }, [metricsReq, filters]);
+
+  useEffect(() => {
+    const selectedMetric = new URLSearchParams(location.search).get("metric");
+    if (fromModal || selectedMetric !== metric?.metric_name) return;
+    replaceObservabilityState(history, location, {
+      metric: metric?.metric_name,
+      metricDimension: metricsReq.dimension,
+      metricQuantile: metricsReq.quantile,
+      metricDuration: metricsReq.duration,
+      metricStart: metricsReq.start_time,
+      metricEnd: metricsReq.end_time,
+      metricFilter: Object.entries(filters)
+        .filter(([key]) =>
+          filtersList.some(
+            (filter: any) => filter.name === key && !filter.required
+          )
+        )
+        .map(([key, value]) => `${key}:${value}`)
+        .join(","),
+    });
+  }, [
+    metricsReq,
+    filters,
+    filtersList,
+    metric?.metric_name,
+    fromModal,
+    history,
+    location,
+  ]);
 
   // required filters
   const getFilterValue = useCallback(
@@ -361,7 +413,7 @@ const LineChartComponent = ({
         newFilters[filterElement.name] = getFilterValue(filterElement.name);
       }
     });
-    setFilters(newFilters);
+    setFilters((previousFilters: any) => ({ ...previousFilters, ...newFilters }));
   }, [filtersList, getFilterValue, setFilters]);
 
   //update filters only when dimension changes in metricsReq
@@ -630,6 +682,9 @@ const LineChartComponent = ({
                   field={param?.name}
                   setMetricReq={setMetricsReq}
                   presets={presets}
+                  urlValue={initialMetricParams.get(
+                    `metric${param?.name.charAt(0).toUpperCase()}${param?.name.slice(1)}`
+                  )}
                 />
               </Box>
             );
@@ -663,6 +718,7 @@ const LineChartComponent = ({
               isFilterFocused={isFilterFocused}
               setFilterFocused={setFilterFocused}
               metric={metric}
+              initialFilters={initialMetricParams.get("metricFilter")}
             />
           </Box>
         )}
@@ -671,7 +727,11 @@ const LineChartComponent = ({
         )}
         {hasTimeParams && (
           <Box key="line-chart-preset">
-            <TimeSelector setMetricReq={setMetricsReq} />
+            <TimeSelector
+              setMetricReq={setMetricsReq}
+              initialStart={initialMetricParams.get("metricStart")}
+              initialEnd={initialMetricParams.get("metricEnd")}
+            />
           </Box>
         )}
       </Box>

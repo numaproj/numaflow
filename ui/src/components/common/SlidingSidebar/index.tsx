@@ -26,7 +26,9 @@ import { CloseModal } from "./partials/CloseModal";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { toast } from "react-toastify";
+import { useHistory, useLocation } from "react-router-dom";
 import slider from "../../../images/slider.png";
+import { clearObservabilitySearch } from "../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -100,6 +102,8 @@ export function SlidingSidebar({
   parentCloseIndicator,
 }: SlidingSidebarProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
   const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
@@ -169,14 +173,26 @@ export function SlidingSidebar({
     }
     // Close sidebar
     setSidebarProps && setSidebarProps(undefined);
+    if (type === SidebarType.VERTEX_DETAILS) {
+      const search = clearObservabilitySearch(location.search);
+      if (search !== location.search) {
+        history.replace({ pathname: location.pathname, search });
+      }
+    }
     // remove all toast when sidebar is closed
     toast.dismiss();
-  }, [modalOnClose, setSidebarProps]);
+  }, [modalOnClose, setSidebarProps, type, location, history]);
 
   const handleCloseConfirm = useCallback(() => {
     // Modal close confirmed
     setSidebarProps && setSidebarProps(undefined);
-  }, [setSidebarProps]);
+    if (type === SidebarType.VERTEX_DETAILS) {
+      const search = clearObservabilitySearch(location.search);
+      if (search !== location.search) {
+        history.replace({ pathname: location.pathname, search });
+      }
+    }
+  }, [setSidebarProps, type, location, history]);
 
   const handleCloseCancel = useCallback(() => {
     // Modal close cancelled

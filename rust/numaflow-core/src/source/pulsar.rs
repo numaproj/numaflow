@@ -155,6 +155,7 @@ mod tests {
             max_unack: 100,
             dead_letter_policy: None,
             auth: None,
+            tls: None,
         };
         let mut pulsar = new_pulsar_source(
             cfg,

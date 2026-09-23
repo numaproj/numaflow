@@ -167,6 +167,7 @@ mod tests {
     use async_nats::jetstream;
     use numaflow::sideinput;
     use numaflow::sideinput::SideInputer;
+    use numaflow_shared::kv::inmemory::SimpleKVStore;
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
@@ -186,9 +187,9 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn side_input_operations() -> Result<()> {
+    /// Shared assertions for `side_input_operations`: runs the manager against `store` and
+    /// confirms the generated side input shows up under key `input-1`.
+    async fn assert_side_input_operations(store: Arc<dyn KVStore>) -> Result<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sideinput.sock");
@@ -228,6 +229,32 @@ mod tests {
         // create manager
         let manager = SideInputManager::new("input-1", client, cancel.clone());
 
+        let verify_store = Arc::clone(&store);
+        let manager_handle = tokio::spawn(async move {
+            manager.run(store, side_input_trigger).await.unwrap();
+        });
+
+        // sleep for 100ms and make sure the side-input is generated
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let entries = verify_store.get("input-1").await.unwrap();
+        assert!(entries.is_some());
+        let entries = entries.unwrap();
+        assert_eq!(entries, Bytes::from("test"));
+
+        cancel.cancel();
+
+        manager_handle.await.unwrap();
+
+        shutdown_tx.send(()).unwrap();
+        handle.await.unwrap();
+
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn side_input_operations() -> Result<()> {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
@@ -245,25 +272,18 @@ mod tests {
 
         let store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(kv_store.clone(), store_name));
 
-        let manager_handle = tokio::spawn(async move {
-            manager.run(store, side_input_trigger).await.unwrap();
-        });
+        assert_side_input_operations(store).await?;
 
-        // sleep for 100ms and make sure the side-input is generated
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let entries = kv_store.get("input-1").await.unwrap();
-        assert!(entries.is_some());
-        let entries = entries.unwrap();
-        assert_eq!(entries, Bytes::from("test"));
-
-        cancel.cancel();
-
-        manager_handle.await.unwrap();
-
-        shutdown_tx.send(()).unwrap();
-        handle.await.unwrap();
+        let _ = js_context.delete_key_value(store_name).await;
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn side_input_operations_inmemory() -> Result<()> {
+        let store: Arc<dyn KVStore> =
+            Arc::new(SimpleKVStore::new("test-side-input-manager-store-inmemory"));
+
+        assert_side_input_operations(store).await
     }
 }

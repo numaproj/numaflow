@@ -210,9 +210,11 @@ This example demonstrates how the configuration translates into actionable PromQ
 
 ## How the Metrics Tab Appears in the UI
 
-The **Metrics Tab** is located next to the [Logs Tab](./logs.md) in the [Pods View](./pods-view.md).
+The **Metrics Tab** is located next to **Pods View** in the vertex details panel.
 
-![Metrics Tab](../../assets/metrics/metrics-tab.png)
+![Vertex tabs with Metrics](../../assets/metrics/mono-vertex-tabs-pods-view.png)
+
+![MonoVertex Pending Messages](../../assets/metrics/metrics-pending-messages-chart.png)
 
 The following screenshots illustrate how the UI translates the discussed configuration into a visual representation:
 

@@ -20,6 +20,7 @@ package sdks_e2e
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -145,6 +146,56 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 	}()
 
 	w.Expect().VertexPodLogContains("map-udf", "processed\":\"50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
+}
+
+// TestMapRetryDrop verifies that when a map UDF keeps failing a message (reserved
+// FAIL tag) and its retryStrategy is exhausted under onFailure: drop, the message
+// is dropped after exactly `steps` retries.
+func (s *MapSuite) TestMapRetryDrop() {
+	w := s.Given().Pipeline("@testdata/map-retry-drop.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "map-retry-drop"
+
+	w.Expect().VertexPodsRunning()
+
+	// The map always fails a message whose body is "fail".
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fail")))
+
+	// The udf vertex's numa container logs each retry attempt and the drop.
+	w.Expect().
+		VertexPodLogContains("udf", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogNotContains("udf", LogRetryAttempt+"3", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
+}
+
+// TestMapRetryRecover verifies that a map UDF whose retryStrategy has enough steps
+// recovers a transiently-failing message: it is failed FAIL_COUNT times, retried,
+// then delivered to the sink.
+func (s *MapSuite) TestMapRetryRecover() {
+	w := s.Given().Pipeline("@testdata/map-retry-recover.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "map-retry-recover"
+
+	w.Expect().VertexPodsRunning()
+
+	// A non-"fail" body is failed FAIL_COUNT (2) times, then passes through.
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("recover-me")))
+
+	// Two retries happen, then the message recovers and reaches the sink.
+	w.Expect().
+		VertexPodLogContains("udf", LogRetryAttempt+"1", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("udf", LogRetryAttempt+"2", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("out", "recover-me", PodLogCheckOptionWithContainer("numa"))
+
+	// It recovered: no nack, no drop.
+	w.Expect().
+		VertexPodLogNotContains("udf", LogReceivedNack, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second)).
+		VertexPodLogNotContains("udf", LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(15*time.Second))
 }
 
 func TestMapSuite(t *testing.T) {
