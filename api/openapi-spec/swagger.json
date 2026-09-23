@@ -20022,6 +20022,10 @@
         },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecurityContext"
+        },
+        "startupProbe": {
+          "description": "StartupProbe runs the same check as the liveness probe, but only until the container has started successfully, giving a slow first start its own budget. No startup probe is configured unless this is set.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe"
         }
       }
     },
