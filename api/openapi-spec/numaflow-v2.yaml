@@ -26,15 +26,112 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/summary:
+    get:
+      operationId: getPipelineVertexSummary
+      summary: Get a compact pipeline vertex summary
+      tags: [Vertex]
+      x-numaflow-authz-object: pipeline
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/Pipeline"
+        - $ref: "#/components/parameters/Vertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Pipeline vertex summary
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
       name: numaflow-login
+  parameters:
+    Namespace:
+      name: namespace
+      in: path
+      required: true
+      description: Kubernetes namespace containing the target
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    Pipeline:
+      name: pipeline
+      in: path
+      required: true
+      description: Pipeline name
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    Vertex:
+      name: vertex
+      in: path
+      required: true
+      description: Vertex name within the pipeline
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: ETag from an earlier response
+      schema:
+        type: string
+  headers:
+    ETag:
+      description: Entity tag derived from the Kubernetes resource version
+      schema:
+        type: string
   responses:
+    NotModified:
+      description: The target has not changed
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
     Unauthorized:
       description: The caller could not be authenticated
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: The caller cannot access this target
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The requested target does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationFailed:
+      description: One or more request fields are invalid
       content:
         application/problem+json:
           schema:
@@ -60,6 +157,7 @@ components:
             type: string
           example:
             - getCapabilities
+            - getPipelineVertexSummary
         limits:
           $ref: "#/components/schemas/ApiLimits"
     ApiLimits:
@@ -83,6 +181,95 @@ components:
           type: integer
           minimum: 1
           example: 2000
+    TargetRef:
+      type: object
+      additionalProperties: false
+      required: [kind, namespace, pipeline, name, uid]
+      properties:
+        kind:
+          $ref: "#/components/schemas/TargetKind"
+        namespace:
+          type: string
+        pipeline:
+          type: string
+        name:
+          type: string
+        uid:
+          type: string
+    TargetKind:
+      type: string
+      enum: [PipelineVertex]
+    VertexType:
+      type: string
+      enum: [Source, Sink, MapUDF, ReduceUDF]
+    Health:
+      description: Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/HealthState"
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+    HealthState:
+      type: string
+      enum: [healthy, warning, critical, inactive, unknown]
+    VertexSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - ref
+        - vertexType
+        - phase
+        - desiredPhase
+        - health
+        - generation
+        - observedGeneration
+        - createdAt
+        - observedAt
+        - capabilities
+      properties:
+        ref:
+          $ref: "#/components/schemas/TargetRef"
+        vertexType:
+          $ref: "#/components/schemas/VertexType"
+        phase:
+          type: string
+        desiredPhase:
+          type: string
+        health:
+          $ref: "#/components/schemas/Health"
+        generation:
+          type: integer
+          format: int64
+        observedGeneration:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        observedAt:
+          type: string
+          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          format: date-time
+        lastScaledAt:
+          type: string
+          format: date-time
+        capabilities:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+        truncatedFields:
+          type: array
+          maxItems: 16
+          items:
+            type: string
     Problem:
       type: object
       additionalProperties: false

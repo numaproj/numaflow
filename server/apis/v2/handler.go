@@ -17,13 +17,18 @@ limitations under the License.
 package v2
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/numaproj/numaflow/server/apis/v2/generated"
 	"github.com/numaproj/numaflow/server/application/capabilities"
+	"github.com/numaproj/numaflow/server/application/observability"
 )
 
 // CapabilitiesService provides transport-independent API v2 discovery data.
@@ -31,24 +36,46 @@ type CapabilitiesService interface {
 	GetCapabilities() capabilities.Capabilities
 }
 
-// Handler adapts API v2 application services to HTTP handlers.
-type Handler struct {
-	service CapabilitiesService
+// PipelineVertexSummaryService serves Kubernetes-backed observability reads.
+type PipelineVertexSummaryService interface {
+	GetPipelineVertexSummary(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexSummary], error)
 }
 
-// NewHandler builds the API v2 HTTP adapter around the capabilities application service.
-func NewHandler(service CapabilitiesService) (*Handler, error) {
-	if service == nil {
+// Handler adapts API v2 application services to HTTP handlers.
+type Handler struct {
+	capabilitiesService CapabilitiesService
+	summaryService      PipelineVertexSummaryService
+}
+
+// NewHandler builds the API v2 HTTP adapter from discovery and observability services.
+func NewHandler(capabilitiesService CapabilitiesService, summaryService PipelineVertexSummaryService) (*Handler, error) {
+	if capabilitiesService == nil {
 		return nil, fmt.Errorf("capabilities service is required")
 	}
-	return &Handler{service: service}, nil
+	if summaryService == nil {
+		return nil, fmt.Errorf("pipeline vertex summary service is required")
+	}
+	return &Handler{capabilitiesService: capabilitiesService, summaryService: summaryService}, nil
 }
 
 var _ generated.ServerInterface = (*Handler)(nil)
 
 // GetCapabilities returns the API v2 discovery document for the current server.
 func (h *Handler) GetCapabilities(c *gin.Context) {
-	c.JSON(http.StatusOK, toCapabilities(h.service.GetCapabilities()))
+	c.JSON(http.StatusOK, toCapabilities(h.capabilitiesService.GetCapabilities()))
+}
+
+// GetPipelineVertexSummary returns a compact controller-backed Vertex projection.
+func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexSummaryParams) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
+		return
+	}
+	result, err := h.summaryService.GetPipelineVertexSummary(c.Request.Context(), namespace, pipeline, vertex)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
 }
 
 // toCapabilities translates transport-independent application types into the
@@ -64,4 +91,94 @@ func toCapabilities(value capabilities.Capabilities) generated.Capabilities {
 			MaximumMetricPoints: value.Limits.MaximumMetricPoints,
 		},
 	}
+}
+
+type nameField struct {
+	name  string
+	value string
+}
+
+// validateNames rejects path segments that are not valid DNS-1123 subdomain labels.
+func validateNames(c *gin.Context, fields ...nameField) bool {
+	violations := make([]generated.Violation, 0)
+	for _, field := range fields {
+		for _, message := range validation.IsDNS1123Subdomain(field.value) {
+			violations = append(violations, generated.Violation{
+				Field:   field.name,
+				Reason:  "invalid_kubernetes_name",
+				Message: message,
+			})
+		}
+	}
+	if len(violations) == 0 {
+		return true
+	}
+	WriteProblem(c, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", "One or more target names are invalid", violations)
+	return false
+}
+
+// writeServiceError maps Kubernetes read failures to stable Problem codes without leaking provider text.
+func writeServiceError(c *gin.Context, err error) {
+	if apierrors.IsNotFound(err) {
+		WriteProblem(c, http.StatusNotFound, "target_not_found", "Target not found", "The requested pipeline vertex does not exist", nil)
+		return
+	}
+	WriteProblem(c, http.StatusInternalServerError, "target_read_failed", "Target read failed", "Failed to read the requested pipeline vertex", nil)
+}
+
+// writeVersioned sets an ETag from the CR resourceVersion and honors If-None-Match with 304.
+func writeVersioned[T any](c *gin.Context, resourceVersion string, ifNoneMatch *string, value T) {
+	etag := fmt.Sprintf("%q", resourceVersion)
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "private, no-cache")
+	if ifNoneMatch != nil && strings.TrimSpace(*ifNoneMatch) == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+	c.JSON(http.StatusOK, value)
+}
+
+func toVertexSummary(value observability.VertexSummary) generated.VertexSummary {
+	return generated.VertexSummary{
+		Ref: generated.TargetRef{
+			Kind:      generated.PipelineVertex,
+			Namespace: value.Ref.Namespace,
+			Pipeline:  value.Ref.Pipeline,
+			Name:      value.Ref.Name,
+			Uid:       value.Ref.UID,
+		},
+		VertexType:         generated.VertexType(value.VertexType),
+		Phase:              value.Phase,
+		DesiredPhase:       value.DesiredPhase,
+		Health:             toHealth(value.Health),
+		Generation:         value.Generation,
+		ObservedGeneration: value.ObservedGeneration,
+		CreatedAt:          value.CreatedAt,
+		ObservedAt:         value.ObservedAt,
+		LastScaledAt:       value.LastScaledAt,
+		Capabilities:       value.Capabilities,
+		TruncatedFields:    optionalStrings(value.TruncatedFields),
+	}
+}
+
+func toHealth(value observability.Health) generated.Health {
+	return generated.Health{
+		State:   generated.HealthState(value.State),
+		Reason:  optionalString(value.Reason),
+		Message: optionalString(value.Message),
+	}
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func optionalStrings(value []string) *[]string {
+	if len(value) == 0 {
+		return nil
+	}
+	return &value
 }

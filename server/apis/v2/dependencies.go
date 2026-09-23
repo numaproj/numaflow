@@ -16,9 +16,28 @@ limitations under the License.
 
 package v2
 
-import "github.com/numaproj/numaflow/server/application/capabilities"
+import (
+	"fmt"
 
-// NewClusterHandler assembles the API v2 handler from server capabilities.
+	dfv1versioned "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
+	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/application/capabilities"
+	"github.com/numaproj/numaflow/server/application/observability"
+)
+
+// NewClusterHandler assembles the API v2 handler from server capabilities and observability.
 func NewClusterHandler() (*Handler, error) {
-	return NewHandler(capabilities.NewService())
+	restConfig, err := util.K8sRestConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Kubernetes REST config: %w", err)
+	}
+	numaflowClient, err := dfv1versioned.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Numaflow client: %w", err)
+	}
+	summaryService, err := observability.NewService(numaflowClient.NumaflowV1alpha1())
+	if err != nil {
+		return nil, err
+	}
+	return NewHandler(capabilities.NewService(), summaryService)
 }

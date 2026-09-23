@@ -8,16 +8,41 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gin-gonic/gin"
+	"github.com/oapi-codegen/runtime"
 )
 
 const (
 	CookieAuthScopes = "cookieAuth.Scopes"
+)
+
+// Defines values for HealthState.
+const (
+	Critical HealthState = "critical"
+	Healthy  HealthState = "healthy"
+	Inactive HealthState = "inactive"
+	Unknown  HealthState = "unknown"
+	Warning  HealthState = "warning"
+)
+
+// Defines values for TargetKind.
+const (
+	PipelineVertex TargetKind = "PipelineVertex"
+)
+
+// Defines values for VertexType.
+const (
+	MapUDF    VertexType = "MapUDF"
+	ReduceUDF VertexType = "ReduceUDF"
+	Sink      VertexType = "Sink"
+	Source    VertexType = "Source"
 )
 
 // ApiLimits defines model for ApiLimits.
@@ -35,6 +60,16 @@ type Capabilities struct {
 	Operations []string  `json:"operations"`
 }
 
+// Health Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+type Health struct {
+	Message *string     `json:"message,omitempty"`
+	Reason  *string     `json:"reason,omitempty"`
+	State   HealthState `json:"state"`
+}
+
+// HealthState defines model for HealthState.
+type HealthState string
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code       string       `json:"code"`
@@ -48,6 +83,41 @@ type Problem struct {
 	Violations *[]Violation `json:"violations,omitempty"`
 }
 
+// TargetKind defines model for TargetKind.
+type TargetKind string
+
+// TargetRef defines model for TargetRef.
+type TargetRef struct {
+	Kind      TargetKind `json:"kind"`
+	Name      string     `json:"name"`
+	Namespace string     `json:"namespace"`
+	Pipeline  string     `json:"pipeline"`
+	Uid       string     `json:"uid"`
+}
+
+// VertexSummary defines model for VertexSummary.
+type VertexSummary struct {
+	Capabilities []string  `json:"capabilities"`
+	CreatedAt    time.Time `json:"createdAt"`
+	DesiredPhase string    `json:"desiredPhase"`
+	Generation   int64     `json:"generation"`
+
+	// Health Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+	Health       Health     `json:"health"`
+	LastScaledAt *time.Time `json:"lastScaledAt,omitempty"`
+
+	// ObservedAt Latest controller-provided condition transition or scaling timestamp, not response generation time.
+	ObservedAt         time.Time  `json:"observedAt"`
+	ObservedGeneration int64      `json:"observedGeneration"`
+	Phase              string     `json:"phase"`
+	Ref                TargetRef  `json:"ref"`
+	TruncatedFields    *[]string  `json:"truncatedFields,omitempty"`
+	VertexType         VertexType `json:"vertexType"`
+}
+
+// VertexType defines model for VertexType.
+type VertexType string
+
 // Violation defines model for Violation.
 type Violation struct {
 	AllowedValues *[]string `json:"allowedValues,omitempty"`
@@ -56,17 +126,47 @@ type Violation struct {
 	Reason        string    `json:"reason"`
 }
 
+// IfNoneMatch defines model for IfNoneMatch.
+type IfNoneMatch = string
+
+// Namespace defines model for Namespace.
+type Namespace = string
+
+// Pipeline defines model for Pipeline.
+type Pipeline = string
+
+// Vertex defines model for Vertex.
+type Vertex = string
+
+// Forbidden defines model for Forbidden.
+type Forbidden = Problem
+
 // InternalServerError defines model for InternalServerError.
 type InternalServerError = Problem
 
+// NotFound defines model for NotFound.
+type NotFound = Problem
+
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Problem
+
+// ValidationFailed defines model for ValidationFailed.
+type ValidationFailed = Problem
+
+// GetPipelineVertexSummaryParams defines parameters for GetPipelineVertexSummary.
+type GetPipelineVertexSummaryParams struct {
+	// IfNoneMatch ETag from an earlier response
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get capabilities available to the current caller
 	// (GET /capabilities)
 	GetCapabilities(c *gin.Context)
+	// Get a compact pipeline vertex summary
+	// (GET /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/summary)
+	GetPipelineVertexSummary(c *gin.Context, namespace Namespace, pipeline Pipeline, vertex Vertex, params GetPipelineVertexSummaryParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -91,6 +191,74 @@ func (siw *ServerInterfaceWrapper) GetCapabilities(c *gin.Context) {
 	}
 
 	siw.Handler.GetCapabilities(c)
+}
+
+// GetPipelineVertexSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetPipelineVertexSummary(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", c.Param("namespace"), &namespace, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "pipeline" -------------
+	var pipeline Pipeline
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pipeline", c.Param("pipeline"), &pipeline, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter pipeline: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "vertex" -------------
+	var vertex Vertex
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vertex", c.Param("vertex"), &vertex, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter vertex: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPipelineVertexSummaryParams
+
+	headers := c.Request.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-None-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetPipelineVertexSummary(c, namespace, pipeline, vertex, params)
 }
 
 // GinServerOptions provides options for the Gin server.
@@ -121,26 +289,43 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/capabilities", wrapper.GetCapabilities)
+	router.GET(options.BaseURL+"/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/summary", wrapper.GetPipelineVertexSummary)
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"oRoAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
