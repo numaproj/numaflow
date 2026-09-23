@@ -207,7 +207,7 @@ impl JetStreamReader {
     /// Acknowledge the offset
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
         let msg = self
-            .get_js_message(offset, true)
+            .get_js_message(offset, false)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
         msg.double_ack()
             .await
@@ -223,7 +223,7 @@ impl JetStreamReader {
         nack_options: Option<NackOptions>,
     ) -> Result<()> {
         let msg = self
-            .get_js_message(offset, true)
+            .get_js_message(offset, false)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
         let delay = nack_options
             .and_then(|option| option.delay)
