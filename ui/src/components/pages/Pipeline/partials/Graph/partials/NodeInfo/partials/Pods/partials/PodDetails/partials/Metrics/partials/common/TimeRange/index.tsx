@@ -11,11 +11,19 @@ import "./style.css";
 
 interface TimeSelectorProps {
   setMetricReq: any;
+  initialStart?: string | null;
+  initialEnd?: string | null;
 }
 
-const TimeSelector = ({ setMetricReq }: TimeSelectorProps) => {
-  const [startDate, setStartDate] = useState(moment().subtract(1, "hour"));
-  const [endDate, setEndDate] = useState(moment());
+const TimeSelector = ({
+  setMetricReq,
+  initialStart,
+  initialEnd,
+}: TimeSelectorProps) => {
+  const [startDate, setStartDate] = useState(
+    initialStart ? moment(initialStart) : moment().subtract(1, "hour")
+  );
+  const [endDate, setEndDate] = useState(initialEnd ? moment(initialEnd) : moment());
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   const handleToggle = () => {
@@ -33,7 +41,7 @@ const TimeSelector = ({ setMetricReq }: TimeSelectorProps) => {
   };
 
   useEffect(() => {
-    handleCallback(moment().subtract(1, "hour"), moment());
+    handleCallback(startDate, endDate);
   }, []);
 
   const ranges: { [key: string]: [moment.Moment, moment.Moment] } = {

@@ -1,10 +1,14 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as renderBase, screen } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import "@testing-library/jest-dom";
 import { PodDetail } from "./index";
 import { PodContainerSpec } from "../../../../../../../../../../../types/declarations/pods";
 import { TextDecoder, TextEncoder } from "util";
 import { act } from "react-test-renderer";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
