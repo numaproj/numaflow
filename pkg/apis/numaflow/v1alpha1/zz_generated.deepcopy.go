@@ -3351,6 +3351,11 @@ func (in *SqsSource) DeepCopyInto(out *SqsSource) {
 		*out = new(AWSAssumeRole)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.MaxReceiveCount != nil {
+		in, out := &in.MaxReceiveCount, &out.MaxReceiveCount
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

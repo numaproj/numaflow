@@ -13681,6 +13681,47 @@ queueOwnerAWSAccountID. Mutually exclusive with queueName.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>deadLetterQueues</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DeadLetterQueues is a comma-separated list of SQS dead-letter queue
+names. Entries correspond positionally to the configured source queues.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxReceiveCount</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MaxReceiveCount is the maximum number of receives before SQS moves a
+message to its configured dead-letter queue. Valid values: 1-1000.
+Defaults to 10 when deadLetterQueues is configured.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

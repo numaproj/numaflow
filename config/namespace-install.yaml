@@ -8112,9 +8112,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:
@@ -21514,9 +21519,14 @@ spec:
                               type: array
                             awsRegion:
                               type: string
+                            deadLetterQueues:
+                              type: string
                             endpointUrl:
                               type: string
                             maxNumberOfMessages:
+                              format: int32
+                              type: integer
+                            maxReceiveCount:
                               format: int32
                               type: integer
                             messageAttributeNames:
@@ -34910,9 +34920,14 @@ spec:
                                   type: array
                                 awsRegion:
                                   type: string
+                                deadLetterQueues:
+                                  type: string
                                 endpointUrl:
                                   type: string
                                 maxNumberOfMessages:
+                                  format: int32
+                                  type: integer
+                                maxReceiveCount:
                                   format: int32
                                   type: integer
                                 messageAttributeNames:
@@ -44510,9 +44525,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:
