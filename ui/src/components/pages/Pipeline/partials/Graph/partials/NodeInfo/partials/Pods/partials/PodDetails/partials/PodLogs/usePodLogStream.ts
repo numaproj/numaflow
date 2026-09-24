@@ -118,7 +118,7 @@ export function usePodLogStream({
   const liveGenerationRef = useRef(0);
   const snapshotGenerationRef = useRef(0);
   const prevGenerationRef = useRef(0);
-  const skipPausedSnapshotRef = useRef(true);
+  const skipPausedSnapshotRef = useRef(!paused);
   // Tail size while last live; used so auto-pause+size-change still snapshots.
   const lastLiveTailLinesRef = useRef(tailLines);
   const tailLinesRef = useRef(tailLines);

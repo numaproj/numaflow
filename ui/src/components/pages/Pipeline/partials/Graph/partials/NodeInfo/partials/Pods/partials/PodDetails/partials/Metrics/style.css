@@ -20,9 +20,18 @@
 .metrics-accordion-summary {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   font-family: Avenir Next, sans-serif;
   font-weight: 500;
   gap: 1rem;
+}
+
+.metrics-accordion-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .metrics-accordion-summary-tooltip {

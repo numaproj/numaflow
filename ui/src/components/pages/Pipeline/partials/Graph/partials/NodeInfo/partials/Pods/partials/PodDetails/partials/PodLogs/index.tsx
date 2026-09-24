@@ -117,26 +117,78 @@ export function PodLogs({
 }: PodLogsProps) {
   const history = useHistory();
   const location = useLocation();
-  const initialParams = useMemo(() => new URLSearchParams(location.search), []);
-  const initialTailLines = Number(initialParams.get("logsTail"));
-  const [search, setSearch] = useState<string>(initialParams.get("logsSearch") || "");
-  const [negateSearch, setNegateSearch] = useState<boolean>(() => parseBooleanParam(initialParams, "logsNegate"));
-  const [wrapLines, setWrapLines] = useState<boolean>(() => parseBooleanParam(initialParams, "logsWrap", true));
-  const [paused, setPaused] = useState<boolean>(() => parseBooleanParam(initialParams, "logsPaused"));
-  const [colorMode, setColorMode] = useState<string>(initialParams.get("logsColor") === "dark" ? "dark" : "light");
-  const [logsOrder, setLogsOrder] = useState<string>(initialParams.get("logsOrder") === "asc" ? "asc" : "desc");
-  const [enableTimestamp, setEnableTimestamp] = useState<boolean>(() => parseBooleanParam(initialParams, "logsTimestamps"));
-  const [levelFilter, setLevelFilter] = useState<string>(initialParams.get("logsLevel") || "all");
-  const [showPreviousLogs, setShowPreviousLogs] = useState(() => parseBooleanParam(initialParams, "logsPrevious"));
-  const [tailLines, setTailLines] = useState(
-    LOG_TAIL_SIZES.includes(initialTailLines) ? initialTailLines : DEFAULT_LOG_TAIL_SIZE
+  const [search, setSearch] = useState<string>(
+    () => new URLSearchParams(location.search).get("logsSearch") || ""
   );
+  const [negateSearch, setNegateSearch] = useState<boolean>(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsNegate")
+  );
+  const [wrapLines, setWrapLines] = useState<boolean>(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsWrap", true)
+  );
+  const [paused, setPaused] = useState<boolean>(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsPaused")
+  );
+  const [colorMode, setColorMode] = useState<string>(() =>
+    new URLSearchParams(location.search).get("logsColor") === "dark" ? "dark" : "light"
+  );
+  const [logsOrder, setLogsOrder] = useState<string>(() =>
+    new URLSearchParams(location.search).get("logsOrder") === "asc" ? "asc" : "desc"
+  );
+  const [enableTimestamp, setEnableTimestamp] = useState<boolean>(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsTimestamps")
+  );
+  const [levelFilter, setLevelFilter] = useState<string>(
+    () => new URLSearchParams(location.search).get("logsLevel") || "all"
+  );
+  const [showPreviousLogs, setShowPreviousLogs] = useState(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsPrevious")
+  );
+  const [tailLines, setTailLines] = useState(() => {
+    const initialTailLines = Number(
+      new URLSearchParams(location.search).get("logsTail")
+    );
+    return LOG_TAIL_SIZES.includes(initialTailLines)
+      ? initialTailLines
+      : DEFAULT_LOG_TAIL_SIZE;
+  });
   const [tailMenuAnchor, setTailMenuAnchor] = useState<null | HTMLElement>(
     null
   );
-  const [focused, setFocused] = useState(() => parseBooleanParam(initialParams, "logsFocus"));
+  const [focused, setFocused] = useState(() =>
+    parseBooleanParam(new URLSearchParams(location.search), "logsFocus")
+  );
   const { host } = useContext<AppContextProps>(AppContext);
   const previousLogContext = useRef(`${namespaceId}-${podName}-${containerName}`);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const nextSearch = params.get("logsSearch") || "";
+    if (nextSearch !== search) setSearch(nextSearch);
+    const nextNegate = parseBooleanParam(params, "logsNegate");
+    if (nextNegate !== negateSearch) setNegateSearch(nextNegate);
+    const nextWrap = parseBooleanParam(params, "logsWrap", true);
+    if (nextWrap !== wrapLines) setWrapLines(nextWrap);
+    const nextPaused = parseBooleanParam(params, "logsPaused");
+    if (nextPaused !== paused) setPaused(nextPaused);
+    const nextColor = params.get("logsColor") === "dark" ? "dark" : "light";
+    if (nextColor !== colorMode) setColorMode(nextColor);
+    const nextOrder = params.get("logsOrder") === "asc" ? "asc" : "desc";
+    if (nextOrder !== logsOrder) setLogsOrder(nextOrder);
+    const nextTimestamps = parseBooleanParam(params, "logsTimestamps");
+    if (nextTimestamps !== enableTimestamp) setEnableTimestamp(nextTimestamps);
+    const nextLevel = params.get("logsLevel") || "all";
+    if (nextLevel !== levelFilter) setLevelFilter(nextLevel);
+    const nextPrevious = parseBooleanParam(params, "logsPrevious");
+    if (nextPrevious !== showPreviousLogs) setShowPreviousLogs(nextPrevious);
+    const nextTail = Number(params.get("logsTail"));
+    const resolvedTail = LOG_TAIL_SIZES.includes(nextTail)
+      ? nextTail
+      : DEFAULT_LOG_TAIL_SIZE;
+    if (resolvedTail !== tailLines) setTailLines(resolvedTail);
+    const nextFocus = parseBooleanParam(params, "logsFocus");
+    if (nextFocus !== focused) setFocused(nextFocus);
+  }, [location.search]);
 
   // New container/pod: resume live with the default tail window.
   useEffect(() => {
@@ -515,6 +567,9 @@ export function PodLogs({
                 </MenuItem>
               ))}
             </Menu>
+            {focused && (
+              <CopyViewLinkButton className="PodLogs-copy-link" />
+            )}
             <ToolbarIconButton
               testId="focus-logs-button"
               title={focused ? "Exit focus" : "Open a larger log view"}
@@ -523,7 +578,6 @@ export function PodLogs({
             >
               {focused ? <CloseFullscreen /> : <OpenInFull />}
             </ToolbarIconButton>
-            <CopyViewLinkButton />
           </div>
         </div>
         <div className="PodLogs-controls">

@@ -51,7 +51,12 @@ import {
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 import { Pod } from "../../../../../../../../../../../../../../../types/declarations/pods";
-import { replaceObservabilityState } from "../../../../../../../../../../../../../../../utils/observabilityURLState";
+import {
+  parseMetricFilters,
+  readMetricRequestFromSearch,
+  replaceObservabilityState,
+  serializeMetricFilters,
+} from "../../../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -60,6 +65,10 @@ interface TooltipProps {
   label?: string;
   active?: boolean;
 }
+
+// Maps metrics request fields, such as dimension, to observability URL keys, such as metricDimension.
+const metricRequestFieldUrlKey = (field: string): string =>
+  `metric${field.charAt(0).toUpperCase()}${field.slice(1)}`;
 
 const formattedDate = (timestamp: number): string => {
   if (timestamp) {
@@ -257,6 +266,7 @@ interface LineChartComponentProps {
   presets?: any;
   fromModal?: boolean;
   pod?: Pod;
+  podName?: string;
 }
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
@@ -269,39 +279,39 @@ const LineChartComponent = ({
   presets,
   fromModal,
   pod,
+  podName,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
   const location = useLocation();
-  const initialMetricParams = useMemo(
+  const resolvedPodName = pod?.name || podName;
+  const metricParams = useMemo(
     () => new URLSearchParams(location.search),
-    []
+    [location.search]
   );
+  const urlMetric = metricParams.get("metric");
+  // Several charts can mount at once, but the URL has one metric. Only this chart
+  // restores metric state when the URL metric is absent or matches this chart.
+  const restoreMetricStateFromUrl =
+    !urlMetric || urlMetric === metric?.metric_name;
+  const applyingUrlRef = useRef(false);
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
     pattern_name: metric?.pattern_name,
     display_name: metric?.display_name,
-    dimension: initialMetricParams.get("metricDimension") || undefined,
-    quantile: initialMetricParams.get("metricQuantile") || undefined,
-    duration: initialMetricParams.get("metricDuration") || undefined,
-    start_time: initialMetricParams.get("metricStart") || undefined,
-    end_time: initialMetricParams.get("metricEnd") || undefined,
+    dimension: metricParams.get("metricDimension") || undefined,
+    quantile: metricParams.get("metricQuantile") || undefined,
+    duration: metricParams.get("metricDuration") || undefined,
+    start_time: metricParams.get("metricStart") || undefined,
+    end_time: metricParams.get("metricEnd") || undefined,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
   const [filters, setFilters] = useState<any>(() =>
-    (initialMetricParams.get("metricFilter") || "")
-      .split(",")
-      .filter(Boolean)
-      .reduce((result, item) => {
-        const [key, ...value] = item.split(":");
-        return key && value.length
-          ? { ...result, [key]: value.join(":") }
-          : result;
-      }, {})
+    parseMetricFilters(metricParams.get("metricFilter"))
   );
   // Start empty so the initial URL-provided dimension also populates its
   // required filters before the first metrics request.
@@ -326,8 +336,39 @@ const LineChartComponent = ({
   }, [metricsReq, filters]);
 
   useEffect(() => {
-    const selectedMetric = new URLSearchParams(location.search).get("metric");
+    if (fromModal) return;
+    const selectedMetric = metricParams.get("metric");
+    if (selectedMetric && selectedMetric !== metric?.metric_name) return;
+
+    const { req: nextReq, filters: nextFilters } = readMetricRequestFromSearch(
+      location.search
+    );
+    setMetricsReq((prev: any) => {
+      const reqChanged = (
+        Object.keys(nextReq) as (keyof typeof nextReq)[]
+      ).some((key) => prev[key] !== nextReq[key]);
+      if (!reqChanged) return prev;
+      applyingUrlRef.current = true;
+      return { ...prev, ...nextReq };
+    });
+    if (nextFilters !== undefined) {
+      setFilters((prev: any) => {
+        if (serializeMetricFilters(prev) === serializeMetricFilters(nextFilters)) {
+          return prev;
+        }
+        applyingUrlRef.current = true;
+        return nextFilters;
+      });
+    }
+  }, [fromModal, metric?.metric_name, metricParams, location.search]);
+
+  useEffect(() => {
+    const selectedMetric = metricParams.get("metric");
     if (fromModal || selectedMetric !== metric?.metric_name) return;
+    if (applyingUrlRef.current) {
+      applyingUrlRef.current = false;
+      return;
+    }
     replaceObservabilityState(history, location, {
       metric: metric?.metric_name,
       metricDimension: metricsReq.dimension,
@@ -335,14 +376,15 @@ const LineChartComponent = ({
       metricDuration: metricsReq.duration,
       metricStart: metricsReq.start_time,
       metricEnd: metricsReq.end_time,
-      metricFilter: Object.entries(filters)
-        .filter(([key]) =>
-          filtersList.some(
-            (filter: any) => filter.name === key && !filter.required
+      metricFilter: serializeMetricFilters(
+        Object.fromEntries(
+          Object.entries(filters).filter(([key]) =>
+            filtersList.some(
+              (filter: any) => filter.name === key && !filter.required
+            )
           )
-        )
-        .map(([key, value]) => `${key}:${value}`)
-        .join(","),
+        ) as Record<string, string>
+      ),
     });
   }, [
     metricsReq,
@@ -352,6 +394,7 @@ const LineChartComponent = ({
     fromModal,
     history,
     location,
+    metricParams,
   ]);
 
   // required filters
@@ -378,7 +421,7 @@ const LineChartComponent = ({
                 return `${pipelineId}-${vertexId}-.*`;
             }
           } else {
-            return pod?.name;
+            return resolvedPodName;
           }
         case "replica":
           // Currently "replica" is not used in any of the metrics as a required filter
@@ -389,7 +432,7 @@ const LineChartComponent = ({
           return "";
       }
     },
-    [namespaceId, pipelineId, pod]
+    [namespaceId, pipelineId, resolvedPodName]
   );
 
   const updateFilterList = useCallback(
@@ -533,10 +576,11 @@ const LineChartComponent = ({
     if (
       Array.isArray(label) &&
       label.length === 1 &&
-      label[0] === "container"
+      label[0] === "container" &&
+      pod?.containers
     ) {
       filteredChartData = filteredChartData?.filter((item) => {
-        return pod?.containers?.includes(item?.metric?.["container"]);
+        return pod.containers.includes(item?.metric?.["container"]);
       });
     }
 
@@ -682,9 +726,14 @@ const LineChartComponent = ({
                   field={param?.name}
                   setMetricReq={setMetricsReq}
                   presets={presets}
-                  urlValue={initialMetricParams.get(
-                    `metric${param?.name.charAt(0).toUpperCase()}${param?.name.slice(1)}`
-                  )}
+                  // Deep link: seed this dropdown only when this panel owns the active metric.
+                  urlValue={
+                    restoreMetricStateFromUrl
+                      ? metricParams.get(
+                          metricRequestFieldUrlKey(param?.name)
+                        )
+                      : undefined
+                  }
                 />
               </Box>
             );
@@ -714,11 +763,16 @@ const LineChartComponent = ({
               type={type}
               vertexId={vertexId}
               setFilters={setFilters}
-              selectedPodName={pod?.name}
+              selectedPodName={resolvedPodName}
               isFilterFocused={isFilterFocused}
               setFilterFocused={setFilterFocused}
               metric={metric}
-              initialFilters={initialMetricParams.get("metricFilter")}
+              // Do not apply another panel's metric filter from the URL.
+              initialFilters={
+                restoreMetricStateFromUrl
+                  ? metricParams.get("metricFilter")
+                  : undefined
+              }
             />
           </Box>
         )}
@@ -729,8 +783,8 @@ const LineChartComponent = ({
           <Box key="line-chart-preset">
             <TimeSelector
               setMetricReq={setMetricsReq}
-              initialStart={initialMetricParams.get("metricStart")}
-              initialEnd={initialMetricParams.get("metricEnd")}
+              initialStart={metricParams.get("metricStart")}
+              initialEnd={metricParams.get("metricEnd")}
             />
           </Box>
         )}

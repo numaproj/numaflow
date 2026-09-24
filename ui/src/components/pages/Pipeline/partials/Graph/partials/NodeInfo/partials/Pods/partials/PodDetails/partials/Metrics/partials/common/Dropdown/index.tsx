@@ -42,34 +42,36 @@ const Dropdown = ({
     );
   }, [metric, type]);
 
-  const getInitialValue = useMemo(() => {
+  const defaultValue = useMemo(() => {
     switch (field) {
       case "dimension":
-        return urlValue || initialDimensionValue;
+        return initialDimensionValue;
       case "quantile":
-        return (
-          urlValue ||
-          presets?.quantile ||
-          quantileOptions[quantileOptions.length - 1]
-        );
+        return presets?.quantile || quantileOptions[quantileOptions.length - 1];
       case "duration":
-        return urlValue || presets?.duration || durationOptions[0];
+        return presets?.duration || durationOptions[0];
       default:
         return "";
     }
   }, [field, initialDimensionValue, quantileOptions, durationOptions, presets]);
 
-  const [value, setValue] = useState<string>(getInitialValue);
+  const [value, setValue] = useState<string>(urlValue || defaultValue);
 
   const fieldName = useMemo(() => {
     const capitalizedField = field.charAt(0).toUpperCase() + field.slice(1);
     return capitalizedField === "Duration" ? "Query Window" : capitalizedField;
   }, [field]);
 
-  // Update metricsReq with the initial value
+  // Push the local default; URL restore is handled by the urlValue effect.
   useEffect(() => {
-    setMetricReq((prev: any) => ({ ...prev, [field]: getInitialValue }));
-  }, [getInitialValue, field, setMetricReq]);
+    setMetricReq((prev: any) => ({ ...prev, [field]: defaultValue }));
+  }, [defaultValue, field, setMetricReq]);
+
+  useEffect(() => {
+    if (!urlValue) return;
+    setValue(urlValue);
+    setMetricReq((prev: any) => ({ ...prev, [field]: urlValue }));
+  }, [urlValue, field, setMetricReq]);
 
   const getDropDownEntries = useMemo(() => {
     switch (field) {

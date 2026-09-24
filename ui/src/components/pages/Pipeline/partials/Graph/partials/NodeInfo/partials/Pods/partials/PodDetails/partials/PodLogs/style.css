@@ -181,6 +181,10 @@
   font-size: 1.6rem;
 }
 
+.PodLogs-copy-link {
+  height: 3.2rem !important;
+}
+
 .PodLogs-icon-btn {
   display: inline-grid !important;
   place-items: center;

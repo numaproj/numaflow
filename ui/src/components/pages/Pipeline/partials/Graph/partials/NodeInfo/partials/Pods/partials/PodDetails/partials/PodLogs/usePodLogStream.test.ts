@@ -414,6 +414,31 @@ describe("usePodLogStream lifecycle", () => {
     expect(handles[1].url).toContain("tailLines=1000");
   });
 
+  it("fetches a paused snapshot on first mount so a shared paused URL has lines", async () => {
+    const { handles } = installFetchMock();
+
+    const { result } = renderHook(() =>
+      usePodLogStream({ ...defaultParams, paused: true, tailLines: 10000 })
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    expect(handles[0].url).toContain("follow=false");
+    expect(handles[0].url).toContain("tailLines=10000");
+    expect(handles.some((h) => !h.url.includes("follow=false"))).toBe(false);
+
+    await act(async () => {
+      handles[0].resolveFetch();
+      await Promise.resolve();
+      handles[0].pushText("snap-a\nsnap-b\n");
+      handles[0].close();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual(["snap-a", "snap-b"]);
+    });
+  });
+
   it("does not fetch a snapshot when pausing alone", async () => {
     const { handles } = installFetchMock();
 
