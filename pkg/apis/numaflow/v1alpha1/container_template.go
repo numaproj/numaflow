@@ -37,6 +37,11 @@ type ContainerTemplate struct {
 	ReadinessProbe *Probe `json:"readinessProbe,omitempty" protobuf:"bytes,6,opt,name=readinessProbe"`
 	// +optional
 	LivenessProbe *Probe `json:"livenessProbe,omitempty" protobuf:"bytes,7,opt,name=livenessProbe"`
+	// StartupProbe runs the same check as the liveness probe, but only until the container has
+	// started successfully, giving a slow first start its own budget. No startup probe is
+	// configured unless this is set.
+	// +optional
+	StartupProbe *Probe `json:"startupProbe,omitempty" protobuf:"bytes,8,opt,name=startupProbe"`
 }
 
 // ApplyToContainer updates the Container with the values from the ContainerTemplate
@@ -85,6 +90,9 @@ func (ct *ContainerTemplate) ApplyToContainer(c *corev1.Container) {
 		if lp.SuccessThreshold != nil {
 			c.LivenessProbe.SuccessThreshold = *lp.SuccessThreshold
 		}
+	}
+	if sp := startupProbeFrom(ct.StartupProbe, c.LivenessProbe); sp != nil {
+		c.StartupProbe = sp
 	}
 }
 
