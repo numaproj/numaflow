@@ -82,7 +82,10 @@ impl futures::Stream for JetstreamWatcher {
                     self.watcher = watcher;
                     // fall through and poll the watcher
                 }
-                Poll::Pending => return Poll::Pending,
+                Poll::Pending => {
+                    self.recreate_future = Some(future);
+                    return Poll::Pending;
+                }
             }
         }
 
