@@ -3509,6 +3509,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Liveness and Readiness
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -3525,6 +3543,36 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -5099,6 +5147,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -5227,6 +5294,36 @@
 <span class="w">            </span><span class="nt">initialDelaySeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">40</span>
 <span class="w">            </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 </code></pre></div>
+<h2 id="startup">Startup<a class="headerlink" href="#startup" title="Permanent link">&para;</a></h2>
+<p>A vertex that is slow to start — replaying a large WAL, warming a cache, or loading a model — has
+to buy that time out of its liveness budget, which is <code>initialDelaySeconds + (failureThreshold - 1)
+* periodSeconds</code>. Widening <code>failureThreshold</code> to cover a one-off boot window permanently blunts
+steady-state failure detection.</p>
+<p>A <code>startupProbe</code> on the <code>numa</code> container gives the first start its own budget instead. It runs the
+same handler as the liveness probe, and Kubernetes holds the liveness and readiness probes off
+until it succeeds, after which it never runs again. No startup probe is configured unless you set
+one, and any field you leave out falls back to the liveness probe's value.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce</span>
+<span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span><span class="w"> </span><span class="c1"># For "numa" container</span>
+<span class="w">        </span><span class="nt">startupProbe</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">initialDelaySeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">          </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">          </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w"> </span><span class="c1"># Allow up to 10 minutes to start</span>
+</code></pre></div>
+<p>The same configuration is available on <code>MonoVertex</code>, and via a
+<a href="../pipeline-customization/#vertices">Vertex Template</a> to apply it to every vertex in a pipeline.</p>
+<p>A <code>startupProbe</code> is deliberately not offered on the user-defined containers (<code>udf</code>, <code>udsource</code>,
+<code>transformer</code>, <code>udsink</code> and <code>fb-udsink</code>). Those run as sidecars, and their probe endpoint
+<code>/sidecar-livez</code> is served by the <code>numa</code> container, which Kubernetes does not start until every
+sidecar reports started. A startup probe on a sidecar would therefore gate itself on an endpoint
+that cannot exist yet, and the pod would never start. Use the liveness settings above for those
+containers.</p>
 
 
 
