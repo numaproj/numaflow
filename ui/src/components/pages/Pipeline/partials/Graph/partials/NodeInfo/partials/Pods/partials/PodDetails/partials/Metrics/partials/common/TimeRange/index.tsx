@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import moment from "moment";
 import "jquery";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -15,6 +15,23 @@ interface TimeSelectorProps {
   initialEnd?: string | null;
 }
 
+const formatMetricTime = (value: moment.Moment): string =>
+  value.toDate().toISOString();
+
+const sameMetricInstant = (
+  left: string | null | undefined,
+  right: string
+): boolean => {
+  if (!left) return false;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  return (
+    !Number.isNaN(leftMs) &&
+    !Number.isNaN(rightMs) &&
+    leftMs === rightMs
+  );
+};
+
 const TimeSelector = ({
   setMetricReq,
   initialStart,
@@ -25,6 +42,7 @@ const TimeSelector = ({
   );
   const [endDate, setEndDate] = useState(initialEnd ? moment(initialEnd) : moment());
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const lastAppliedUrlRangeRef = useRef<string>();
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
@@ -33,16 +51,75 @@ const TimeSelector = ({
   const handleCallback = (start: moment.Moment, end: moment.Moment) => {
     setStartDate(start);
     setEndDate(end);
-    setMetricReq((prev: any) => ({
-      ...prev,
-      start_time: start.format(),
-      end_time: end.format(),
-    }));
+    const startTime = formatMetricTime(start);
+    const endTime = formatMetricTime(end);
+    setMetricReq((prev: any) => {
+      if (
+        sameMetricInstant(prev.start_time, startTime) &&
+        sameMetricInstant(prev.end_time, endTime)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        start_time: startTime,
+        end_time: endTime,
+      };
+    });
   };
 
   useEffect(() => {
-    handleCallback(startDate, endDate);
-  }, []);
+    if (initialStart || initialEnd) return;
+    const startTime = formatMetricTime(startDate);
+    const endTime = formatMetricTime(endDate);
+    setMetricReq((prev: any) => {
+      if (
+        sameMetricInstant(prev.start_time, startTime) &&
+        sameMetricInstant(prev.end_time, endTime)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        start_time: startTime,
+        end_time: endTime,
+      };
+    });
+  }, [initialStart, initialEnd, setMetricReq]);
+
+  useEffect(() => {
+    if (!initialStart || !initialEnd) {
+      lastAppliedUrlRangeRef.current = undefined;
+      return;
+    }
+    const urlRange = `${initialStart}\n${initialEnd}`;
+    if (lastAppliedUrlRangeRef.current === urlRange) return;
+
+    const nextStart = moment(initialStart);
+    const nextEnd = moment(initialEnd);
+    if (!nextStart.isValid() || !nextEnd.isValid()) return;
+    lastAppliedUrlRangeRef.current = urlRange;
+
+    const startTime = formatMetricTime(nextStart);
+    const endTime = formatMetricTime(nextEnd);
+    setStartDate((current) =>
+      current.isSame(nextStart) ? current : nextStart
+    );
+    setEndDate((current) => (current.isSame(nextEnd) ? current : nextEnd));
+    setMetricReq((prev: any) => {
+      if (
+        sameMetricInstant(prev.start_time, startTime) &&
+        sameMetricInstant(prev.end_time, endTime)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        start_time: startTime,
+        end_time: endTime,
+      };
+    });
+  }, [initialStart, initialEnd, setMetricReq]);
 
   const ranges: { [key: string]: [moment.Moment, moment.Moment] } = {
     "Last 10 Minutes": [moment().subtract(10, "minutes"), moment()],
