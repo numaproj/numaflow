@@ -8,32 +8,33 @@
 [![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow&color=dca282)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)
 
-Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, and built-in observability, developers can focus on their processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility in using the best programming language for each step and ease of using the languages you are most familiar with.
+Welcome to Numaflow! A Kubernetes-native, serverless platform for stream processing or real-time data processing. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, and built-in observability, developers can focus on their processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility in using the best programming language for each step and ease of using the languages you are most familiar with.
 
-Numaflow, created by the Intuit Argo team to address community needs for continuous event processing, leverages their expertise to deliver a scalable and robust, serverless platform for event-driven applications.
+Numaflow, created by the Intuit Argo team to address community needs for continuous stream processing, leverages their expertise to deliver a scalable and robust, serverless platform for real-time data processing.
 
 ![Numaflow Pipeline](./docs/assets/simple-pipeline.png)
-
-## Use Cases
-
-- Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce.
-- Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing.
-- Inference on streaming data: Perform real-time predictions, e.g., anomaly detection.
-- Workflows running in a streaming manner.
 
 ## Key Features
 
 - Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow.
 - Serverless: Focus on your code and let the system scale up and down based on demand.
 - Language agnostic: Use your favorite programming language.
-- Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
+- Exactly-Once semantics: At-least-once by default, with exactly-once semantics for unbounded, near real-time data sources — no data loss or duplication, even across pod restarts.
 - Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 
-## Data Integrity Guarantees
+## Use Cases
 
-- Minimally provide at-least-once semantics
-- Provide exactly-once semantics for unbounded and near real-time data sources
-- Preserving order is not required
+- Streaming ML inference: Perform real-time predictions on streaming data, e.g., anomaly detection, fraud detection.
+- Event driven agents: Power autonomous AI agents that react to events in real time, e.g., agents triggered by data changes or messages instead of polling.
+- Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing.
+- Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce.
+
+## Case Studies
+
+- **CSIT (Singapore)**: Runs concurrent real-time data processing pipelines on Numaflow to turn fast-moving operational data into timely signals. [Read more](https://medium.com/csit-tech-blog/real-time-data-processing-with-numaflow-10bb67bfa5b7)
+- **NTT Research**: Built high-performance AI/ML pipelines using accelerator chaining and Kubernetes-native Dynamic Resource Allocation to assign accelerators per vertex. [Read more](https://blog.numaproj.io/effortlessly-build-high-performance-ai-ml-pipelines-with-accelerator-chaining-and-k8s-native-tech-11ba8216a179)
+
+See [USERS.md](USERS.md) for the full list of organizations using Numaflow in production.
 
 ## Roadmap
 
