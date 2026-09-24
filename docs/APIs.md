@@ -2303,6 +2303,28 @@ Kubernetes core/v1.SecurityContext </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>startupProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+StartupProbe runs the same check as the liveness probe, but only until
+the container has started successfully, giving a slow first start its
+own budget. No startup probe is configured unless this is set.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

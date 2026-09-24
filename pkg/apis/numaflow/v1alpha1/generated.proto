@@ -440,6 +440,12 @@ message ContainerTemplate {
 
   // +optional
   optional Probe livenessProbe = 7;
+
+  // StartupProbe runs the same check as the liveness probe, but only until the container has
+  // started successfully, giving a slow first start its own budget. No startup probe is
+  // configured unless this is set.
+  // +optional
+  optional Probe startupProbe = 8;
 }
 
 message CronSchedule {

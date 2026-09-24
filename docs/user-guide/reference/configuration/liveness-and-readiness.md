@@ -115,3 +115,40 @@ spec:
             initialDelaySeconds: 40
             failureThreshold: 5
 ```
+
+## Startup
+
+A vertex that is slow to start — replaying a large WAL, warming a cache, or loading a model — has
+to buy that time out of its liveness budget, which is `initialDelaySeconds + (failureThreshold - 1)
+* periodSeconds`. Widening `failureThreshold` to cover a one-off boot window permanently blunts
+steady-state failure detection.
+
+A `startupProbe` on the `numa` container gives the first start its own budget instead. It runs the
+same handler as the liveness probe, and Kubernetes holds the liveness and readiness probes off
+until it succeeds, after which it never runs again. No startup probe is configured unless you set
+one, and any field you leave out falls back to the liveness probe's value.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-reduce
+      containerTemplate: # For "numa" container
+        startupProbe:
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          failureThreshold: 60 # Allow up to 10 minutes to start
+```
+
+The same configuration is available on `MonoVertex`, and via a
+[Vertex Template](./pipeline-customization.md#vertices) to apply it to every vertex in a pipeline.
+
+A `startupProbe` is deliberately not offered on the user-defined containers (`udf`, `udsource`,
+`transformer`, `udsink` and `fb-udsink`). Those run as sidecars, and their probe endpoint
+`/sidecar-livez` is served by the `numa` container, which Kubernetes does not start until every
+sidecar reports started. A startup probe on a sidecar would therefore gate itself on an endpoint
+that cannot exist yet, and the pod would never start. Use the liveness settings above for those
+containers.

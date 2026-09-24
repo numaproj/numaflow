@@ -16,6 +16,8 @@ limitations under the License.
 
 package v1alpha1
 
+import corev1 "k8s.io/api/core/v1"
+
 // Probe is used to customize the configuration for Readiness and Liveness probes.
 type Probe struct {
 	// Number of seconds after the container has started before liveness probes are initiated.
@@ -71,4 +73,21 @@ func GetProbeFailureThresholdOr(probe *Probe, defaultValue int32) int32 {
 		return defaultValue
 	}
 	return *probe.FailureThreshold
+}
+
+// startupProbeFrom builds a startup probe running the same check as the given liveness probe, so
+// that a slow first start is bounded by the startup probe rather than the liveness budget. Unset
+// fields fall back to the liveness probe's, and nil is returned unless a startup probe was asked
+// for and there is a liveness check to derive it from.
+func startupProbeFrom(startup *Probe, liveness *corev1.Probe) *corev1.Probe {
+	if startup == nil || liveness == nil {
+		return nil
+	}
+	return &corev1.Probe{
+		ProbeHandler:        liveness.ProbeHandler,
+		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(startup, liveness.InitialDelaySeconds),
+		PeriodSeconds:       GetProbePeriodSecondsOr(startup, liveness.PeriodSeconds),
+		TimeoutSeconds:      GetProbeTimeoutSecondsOr(startup, liveness.TimeoutSeconds),
+		FailureThreshold:    GetProbeFailureThresholdOr(startup, liveness.FailureThreshold),
+	}
 }

@@ -696,6 +696,35 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 	})
 }
 
+func TestMonoVertexGetPodSpecStartupProbe(t *testing.T) {
+	req := GetMonoVertexPodSpecReq{Image: "my-image", PullPolicy: corev1.PullIfNotPresent}
+
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		podSpec, err := testMvtx.DeepCopy().GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Nil(t, podSpec.Containers[0].StartupProbe)
+	})
+
+	t.Run("numa container gets one from the container template", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.ContainerTemplate.StartupProbe = &Probe{
+			PeriodSeconds:    ptr.To[int32](10),
+			FailureThreshold: ptr.To[int32](60),
+		}
+		podSpec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		startup := podSpec.Containers[0].StartupProbe
+		assert.NotNil(t, startup)
+		assert.Equal(t, "/livez", startup.HTTPGet.Path)
+		assert.Equal(t, int32(10), startup.PeriodSeconds)
+		assert.Equal(t, int32(60), startup.FailureThreshold)
+		// Unset fields come from the liveness probe as the template leaves it.
+		assert.Equal(t, int32(14), startup.InitialDelaySeconds)
+		assert.Equal(t, int32(11), startup.TimeoutSeconds)
+		assert.Equal(t, int32(1), podSpec.Containers[0].LivenessProbe.FailureThreshold)
+	})
+}
+
 func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesEmbeddedObject(t *testing.T) {
 	mv := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{

@@ -34,6 +34,8 @@ pub struct ContainerTemplate {
     pub resources: Option<k8s_openapi::api::core::v1::ResourceRequirements>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
     pub security_context: Option<k8s_openapi::api::core::v1::SecurityContext>,
+    #[serde(rename = "startupProbe", skip_serializing_if = "Option::is_none")]
+    pub startup_probe: Option<Box<crate::models::Probe>>,
 }
 
 impl ContainerTemplate {
@@ -47,6 +49,7 @@ impl ContainerTemplate {
             readiness_probe: None,
             resources: None,
             security_context: None,
+            startup_probe: None,
         }
     }
 }

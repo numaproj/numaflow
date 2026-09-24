@@ -721,6 +721,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   dnsConfig:
                     properties:
@@ -1005,6 +1023,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   nodeSelector:
                     additionalProperties:
@@ -1263,6 +1299,24 @@ spec:
                               runAsUserName:
                                 type: string
                             type: object
+                        type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
                         type: object
                     type: object
                   replicas:
@@ -2319,6 +2373,24 @@ spec:
                             type: string
                         type: object
                     type: object
+                  startupProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                 type: object
               daemonTemplate:
                 properties:
@@ -2999,6 +3071,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   dnsConfig:
                     properties:
@@ -3269,6 +3359,24 @@ spec:
                               runAsUserName:
                                 type: string
                             type: object
+                        type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
                         type: object
                     type: object
                   metadata:
@@ -12224,6 +12332,24 @@ spec:
                                     type: string
                                 type: object
                             type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                       dnsConfig:
                         properties:
@@ -12494,6 +12620,24 @@ spec:
                                   runAsUserName:
                                     type: string
                                 type: object
+                            type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
                             type: object
                         type: object
                       metadata:
@@ -13313,6 +13457,24 @@ spec:
                                   runAsUserName:
                                     type: string
                                 type: object
+                            type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
                             type: object
                         type: object
                       dnsConfig:
@@ -14164,6 +14326,24 @@ spec:
                                     type: string
                                 type: object
                             type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                       dnsConfig:
                         properties:
@@ -14434,6 +14614,24 @@ spec:
                                   runAsUserName:
                                     type: string
                                 type: object
+                            type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
                             type: object
                         type: object
                       metadata:
@@ -15248,6 +15446,24 @@ spec:
                                     type: string
                                 type: object
                             type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                       dnsConfig:
                         properties:
@@ -15518,6 +15734,24 @@ spec:
                                   runAsUserName:
                                     type: string
                                 type: object
+                            type: object
+                          startupProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
                             type: object
                         type: object
                       metadata:
@@ -16334,6 +16568,24 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        startupProbe:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
+                          type: object
                       type: object
                     dnsConfig:
                       properties:
@@ -16604,6 +16856,24 @@ spec:
                                 runAsUserName:
                                   type: string
                               type: object
+                          type: object
+                        startupProbe:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
                           type: object
                       type: object
                     initContainers:
@@ -17964,6 +18234,24 @@ spec:
                                 runAsUserName:
                                   type: string
                               type: object
+                          type: object
+                        startupProbe:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
                           type: object
                       type: object
                     sidecars:
@@ -25620,6 +25908,24 @@ spec:
                                         type: string
                                     type: object
                                 type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           dnsConfig:
                             properties:
@@ -25890,6 +26196,24 @@ spec:
                                       runAsUserName:
                                         type: string
                                     type: object
+                                type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
                                 type: object
                             type: object
                           metadata:
@@ -26709,6 +27033,24 @@ spec:
                                       runAsUserName:
                                         type: string
                                     type: object
+                                type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
                                 type: object
                             type: object
                           dnsConfig:
@@ -27560,6 +27902,24 @@ spec:
                                         type: string
                                     type: object
                                 type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           dnsConfig:
                             properties:
@@ -27830,6 +28190,24 @@ spec:
                                       runAsUserName:
                                         type: string
                                     type: object
+                                type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
                                 type: object
                             type: object
                           metadata:
@@ -28644,6 +29022,24 @@ spec:
                                         type: string
                                     type: object
                                 type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           dnsConfig:
                             properties:
@@ -28914,6 +29310,24 @@ spec:
                                       runAsUserName:
                                         type: string
                                     type: object
+                                type: object
+                              startupProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
                                 type: object
                             type: object
                           metadata:
@@ -29730,6 +30144,24 @@ spec:
                                       type: string
                                   type: object
                               type: object
+                            startupProbe:
+                              properties:
+                                failureThreshold:
+                                  format: int32
+                                  type: integer
+                                initialDelaySeconds:
+                                  format: int32
+                                  type: integer
+                                periodSeconds:
+                                  format: int32
+                                  type: integer
+                                successThreshold:
+                                  format: int32
+                                  type: integer
+                                timeoutSeconds:
+                                  format: int32
+                                  type: integer
+                              type: object
                           type: object
                         dnsConfig:
                           properties:
@@ -30000,6 +30432,24 @@ spec:
                                     runAsUserName:
                                       type: string
                                   type: object
+                              type: object
+                            startupProbe:
+                              properties:
+                                failureThreshold:
+                                  format: int32
+                                  type: integer
+                                initialDelaySeconds:
+                                  format: int32
+                                  type: integer
+                                periodSeconds:
+                                  format: int32
+                                  type: integer
+                                successThreshold:
+                                  format: int32
+                                  type: integer
+                                timeoutSeconds:
+                                  format: int32
+                                  type: integer
                               type: object
                           type: object
                         initContainers:
@@ -31360,6 +31810,24 @@ spec:
                                     runAsUserName:
                                       type: string
                                   type: object
+                              type: object
+                            startupProbe:
+                              properties:
+                                failureThreshold:
+                                  format: int32
+                                  type: integer
+                                initialDelaySeconds:
+                                  format: int32
+                                  type: integer
+                                periodSeconds:
+                                  format: int32
+                                  type: integer
+                                successThreshold:
+                                  format: int32
+                                  type: integer
+                                timeoutSeconds:
+                                  format: int32
+                                  type: integer
                               type: object
                           type: object
                         sidecars:
@@ -37472,6 +37940,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   dnsConfig:
                     properties:
@@ -38750,6 +39236,24 @@ spec:
                             type: string
                         type: object
                     type: object
+                  startupProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                 type: object
               dnsConfig:
                 properties:
@@ -39570,6 +40074,24 @@ spec:
                           runAsUserName:
                             type: string
                         type: object
+                    type: object
+                  startupProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
                     type: object
                 type: object
               initContainers:
@@ -40960,6 +41482,24 @@ spec:
                           runAsUserName:
                             type: string
                         type: object
+                    type: object
+                  startupProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
                     type: object
                 type: object
               sidecars:
