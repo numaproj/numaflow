@@ -492,7 +492,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
         SourceType::Sqs(sqs_source_config) => {
             let sqs = new_sqs_source(
-                sqs_source_config.clone(),
+                *sqs_source_config.clone(),
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),

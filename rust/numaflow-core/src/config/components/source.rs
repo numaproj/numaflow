@@ -103,7 +103,7 @@ pub(crate) enum SourceType {
     UserDefined(UserDefinedConfig),
     Pulsar(PulsarSourceConfig),
     Jetstream(JetstreamSourceConfig),
-    Sqs(SqsSourceConfig),
+    Sqs(Box<SqsSourceConfig>),
     Kafka(Box<KafkaSourceConfig>),
     Http(numaflow_http::HttpSourceConfig),
     Nats(NatsSourceConfig),
@@ -329,7 +329,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             assume_role_config,
         };
 
-        Ok(SourceType::Sqs(sqs_source_config))
+        Ok(SourceType::Sqs(Box::new(sqs_source_config)))
     }
 }
 
