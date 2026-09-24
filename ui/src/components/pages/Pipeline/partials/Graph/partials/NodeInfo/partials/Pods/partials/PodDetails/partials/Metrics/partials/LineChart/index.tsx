@@ -66,6 +66,10 @@ interface TooltipProps {
   active?: boolean;
 }
 
+// Maps metrics request fields, such as dimension, to observability URL keys, such as metricDimension.
+const metricRequestFieldUrlKey = (field: string): string =>
+  `metric${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+
 const formattedDate = (timestamp: number): string => {
   if (timestamp) {
     try {
@@ -285,6 +289,11 @@ const LineChartComponent = ({
     () => new URLSearchParams(location.search),
     [location.search]
   );
+  const urlMetric = metricParams.get("metric");
+  // Several charts can mount at once, but the URL has one metric. Only this chart
+  // restores metric state when the URL metric is absent or matches this chart.
+  const restoreMetricStateFromUrl =
+    !urlMetric || urlMetric === metric?.metric_name;
   const applyingUrlRef = useRef(false);
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
@@ -717,11 +726,11 @@ const LineChartComponent = ({
                   field={param?.name}
                   setMetricReq={setMetricsReq}
                   presets={presets}
+                  // Deep link: seed this dropdown only when this panel owns the active metric.
                   urlValue={
-                    !metricParams.get("metric") ||
-                    metricParams.get("metric") === metric?.metric_name
+                    restoreMetricStateFromUrl
                       ? metricParams.get(
-                          `metric${param?.name.charAt(0).toUpperCase()}${param?.name.slice(1)}`
+                          metricRequestFieldUrlKey(param?.name)
                         )
                       : undefined
                   }
@@ -758,9 +767,9 @@ const LineChartComponent = ({
               isFilterFocused={isFilterFocused}
               setFilterFocused={setFilterFocused}
               metric={metric}
+              // Do not apply another panel's metric filter from the URL.
               initialFilters={
-                !metricParams.get("metric") ||
-                metricParams.get("metric") === metric?.metric_name
+                restoreMetricStateFromUrl
                   ? metricParams.get("metricFilter")
                   : undefined
               }
