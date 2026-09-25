@@ -17,7 +17,7 @@ pub enum Error {
     ActorTaskTerminated(oneshot::error::RecvError),
 
     #[error("Received unknown offset for acknowledgement. offset={0}")]
-    UnknownOffset(u64),
+    UnknownOffset(String),
 
     #[error("{0}")]
     Other(String),
