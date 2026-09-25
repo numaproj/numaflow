@@ -29,10 +29,10 @@ pub(crate) mod bypass_router;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
-    config: &MonovertexConfig,
+    config: MonovertexConfig,
     metrics_state: metrics::MetricsState,
 ) -> error::Result<()> {
-    let result = run_configured_forwarder(config, cln_token, metrics_state.clone()).await;
+    let result = run_configured_forwarder(&config, cln_token, metrics_state.clone()).await;
     if result.is_err() {
         metrics_state.clear();
     }
@@ -316,7 +316,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = start_forwarder(cln_token.clone(), &config, MetricsState::new()).await;
+        let result = start_forwarder(cln_token.clone(), config, MetricsState::new()).await;
         assert!(result.is_ok());
 
         // stop the source and sink servers

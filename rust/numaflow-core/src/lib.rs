@@ -1,3 +1,5 @@
+use metrics::MetricsState;
+use shared::metrics::start_metrics_server;
 use std::collections::HashMap;
 use std::future::Future;
 use std::time::Duration;
@@ -150,9 +152,9 @@ pub async fn run() -> Result<()> {
     let _runtime_server_handle = runtime_server::spawn_runtime_errors_server(root_token.clone())
         .await
         .map_err(|e| Error::Mapper(format!("failed to start runtime errors server: {e}")))?;
-    let metrics_state = metrics::MetricsState::new();
+    let metrics_state = MetricsState::new();
     let _metrics_server_handle =
-        shared::metrics::start_metrics_server(metrics_config, metrics_state.clone()).await?;
+        start_metrics_server(metrics_config, metrics_state.clone()).await?;
 
     match crd_type {
         CustomResourceType::MonoVertex(config) => {
@@ -161,11 +163,11 @@ pub async fn run() -> Result<()> {
             run_forwarder_with_recovery(
                 root_token.clone(),
                 move |attempt_token| {
-                    let config = forwarder_config.clone();
-                    let metrics_state = metrics_state.clone();
-                    async move {
-                        monovertex::start_forwarder(attempt_token, &config, metrics_state).await
-                    }
+                    monovertex::start_forwarder(
+                        attempt_token,
+                        forwarder_config.clone(),
+                        metrics_state.clone(),
+                    )
                 },
                 report_monovertex_forwarder_error,
                 FORWARDER_RESTART_BACKOFF,
@@ -335,8 +337,11 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
         let tokens = tokens.lock().unwrap();
-        assert!(tokens[0].is_cancelled());
-        assert!(!tokens[1].is_cancelled());
+        let [first_attempt, second_attempt] = tokens.as_slice() else {
+            panic!("expected exactly two forwarder attempts");
+        };
+        assert!(first_attempt.is_cancelled());
+        assert!(!second_attempt.is_cancelled());
     }
 
     #[tokio::test]
