@@ -1,0 +1,67 @@
+.copy-view-link-button-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.copy-view-link-button {
+  height: 3.2rem !important;
+  min-width: 11.2rem !important;
+  padding: 0 1.2rem !important;
+  text-transform: none !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+.copy-view-link-icon-button {
+  width: 3.6rem !important;
+  height: 3.6rem !important;
+  padding: 0 !important;
+  color: #64748b !important;
+}
+
+.copy-view-link-icon-button .MuiSvgIcon-root {
+  font-size: 2.2rem;
+}
+
+.copy-view-link-tooltip {
+  font-size: 1.4rem !important;
+  line-height: 1.4 !important;
+  font-weight: 500 !important;
+  max-width: 28rem !important;
+  padding: 0.8rem 1.2rem !important;
+}
+
+.copy-view-link-icon-button:hover,
+.copy-view-link-icon-button:focus-visible {
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.copy-view-link-icon-button.copy-view-link-button--copied {
+  color: #15803d !important;
+}
+
+.copy-view-link-icon-button.copy-view-link-button--failed {
+  color: #b91c1c !important;
+}
+
+.copy-view-link-button .MuiButton-startIcon {
+  margin-right: 0.6rem;
+}
+
+.copy-view-link-button .MuiSvgIcon-root {
+  font-size: 1.6rem;
+}
+
+.copy-view-link-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

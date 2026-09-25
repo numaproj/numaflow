@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -226,4 +227,65 @@ func TestApplyProbes(t *testing.T) {
 			assert.Equal(t, tt.expected.LivenessProbe, tt.input.LivenessProbe)
 		})
 	}
+}
+
+func TestApplyStartupProbe(t *testing.T) {
+	livez := corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Path:   "/livez",
+			Port:   intstr.FromInt32(2469),
+			Scheme: corev1.URISchemeHTTPS,
+		},
+	}
+	container := func() *corev1.Container {
+		return &corev1.Container{
+			LivenessProbe: &corev1.Probe{
+				ProbeHandler:        livez,
+				InitialDelaySeconds: 20,
+				PeriodSeconds:       60,
+				TimeoutSeconds:      30,
+				FailureThreshold:    5,
+			},
+		}
+	}
+
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		c := container()
+		(&ContainerTemplate{}).ApplyToContainer(c)
+		assert.Nil(t, c.StartupProbe)
+	})
+
+	t.Run("nothing to derive a startup probe from", func(t *testing.T) {
+		c := &corev1.Container{}
+		(&ContainerTemplate{StartupProbe: &Probe{}}).ApplyToContainer(c)
+		assert.Nil(t, c.StartupProbe)
+	})
+
+	t.Run("runs the liveness check on its own schedule", func(t *testing.T) {
+		c := container()
+		(&ContainerTemplate{
+			StartupProbe: &Probe{
+				PeriodSeconds:    ptr.To[int32](10),
+				FailureThreshold: ptr.To[int32](60),
+			},
+		}).ApplyToContainer(c)
+		assert.NotNil(t, c.StartupProbe)
+		assert.Equal(t, livez, c.StartupProbe.ProbeHandler)
+		assert.Equal(t, int32(10), c.StartupProbe.PeriodSeconds)
+		assert.Equal(t, int32(60), c.StartupProbe.FailureThreshold)
+		assert.Equal(t, int32(20), c.StartupProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(30), c.StartupProbe.TimeoutSeconds)
+	})
+
+	t.Run("derived from the liveness probe as the template leaves it", func(t *testing.T) {
+		c := container()
+		(&ContainerTemplate{
+			LivenessProbe: &Probe{PeriodSeconds: ptr.To[int32](15)},
+			StartupProbe:  &Probe{FailureThreshold: ptr.To[int32](20)},
+		}).ApplyToContainer(c)
+		assert.NotNil(t, c.StartupProbe)
+		assert.Equal(t, int32(15), c.StartupProbe.PeriodSeconds)
+		assert.Equal(t, int32(20), c.StartupProbe.FailureThreshold)
+		assert.Equal(t, int32(5), c.LivenessProbe.FailureThreshold)
+	})
 }

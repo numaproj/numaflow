@@ -9,6 +9,7 @@ import Highlighter from "react-highlight-words";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   LOG_ROW_HEIGHT_PX,
+  NO_LOGS,
   NO_LOGS_MATCHING_SEARCH,
   LOADING_LOGS,
 } from "./constants";
@@ -38,8 +39,9 @@ export const LogVirtualList = forwardRef<
   const parentRef = useRef<HTMLDivElement | null>(null);
   const isDark = colorMode === "dark";
   const isEmptyState =
-    logs.length === 1 &&
-    (logs[0] === NO_LOGS_MATCHING_SEARCH || logs[0] === LOADING_LOGS);
+    logs.length === 0 ||
+    (logs.length === 1 &&
+      (logs[0] === NO_LOGS_MATCHING_SEARCH || logs[0] === LOADING_LOGS));
 
   const virtualizer = useVirtualizer({
     count: isEmptyState ? 0 : logs.length,
@@ -92,7 +94,7 @@ export const LogVirtualList = forwardRef<
     >
       {isEmptyState ? (
         <div className="PodLogs-empty" data-testid="log-empty-state">
-          {logs[0]}
+          {logs[0] || NO_LOGS}
         </div>
       ) : (
         <Box

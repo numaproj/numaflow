@@ -1,8 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import fetchMock from "jest-fetch-mock";
+import { BrowserRouter, MemoryRouter, useLocation } from "react-router-dom";
 
 import Graph from "./index";
 
@@ -10,6 +11,9 @@ import { AppContext } from "../../../../../App";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { GraphData } from "../../../../../types/declarations/pipeline";
 import { Position } from "@xyflow/react";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 window.ResizeObserver = class ResizeObserver {
   observe() {
@@ -902,6 +906,44 @@ describe("Graph", () => {
       expect(screen.getByText("in")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId("rf__node-in"));
+  });
+
+  it("clears leftover specLine when another vertex is selected", async () => {
+    const SearchProbe = () => {
+      const location = useLocation();
+      return <div data-testid="location-search">{location.search}</div>;
+    };
+    const refresh = jest.fn();
+    renderBase(
+      <MemoryRouter
+        initialEntries={[
+          "/?namespace=test&pipeline=simple-pipeline&vertex=in&vertexTab=spec&specLine=12",
+        ]}
+      >
+        <AppContext.Provider value={mockContext}>
+          <SearchProbe />
+          <Graph
+            namespaceId="test"
+            data={mockData}
+            pipelineId="simple-pipeline"
+            refresh={refresh}
+          />
+        </AppContext.Provider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("cat")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("rf__node-cat"));
+    await waitFor(() => {
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "vertex=cat"
+      );
+      expect(screen.getByTestId("location-search")).not.toHaveTextContent(
+        "specLine"
+      );
+    });
   });
 
   it("Tests sideInput click", async () => {
