@@ -5,7 +5,8 @@ use crate::config::components::reduce::{
 use crate::config::pipeline::{PipelineConfig, ReduceVtxConfig};
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{
-    ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
+    ComponentHealthChecks, LagReader, MetricsState, MetricsStateSlot, PipelineComponents,
+    WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::ISBFactory;
@@ -98,6 +99,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
+    metrics_state: MetricsStateSlot<WithoutRateLimiter>,
 ) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
     let tracker = Tracker::new(None, cln_token.clone());
@@ -200,22 +202,17 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
             .await?;
 
-    // Start the metrics server with one of the clients
-    start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Aligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
-                }),
-        },
-    )
-    .await;
+    metrics_state.set(MetricsState {
+        health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Aligned(reducer_client.clone()),
+        ))),
+        watermark_fetcher_state: watermark_handle
+            .clone()
+            .map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
+            }),
+    });
 
     let reducer = Reducer::Aligned(
         AlignedReducer::new(
@@ -251,6 +248,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
+    metrics_state: MetricsStateSlot<WithoutRateLimiter>,
 ) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
     let tracker = Tracker::new(None, cln_token.clone());
@@ -339,21 +337,17 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
             .await?;
 
-    start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Unaligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
-                }),
-        },
-    )
-    .await;
+    metrics_state.set(MetricsState {
+        health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Unaligned(reducer_client.clone()),
+        ))),
+        watermark_fetcher_state: watermark_handle
+            .clone()
+            .map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
+            }),
+    });
 
     let reducer = Reducer::Unaligned(
         UnalignedReducer::new(
@@ -495,6 +489,15 @@ pub(crate) async fn start_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> crate::error::Result<()> {
+    // The metrics server must be up before the fence wait: the user-defined container's liveness
+    // probe is served by it, and the wait can outlast that probe's failure budget.
+    let metrics_state = MetricsStateSlot::new();
+    start_metrics_server::<WithoutRateLimiter>(
+        config.metrics_config.clone(),
+        metrics_state.clone(),
+    )
+    .await;
+
     // create fence guard if WAL is configured to make sure the previous WAL instance has exited gracefully
     // before we start resuming from WAL.
     let _fence_guard = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
@@ -502,6 +505,7 @@ pub(crate) async fn start_reduce_forwarder(
         let fence_file_path = storage_config.path.join(fence_file_name);
 
         let fence_timeout = Duration::from_secs(300); // 5 minutes
+        let _sidecars_assumed_live = metrics_state.assume_sidecars_live();
         if let Err(e) = wait_for_fence_availability(&fence_file_path, fence_timeout).await {
             error!(
                 ?e,
@@ -521,6 +525,7 @@ pub(crate) async fn start_reduce_forwarder(
                 config,
                 reduce_vtx_config.clone(),
                 aligned_config.clone(),
+                metrics_state,
             )
             .await
         }
@@ -531,6 +536,7 @@ pub(crate) async fn start_reduce_forwarder(
                 config,
                 reduce_vtx_config.clone(),
                 unaligned_config.clone(),
+                metrics_state,
             )
             .await
         }
@@ -544,7 +550,7 @@ mod tests {
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::reduce::{
         AlignedReducerConfig, AlignedWindowConfig, AlignedWindowType, FixedWindowConfig,
-        UserDefinedConfig,
+        StorageConfig, UserDefinedConfig,
     };
     use crate::config::pipeline::isb::{
         BufferReaderConfig, BufferWriterConfig, ISBClientConfig, Stream,
@@ -554,6 +560,7 @@ mod tests {
         FromVertexConfig, PipelineConfig, ReduceVtxConfig, ToVertexConfig, VertexConfig, VertexType,
     };
     use crate::message::{IntOffset, Message, MessageID, Offset, StringOffset};
+    use crate::metrics::MetricsStateSlot;
     use crate::pipeline::forwarder::reduce_forwarder::{
         FenceGuard, start_aligned_reduce_forwarder, start_reduce_forwarder,
         start_unaligned_reduce_forwarder, wait_for_fence_availability,
@@ -864,6 +871,238 @@ mod tests {
         Ok(())
     }
 
+    /// The user-defined container's liveness probe is served by the numa container's metrics
+    /// server, so that server must answer while the forwarder waits for a stale fence file.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sidecar_livez_served_during_fence_wait() -> crate::Result<()> {
+        let reduce_server = start_server(
+            "reducer",
+            |socket_path, server_info_path, shutdown_rx| async move {
+                reduce::Server::new(CounterCreator {})
+                    .with_socket_file(socket_path)
+                    .with_server_info_file(server_info_path)
+                    .start_with_shutdown(shutdown_rx)
+                    .await
+                    .expect("reduce server failed");
+            },
+        );
+        let vertex = FenceWaitVertex::new(
+            &reduce_server.socket_path(),
+            &reduce_server.server_info_path(),
+        )
+        .await;
+
+        let cancellation_token = CancellationToken::new();
+        let forwarder_task = vertex.start_forwarder(&cancellation_token);
+
+        vertex.wait_for_status("/sidecar-livez", 204).await;
+        assert!(
+            vertex.fence_file.exists(),
+            "the forwarder should still be waiting on the fence file"
+        );
+        assert_eq!(vertex.status("/readyz").await, 503);
+
+        fs::remove_file(&vertex.fence_file).await.unwrap();
+        vertex.wait_for_status("/readyz", 204).await;
+        assert_eq!(vertex.status("/sidecar-livez").await, 204);
+
+        cancellation_token.cancel();
+        tokio::time::timeout(Duration::from_secs(5), forwarder_task)
+            .await
+            .expect("reduce forwarder did not stop")
+            .expect("reduce forwarder task panicked")?;
+        reduce_server.shutdown();
+
+        Ok(())
+    }
+
+    /// The sidecars are only assumed live for the duration of the fence wait. A user-defined
+    /// container that never starts must still fail its liveness probe afterwards, so that it gets
+    /// restarted.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sidecar_livez_fails_after_fence_wait_when_udf_never_starts() {
+        let never_started = TempDir::new().unwrap();
+        let vertex = FenceWaitVertex::new(
+            &never_started.path().join("reducer.sock"),
+            &never_started.path().join("reducer-server-info"),
+        )
+        .await;
+
+        let cancellation_token = CancellationToken::new();
+        let forwarder_task = vertex.start_forwarder(&cancellation_token);
+
+        vertex.wait_for_status("/sidecar-livez", 204).await;
+
+        fs::remove_file(&vertex.fence_file).await.unwrap();
+        vertex.wait_for_status("/sidecar-livez", 503).await;
+        assert_eq!(vertex.status("/readyz").await, 503);
+
+        cancellation_token.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(5), forwarder_task)
+            .await
+            .expect("reduce forwarder did not stop")
+            .expect("reduce forwarder task panicked");
+        assert!(
+            result.is_err(),
+            "the forwarder cannot start without its user-defined container"
+        );
+    }
+
+    /// A persistent reduce vertex whose startup is blocked by a fence file left behind by a
+    /// previous instance, with its metrics server on a free port.
+    struct FenceWaitVertex {
+        _wal_dir: TempDir,
+        fence_file: std::path::PathBuf,
+        metrics_port: u16,
+        pipeline_config: PipelineConfig,
+        reduce_vtx_config: ReduceVtxConfig,
+        client: reqwest::Client,
+    }
+
+    impl FenceWaitVertex {
+        async fn new(socket_path: &std::path::Path, server_info_path: &std::path::Path) -> Self {
+            const INPUT_VERTEX: &str = "fence-wait-input-vertex";
+            const OUTPUT_VERTEX: &str = "fence-wait-output-vertex";
+            const VERTEX_NAME: &str = "fence-wait-reduce-vertex";
+
+            let wal_dir = TempDir::new().unwrap();
+            let fence_file = wal_dir.path().join(format!("{VERTEX_NAME}-0"));
+            fs::write(&fence_file, "").await.unwrap();
+
+            let metrics_port = free_port();
+            let input_stream = Stream::new("fence_wait_input", INPUT_VERTEX, 0);
+            let output_stream = Stream::new("fence_wait_output", OUTPUT_VERTEX, 0);
+
+            let reduce_vtx_config = ReduceVtxConfig {
+                keyed: true,
+                wal_storage_config: Some(StorageConfig {
+                    path: wal_dir.path().to_path_buf(),
+                    ..Default::default()
+                }),
+                reducer_config: crate::config::components::reduce::ReducerConfig::Aligned(
+                    AlignedReducerConfig {
+                        window_config: AlignedWindowConfig {
+                            window_type: AlignedWindowType::Fixed(FixedWindowConfig {
+                                length: Duration::from_secs(60),
+                                streaming: false,
+                            }),
+                            allowed_lateness: Duration::ZERO,
+                            is_keyed: true,
+                        },
+                        user_defined_config: UserDefinedConfig {
+                            grpc_max_message_size: 5 * 1024 * 1024,
+                            socket_path: leak(socket_path),
+                            server_info_path: leak(server_info_path),
+                        },
+                    },
+                ),
+            };
+            let pipeline_config = PipelineConfig {
+                pipeline_name: "fence-wait-pipeline",
+                vertex_name: VERTEX_NAME,
+                replica: 0,
+                batch_size: 10,
+                concurrency: 20,
+                read_timeout: Duration::from_millis(20),
+                graceful_shutdown_time: Duration::from_millis(100),
+                isb_client_config: ISBClientConfig::InMemory,
+                from_vertex_config: vec![FromVertexConfig {
+                    name: INPUT_VERTEX,
+                    reader_config: BufferReaderConfig {
+                        streams: vec![input_stream],
+                        wip_ack_interval: Duration::from_millis(5),
+                        max_ack_pending: 20,
+                    },
+                    partitions: 1,
+                }],
+                to_vertex_config: vec![ToVertexConfig {
+                    name: OUTPUT_VERTEX,
+                    partitions: 1,
+                    writer_config: BufferWriterConfig {
+                        streams: vec![output_stream.clone()],
+                        ..Default::default()
+                    },
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                }],
+                vertex_config: VertexConfig::Reduce(reduce_vtx_config.clone()),
+                vertex_type: VertexType::ReduceUDF,
+                metrics_config: MetricsConfig {
+                    metrics_server_listen_port: metrics_port,
+                    ..Default::default()
+                },
+                watermark_config: None,
+                ..Default::default()
+            };
+
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap();
+
+            Self {
+                _wal_dir: wal_dir,
+                fence_file,
+                metrics_port,
+                pipeline_config,
+                reduce_vtx_config,
+                client,
+            }
+        }
+
+        fn start_forwarder(
+            &self,
+            cancellation_token: &CancellationToken,
+        ) -> tokio::task::JoinHandle<crate::Result<()>> {
+            tokio::spawn(start_reduce_forwarder(
+                cancellation_token.clone(),
+                Arc::new(InMemoryFactory::new()),
+                self.pipeline_config.clone(),
+                self.reduce_vtx_config.clone(),
+            ))
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("https://127.0.0.1:{}{path}", self.metrics_port)
+        }
+
+        async fn status(&self, path: &str) -> u16 {
+            self.client
+                .get(self.url(path))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+
+        async fn wait_for_status(&self, path: &str, expected: u16) {
+            let url = self.url(path);
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    if let Ok(response) = self.client.get(&url).send().await
+                        && response.status().as_u16() == expected
+                    {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("{url} did not return {expected} in time"));
+        }
+    }
+
+    fn leak(path: &std::path::Path) -> &'static str {
+        Box::leak(path.to_string_lossy().into_owned().into_boxed_str())
+    }
+
+    fn free_port() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_aligned_reduce_forwarder() -> crate::Result<()> {
@@ -1112,6 +1351,7 @@ mod tests {
                     pipeline_config,
                     reduce_vtx_config,
                     aligned_config,
+                    MetricsStateSlot::new(),
                 )
                 .await
                 .unwrap();
@@ -1441,6 +1681,7 @@ mod tests {
                     pipeline_config,
                     reduce_vtx_config,
                     unaligned_config,
+                    MetricsStateSlot::new(),
                 )
                 .await
                 {
