@@ -2,7 +2,7 @@ use super::{
     ParentMessageInfo, UserDefinedMessage, create_response_stream, grpc_error_to_redrive,
     map_redrive_error, reconnect_mapper_client, update_udf_drop_metric_by_n,
     update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_metric,
+    update_udf_write_metric, wait_before_map_redrive,
 };
 use crate::config::components::sink::RetryConfig;
 use crate::config::is_mono_vertex;
@@ -61,18 +61,10 @@ pub(in crate::mapper) struct MapBatchTask {
     pub retry_config: Option<RetryConfig>,
 }
 
-pub(in crate::mapper) enum BatchMapTaskError {
-    Redrive {
-        error: Error,
-        msg_handles: Vec<MessageHandle>,
-    },
-    Terminal(Error),
-}
-
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(mut self) -> std::result::Result<(), BatchMapTaskError> {
+    pub async fn execute(mut self) -> Result<()> {
         // Create per-message map spans via the OTel SDK API.
         // Each span's parent is that message's `vertex.process` context (from
         // sys_metadata["tracing"]). We inject the map span context into
@@ -121,10 +113,11 @@ impl MapBatchTask {
                 Err(Error::UdfRedrive(status)) => Some(Error::UdfRedrive(status.clone())),
                 _ => None,
             }) {
-                return Err(BatchMapTaskError::Redrive {
-                    error,
-                    msg_handles: retry_handles,
-                });
+                warn!(?error, "redriving batch map messages after UDF reconnect");
+                wait_before_map_redrive(&self.cln_token).await?;
+                next_retry_handles = retry_handles;
+                // redrive within the current loop to avoid resetting msg retry counts.
+                continue;
             }
 
             for (result, (msg_handle, parent_info)) in results
@@ -172,8 +165,7 @@ impl MapBatchTask {
                                 &offset,
                                 mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                             )
-                            .await
-                            .map_err(BatchMapTaskError::Terminal)?;
+                            .await?;
 
                         for mapped_message in mapped_messages {
                             // Each downstream handle shares the original ack tracking — ACK is
@@ -209,7 +201,7 @@ impl MapBatchTask {
                     Err(e) => {
                         error!(err=?e, "failed to map message");
                         mark_failed!(msg_handle, &e, None);
-                        return Err(BatchMapTaskError::Terminal(e));
+                        return Err(e);
                     }
                 }
             }
@@ -602,7 +594,7 @@ impl UserDefinedBatchMap {
 
 #[cfg(test)]
 mod tests {
-    use super::{BatchMapTaskError, MapBatchTask};
+    use super::MapBatchTask;
     use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
     use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
@@ -1376,10 +1368,7 @@ mod tests {
         mapper: UserDefinedBatchMap,
         msg_handles: Vec<MessageHandle>,
         retry_config: Option<RetryConfig>,
-    ) -> (
-        std::result::Result<(), BatchMapTaskError>,
-        mpsc::Receiver<MessageHandle>,
-    ) {
+    ) -> (crate::error::Result<()>, mpsc::Receiver<MessageHandle>) {
         let (output_tx, output_rx) = mpsc::channel(16);
         let result = MapBatchTask {
             mapper,
