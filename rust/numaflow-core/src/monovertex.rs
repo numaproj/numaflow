@@ -30,6 +30,19 @@ pub(crate) mod bypass_router;
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
+    metrics_state: metrics::MetricsState,
+) -> error::Result<()> {
+    let result = run_configured_forwarder(config, cln_token, metrics_state.clone()).await;
+    if result.is_err() {
+        metrics_state.clear();
+    }
+    result
+}
+
+async fn run_configured_forwarder(
+    config: &MonovertexConfig,
+    cln_token: CancellationToken,
+    metrics_state: metrics::MetricsState,
 ) -> error::Result<()> {
     if let Some(rate_limit_config) = &config.rate_limit {
         if should_use_redis_rate_limiter(rate_limit_config) {
@@ -39,6 +52,7 @@ pub(crate) async fn start_forwarder(
                 config,
                 cln_token,
                 Some(redis_config.throttling_config),
+                metrics_state,
             )
             .await
         } else {
@@ -48,11 +62,18 @@ pub(crate) async fn start_forwarder(
                 config,
                 cln_token,
                 Some(in_mem_config.throttling_config),
+                metrics_state,
             )
             .await
         }
     } else {
-        run_monovertex_forwarder::<crate::typ::WithoutRateLimiter>(config, cln_token, None).await
+        run_monovertex_forwarder::<crate::typ::WithoutRateLimiter>(
+            config,
+            cln_token,
+            None,
+            metrics_state,
+        )
+        .await
     }
 }
 
@@ -61,6 +82,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     config: &MonovertexConfig,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
+    metrics_state: metrics::MetricsState,
 ) -> error::Result<()> {
     let tracker = Tracker::new(None, cln_token.clone());
 
@@ -122,25 +144,14 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    // Start the metrics server in a separate background async spawn,
-    // This should be running throughout the lifetime of the application, hence the handle is not
-    // joined.
-    let metrics_state = metrics::MetricsState {
-        health_checks: metrics::ComponentHealthChecks::Monovertex(Box::new(
-            metrics::MonovertexComponents {
-                source: source.clone(),
-                sink: sink_writer.clone(),
-                mapper: mapper.clone(),
-            },
-        )),
-        watermark_fetcher_state: None, // Monovertex doesn't have watermark handles
-    };
-
-    // start the metrics server
-    // FIXME: what to do with the handle
-    let metrics_server_handle =
-        shared::metrics::start_metrics_server::<C>(config.metrics_config.clone(), metrics_state)
-            .await;
+    metrics_state.set(
+        metrics::ComponentHealthChecks::Monovertex(Box::new(metrics::MonovertexComponents {
+            source: source.clone(),
+            sink: sink_writer.clone(),
+            mapper: mapper.clone(),
+        })),
+        None, // MonoVertex doesn't have watermark handles
+    );
 
     start::<C>(
         config.clone(),
@@ -150,11 +161,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         bypass_router,
         cln_token,
     )
-    .await?;
-
-    // abort the metrics server
-    metrics_server_handle.abort();
-    Ok(())
+    .await
 }
 
 async fn start<C: crate::typ::NumaflowTypeConfig>(
@@ -200,6 +207,7 @@ mod tests {
 
     use crate::config::components;
     use crate::config::monovertex::MonovertexConfig;
+    use crate::metrics::MetricsState;
     use crate::monovertex::start_forwarder;
 
     struct SimpleSource;
@@ -308,7 +316,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = start_forwarder(cln_token.clone(), &config).await;
+        let result = start_forwarder(cln_token.clone(), &config, MetricsState::new()).await;
         assert!(result.is_ok());
 
         // stop the source and sink servers
