@@ -3,7 +3,9 @@ use axum::extract::{Query, State};
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
+use axum_server::from_tcp_rustls;
 use axum_server::tls_rustls::RustlsConfig;
+use parking_lot::RwLock;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -13,7 +15,7 @@ use prometheus_client::registry::Registry;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -213,12 +215,131 @@ pub(crate) struct WatermarkFetcherState {
     pub(crate) partitions: Vec<u16>,
 }
 
-/// MetricsState holds both component health checks and optional watermark fetcher state
-/// for serving metrics and watermark endpoints
-#[derive(Clone)]
-pub(crate) struct MetricsState<C: crate::typ::NumaflowTypeConfig> {
-    pub(crate) health_checks: ComponentHealthChecks<C>,
-    pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+/// Process-bound state for the metrics server.
+///
+/// The active forwarder attempt replaces the health and watermark handles without rebinding the
+/// server.
+#[derive(Clone, Default)]
+pub(crate) struct MetricsState {
+    inner: Arc<RwLock<MetricsStateInner>>,
+}
+
+#[derive(Default)]
+struct MetricsStateInner {
+    health_checks: Option<Arc<dyn HealthCheck>>,
+    watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+#[async_trait::async_trait]
+trait HealthCheck: Send + Sync {
+    async fn check(&self) -> bool;
+}
+
+#[async_trait::async_trait]
+impl<C: crate::typ::NumaflowTypeConfig> HealthCheck for ComponentHealthChecks<C> {
+    async fn check(&self) -> bool {
+        self.clone().ready().await
+    }
+}
+
+impl MetricsState {
+    /// Creates process-bound metrics state without an active forwarder attempt.
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Replaces the health and watermark handles exposed by the metrics server.
+    pub(crate) fn set<C: crate::typ::NumaflowTypeConfig>(
+        &self,
+        health_checks: ComponentHealthChecks<C>,
+        watermark_fetcher_state: Option<WatermarkFetcherState>,
+    ) {
+        *self.inner.write() = MetricsStateInner {
+            health_checks: Some(Arc::new(health_checks)),
+            watermark_fetcher_state,
+        };
+    }
+
+    /// Removes references to a completed forwarder attempt.
+    pub(crate) fn clear(&self) {
+        *self.inner.write() = MetricsStateInner::default();
+    }
+
+    fn health_checks(&self) -> Option<Arc<dyn HealthCheck>> {
+        self.inner.read().health_checks.clone()
+    }
+
+    fn watermark_fetcher_state(&self) -> Option<WatermarkFetcherState> {
+        self.inner.read().watermark_fetcher_state.clone()
+    }
+}
+
+impl<C: crate::typ::NumaflowTypeConfig> ComponentHealthChecks<C> {
+    async fn ready(self) -> bool {
+        match self {
+            ComponentHealthChecks::Monovertex(mut monovertex_state) => {
+                // This call also checks the transformer when one is configured in the source.
+                if !monovertex_state.source.ready().await {
+                    error!("Monovertex source component is not ready");
+                    return false;
+                }
+                if !monovertex_state.sink.ready().await {
+                    error!("Monovertex sink client is not ready");
+                    return false;
+                }
+                if let Some(ref mut mapper) = monovertex_state.mapper
+                    && !mapper.ready().await
+                {
+                    error!("Monovertex mapper component is not ready");
+                    return false;
+                }
+            }
+            ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
+                PipelineComponents::Source(mut source) => {
+                    if !source.ready().await {
+                        error!("Pipeline source component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Sink(mut sink) => {
+                    // This call also checks the fallback sink when one is configured.
+                    if !sink.ready().await {
+                        error!("Pipeline sink component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Map(mut map) => {
+                    if !map.ready().await {
+                        error!("Pipeline map component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Reduce(reducer) => match reducer {
+                    UserDefinedReduce::Aligned(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline aligned reduce is not ready");
+                            return false;
+                        }
+                    }
+                    UserDefinedReduce::Unaligned(reducer) => match reducer {
+                        UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
+                            if !reducer.ready().await {
+                                error!("Pipeline accumulator reduce component is not ready");
+                                return false;
+                            }
+                        }
+                        UserDefinedUnalignedReduce::Session(mut reducer) => {
+                            if !reducer.ready().await {
+                                error!("Pipeline session reduce component is not ready");
+                                return false;
+                            }
+                        }
+                    },
+                },
+            },
+        }
+        true
+    }
 }
 
 /// WatermarkQueryParams represents the query parameters for the /watermark endpoint
@@ -1371,11 +1492,11 @@ pub async fn metrics_handler() -> impl IntoResponse {
 // watermark_handler is used to fetch and return watermark information
 // for all partitions based on available watermark handles.
 // Optionally accepts a 'from' query parameter to filter watermarks by edge (from vertex).
-pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
+pub async fn watermark_handler(
+    State(state): State<MetricsState>,
     Query(params): Query<WatermarkQueryParams>,
 ) -> impl IntoResponse {
-    let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
+    let Some(watermark_fetcher_state) = state.watermark_fetcher_state() else {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
             .header(axum::http::header::CONTENT_TYPE, "application/json")
@@ -1424,10 +1545,7 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
         .unwrap()
 }
 
-pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig>(
-    addr: SocketAddr,
-    metrics_state: MetricsState<C>,
-) -> crate::Result<()> {
+pub(crate) async fn create_metrics_tls_config() -> crate::Result<RustlsConfig> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -1439,9 +1557,17 @@ pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig
         .await
         .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {e}")))?;
 
+    Ok(tls_config)
+}
+
+pub(crate) async fn start_metrics_https_server(
+    listener: TcpListener,
+    tls_config: RustlsConfig,
+    metrics_state: MetricsState,
+) -> crate::Result<()> {
     let metrics_app = metrics_router(metrics_state);
 
-    axum_server::bind_rustls(addr, tls_config)
+    from_tcp_rustls(listener, tls_config)
         .serve(metrics_app.into_make_service())
         .await
         .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {e}")))?;
@@ -1450,7 +1576,7 @@ pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router<C: crate::typ::NumaflowTypeConfig>(metrics_state: MetricsState<C>) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/runtime/watermark", get(watermark_handler))
@@ -1464,9 +1590,7 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
-) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
     // Check if health checks are disabled via the environment variable
     if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
         .map(|v| v.eq_ignore_ascii_case("true"))
@@ -1474,69 +1598,16 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
     {
         return StatusCode::NO_CONTENT;
     }
-    match state.health_checks {
-        ComponentHealthChecks::Monovertex(mut monovertex_state) => {
-            // this call also check the health of transformer if it is configured in the Source.
-            if !monovertex_state.source.ready().await {
-                error!("Monovertex source component is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            if !monovertex_state.sink.ready().await {
-                error!("Monovertex sink client is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            if let Some(ref mut mapper) = monovertex_state.mapper
-                && !mapper.ready().await
-            {
-                error!("Monovertex mapper component is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-        }
-        ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
-            PipelineComponents::Source(mut source) => {
-                if !source.ready().await {
-                    error!("Pipeline source component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Sink(mut sink) => {
-                // this call also check for fbsink if it is there
-                if !sink.ready().await {
-                    error!("Pipeline sink component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Map(mut map) => {
-                if !map.ready().await {
-                    error!("Pipeline map component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Reduce(reducer) => match reducer {
-                UserDefinedReduce::Aligned(mut reducer) => {
-                    if !reducer.ready().await {
-                        error!("Pipeline aligned reduce is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
-                }
-                UserDefinedReduce::Unaligned(reducer) => match reducer {
-                    UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
-                        if !reducer.ready().await {
-                            error!("Pipeline accumulator reduce component is not ready");
-                            return StatusCode::INTERNAL_SERVER_ERROR;
-                        }
-                    }
-                    UserDefinedUnalignedReduce::Session(mut reducer) => {
-                        if !reducer.ready().await {
-                            error!("Pipeline session reduce component is not ready");
-                            return StatusCode::INTERNAL_SERVER_ERROR;
-                        }
-                    }
-                },
-            },
-        },
+    let Some(health_checks) = state.health_checks() else {
+        error!("No active forwarder attempt is registered for health checks");
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    if health_checks.check().await {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
     }
-    StatusCode::NO_CONTENT
 }
 
 #[derive(Clone)]
@@ -1706,8 +1777,6 @@ async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use super::*;
     use crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
     use crate::mapper::test_utils::MapperTestHandle;
@@ -1779,6 +1848,27 @@ mod tests {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             vec![map::Message::new(input.value).with_keys(input.keys)]
         }
+    }
+
+    #[tokio::test]
+    async fn empty_metrics_state_is_live_but_not_ready() {
+        let metrics_state = MetricsState::new();
+
+        let response = livez().await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let response = watermark_handler(
+            State(metrics_state),
+            Query(WatermarkQueryParams { from: None }),
+        )
+        .await;
+        assert_eq!(response.into_response().status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -1917,25 +2007,29 @@ mod tests {
         )
         .await;
 
-        let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
-            health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
-                source,
-                sink: sink_writer,
-                mapper: Some(mapper_handle.mapper),
-            })),
-            watermark_fetcher_state: None,
-        };
+        let metrics_state = MetricsState::new();
+        metrics_state.set(
+            ComponentHealthChecks::<crate::typ::WithoutRateLimiter>::Monovertex(Box::new(
+                MonovertexComponents {
+                    source,
+                    sink: sink_writer,
+                    mapper: Some(mapper_handle.mapper),
+                },
+            )),
+            None,
+        );
 
-        let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let tls_config = create_metrics_tls_config().await.unwrap();
         let metrics_state_clone = metrics_state.clone();
         let server_handle = tokio::spawn(async move {
-            start_metrics_https_server::<crate::typ::WithoutRateLimiter>(addr, metrics_state_clone)
+            start_metrics_https_server(listener, tls_config, metrics_state_clone)
                 .await
                 .unwrap();
         });
 
         // invoke the sidecar-livez endpoint
-        let response = sidecar_livez::<crate::typ::WithoutRateLimiter>(State(metrics_state)).await;
+        let response = sidecar_livez(State(metrics_state.clone())).await;
         assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
 
         // invoke the livez endpoint
@@ -1945,6 +2039,13 @@ mod tests {
         // invoke the metrics endpoint
         let response = metrics_handler().await;
         assert_eq!(response.into_response().status(), StatusCode::OK);
+
+        metrics_state.clear();
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
 
         // Stop the servers
         server_handle.abort();
