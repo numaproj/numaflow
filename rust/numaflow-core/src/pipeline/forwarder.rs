@@ -145,3 +145,50 @@ async fn run_forwarder(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn join_forwarder_tasks_succeeds_when_all_tasks_succeed() {
+        let result = join_forwarder_tasks(
+            vec![
+                AbortOnDropHandle::new(tokio::spawn(async { Ok(()) })),
+                AbortOnDropHandle::new(tokio::spawn(async { Ok(()) })),
+            ],
+            &CancellationToken::new(),
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn join_forwarder_tasks_propagates_task_error() {
+        let result = join_forwarder_tasks(
+            vec![AbortOnDropHandle::new(tokio::spawn(async {
+                Err(Error::Forwarder("forwarder failed".to_string()))
+            }))],
+            &CancellationToken::new(),
+        )
+        .await;
+
+        assert!(matches!(result, Err(Error::Forwarder(message)) if message == "forwarder failed"));
+    }
+
+    #[tokio::test]
+    async fn join_forwarder_tasks_cancels_token_when_task_panics() {
+        let token = CancellationToken::new();
+        let result = join_forwarder_tasks(
+            vec![AbortOnDropHandle::new(tokio::spawn(async {
+                panic!("forwarder task panicked")
+            }))],
+            &token,
+        )
+        .await;
+
+        assert!(matches!(result, Err(Error::Forwarder(_))));
+        assert!(token.is_cancelled());
+    }
+}
