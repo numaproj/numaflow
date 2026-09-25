@@ -35,7 +35,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
-use batch::{BatchMapTaskError, MapBatchTask, UserDefinedBatchMap};
+use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::{MapUnaryTask, UserDefinedUnaryMap};
 
@@ -359,9 +359,7 @@ impl MapHandle {
             }
 
             if !read_batch.is_empty()
-                && let Err(e) = self
-                    .process_batch_with_redrive(read_batch, &ctx, is_mono_vertex)
-                    .await
+                && let Err(e) = self.process_batch(read_batch, &ctx, is_mono_vertex).await
             {
                 error!(?e, "error received while performing batch map operation");
                 upstream_cln_token.cancel();
@@ -371,36 +369,26 @@ impl MapHandle {
         }
     }
 
-    async fn process_batch_with_redrive(
+    /// Runs the batch UDF for one batch. Retries and UDF redrives are handled inside
+    /// [MapBatchTask::execute], so a returned error is always terminal for the component.
+    async fn process_batch(
         &self,
-        mut read_batch: Vec<MessageHandle>,
+        read_batch: Vec<MessageHandle>,
         ctx: &BatchMapContext,
         is_mono_vertex: bool,
     ) -> error::Result<()> {
-        loop {
-            let result = (MapBatchTask {
-                mapper: ctx.batch_mapper.clone(),
-                msg_handles: read_batch,
-                output_tx: ctx.output_tx.clone(),
-                tracker: self.tracker.clone(),
-                bypass_router: ctx.bypass_router.clone(),
-                is_mono_vertex,
-                cln_token: ctx.cln_token.clone(),
-                retry_config: ctx.retry_config.clone(),
-            })
-            .execute()
-            .await;
-
-            match result {
-                Err(BatchMapTaskError::Redrive { error, msg_handles }) => {
-                    warn!(?error, "redriving batch map messages after UDF reconnect");
-                    wait_before_map_redrive(&ctx.cln_token).await?;
-                    read_batch = msg_handles;
-                }
-                Err(BatchMapTaskError::Terminal(error)) => return Err(error),
-                Ok(()) => return Ok(()),
-            }
-        }
+        (MapBatchTask {
+            mapper: ctx.batch_mapper.clone(),
+            msg_handles: read_batch,
+            output_tx: ctx.output_tx.clone(),
+            tracker: self.tracker.clone(),
+            bypass_router: ctx.bypass_router.clone(),
+            is_mono_vertex,
+            cln_token: ctx.cln_token.clone(),
+            retry_config: ctx.retry_config.clone(),
+        })
+        .execute()
+        .await
     }
 }
 
