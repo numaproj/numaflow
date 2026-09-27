@@ -1,5 +1,9 @@
 # Retry Strategy
 
+<div style="padding: 15px; background-color: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; color: #0369a1; margin: 15px 0;">
+    💡 <strong>Note:</strong> From v1.9, retry strategy can also be specified for <strong>map UDFs</strong> and <strong>source transformers</strong> (<a href="../../user-defined-functions/map/retry-strategy/">ref</a>). 
+</div>
+
 ### Overview
 
 The `RetryStrategy` is used to configure the behavior for a sink after encountering failures during a write operation.
@@ -8,9 +12,34 @@ unexpected issues efficiently.
 
 `RetryStrategy` ONLY gets applied to failed messages. To return a failed message, use the methods provided by the SDKs.
 
-- `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/47460a1854b8f58a0e918056ef4d169949193ebe/pkg/sinker/types.go#L45)
-- `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/25fe5e2eb1926c938a15e68ade82f0654bf66c97/src/main/java/io/numaproj/numaflow/sinker/Response.java#L37)
-- `as_failure` for [Python](https://github.com/numaproj/numaflow-python/blob/0d87b8f7603401a646d3ee5a1204077d4207ed27/pynumaflow/sinker/_dtypes.py#L41)
+=== "Golang"
+
+    ```go
+    ResponseFailure(id, errMsg)
+    ```
+    [Golang SDK Examples](https://github.com/numaproj/numaflow-go/blob/7e699ca5b8125eea1477025c200bedc21c17d0d3/examples/sinker/failure_sink/main.go#L19)
+
+=== "Java"
+
+    ```java
+    responseFailure(id, errMsg)
+    ```
+    [Java SDK Examples](https://github.com/numaproj/numaflow-java/blob/198d66de7a24c6d7e841a0f28eb1d3ad88b5cbff/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/SimpleSink.java#L49-L52)
+
+=== "Python"
+
+    ```python
+    Response.as_failure(id, err_msg)
+    ```
+    [Python SDK full signature](https://github.com/numaproj/numaflow-python/blob/5e6476085d8fb5e8b689dccca21c51d38713b9fc/packages/pynumaflow/pynumaflow/sinker/_dtypes.py#L119)
+
+=== "Rust"
+
+    ```rust
+    Response::failure(id, err_msg)
+    ```
+    [Rust SDK Examples](https://github.com/numaproj/numaflow-rs/blob/36da7a9783b60b31d561a4fa43ced5c4ecd2e5ed/examples/sink-log/src/main.rs#L26)
+
 
 ### Retry Strategy Configuration
 
