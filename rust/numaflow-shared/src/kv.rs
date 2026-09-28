@@ -48,6 +48,11 @@ pub struct KVEntry {
     /// This is provided by the KV store (e.g., JetStream) and can be used
     /// for processor liveness detection.
     pub created: i64,
+    /// The store-assigned revision of this entry, monotonic per bucket.
+    /// A watcher records the last observed revision so a recreated watch can
+    /// resume from `last_observed + 1` instead of replaying (or skipping)
+    /// the disconnect window.
+    pub revision: u64,
 }
 
 /// Type alias for the watch stream.

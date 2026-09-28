@@ -50,6 +50,9 @@ pub struct JetstreamWatcher {
     /// Optional revision to start watching from. If None, uses watch_all().
     /// If Some(revision), uses watch_all_from_revision(revision).
     revision: Option<u64>,
+    /// Revision of the last entry this watcher yielded. A recreated watcher
+    /// resumes from `last_observed_revision + 1`
+    last_observed_revision: Option<u64>,
     recreate_future: Option<Pin<Box<dyn Future<Output = Watch> + Send>>>,
 }
 
@@ -63,8 +66,25 @@ impl JetstreamWatcher {
             watcher,
             bucket,
             revision,
+            last_observed_revision: None,
             recreate_future: None,
         })
+    }
+
+    /// The revision a recreated watch must resume from: one past the last
+    /// observed entry, falling back to the originally requested revision when
+    /// nothing has been observed yet.
+    fn resume_revision(&self) -> Option<u64> {
+        self.last_observed_revision.map(|r| r + 1).or(self.revision)
+    }
+
+    /// Schedules recreation of the underlying watch from [`Self::resume_revision`].
+    /// Called when the watch stream ends or yields an error.
+    fn schedule_recreate(&mut self) {
+        self.recreate_future = Some(Box::pin(create_watcher(
+            self.bucket.clone(),
+            self.resume_revision(),
+        )));
     }
 }
 
@@ -82,7 +102,10 @@ impl futures::Stream for JetstreamWatcher {
                     self.watcher = watcher;
                     // fall through and poll the watcher
                 }
-                Poll::Pending => return Poll::Pending,
+                Poll::Pending => {
+                    self.recreate_future = Some(future);
+                    return Poll::Pending;
+                }
             }
         }
 
@@ -91,17 +114,18 @@ impl futures::Stream for JetstreamWatcher {
             Poll::Ready(entry) => match entry {
                 None => {
                     warn!("Watcher stream ended unexpectedly. Recreating watcher...");
-                    self.recreate_future =
-                        Some(Box::pin(create_watcher(self.bucket.clone(), self.revision)));
+                    self.schedule_recreate();
                     // now let's manually call poll_next to poll the future we just set
                     self.poll_next(cx)
                 }
                 Some(inner_entry) => match inner_entry {
-                    Ok(entry) => Poll::Ready(Some(entry)),
+                    Ok(entry) => {
+                        self.last_observed_revision = Some(entry.revision);
+                        Poll::Ready(Some(entry))
+                    }
                     Err(e) => {
                         warn!(?e, "Failed to get next entry from watcher");
-                        self.recreate_future =
-                            Some(Box::pin(create_watcher(self.bucket.clone(), self.revision)));
+                        self.schedule_recreate();
                         // now let's manually call poll_next to poll the future we just set
                         self.poll_next(cx)
                     }
@@ -393,6 +417,64 @@ mod tests {
         let _watcher_no_rev = create_watcher(kv_store.clone(), None).await;
 
         // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    async fn setup_watcher_bucket(store_name: &str) -> (jetstream::Context, jetstream::kv::Store) {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+        let _ = js_context.delete_key_value(store_name).await;
+        let kv_store = js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        (js_context, kv_store)
+    }
+
+    /// A recreated watch must resume from one past the last observed revision.
+    /// Resuming from the original revision instead replays every already-seen
+    /// entry after a reconnect.
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_recreated_watcher_resumes_after_last_observed_revision() {
+        let store_name = "test-watcher-resume-some";
+        let (js_context, kv_store) = setup_watcher_bucket(store_name).await;
+
+        kv_store.put("key1", "v1".into()).await.unwrap(); // revision 1
+        kv_store.put("key1", "v2".into()).await.unwrap(); // revision 2
+
+        let mut watcher = JetstreamWatcher::new(kv_store.clone(), Some(1))
+            .await
+            .unwrap();
+        let timeout_duration = Duration::from_secs(5);
+        for expected_rev in [1, 2] {
+            let entry = timeout(timeout_duration, watcher.next())
+                .await
+                .expect("timed out waiting for initial entry")
+                .expect("watch ended unexpectedly");
+            assert_eq!(entry.revision, expected_rev);
+        }
+
+        // Written "during the disconnect window": after the last observed
+        // entry, before the watch is recreated.
+        kv_store.put("key1", "v3".into()).await.unwrap(); // revision 3
+
+        watcher.schedule_recreate();
+
+        let entry = timeout(timeout_duration, watcher.next())
+            .await
+            .expect("timed out waiting for the disconnect-window entry")
+            .expect("watch ended unexpectedly");
+        assert_eq!(
+            entry.revision, 3,
+            "recreated watch must deliver the disconnect-window entry exactly once, \
+             not replay from the original revision"
+        );
+
         let _ = js_context.delete_key_value(store_name).await;
     }
 }

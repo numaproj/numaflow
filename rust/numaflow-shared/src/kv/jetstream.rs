@@ -29,6 +29,7 @@ impl From<Entry> for KVEntry {
             value: value.value,
             operation,
             created,
+            revision: value.revision,
         }
     }
 }
@@ -318,6 +319,10 @@ mod tests {
         assert_eq!(entry.key, "key1");
         assert_eq!(entry.value, Bytes::from("value1"));
         assert_eq!(entry.operation, KVWatchOp::Put);
+        assert_eq!(
+            entry.revision, 1,
+            "KVEntry.revision must carry the JetStream entry revision"
+        );
 
         cleanup_test_kv(&js, bucket_name).await;
     }
@@ -345,11 +350,13 @@ mod tests {
             value: Bytes::from("test-value"),
             operation: KVWatchOp::Put,
             created: 1234567890000,
+            revision: 7,
         };
 
         assert_eq!(entry.key, "test-key");
         assert_eq!(entry.value, Bytes::from("test-value"));
         assert_eq!(entry.operation, KVWatchOp::Put);
         assert_eq!(entry.created, 1234567890000);
+        assert_eq!(entry.revision, 7);
     }
 }
