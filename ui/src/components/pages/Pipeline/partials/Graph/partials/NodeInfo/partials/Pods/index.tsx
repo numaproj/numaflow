@@ -53,8 +53,6 @@ function resolveContainerForPod(
   return getDefaultContainerName(pod);
 }
 
-// Classic is the initial Pod View experience. A future UI-only selector will
-// require a beta-disclaimer modal before persisting a user's Next preference.
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
