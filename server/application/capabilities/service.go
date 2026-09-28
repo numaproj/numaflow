@@ -14,21 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package podview
+package capabilities
 
-// GetCapabilities describes the API v2 features and Pod View experience available
-// from this server. It advertises only operations that are mounted in this release.
+// Service provides the API v2 discovery document. It does not own UI preferences.
+type Service struct{}
+
+// NewService creates the API v2 capability service.
+func NewService() *Service {
+	return &Service{}
+}
+
+// GetCapabilities describes API v2 operations and limits available from this server.
 func (s *Service) GetCapabilities() Capabilities {
-	podView := Capability{
-		Mode:                 s.mode,
-		Eligible:             s.mode == ModeEnabled,
-		DefaultExperience:    ExperienceClassic,
-		AllowClassicFallback: true,
-	}
-
 	return Capabilities{
 		APIVersion: "v2",
-		PodView:    podView,
 		Operations: []string{"getCapabilities"},
 		Limits: Limits{
 			DefaultPageSize:     50,

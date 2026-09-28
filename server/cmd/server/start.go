@@ -55,7 +55,6 @@ type ServerOptions struct {
 	CorsAllowedOrigins   string
 	ReadOnly             bool
 	DaemonClientProtocol string
-	PodViewV2Mode        string
 }
 
 type server struct {
@@ -110,7 +109,6 @@ func (s *server) Start(ctx context.Context) {
 			DisableMetricsCharts: true, // defaults to true
 			Version:              numaflow.GetVersion().String(),
 			DaemonClientProtocol: s.options.DaemonClientProtocol,
-			PodViewV2Mode:        s.options.PodViewV2Mode,
 		},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,

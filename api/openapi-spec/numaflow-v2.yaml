@@ -17,7 +17,7 @@ paths:
       x-numaflow-requires-authz: false
       responses:
         "200":
-          description: Effective API and Pod View capabilities
+          description: Effective API capabilities
           content:
             application/json:
               schema:
@@ -49,13 +49,11 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [apiVersion, podView, operations, limits]
+      required: [apiVersion, operations, limits]
       properties:
         apiVersion:
           type: string
           example: v2
-        podView:
-          $ref: "#/components/schemas/PodViewCapability"
         operations:
           type: array
           items:
@@ -64,27 +62,6 @@ components:
             - getCapabilities
         limits:
           $ref: "#/components/schemas/ApiLimits"
-    PodViewCapability:
-      type: object
-      additionalProperties: false
-      required: [mode, eligible, defaultExperience, allowClassicFallback]
-      properties:
-        mode:
-          $ref: "#/components/schemas/PodViewMode"
-        eligible:
-          type: boolean
-          description: Whether Pod View v2 is enabled by the server and available for a user to select.
-        defaultExperience:
-          $ref: "#/components/schemas/PodViewExperience"
-        allowClassicFallback:
-          type: boolean
-    PodViewMode:
-      type: string
-      description: Server-wide Pod View v2 availability.
-      enum: [disabled, enabled]
-    PodViewExperience:
-      type: string
-      enum: [classic, next]
     ApiLimits:
       type: object
       additionalProperties: false

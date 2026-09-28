@@ -14,11 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v2
+package capabilities
 
-import "github.com/numaproj/numaflow/server/application/capabilities"
+import (
+	"testing"
 
-// NewClusterHandler assembles the API v2 handler from server capabilities.
-func NewClusterHandler() (*Handler, error) {
-	return NewHandler(capabilities.NewService())
+	"github.com/stretchr/testify/assert"
+)
+
+func TestGetCapabilities(t *testing.T) {
+	service := NewService()
+
+	assert.Equal(t, Capabilities{
+		APIVersion: "v2",
+		Operations: []string{"getCapabilities"},
+		Limits: Limits{
+			DefaultPageSize:     50,
+			MaximumPageSize:     200,
+			MaximumLogLines:     1000,
+			MaximumMetricPoints: 2000,
+		},
+	}, service.GetCapabilities())
 }

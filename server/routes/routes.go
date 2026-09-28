@@ -24,7 +24,6 @@ import (
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	v2 "github.com/numaproj/numaflow/server/apis/v2"
-	"github.com/numaproj/numaflow/server/application/podview"
 	"github.com/numaproj/numaflow/server/authz"
 )
 
@@ -35,7 +34,6 @@ type SystemInfo struct {
 	DisableMetricsCharts bool   `json:"disableMetricsCharts"`
 	Version              string `json:"version"`
 	DaemonClientProtocol string `json:"daemonClientProtocol"`
-	PodViewV2Mode        string `json:"-"`
 }
 
 type AuthInfo struct {
@@ -94,7 +92,7 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
 
-	v2Handler, err := v2.NewClusterHandler(podview.Mode(sysInfo.PodViewV2Mode))
+	v2Handler, err := v2.NewClusterHandler()
 	if err != nil {
 		panic(err)
 	}

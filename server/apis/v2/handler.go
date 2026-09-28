@@ -23,21 +23,23 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/server/apis/v2/generated"
-	"github.com/numaproj/numaflow/server/application/podview"
+	"github.com/numaproj/numaflow/server/application/capabilities"
 )
 
-type PodViewService interface {
-	GetCapabilities() podview.Capabilities
+// CapabilitiesService provides transport-independent API v2 discovery data.
+type CapabilitiesService interface {
+	GetCapabilities() capabilities.Capabilities
 }
 
+// Handler adapts API v2 application services to HTTP handlers.
 type Handler struct {
-	service PodViewService
+	service CapabilitiesService
 }
 
-// NewHandler builds the API v2 HTTP adapter around the Pod View application service.
-func NewHandler(service PodViewService) (*Handler, error) {
+// NewHandler builds the API v2 HTTP adapter around the capabilities application service.
+func NewHandler(service CapabilitiesService) (*Handler, error) {
 	if service == nil {
-		return nil, fmt.Errorf("pod View service is required")
+		return nil, fmt.Errorf("capabilities service is required")
 	}
 	return &Handler{service: service}, nil
 }
@@ -51,15 +53,9 @@ func (h *Handler) GetCapabilities(c *gin.Context) {
 
 // toCapabilities translates transport-independent application types into the
 // OpenAPI-generated response type.
-func toCapabilities(value podview.Capabilities) generated.Capabilities {
+func toCapabilities(value capabilities.Capabilities) generated.Capabilities {
 	return generated.Capabilities{
 		ApiVersion: value.APIVersion,
-		PodView: generated.PodViewCapability{
-			Mode:                 generated.PodViewMode(value.PodView.Mode),
-			Eligible:             value.PodView.Eligible,
-			DefaultExperience:    generated.PodViewExperience(value.PodView.DefaultExperience),
-			AllowClassicFallback: value.PodView.AllowClassicFallback,
-		},
 		Operations: value.Operations,
 		Limits: generated.ApiLimits{
 			DefaultPageSize:     value.Limits.DefaultPageSize,

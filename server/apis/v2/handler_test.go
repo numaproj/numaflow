@@ -27,20 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/numaproj/numaflow/server/apis/v2/generated"
-	"github.com/numaproj/numaflow/server/application/podview"
+	"github.com/numaproj/numaflow/server/application/capabilities"
 )
 
 func TestGetCapabilities(t *testing.T) {
-	service := &fakePodViewService{capabilities: podview.Capabilities{
+	service := &fakeCapabilitiesService{capabilities: capabilities.Capabilities{
 		APIVersion: "v2",
-		PodView: podview.Capability{
-			Mode:                 podview.ModeEnabled,
-			Eligible:             true,
-			DefaultExperience:    podview.ExperienceClassic,
-			AllowClassicFallback: true,
-		},
 		Operations: []string{"getCapabilities", "getVertexSummary"},
-		Limits: podview.Limits{
+		Limits: capabilities.Limits{
 			DefaultPageSize:     11,
 			MaximumPageSize:     22,
 			MaximumLogLines:     33,
@@ -57,12 +51,6 @@ func TestGetCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.Equal(t, generated.Capabilities{
 		ApiVersion: "v2",
-		PodView: generated.PodViewCapability{
-			Mode:                 generated.Enabled,
-			Eligible:             true,
-			DefaultExperience:    generated.Classic,
-			AllowClassicFallback: true,
-		},
 		Operations: []string{"getCapabilities", "getVertexSummary"},
 		Limits: generated.ApiLimits{
 			DefaultPageSize:     11,
@@ -78,7 +66,7 @@ func TestNewHandlerRejectsNilService(t *testing.T) {
 	require.Error(t, err)
 }
 
-func testRouter(t *testing.T, service PodViewService) *gin.Engine {
+func testRouter(t *testing.T, service CapabilitiesService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	handler, err := NewHandler(service)
@@ -92,10 +80,10 @@ func testRouter(t *testing.T, service PodViewService) *gin.Engine {
 	return router
 }
 
-type fakePodViewService struct {
-	capabilities podview.Capabilities
+type fakeCapabilitiesService struct {
+	capabilities capabilities.Capabilities
 }
 
-func (f *fakePodViewService) GetCapabilities() podview.Capabilities {
+func (f *fakeCapabilitiesService) GetCapabilities() capabilities.Capabilities {
 	return f.capabilities
 }

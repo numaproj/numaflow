@@ -20,18 +20,6 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
-// Defines values for PodViewExperience.
-const (
-	Classic PodViewExperience = "classic"
-	Next    PodViewExperience = "next"
-)
-
-// Defines values for PodViewMode.
-const (
-	Disabled PodViewMode = "disabled"
-	Enabled  PodViewMode = "enabled"
-)
-
 // ApiLimits defines model for ApiLimits.
 type ApiLimits struct {
 	DefaultPageSize     int `json:"defaultPageSize"`
@@ -42,29 +30,10 @@ type ApiLimits struct {
 
 // Capabilities defines model for Capabilities.
 type Capabilities struct {
-	ApiVersion string            `json:"apiVersion"`
-	Limits     ApiLimits         `json:"limits"`
-	Operations []string          `json:"operations"`
-	PodView    PodViewCapability `json:"podView"`
+	ApiVersion string    `json:"apiVersion"`
+	Limits     ApiLimits `json:"limits"`
+	Operations []string  `json:"operations"`
 }
-
-// PodViewCapability defines model for PodViewCapability.
-type PodViewCapability struct {
-	AllowClassicFallback bool              `json:"allowClassicFallback"`
-	DefaultExperience    PodViewExperience `json:"defaultExperience"`
-
-	// Eligible Whether Pod View v2 is enabled by the server and available for a user to select.
-	Eligible bool `json:"eligible"`
-
-	// Mode Server-wide Pod View v2 availability.
-	Mode PodViewMode `json:"mode"`
-}
-
-// PodViewExperience defines model for PodViewExperience.
-type PodViewExperience string
-
-// PodViewMode Server-wide Pod View v2 availability.
-type PodViewMode string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -157,24 +126,21 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

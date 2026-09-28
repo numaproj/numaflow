@@ -14,29 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package podview
+// Package capabilities advertises API v2 operations and server-enforced limits.
+// It does not define user interface preferences or feature-rollout policy.
+package capabilities
 
-type Mode string
-
-const (
-	ModeDisabled Mode = "disabled"
-	ModeEnabled  Mode = "enabled"
-)
-
-type Experience string
-
-const (
-	ExperienceClassic Experience = "classic"
-	ExperienceNext    Experience = "next"
-)
-
-type Capability struct {
-	Mode                 Mode
-	Eligible             bool
-	DefaultExperience    Experience
-	AllowClassicFallback bool
-}
-
+// Limits defines server-enforced bounds that API v2 clients must observe.
 type Limits struct {
 	DefaultPageSize     int
 	MaximumPageSize     int
@@ -44,9 +26,9 @@ type Limits struct {
 	MaximumMetricPoints int
 }
 
+// Capabilities describes the API v2 operations and limits available from a server.
 type Capabilities struct {
 	APIVersion string
-	PodView    Capability
 	Operations []string
 	Limits     Limits
 }
