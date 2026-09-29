@@ -16,3 +16,8 @@ cd "${REPO_ROOT}"
 go run "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@${OAPI_CODEGEN_VERSION}" \
   --config api/openapi-spec/oapi-codegen-v2-server.yaml \
   "${SPEC}"
+
+# Drop github.com/oapi-codegen/runtime so Snyk/module graph does not include
+# unused Echo/Iris/msgpack/gomarkdown requires from that module.
+python3 "${REPO_ROOT}/hack/strip-oapi-runtime.py" \
+  "${REPO_ROOT}/server/apis/v2/generated/server.gen.go"
