@@ -236,6 +236,6 @@ require (
 )
 
 replace (
+	github.com/gomarkdown/markdown => github.com/gomarkdown/markdown v0.0.0-20240729212818-a2a9c4f76ef5
 	github.com/labstack/echo/v4 => github.com/labstack/echo/v4 v4.15.3
-	github.com/labstack/echo/v5 => github.com/labstack/echo/v5 v5.2.0
 )
