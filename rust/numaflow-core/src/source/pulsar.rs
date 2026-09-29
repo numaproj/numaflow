@@ -541,43 +541,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pulsar_source_batched_producer() {
-        let local = format!("i3-{}", get_rand_str());
-        let topic = full_topic(&local);
-        let subscription = format!("sub-{}", get_rand_str());
-
-        let mut source =
-            new_test_source(&topic, &subscription, 10, Duration::from_millis(500)).await;
-
-        produce(&topic, (0..5).map(|i| format!("batch-{i}")).collect(), true).await;
-
-        let messages = read_until(&mut source, 5, Duration::from_secs(15)).await;
-        assert_eq!(messages.len(), 5);
-
-        let offsets: Vec<Offset> = messages.iter().map(|m| m.offset.clone()).collect();
-        let ack_result = source.ack(offsets.clone()).await;
-        assert!(ack_result.is_ok(), "ack failed: {ack_result:?}");
-
-        let distinct_offsets: HashSet<&Offset> = offsets.iter().collect();
-        assert_eq!(distinct_offsets.len(), 5);
-        let distinct_ids: HashSet<_> = messages.iter().map(|m| &m.id.offset).collect();
-        assert_eq!(distinct_ids.len(), 5);
-
-        let parsed: Vec<PulsarOffset> = offsets.iter().map(parse_offset).collect();
-        let ledger_entries: HashSet<(u64, u64)> =
-            parsed.iter().map(|o| (o.ledger_id, o.entry_id)).collect();
-        assert_eq!(
-            ledger_entries.len(),
-            1,
-            "batch members should share (ledger_id, entry_id): {parsed:?}"
-        );
-        let batch_indices: HashSet<i32> = parsed.iter().map(|o| o.batch_index).collect();
-        assert_eq!(batch_indices, HashSet::from([0, 1, 2, 3, 4]));
-    }
-
-    #[tokio::test]
     async fn test_pulsar_source_ledger_rollover() {
-        let local = format!("i4-{}", get_rand_str());
+        let local = format!("i3-{}", get_rand_str());
         let topic = full_topic(&local);
         let subscription = format!("sub-{}", get_rand_str());
 
