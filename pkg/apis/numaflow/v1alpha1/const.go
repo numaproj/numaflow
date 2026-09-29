@@ -122,6 +122,7 @@ const (
 	EnvISBSvcJetStreamURL               = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
 	EnvISBSvcJetStreamTLSEnabled        = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED"
 	EnvISBSvcConfig                     = "NUMAFLOW_ISBSVC_CONFIG"
+	EnvISBSvcType                       = "NUMAFLOW_ISBSVC_TYPE"
 	EnvLeaderElectionDisabled           = "NUMAFLOW_LEADER_ELECTION_DISABLED"
 	EnvLeaderElectionLeaseDuration      = "NUMAFLOW_LEADER_ELECTION_LEASE_DURATION"
 	EnvLeaderElectionLeaseRenewDeadline = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE"
