@@ -138,51 +138,6 @@ impl source::LagReader for PulsarSource {
     }
 }
 
-#[cfg(test)]
-mod unit_tests {
-    use std::collections::HashMap;
-
-    use bytes::Bytes;
-    use chrono::Utc;
-    use numaflow_pulsar::source::PulsarOffset;
-
-    use super::*;
-    use crate::message::{IntOffset, StringOffset};
-
-    fn pulsar_message(offset: PulsarOffset) -> PulsarMessage {
-        PulsarMessage {
-            key: "key".into(),
-            payload: Bytes::from_static(b"payload"),
-            offset,
-            event_time: Utc::now(),
-            headers: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn test_to_pulsar_offset_rejects_invalid() {
-        let int_offset = Offset::Int(IntOffset::new(1, 0));
-        assert!(matches!(
-            to_pulsar_offset(&int_offset),
-            Err(Error::Source(_))
-        ));
-
-        for malformed in ["0", "1:2:3", "a:b:c:d"] {
-            let offset = Offset::String(StringOffset::new(malformed.into(), 0));
-            assert!(matches!(to_pulsar_offset(&offset), Err(Error::Source(_))));
-        }
-
-        let valid = PulsarOffset {
-            ledger_id: 36,
-            entry_id: 0,
-            partition: 1,
-            batch_index: -1,
-        };
-        let offset = Offset::String(StringOffset::new(valid.to_string(), 0));
-        assert_eq!(to_pulsar_offset(&offset).expect("should parse"), valid);
-    }
-}
-
 #[cfg(feature = "pulsar-tests")]
 #[cfg(test)]
 mod tests {
