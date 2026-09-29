@@ -96,6 +96,7 @@ nav:
                   - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
                   - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
                   - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
+              - Retry Strategy: "user-guide/user-defined-functions/map/retry-strategy.md"
               - Examples: "user-guide/user-defined-functions/map/examples.md"
           - Reduce:
               - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
@@ -111,22 +112,24 @@ nav:
           - Compatibility: user-guide/sdks/compatibility.md
           - Features: user-guide/sdks/features.md
       - Reference:
+          - Pipeline:
+              - user-guide/reference/pipeline-tuning.md
+              - user-guide/reference/pipeline-operations.md
+          - MonoVertex:
+              - user-guide/reference/mvtx-tuning.md
+              - user-guide/reference/mvtx-operations.md
+              - "MonoVertex Streaming Mode": user-guide/reference/mvtx-streaming.md
+              - user-guide/reference/monovertex-bypass.md
           - Message Headers: "core-concepts/message-headers.md"
           - Tracing: "user-guide/reference/tracing.md"
-          - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
-          - user-guide/reference/pipeline-operations.md
           - user-guide/reference/gpu.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
           - user-guide/reference/ordered-processing.md
           - user-guide/reference/side-inputs.md
-          - user-guide/reference/mvtx-tuning.md
-          - user-guide/reference/mvtx-operations.md
-          - "MonoVertex Streaming Mode": user-guide/reference/mvtx-streaming.md
           - user-guide/reference/distributed-throttling.md
-          - user-guide/reference/monovertex-bypass.md
           - "Per-message Nack": user-guide/reference/per-message-nack.md
           - "Memory profiling": user-guide/reference/memory-profiling.md
           - Configuration:
