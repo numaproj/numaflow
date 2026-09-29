@@ -84,8 +84,8 @@ impl futures::Stream for JetstreamWatcher {
                 }
                 Poll::Pending => {
                     self.recreate_future = Some(future);
-                    return Poll::Pending
-                },
+                    return Poll::Pending;
+                }
             }
         }
 
@@ -452,8 +452,8 @@ mod tests {
                 }
             }
         })
-            .await
-            .expect("watcher never recovered after the underlying watcher failed");
+        .await
+        .expect("watcher never recovered after the underlying watcher failed");
         assert_eq!(entry.key, "after");
         writer.abort();
 
