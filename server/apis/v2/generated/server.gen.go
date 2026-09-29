@@ -16,7 +16,6 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gin-gonic/gin"
-	"github.com/oapi-codegen/runtime"
 )
 
 const (
@@ -201,7 +200,7 @@ func (siw *ServerInterfaceWrapper) GetPipelineVertexSummary(c *gin.Context) {
 	// ------------- Path parameter "namespace" -------------
 	var namespace Namespace
 
-	err = runtime.BindStyledParameterWithOptions("simple", "namespace", c.Param("namespace"), &namespace, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	err = bindSimpleString("namespace", c.Param("namespace"), &namespace, true)
 	if err != nil {
 		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
 		return
@@ -210,7 +209,7 @@ func (siw *ServerInterfaceWrapper) GetPipelineVertexSummary(c *gin.Context) {
 	// ------------- Path parameter "pipeline" -------------
 	var pipeline Pipeline
 
-	err = runtime.BindStyledParameterWithOptions("simple", "pipeline", c.Param("pipeline"), &pipeline, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	err = bindSimpleString("pipeline", c.Param("pipeline"), &pipeline, true)
 	if err != nil {
 		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter pipeline: %w", err), http.StatusBadRequest)
 		return
@@ -219,7 +218,7 @@ func (siw *ServerInterfaceWrapper) GetPipelineVertexSummary(c *gin.Context) {
 	// ------------- Path parameter "vertex" -------------
 	var vertex Vertex
 
-	err = runtime.BindStyledParameterWithOptions("simple", "vertex", c.Param("vertex"), &vertex, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	err = bindSimpleString("vertex", c.Param("vertex"), &vertex, true)
 	if err != nil {
 		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter vertex: %w", err), http.StatusBadRequest)
 		return
@@ -241,7 +240,7 @@ func (siw *ServerInterfaceWrapper) GetPipelineVertexSummary(c *gin.Context) {
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		err = bindSimpleString("If-None-Match", valueList[0], &IfNoneMatch, false)
 		if err != nil {
 			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
 			return
