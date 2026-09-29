@@ -1,22 +1,22 @@
 # Retry Strategy
 
-<div style="padding: 15px; background-color: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; color: #0369a1; margin: 15px 0;">
-    💡 <strong>Note: </strong> Available from v1.9 for <strong>map UDFs</strong> and <strong>source transformers</strong>. 
-      <br> For the sink equivalent, and for the full backoff reference, see <a href="../../../sinks/retry-strategy/">Sink Retry Strategy</a>.
-</div>
+!!! note "Available from v1.9"
+
+    Available for **map UDFs** and **source transformers**.
+    For the sink equivalent, and for the full backoff reference, see [Sink Retry Strategy](../../sinks/retry-strategy.md).
 
 ### Overview
 
-A `retryStrategy` can also be configured on a **map UDF** and on a **source transformer**.
-Numaflow re-invokes your user-defined container with the *same* input message. 
-Your handler simply gets called again, after the configured backoff interval.
-`retryStrategy` ONLY gets applied to messages your code explicitly marks as **failed**.
+A `retryStrategy` can be configured on a **map UDF** and on a **source transformer**.
+Numaflow calls your user-defined container again, over gRPC, with the same input message.
+Your handler is invoked again after the configured backoff interval.
+`retryStrategy` applies only to messages your code explicitly marks as **failed**.
 
-It follows the same shape and the same `backoff` semantics as the [sink retry strategy](../../sinks/retry-strategy.md);
-this page only covers what is **different** for these two components.
+It uses the same `backoff` fields as the [sink retry strategy](../../sinks/retry-strategy.md).
+This page covers how those fields behave for a map UDF and a source transformer.
 
-The way you signal a failure is slightly different from the sink. A sink returns a failure
-*response* carrying the message id and an error string. A map UDF or source transformer instead returns a
+The way you signal a failure is different from the sink. A sink returns a failure
+response carrying the message id and an error string. A map UDF or source transformer returns a
 message built with a reserved **fail tag**, mirroring the existing `Drop` message helpers. There is no
 place to attach an error reason: the fail signal is tag-only in every SDK.
 
@@ -113,47 +113,59 @@ source:
       backoff:
         interval: 1s
         steps: 5
-      onFailure: 'retry'
+      onFailure: 'drop'
 ```
 
 #### BackOff Parameters
 
-The `backoff` block is **identical** to the sink's — `interval`, `steps`, `factor`, `cap` and `jitter`
-carry the same meanings, the same types and the same defaults. See
+The `backoff` fields match the sink: `interval`, `steps`, `factor`, `cap`, and `jitter` have the same
+types and the same defaults. See
 [BackOff Parameters](../../sinks/retry-strategy.md#backoff-parameters) for the full reference.
 
-Note that for a map UDF and a source transformer, `steps` bounds the number of **retries made after the
-initial invocation** — `steps: 2` means the container is called once, and then re-invoked up to 2 more
-times, for 3 invocations in total.
+`steps` is the number of retries **after the first call**. `steps: 2` means the container is called
+once and then up to two more times. That limit is applied only when `onFailure` is `drop`. When
+`onFailure` is `retry`, including when `onFailure` is omitted, the configured `steps` value is ignored
+and the runtime retries up to 65535 times.
 
 #### OnFailure Actions
 
-This is where the UDF/transformer strategy **diverges from the sink**. Only two options are valid:
+`fallback` is a sink-only action. For a map UDF or a source transformer the valid values are:
 
-- **`retry`**: Default strategy, restart the retry logic.
-- **`drop`**: Discard the message once retries are exhausted. The message is acknowledged as if it had
-  been processed, and the UDF drop metric is incremented (`forwarder_ud_drop_total` for a Pipeline,
-  `monovtx_udf_drop_total` for a MonoVertex).
-- **`fallback`**: **Not supported today.** A fallback sink is a sink-only concept, so setting
-  `onFailure: fallback` on a map UDF or a source transformer is **rejected at validation time** with:
+- **`retry`**: Default when `retryStrategy` is set. `backoff.steps` is ignored. Numaflow retries the
+  fail-tagged message up to 65535 times after the first call, using `interval`, `factor`, `cap`, and
+  `jitter` (`interval` defaults to `1ms`). When that cap is reached, the message is nacked and the
+  vertex exits, so the pod restarts. On a pipeline source transformer,
+  `source_forwarder_transformer_error_total` is incremented.
+- **`drop`**: After `steps` retries, acknowledge the message and drop it. The drop counter that
+  increments depends on the component:
+
+    | Component          | Pipeline                                 | MonoVertex                            |
+    |--------------------|------------------------------------------|---------------------------------------|
+    | Map UDF            | `forwarder_ud_drop_total`                | `monovtx_udf_drop_total`              |
+    | Source transformer | `source_forwarder_transformer_drop_total` | `monovtx_transformer_dropped_total`  |
+
+- **`fallback`**: Rejected at validation with:
 
   ```
   given fallback OnFailure strategy is not currently supported
   ```
 
-#### Defaults when `retryStrategy` is omitted
+#### Defaults
 
-The UDF and transformer `retryStrategy` is an **optional pointer**. When you omit it entirely, 
-the component **retries forever with no delay between attempts**.
+- **`retryStrategy` omitted**: a fail-tagged message is retried forever, with no delay between attempts.
+  The vertex keeps running.
+- **`retryStrategy` set, `onFailure` omitted**: same as `onFailure: retry`. An empty `retryStrategy: {}`
+  waits `1ms` between attempts, retries up to 65535 times, and then the vertex exits. A `steps` value
+  in that block is ignored.
 
 ### Differences from the Sink Retry Strategy
 
 |                                  | Sink                                                         | Map UDF / Source transformer                                                              |
 |----------------------------------|--------------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| Where the retry happens          | Re-writes to the external sink destination                   | Re-invokes your UDF/transformer container in-process with the same message                |
+| Where the retry happens          | Re-writes to the external sink destination                   | Another gRPC call to the same sidecar, with the same message                              |
 | How a message is failed          | A failure **response** carrying an id and an error message   | A reserved **fail tag** on the returned message (see the SDK tabs above)                  |
 | Failure reason string            | Supported (`errMsg`)                                         | Not carried — the tag has no reason field                                                 |
-| `onFailure: fallback`            | Supported                                                    | **Rejected at validation**                                                                |
+| `onFailure: fallback`            | Supported                                                    | Rejected at validation                                                                    |
 
 ### Important Considerations
 

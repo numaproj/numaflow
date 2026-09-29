@@ -1,8 +1,9 @@
 # Retry Strategy
 
-<div style="padding: 15px; background-color: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; color: #0369a1; margin: 15px 0;">
-    💡 <strong>Note:</strong> From v1.9, retry strategy can also be specified for <strong>map UDFs</strong> and <strong>source transformers</strong> (<a href="../../user-defined-functions/map/retry-strategy/">ref</a>). 
-</div>
+!!! note "Also available for map UDFs and source transformers"
+
+    From v1.9, `retryStrategy` can also be set on a map UDF or a source transformer.
+    See [Map and transformer retry strategy](../user-defined-functions/map/retry-strategy.md).
 
 ### Overview
 
@@ -70,10 +71,10 @@ The `BackOff` configuration defines the timing and limits for retries. Below are
     - Type: String with a timestamp suffix.
     - Default: `1ms`.
 
-- **`steps`**: The maximum number of retry attempts, including the initial attempt.
+- **`steps`**: The number of retries after the first attempt. `steps: 2` means one initial attempt and up to two retries. This value is used when `onFailure` is `drop` or `fallback`.
 
     - Type: Unsigned integer, must be greater than 0.
-    - Default: Infinite.
+    - Default: `65535` when `onFailure` is `retry` (the default).
 
 - **`factor`**: A multiplier applied to the interval after each retry attempt.
 

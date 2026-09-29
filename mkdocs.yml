@@ -115,7 +115,7 @@ nav:
           - Pipeline:
               - user-guide/reference/pipeline-tuning.md
               - user-guide/reference/pipeline-operations.md
-          - Monovertex:
+          - MonoVertex:
               - user-guide/reference/mvtx-tuning.md
               - user-guide/reference/mvtx-operations.md
               - "MonoVertex Streaming Mode": user-guide/reference/mvtx-streaming.md
