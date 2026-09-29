@@ -27,7 +27,7 @@ func TestGetCapabilities(t *testing.T) {
 
 	assert.Equal(t, Capabilities{
 		APIVersion: "v2",
-		Operations: []string{"getCapabilities"},
+		Operations: []string{"getCapabilities", "getPipelineVertexSummary"},
 		Limits: Limits{
 			DefaultPageSize:     50,
 			MaximumPageSize:     200,
