@@ -47,11 +47,11 @@ enum ConsumerActorMessage {
         respond_to: oneshot::Sender<Option<Result<Vec<PulsarMessage>>>>,
     },
     Ack {
-        offsets: Vec<u64>,
+        offsets: Vec<String>,
         respond_to: oneshot::Sender<Result<()>>,
     },
     Nack {
-        offsets: Vec<u64>,
+        offsets: Vec<String>,
         respond_to: oneshot::Sender<Result<()>>,
     },
 }
@@ -59,18 +59,36 @@ enum ConsumerActorMessage {
 pub struct PulsarMessage {
     pub key: String,
     pub payload: Bytes,
-    pub offset: u64,
+    pub offset: String,
     pub event_time: DateTime<Utc>,
     pub headers: HashMap<String, String>,
+}
+
+struct PendingMessage {
+    topic: String,
+    message_id: MessageIdData,
 }
 
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
-    message_ids: BTreeMap<u64, MessageIdData>,
+    pending_messages: BTreeMap<String, PendingMessage>,
     max_unack: usize,
-    topic: String,
     cancel_token: CancellationToken,
+}
+
+// A Pulsar entry ID is only unique within a ledger and partition. Keep the actual topic in the
+// opaque offset as well: partitioned-topic consumers need it to route acknowledgements to the
+// correct internal consumer.
+fn message_offset(topic: &str, message_id: &MessageIdData) -> String {
+    format!(
+        "{}:{}:{}:{}:{}",
+        topic,
+        message_id.partition.unwrap_or(-1),
+        message_id.ledger_id,
+        message_id.entry_id,
+        message_id.batch_index.unwrap_or(-1),
+    )
 }
 
 impl ConsumerReaderActor {
@@ -146,9 +164,8 @@ impl ConsumerReaderActor {
             let mut consumer_actor = ConsumerReaderActor {
                 consumer,
                 handler_rx,
-                message_ids: BTreeMap::new(),
+                pending_messages: BTreeMap::new(),
                 max_unack: config.max_unack,
-                topic: config.topic,
                 cancel_token,
             };
             consumer_actor.run().await;
@@ -198,8 +215,8 @@ impl ConsumerReaderActor {
             return None;
         }
 
-        if self.message_ids.len() >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
+        if self.pending_messages.len() >= self.max_unack {
+            return Some(Err(Error::AckPendingExceeded(self.pending_messages.len())));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -220,7 +237,7 @@ impl ConsumerReaderActor {
                     return Some(Err(Error::Pulsar(e)));
                 }
             };
-            let offset = msg.message_id().entry_id;
+            let offset = message_offset(&msg.topic, msg.message_id());
             let event_time = msg
                 .metadata()
                 .event_time
@@ -238,7 +255,13 @@ impl ConsumerReaderActor {
                 //FIXME: NACK the message
             };
 
-            self.message_ids.insert(offset, msg.message_id().clone());
+            self.pending_messages.insert(
+                offset.clone(),
+                PendingMessage {
+                    topic: msg.topic.clone(),
+                    message_id: msg.message_id().clone(),
+                },
+            );
             let headers = msg
                 .metadata()
                 .properties
@@ -263,41 +286,45 @@ impl ConsumerReaderActor {
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
-    async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+    async fn ack_messages(&mut self, offsets: Vec<String>) -> Result<()> {
         for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
+            let pending_message = self.pending_messages.remove(&offset);
 
-            let Some(msg_id) = msg_id else {
-                return Err(Error::UnknownOffset(offset));
-            };
-
-            let Err(e) = self.consumer.ack_with_id(&self.topic, msg_id.clone()).await else {
-                continue;
-            };
-            // Insert offset back
-            self.message_ids.insert(offset, msg_id);
-            return Err(Error::Pulsar(e.into()));
-        }
-        Ok(())
-    }
-
-    async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
-        for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
-
-            let Some(msg_id) = msg_id else {
+            let Some(pending_message) = pending_message else {
                 return Err(Error::UnknownOffset(offset));
             };
 
             let Err(e) = self
                 .consumer
-                .nack_with_id(&self.topic, msg_id.clone())
+                .ack_with_id(&pending_message.topic, pending_message.message_id.clone())
                 .await
             else {
                 continue;
             };
             // Insert offset back
-            self.message_ids.insert(offset, msg_id);
+            self.pending_messages.insert(offset, pending_message);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
+    }
+
+    async fn nack_messages(&mut self, offsets: Vec<String>) -> Result<()> {
+        for offset in offsets {
+            let pending_message = self.pending_messages.remove(&offset);
+
+            let Some(pending_message) = pending_message else {
+                return Err(Error::UnknownOffset(offset));
+            };
+
+            let Err(e) = self
+                .consumer
+                .nack_with_id(&pending_message.topic, pending_message.message_id.clone())
+                .await
+            else {
+                continue;
+            };
+            // Insert offset back
+            self.pending_messages.insert(offset, pending_message);
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
@@ -346,7 +373,7 @@ impl PulsarSource {
             .unwrap_or_else(|e| Some(Err(e)))
     }
 
-    pub async fn ack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn ack_offsets(&self, offsets: Vec<String>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx
@@ -358,7 +385,7 @@ impl PulsarSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
-    pub async fn nack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn nack_offsets(&self, offsets: Vec<String>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx
@@ -376,5 +403,68 @@ impl PulsarSource {
 
     pub fn partitions_vec(&self) -> Vec<u16> {
         vec![self.vertex_replica]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message_id(
+        partition: i32,
+        ledger_id: u64,
+        entry_id: u64,
+        batch_index: i32,
+    ) -> MessageIdData {
+        MessageIdData {
+            partition: Some(partition),
+            ledger_id,
+            entry_id,
+            batch_index: Some(batch_index),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn message_offset_is_stable_and_unique() {
+        let topic = "persistent://public/default/events-partition-0";
+        let id = message_id(0, 10, 20, 0);
+
+        assert_eq!(
+            message_offset(topic, &id),
+            "persistent://public/default/events-partition-0:0:10:20:0"
+        );
+        assert_eq!(message_offset(topic, &id), message_offset(topic, &id));
+
+        assert_ne!(
+            message_offset(topic, &id),
+            message_offset("persistent://public/default/other-events-partition-0", &id,)
+        );
+        assert_ne!(
+            message_offset(topic, &id),
+            message_offset(topic, &message_id(1, 10, 20, 0))
+        );
+        assert_ne!(
+            message_offset(topic, &id),
+            message_offset(topic, &message_id(0, 11, 20, 0))
+        );
+        assert_ne!(
+            message_offset(topic, &id),
+            message_offset(topic, &message_id(0, 10, 21, 0))
+        );
+        assert_ne!(
+            message_offset(topic, &id),
+            message_offset(topic, &message_id(0, 10, 20, 1))
+        );
+
+        let id_without_optional_fields = MessageIdData {
+            ledger_id: 10,
+            entry_id: 20,
+            ..Default::default()
+        };
+        assert_eq!(
+            message_offset(topic, &id_without_optional_fields),
+            "persistent://public/default/events-partition-0:-1:10:20:-1"
+        );
     }
 }

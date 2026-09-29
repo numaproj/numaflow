@@ -5,7 +5,7 @@ use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, NackOffset, Offset};
+use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
 
@@ -13,7 +13,7 @@ impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
-        let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
+        let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
 
         Ok(Message {
             typ: Default::default(),
@@ -93,12 +93,16 @@ impl source::SourceAcker for PulsarSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Int(int_offset) = offset else {
+            let Offset::String(string_offset) = offset else {
                 return Err(Error::Source(format!(
-                    "Expected Offset::Int type for Pulsar. offset={offset:?}"
+                    "Expected Offset::String type for Pulsar. offset={offset:?}"
                 )));
             };
-            pulsar_offsets.push(int_offset.offset as u64);
+            pulsar_offsets.push(
+                String::from_utf8(string_offset.offset.to_vec()).map_err(|e| {
+                    Error::Source(format!("Pulsar offset must be valid UTF-8. error={e}"))
+                })?,
+            );
         }
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
@@ -115,14 +119,18 @@ impl source::SourceAcker for PulsarSource {
                 logged = true;
             }
 
-            let Offset::Int(int_offset) = offset.offset else {
+            let Offset::String(string_offset) = offset.offset else {
                 return Err(Error::Source(format!(
-                    "Expected Offset::Int type for Pulsar. offset={:?}",
+                    "Expected Offset::String type for Pulsar. offset={:?}",
                     offset.offset
                 )));
             };
 
-            pulsar_offsets.push(int_offset.offset as u64);
+            pulsar_offsets.push(
+                String::from_utf8(string_offset.offset.to_vec()).map_err(|e| {
+                    Error::Source(format!("Pulsar offset must be valid UTF-8. error={e}"))
+                })?,
+            );
         }
 
         self.nack_offsets(pulsar_offsets).await.map_err(Into::into)
@@ -140,25 +148,81 @@ impl source::LagReader for PulsarSource {
 mod tests {
     use pulsar::{Pulsar, TokioExecutor, producer, proto};
     use source::{LagReader, SourceAcker, SourceReader};
+    use std::collections::HashSet;
 
     use super::*;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-    #[tokio::test]
-    async fn test_pulsar_source() -> Result<()> {
-        let cfg = PulsarSourceConfig {
-            pulsar_server_addr: "pulsar://localhost:6650".into(),
-            topic: "persistent://public/default/test_persistent".into(),
-            consumer_name: "test".into(),
-            subscription: "test".into(),
+    const PULSAR_ADDR: &str = "pulsar://localhost:6650";
+    const PULSAR_ADMIN_ADDR: &str = "http://localhost:8080";
+
+    fn unique_topic(prefix: &str) -> (String, String) {
+        let suffix = rand::random::<u64>();
+        (
+            format!("persistent://public/default/{prefix}-{suffix}"),
+            format!("{prefix}-subscription-{suffix}"),
+        )
+    }
+
+    fn source_config(topic: String, subscription: String) -> PulsarSourceConfig {
+        PulsarSourceConfig {
+            pulsar_server_addr: PULSAR_ADDR.into(),
+            topic,
+            consumer_name: "numaflow-pulsar-test".into(),
+            subscription,
             max_unack: 100,
             dead_letter_policy: None,
             auth: None,
             tls: None,
-        };
+        }
+    }
+
+    async fn create_partitioned_topic(topic: &str, partitions: usize) -> Result<()> {
+        let topic_name = topic
+            .rsplit('/')
+            .next()
+            .ok_or_else(|| format!("Invalid Pulsar topic: {topic}"))?;
+        reqwest::Client::new()
+            .put(format!(
+                "{PULSAR_ADMIN_ADDR}/admin/v2/persistent/public/default/{topic_name}/partitions"
+            ))
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(partitions.to_string())
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
+    async fn produce_messages(topic: &str, messages: Vec<String>) -> Result<()> {
+        let pulsar: Pulsar<_> = Pulsar::builder(PULSAR_ADDR, TokioExecutor).build().await?;
+        let mut producer = pulsar
+            .producer()
+            .with_topic(topic)
+            .with_name("numaflow-pulsar-test-producer")
+            .with_options(producer::ProducerOptions {
+                schema: Some(proto::Schema {
+                    r#type: proto::schema::Type::String as i32,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .build()
+            .await?;
+
+        let send_futures = producer.send_all(messages).await?;
+        for future in send_futures {
+            future.await?;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_non_partitioned_pulsar_source() -> Result<()> {
+        let (topic, subscription) = unique_topic("numaflow-source");
         let mut pulsar = new_pulsar_source(
-            cfg,
+            source_config(topic.clone(), subscription),
             10,
             Duration::from_millis(200),
             0,
@@ -173,40 +237,86 @@ mod tests {
 
         assert!(pulsar.pending().await.unwrap().is_none());
 
-        let pulsar_producer: Pulsar<_> = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
-            .build()
-            .await
-            .unwrap();
-        let mut pulsar_producer = pulsar_producer
-            .producer()
-            .with_topic("persistent://public/default/test_persistent")
-            .with_name("my producer")
-            .with_options(producer::ProducerOptions {
-                schema: Some(proto::Schema {
-                    r#type: proto::schema::Type::String as i32,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            })
-            .build()
-            .await
-            .unwrap();
-
         let data: Vec<String> = (0..10).map(|i| format!("test_data_{i}")).collect();
-        let send_futures = pulsar_producer
-            .send_all(data)
-            .await
-            .map_err(|e| format!("Sending messages to Pulsar: {e:?}"))?;
-        for fut in send_futures {
-            fut.await?;
-        }
+        produce_messages(&topic, data).await?;
 
         let messages = pulsar.read().await.unwrap()?;
         assert_eq!(messages.len(), 10);
+        assert!(
+            messages
+                .iter()
+                .all(|message| matches!(message.offset, Offset::String(_)))
+        );
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
 
         pulsar.ack(offsets).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_partitioned_pulsar_source_ack_and_nack() -> Result<()> {
+        let (topic, subscription) = unique_topic("numaflow-partitioned-source");
+        let partition_count = 3;
+        create_partitioned_topic(&topic, partition_count).await?;
+
+        let mut source = new_pulsar_source(
+            source_config(topic.clone(), subscription),
+            partition_count,
+            Duration::from_secs(1),
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await?;
+
+        for partition in 0..partition_count {
+            produce_messages(
+                &format!("{topic}-partition-{partition}"),
+                vec![format!("partition-{partition}")],
+            )
+            .await?;
+        }
+
+        let messages = source.read().await.unwrap()?;
+        assert_eq!(messages.len(), partition_count);
+
+        let offsets: HashSet<Offset> = messages
+            .iter()
+            .map(|message| message.offset.clone())
+            .collect();
+        assert_eq!(offsets.len(), partition_count);
+        assert!(
+            offsets
+                .iter()
+                .all(|offset| matches!(offset, Offset::String(_)))
+        );
+
+        source.ack(offsets.into_iter().collect()).await?;
+
+        let messages = source.read().await.unwrap()?;
+        assert!(
+            messages.is_empty(),
+            "acked messages must not be redelivered"
+        );
+
+        produce_messages(
+            &format!("{topic}-partition-0"),
+            vec!["message-to-nack".to_string()],
+        )
+        .await?;
+        let messages = source.read().await.unwrap()?;
+        assert_eq!(messages.len(), 1);
+        source
+            .nack(vec![NackOffset {
+                offset: messages
+                    .into_iter()
+                    .next()
+                    .expect("one message was asserted above")
+                    .offset,
+                option: None,
+            }])
+            .await?;
 
         Ok(())
     }
