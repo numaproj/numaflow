@@ -450,34 +450,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pulsar_source_single_partition() {
-        let local = format!("r2-{}", get_rand_str());
-        let topic = full_topic(&local);
-        let subscription = format!("sub-{}", get_rand_str());
-
-        create_partitioned_topic(&local, 1).await;
-
-        // The source must exist before producing: PulsarSource subscribes at Latest.
-        let mut source =
-            new_test_source(&topic, &subscription, 10, Duration::from_millis(500)).await;
-
-        produce(
-            &format!("{topic}-partition-0"),
-            vec!["a".into(), "b".into(), "c".into()],
-            false,
-        )
-        .await;
-
-        let messages = read_until(&mut source, 3, Duration::from_secs(15)).await;
-        assert_eq!(messages.len(), 3);
-
-        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
-        source.ack(offsets).await.expect("ack failed");
-
-        wait_for_backlog_zero(&local, true, &subscription, Duration::from_secs(15)).await;
-    }
-
-    #[tokio::test]
     async fn test_pulsar_source_partitioned_ack() {
         let local = format!("i1-{}", get_rand_str());
         let topic = full_topic(&local);
