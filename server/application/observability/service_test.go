@@ -66,7 +66,7 @@ func TestPipelineVertexSummary(t *testing.T) {
 	assert.Equal(t, string(dfv1.VertexTypeMapUDF), summary.Value.VertexType)
 	assert.Equal(t, HealthStateHealthy, summary.Value.Health.State)
 	assert.Equal(t, transition.Time, summary.Value.ObservedAt)
-	assert.Equal(t, []string{"summary"}, summary.Value.Capabilities)
+	assert.Equal(t, []string{"summary", "status"}, summary.Value.Capabilities)
 }
 
 func TestPipelineVertexSummaryGenerationProgressing(t *testing.T) {
@@ -195,6 +195,88 @@ func TestPipelineVertexSummaryReturnsProviderError(t *testing.T) {
 
 	_, err = service.GetPipelineVertexSummary(context.Background(), "team-a", "orders", "map")
 	assert.ErrorIs(t, err, assert.AnError)
+}
+
+func TestPipelineVertexStatus(t *testing.T) {
+	transition := metav1.NewTime(summaryObservedAt)
+	vertex := testPipelineVertex()
+	vertex.ObjectMeta = metav1.ObjectMeta{
+		Name:              "orders-map",
+		Namespace:         "team-a",
+		UID:               types.UID("vertex-uid"),
+		ResourceVersion:   "18",
+		Generation:        4,
+		CreationTimestamp: metav1.NewTime(summaryObservedAt.Add(-time.Hour)),
+	}
+	vertex.Status = dfv1.VertexStatus{
+		Status: dfv1.Status{Conditions: []metav1.Condition{{
+			Type:               string(dfv1.VertexConditionPodsHealthy),
+			Status:             metav1.ConditionTrue,
+			Reason:             "Ready",
+			Message:            "All pods are ready",
+			ObservedGeneration: 4,
+			LastTransitionTime: transition,
+		}}},
+		Phase:                dfv1.VertexPhaseRunning,
+		Reason:               "Running",
+		Message:              "Vertex is running",
+		Replicas:             3,
+		DesiredReplicas:      4,
+		ReadyReplicas:        2,
+		UpdatedReplicas:      3,
+		UpdatedReadyReplicas: 2,
+		ObservedGeneration:   4,
+		LastScaledAt:         metav1.NewTime(summaryObservedAt.Add(-time.Minute)),
+	}
+	service := newTestService(t, vertex)
+
+	status, err := service.GetPipelineVertexStatus(context.Background(), "team-a", "orders", "map")
+	require.NoError(t, err)
+	assert.Equal(t, "18", status.ResourceVersion)
+	assert.Equal(t, "Running", status.Value.Phase)
+	assert.Equal(t, "Running", status.Value.DesiredPhase)
+	assert.Equal(t, ReplicaStatus{Current: 3, Desired: 4, Ready: 2, Updated: 3, UpdatedReady: 2}, status.Value.Replicas)
+	require.Len(t, status.Value.Conditions, 1)
+	assert.Equal(t, "PodsHealthy", status.Value.Conditions[0].Type)
+	assert.Equal(t, "True", status.Value.Conditions[0].Status)
+	assert.Equal(t, transition.Time, status.Value.ObservedAt)
+}
+
+func TestPipelineVertexStatusBoundsConditionsAndProviderText(t *testing.T) {
+	vertex := testPipelineVertex()
+	vertex.Status.Reason = strings.Repeat("r", maximumReasonLength+1)
+	vertex.Status.Message = strings.Repeat("m", maximumMessageLength+1)
+	vertex.Status.Conditions = make([]metav1.Condition, maximumConditions+1)
+	for index := range vertex.Status.Conditions {
+		vertex.Status.Conditions[index] = metav1.Condition{
+			Type:    "Condition",
+			Status:  metav1.ConditionTrue,
+			Reason:  strings.Repeat("r", maximumReasonLength+1),
+			Message: strings.Repeat("m", maximumMessageLength+1),
+		}
+	}
+	service := newTestService(t, vertex)
+
+	status, err := service.GetPipelineVertexStatus(context.Background(), "team-a", "orders", "map")
+	require.NoError(t, err)
+	assert.Len(t, status.Value.Conditions, maximumConditions)
+	assert.Len(t, []rune(status.Value.Reason), maximumReasonLength)
+	assert.Len(t, []rune(status.Value.Message), maximumMessageLength)
+	assert.Contains(t, status.Value.TruncatedFields, "conditions")
+	assert.Contains(t, status.Value.TruncatedFields, "conditions[0].reason")
+	assert.Contains(t, status.Value.TruncatedFields, "conditions[0].message")
+}
+
+func TestPipelineVertexStatusRejectsAmbiguousResourceName(t *testing.T) {
+	vertex := testPipelineVertex()
+	vertex.Name = "a-b-c"
+	vertex.Spec.PipelineName = "a-b"
+	vertex.Spec.Name = "c"
+	service := newTestService(t, vertex)
+
+	_, err := service.GetPipelineVertexStatus(context.Background(), "team-a", "a", "b-c")
+	require.Error(t, err)
+	assert.True(t, apierrors.IsNotFound(err))
 }
 
 func testPipelineVertex() *dfv1.Vertex {

@@ -41,6 +41,7 @@ var (
 		"/pipelines",
 		"/login",
 	}
+	corsAllowedHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "If-None-Match"}
 )
 
 type ServerOptions struct {
@@ -85,7 +86,7 @@ func (s *server) Start(ctx context.Context) {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     allowedOrigins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+			AllowHeaders:     corsAllowedHeaders,
 			AllowCredentials: true,
 		}))
 	}
