@@ -924,9 +924,41 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, metrics.Items))
 }
 
-// PodLogs is used to provide the logs of a given container in pod
+// PodLogs provides logs for a Numaflow-managed pod through the legacy generic route.
+// Resource-scoped callers should use PipelinePodLogs or MonoVertexPodLogs.
 func (h *handler) PodLogs(c *gin.Context) {
-	ns, pod := c.Param("namespace"), c.Param("pod")
+	h.podLogs(c, nil)
+}
+
+// PipelinePodLogs provides logs for a pod belonging to the requested pipeline vertex.
+func (h *handler) PipelinePodLogs(c *gin.Context) {
+	h.podLogs(c, map[string]string{
+		dfv1.KeyPipelineName: c.Param("pipeline"),
+		dfv1.KeyVertexName:   c.Param("vertex"),
+	})
+}
+
+// MonoVertexPodLogs provides logs for a pod belonging to the requested mono vertex.
+func (h *handler) MonoVertexPodLogs(c *gin.Context) {
+	h.podLogs(c, map[string]string{
+		dfv1.KeyMonoVertexName: c.Param("mono-vertex"),
+	})
+}
+
+func (h *handler) podLogs(c *gin.Context, requiredLabels map[string]string) {
+	ns, podName := c.Param("namespace"), c.Param("pod")
+
+	pod, err := h.kubeClient.CoreV1().Pods(ns).Get(c, podName, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get pod %q in namespace %q: %s", podName, ns, err.Error()))
+		return
+	}
+
+	if !podMatchesLogScope(pod, requiredLabels) {
+		errMsg := "Pod does not belong to the requested Numaflow resource"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 
 	// parse the query parameters
 	tailLines := h.parseTailLines(c.Query("tailLines"))
@@ -938,7 +970,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 		Previous:   c.Query("previous") == "true",
 	}
 
-	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
+	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(podName, logOptions).Stream(c)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get pod logs: %s", err.Error()))
 		return
@@ -949,6 +981,24 @@ func (h *handler) PodLogs(c *gin.Context) {
 
 	// Stream the logs back to the client
 	h.streamLogs(c, stream)
+}
+
+func podMatchesLogScope(pod *corev1.Pod, requiredLabels map[string]string) bool {
+	if len(requiredLabels) == 0 {
+		return isNumaflowManagedPod(pod)
+	}
+	for key, value := range requiredLabels {
+		if value == "" || pod.Labels[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func isNumaflowManagedPod(pod *corev1.Pod) bool {
+	labels := pod.Labels
+	return labels[dfv1.KeyMonoVertexName] != "" ||
+		(labels[dfv1.KeyPipelineName] != "" && labels[dfv1.KeyVertexName] != "")
 }
 
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {

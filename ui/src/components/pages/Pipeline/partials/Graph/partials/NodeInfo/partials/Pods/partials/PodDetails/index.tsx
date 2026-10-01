@@ -5,6 +5,8 @@ import { PodDetailProps } from "../../../../../../../../../../../types/declarati
 
 export function PodDetail({
   namespaceId,
+  pipelineId,
+  vertexId,
   type,
   containerName,
   pod,
@@ -24,6 +26,8 @@ export function PodDetail({
     >
       <PodLogs
         namespaceId={namespaceId}
+        pipelineId={pipelineId}
+        vertexId={vertexId}
         podName={pod.name}
         containerName={containerName}
         type={type}
