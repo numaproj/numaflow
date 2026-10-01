@@ -26,6 +26,9 @@ struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
     vertex_name: &'static str,
+    /// Name of the buffer this message was read from. Part of the rewritten `MessageID`,
+    /// which is what downstream writes use as the JetStream dedup key.
+    source_stream: &'static str,
     compression_type: Option<CompressionType>,
 }
 
@@ -67,9 +70,16 @@ impl JSWrappedMessage {
 
         let mut message = message_from_isb_proto(proto_message, offset.clone())?;
         // JetStream overwrites MessageID with vertex name and stream offset.
+        //
+        // The source buffer name is part of the id because `stream_sequence` is only unique
+        // within one JetStream stream. Buffers are edge-owned, so a vertex with several
+        // ingress edges reads several buffers whose sequences all start at 1 and collide.
+        // Downstream writes use this id as the `Nats-Msg-Id` dedup key, so without the
+        // buffer name a join would have messages from its second source silently dropped
+        // by JetStream as duplicates.
         message.id = MessageID {
             vertex_name: self.vertex_name.into(),
-            offset: offset.to_string().into(),
+            offset: format!("{}-{}", self.source_stream, offset).into(),
             index: 0,
         };
         Ok(message)
@@ -174,6 +184,7 @@ impl JetStreamReader {
                 partition_idx: self.stream.partition,
                 message: js_msg.clone(),
                 vertex_name: get_vertex_name(),
+                source_stream: self.stream.name,
                 compression_type: self.compression_type,
             }
             .into_message()
@@ -306,6 +317,66 @@ mod tests {
     use bytes::{Bytes, BytesMut};
     use chrono::Utc;
     use flate2::write::GzEncoder;
+
+    /// Builds the `MessageID` exactly as `JSWrappedMessage::into_message` does, so the
+    /// dedup-key format can be asserted without a live JetStream.
+    fn dedup_key(
+        vertex: &'static str,
+        source_stream: &'static str,
+        seq: i64,
+        partition: u16,
+    ) -> String {
+        let offset = Offset::Int(IntOffset::new(seq, partition));
+        MessageID {
+            vertex_name: vertex.into(),
+            offset: format!("{source_stream}-{offset}").into(),
+            index: 0,
+        }
+        .to_string()
+    }
+
+    /// Two ingress edges at the same sequence must not collide.
+    ///
+    /// `stream_sequence` is only unique within a single JetStream stream. Buffers are
+    /// edge-owned, so a join reads one buffer per source and both sequences start at 1.
+    /// The id is used as the `Nats-Msg-Id` dedup key on the downstream write, so a
+    /// collision here makes JetStream silently drop one source's messages.
+    #[test]
+    fn test_dedup_key_distinguishes_source_buffers() {
+        let from_one = dedup_key("cat", "default-simple-pipeline-in-one-cat-0", 350, 0);
+        let from_two = dedup_key("cat", "default-simple-pipeline-in-two-cat-0", 350, 0);
+        assert_ne!(
+            from_one, from_two,
+            "same sequence on different ingress buffers must yield different dedup keys"
+        );
+    }
+
+    /// Partition and sequence still participate in the key.
+    #[test]
+    fn test_dedup_key_distinguishes_partition_and_sequence() {
+        let stream = "default-simple-pipeline-in-one-cat-0";
+        assert_ne!(
+            dedup_key("cat", stream, 350, 0),
+            dedup_key("cat", stream, 351, 0),
+            "different sequences must differ"
+        );
+        assert_ne!(
+            dedup_key("cat", stream, 350, 0),
+            dedup_key("cat", stream, 350, 1),
+            "different partitions must differ"
+        );
+    }
+
+    /// The same message read twice yields the same key, so genuine redeliveries are
+    /// still deduplicated.
+    #[test]
+    fn test_dedup_key_is_stable_for_the_same_message() {
+        let stream = "default-simple-pipeline-in-one-cat-0";
+        assert_eq!(
+            dedup_key("cat", stream, 350, 0),
+            dedup_key("cat", stream, 350, 0)
+        );
+    }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
