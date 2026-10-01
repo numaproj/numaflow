@@ -598,9 +598,20 @@ impl PipelineConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
-                    // Cap inflight messages on this ISB reader to the vertex's `concurrency`. The
-                    // reader holds a semaphore of this size so that, even with read-ahead, we never
-                    // have more than `concurrency + read_batch_size` messages in flight.
+                    // `concurrency` is a per-buffer cap, not a per-vertex one. Each reader
+                    // holds its own semaphore of this size, so with read-ahead a single
+                    // buffer never exceeds `concurrency + read_batch_size` in flight.
+                    //
+                    // A vertex reading B buffers therefore allows up to B times that. B is
+                    // the number of (ingress edge, partition) pairs this pod reads: 1 for a
+                    // single-edge ordered/reduce replica, one per ingress edge for a join,
+                    // and edges times partitions for an unordered map/sink pod. This is
+                    // deliberate — per-buffer budgets keep the sources of a join
+                    // independent, and ordered processing relies on it (the controller
+                    // forces `concurrency: 1` to mean one in-flight message *per
+                    // partition*, since ordering is only guaranteed within a partition).
+                    // Do not collapse these into one shared semaphore: edges would contend
+                    // for permits and the loser would stall.
                     max_ack_pending: concurrency,
                     ..Default::default()
                 },

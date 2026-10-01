@@ -8540,7 +8540,8 @@ Read batch size for all the vertices in the pipeline, can be overridden
 by the vertex’s limit settings. ReadBatchSize controls only how many
 messages are fetched in a single read call from the source/buffer; it is
 not a cap on how many messages may be in-flight (use
-<code>concurrency</code> for that).
+<code>concurrency</code> for that). It applies per buffer, so a pod
+reading several buffers issues a read of this size against each.
 </p>
 
 </td>
@@ -8650,13 +8651,17 @@ RateLimit.
 <p>
 
 Concurrency defines the maximum number of messages that can be actively
-in-flight (read but not yet acknowledged) at any given time across each
-vertex of the pipeline. With read-ahead enabled, the data plane keeps
-reading new batches from the source/buffer until the number of in-flight
-messages reaches <code>concurrency</code>; once that ceiling is hit, one
-more batch may be pre-fetched and held ready so that completed messages
-can be replaced immediately. Therefore the maximum in-flight count per
-vertex is at most <code>concurrency + readBatchSize</code>.
+in-flight (read but not yet acknowledged) at any given time, per buffer
+read by a pod. With read-ahead enabled, the data plane keeps reading new
+batches from the source/buffer until the number of in-flight messages
+reaches <code>concurrency</code>; once that ceiling is hit, one more
+batch may be pre-fetched and held ready so that completed messages can
+be replaced immediately. Therefore the maximum in-flight count per
+buffer is at most <code>concurrency + readBatchSize</code>. This budget
+is per buffer, not per vertex: buffers are owned by edges, so a pod’s
+total in-flight ceiling is <code>concurrency</code> times the number of
+buffers it reads (one per partition per incoming edge). A Map vertex
+with 3 partitions joining 2 incoming edges reads 6 buffers.
 <code>readBatchSize</code> controls only the size of an individual read;
 <code>concurrency</code> controls how many messages can be processed in
 parallel. By default, read-ahead is disabled on source vertices (so
@@ -14877,7 +14882,8 @@ Read batch size from the source or buffer. It overrides the settings
 from pipeline limits. ReadBatchSize controls only how many messages are
 fetched in a single read call from the source/buffer; it is not a cap on
 how many messages may be in-flight (use <code>concurrency</code> for
-that).
+that). It applies per buffer, so a pod reading several buffers issues a
+read of this size against each.
 </p>
 
 </td>
@@ -14984,20 +14990,26 @@ is not applied to Source vertices.
 <p>
 
 Concurrency defines the maximum number of messages that can be actively
-in-flight (read but not yet acknowledged) at any given time. With
-read-ahead enabled, the data plane keeps reading new batches from the
-source/buffer until the number of in-flight messages reaches
-<code>concurrency</code>; once that ceiling is hit, one more batch may
-be pre-fetched and held ready so that completed messages can be replaced
-immediately. Therefore the maximum in-flight count is at most
-<code>concurrency + readBatchSize</code>. <code>readBatchSize</code>
-controls only the size of an individual read; <code>concurrency</code>
-controls how many messages can be processed in parallel. It overrides
-the settings from pipeline limits. By default, read-ahead is disabled on
-source vertices and enabled on Map/Sink/Reduce vertices. To force
-strictly sequential processing, set <code>concurrency</code> to 1 and
-disable read-ahead via the <code>NUMAFLOW_READ_AHEAD</code> environment
-variable on the vertex’s container template.
+in-flight (read but not yet acknowledged) at any given time, per buffer
+read by a pod. With read-ahead enabled, the data plane keeps reading new
+batches from the source/buffer until the number of in-flight messages
+reaches <code>concurrency</code>; once that ceiling is hit, one more
+batch may be pre-fetched and held ready so that completed messages can
+be replaced immediately. Therefore the maximum in-flight count per
+buffer is at most <code>concurrency + readBatchSize</code>. This budget
+is per buffer, not per vertex: buffers are owned by edges, so a pod’s
+total in-flight ceiling is <code>concurrency</code> times the number of
+buffers it reads (one per partition per incoming edge). For an ordered
+Map/Sink vertex the controller forces <code>concurrency</code> to 1,
+which means one in-flight message per partition, the unit ordering is
+guaranteed in. <code>readBatchSize</code> controls only the size of an
+individual read; <code>concurrency</code> controls how many messages can
+be processed in parallel. It overrides the settings from pipeline
+limits. By default, read-ahead is disabled on source vertices and
+enabled on Map/Sink/Reduce vertices. To force strictly sequential
+processing, set <code>concurrency</code> to 1 and disable read-ahead via
+the <code>NUMAFLOW_READ_AHEAD</code> environment variable on the
+vertex’s container template.
 </p>
 
 </td>

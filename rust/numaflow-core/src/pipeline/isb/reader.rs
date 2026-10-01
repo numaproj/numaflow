@@ -126,6 +126,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         let (tx, rx) = mpsc::channel::<MessageHandle>(batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            // One semaphore per reader, i.e. per buffer. This is intentionally not shared
+            // across a vertex's readers: see `BufferReaderConfig::max_ack_pending`.
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
 
             let result = async {

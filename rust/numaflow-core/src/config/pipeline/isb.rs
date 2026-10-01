@@ -107,6 +107,11 @@ impl Display for BufferFullStrategy {
 pub(crate) struct BufferReaderConfig {
     pub(crate) streams: Vec<Stream>,
     pub(crate) wip_ack_interval: Duration,
+    /// Cap on read-but-unacked messages for a *single* buffer, sourced from the vertex's
+    /// `concurrency` limit. Each ISB reader enforces this with its own semaphore, so a
+    /// vertex's total in-flight ceiling is this value times the number of buffers the pod
+    /// reads. See the construction site in `config/pipeline.rs` for why the budget is
+    /// per-buffer rather than shared.
     pub(crate) max_ack_pending: usize,
 }
 
