@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -47,6 +47,15 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 const NATS_HEADER_PREAMBLE: &[u8] = b"NATS/1.0\r\n";
 const NATS_HEADER_TERMINATOR: &[u8] = b"\r\n";
 
+/// Whether a publish of `size` bytes exceeds the server's `max_payload`.
+///
+/// A `max_payload` of 0 means the server has not reported its limit yet (it arrives with the
+/// INFO sent during the connection handshake), so no judgement is possible and the publish is
+/// treated as within limits. Reporting it as oversized instead would warn on every message.
+fn exceeds_max_payload(size: usize, max_payload: usize) -> bool {
+    max_payload != 0 && size > max_payload
+}
+
 /// Returns the number of bytes NATS adds to the HPUB body for the supplied headers.
 ///
 /// NATS applies `max_payload` to the HPUB body, which is the encoded header block plus
@@ -92,8 +101,14 @@ pub(crate) struct JetStreamWriter {
     /// Pipeline labels for max-payload exceeded metrics. Some internal/test writers do not
     /// have pipeline context and therefore leave these unset.
     metric_labels: Option<MetricLabels>,
-    /// Max NATS payload (bytes), cached at construction to avoid cloning ServerInfo per publish.
-    max_payload: usize,
+    /// Max NATS payload (bytes), cached to avoid cloning ServerInfo per publish.
+    ///
+    /// `0` means "not yet known": the server sends its INFO (which carries `max_payload`)
+    /// during the connection handshake, so a writer built before that lands would otherwise
+    /// cache the `ServerInfo::default()` value of `0` forever and report every message as
+    /// oversized. While the cache is `0` we re-read it from the client, and the size check
+    /// is skipped so we never warn against an unknown limit.
+    max_payload: Arc<AtomicUsize>,
 }
 
 impl JetStreamWriter {
@@ -117,7 +132,9 @@ impl JetStreamWriter {
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
 
-        let max_payload = js_ctx.client().server_info().max_payload;
+        // May still be 0 if the connection handshake has not delivered the server INFO yet;
+        // `resolve_max_payload` picks it up on a later publish.
+        let max_payload = Arc::new(AtomicUsize::new(js_ctx.client().server_info().max_payload));
 
         let js_writer = Self {
             stream,
@@ -173,9 +190,26 @@ impl JetStreamWriter {
         Ok(js_writer)
     }
 
+    /// Returns the server's max payload, re-reading it from the client while still unknown.
+    ///
+    /// Once a non-zero value is seen it is cached, so the common path is a relaxed atomic
+    /// load rather than cloning `ServerInfo` (6 `String`s and a `Vec`) on every publish.
+    fn resolve_max_payload(&self) -> usize {
+        let cached = self.max_payload.load(Ordering::Relaxed);
+        if cached != 0 {
+            return cached;
+        }
+
+        let fetched = self.js_ctx.client().server_info().max_payload;
+        if fetched != 0 {
+            self.max_payload.store(fetched, Ordering::Relaxed);
+        }
+        fetched
+    }
+
     fn record_max_payload_exceeded(&self, size: usize, message_id: &str) {
-        let max = self.max_payload;
-        if size <= max {
+        let max = self.resolve_max_payload();
+        if !exceeds_max_payload(size, max) {
             return;
         }
 
@@ -557,6 +591,25 @@ mod tests {
     use async_nats::jetstream::consumer::{self, Config};
     use async_nats::jetstream::stream;
     use chrono::Utc;
+
+    /// An unknown limit must never be reported as exceeded.
+    ///
+    /// `server_info().max_payload` is 0 until the connection handshake delivers the server
+    /// INFO. A writer built in that window used to cache the 0 permanently, so every
+    /// publish logged "ISB message exceeds the maximum NATS payload" with
+    /// `max_payload_bytes: 0`, spamming the logs and making the metric meaningless.
+    #[test]
+    fn test_unknown_max_payload_is_not_exceeded() {
+        assert!(!exceeds_max_payload(147, 0));
+        assert!(!exceeds_max_payload(usize::MAX, 0));
+    }
+
+    #[test]
+    fn test_max_payload_exceeded_only_when_over_a_known_limit() {
+        assert!(exceeds_max_payload(1025, 1024), "over the limit");
+        assert!(!exceeds_max_payload(1024, 1024), "exactly at the limit");
+        assert!(!exceeds_max_payload(147, 1024), "under the limit");
+    }
 
     #[test]
     fn test_nats_header_block_len_includes_protocol_overhead() {
