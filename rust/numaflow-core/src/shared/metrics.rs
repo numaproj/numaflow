@@ -6,14 +6,16 @@ use tracing::error;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
-    LagReader, MetricsState, PendingReader, PendingReaderBuilder, start_metrics_https_server,
+    LagReader, MetricsStateSlot, PendingReader, PendingReaderBuilder, start_metrics_https_server,
 };
 
-/// Starts the metrics server
+/// Starts the metrics server. The state may be passed as a [MetricsStateSlot] that is filled in
+/// later, so the server can be up before the vertex's components exist.
 pub(crate) async fn start_metrics_server<C: crate::typ::NumaflowTypeConfig>(
     metrics_config: MetricsConfig,
-    metrics_state: MetricsState<C>,
+    metrics_state: impl Into<MetricsStateSlot<C>>,
 ) -> JoinHandle<()> {
+    let metrics_state = metrics_state.into();
     tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.
         let metrics_addr: SocketAddr =

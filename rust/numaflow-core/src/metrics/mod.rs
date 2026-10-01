@@ -14,13 +14,13 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 use tokio::task::JoinHandle;
 use tokio::time;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::Error;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
@@ -219,6 +219,76 @@ pub(crate) struct WatermarkFetcherState {
 pub(crate) struct MetricsState<C: crate::typ::NumaflowTypeConfig> {
     pub(crate) health_checks: ComponentHealthChecks<C>,
     pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+/// The metrics server's state, which may not exist yet when the server starts.
+///
+/// The server is started before the vertex's components so that the health endpoints answer
+/// during slow startup steps (e.g. the reduce fence wait), and the state is filled in once the
+/// components have been created.
+#[derive(Clone)]
+pub(crate) struct MetricsStateSlot<C: crate::typ::NumaflowTypeConfig> {
+    state: Arc<OnceLock<MetricsState<C>>>,
+    sidecars_assumed_live: Arc<AtomicBool>,
+}
+
+impl<C: crate::typ::NumaflowTypeConfig> Default for MetricsStateSlot<C> {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(OnceLock::new()),
+            sidecars_assumed_live: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl<C: crate::typ::NumaflowTypeConfig> MetricsStateSlot<C> {
+    /// Creates an empty slot. Until [MetricsStateSlot::set] is called the numa container is not
+    /// ready, and the user-defined containers are not live unless
+    /// [MetricsStateSlot::assume_sidecars_live] is in effect.
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fills the slot. The state can only be set once; later calls are ignored.
+    pub(crate) fn set(&self, state: MetricsState<C>) {
+        if self.state.set(state).is_err() {
+            warn!("Metrics state is already set, ignoring the new state");
+        }
+    }
+
+    /// Reports the user-defined containers as live while the slot is empty, until the returned
+    /// guard is dropped. For startup steps that don't involve those containers and can outlast
+    /// their liveness budget, so that they aren't restarted for a delay that isn't theirs.
+    pub(crate) fn assume_sidecars_live(&self) -> SidecarsAssumedLive {
+        self.sidecars_assumed_live.store(true, Ordering::Release);
+        SidecarsAssumedLive(Arc::clone(&self.sidecars_assumed_live))
+    }
+
+    fn get(&self) -> Option<&MetricsState<C>> {
+        self.state.get()
+    }
+
+    fn sidecars_assumed_live(&self) -> bool {
+        self.sidecars_assumed_live.load(Ordering::Acquire)
+    }
+}
+
+impl<C: crate::typ::NumaflowTypeConfig> From<MetricsState<C>> for MetricsStateSlot<C> {
+    fn from(state: MetricsState<C>) -> Self {
+        let slot = Self::default();
+        slot.set(state);
+        slot
+    }
+}
+
+/// Keeps the user-defined containers reported as live while the metrics state is empty; see
+/// [MetricsStateSlot::assume_sidecars_live].
+pub(crate) struct SidecarsAssumedLive(Arc<AtomicBool>);
+
+impl Drop for SidecarsAssumedLive {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 /// WatermarkQueryParams represents the query parameters for the /watermark endpoint
@@ -1372,17 +1442,20 @@ pub async fn metrics_handler() -> impl IntoResponse {
 // for all partitions based on available watermark handles.
 // Optionally accepts a 'from' query parameter to filter watermarks by edge (from vertex).
 pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
+    State(state): State<MetricsStateSlot<C>>,
     Query(params): Query<WatermarkQueryParams>,
 ) -> impl IntoResponse {
+    let Some(state) = state.get() else {
+        return json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            r#"{"error": "Vertex is still starting up"}"#.to_string(),
+        );
+    };
     let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header(axum::http::header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                r#"{"error": "Watermark not available for this vertex type"}"#,
-            ))
-            .unwrap();
+        return json_response(
+            StatusCode::NOT_FOUND,
+            r#"{"error": "Watermark not available for this vertex type"}"#.to_string(),
+        );
     };
 
     let mut partitions = HashMap::new();
@@ -1413,20 +1486,24 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
     }
 
     let response = WatermarkResponse { partitions };
-    let json_response = serde_json::to_string(&response)
+    let body = serde_json::to_string(&response)
         .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
 
-    debug!(?json_response, ?params.from, "Watermark response");
+    debug!(?body, ?params.from, "Watermark response");
+    json_response(StatusCode::OK, body)
+}
+
+fn json_response(status: StatusCode, body: String) -> Response<Body> {
     Response::builder()
-        .status(StatusCode::OK)
+        .status(status)
         .header(axum::http::header::CONTENT_TYPE, "application/json")
-        .body(Body::from(json_response))
+        .body(Body::from(body))
         .unwrap()
 }
 
 pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig>(
     addr: SocketAddr,
-    metrics_state: MetricsState<C>,
+    metrics_state: MetricsStateSlot<C>,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -1450,12 +1527,12 @@ pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router<C: crate::typ::NumaflowTypeConfig>(metrics_state: MetricsState<C>) -> Router {
+fn metrics_router<C: crate::typ::NumaflowTypeConfig>(metrics_state: MetricsStateSlot<C>) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/runtime/watermark", get(watermark_handler))
         .route("/livez", get(livez))
-        .route("/readyz", get(sidecar_livez))
+        .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
         .with_state(metrics_state)
 }
@@ -1464,17 +1541,45 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
-) -> impl IntoResponse {
-    // Check if health checks are disabled via the environment variable
-    if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
+fn health_checks_disabled() -> bool {
+    env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
         .map(|v| v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
-    {
+}
+
+/// Readiness of the numa container: not ready until its components exist and are healthy.
+async fn readyz<C: crate::typ::NumaflowTypeConfig>(
+    State(state): State<MetricsStateSlot<C>>,
+) -> impl IntoResponse {
+    if health_checks_disabled() {
         return StatusCode::NO_CONTENT;
     }
-    match state.health_checks {
+    match state.get() {
+        Some(state) => components_ready(state.health_checks.clone()).await,
+        None => StatusCode::SERVICE_UNAVAILABLE,
+    }
+}
+
+/// Liveness of the user-defined containers, probed via the numa container. Before the components
+/// exist the containers are only reported live while that is being assumed explicitly; otherwise
+/// a container that never starts would never be restarted.
+async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
+    State(state): State<MetricsStateSlot<C>>,
+) -> impl IntoResponse {
+    if health_checks_disabled() {
+        return StatusCode::NO_CONTENT;
+    }
+    match state.get() {
+        Some(ready_state) => components_ready(ready_state.health_checks.clone()).await,
+        None if state.sidecars_assumed_live() => StatusCode::NO_CONTENT,
+        None => StatusCode::SERVICE_UNAVAILABLE,
+    }
+}
+
+async fn components_ready<C: crate::typ::NumaflowTypeConfig>(
+    health_checks: ComponentHealthChecks<C>,
+) -> StatusCode {
+    match health_checks {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
             if !monovertex_state.source.ready().await {
@@ -1929,13 +2034,19 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();
         let server_handle = tokio::spawn(async move {
-            start_metrics_https_server::<crate::typ::WithoutRateLimiter>(addr, metrics_state_clone)
-                .await
-                .unwrap();
+            start_metrics_https_server::<crate::typ::WithoutRateLimiter>(
+                addr,
+                metrics_state_clone.into(),
+            )
+            .await
+            .unwrap();
         });
 
-        // invoke the sidecar-livez endpoint
-        let response = sidecar_livez::<crate::typ::WithoutRateLimiter>(State(metrics_state)).await;
+        // invoke the sidecar-livez and readyz endpoints
+        let metrics_state: MetricsStateSlot<crate::typ::WithoutRateLimiter> = metrics_state.into();
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state)).await;
         assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
 
         // invoke the livez endpoint
@@ -1956,6 +2067,46 @@ mod tests {
         sink_server_handle.await.unwrap();
         fb_sink_server_handle.await.unwrap();
         transformer_handle.await.unwrap();
+    }
+
+    /// Before the vertex's components exist the numa container is not ready, and the sidecars
+    /// are live only while that is being assumed.
+    #[tokio::test]
+    async fn test_health_endpoints_before_metrics_state_is_set() {
+        let metrics_state: MetricsStateSlot<crate::typ::WithoutRateLimiter> =
+            MetricsStateSlot::new();
+
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        let assumed_live = metrics_state.assume_sidecars_live();
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        drop(assumed_live);
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        let response = watermark_handler(
+            State(metrics_state),
+            Query(WatermarkQueryParams { from: None }),
+        )
+        .await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
     }
 
     #[test]
