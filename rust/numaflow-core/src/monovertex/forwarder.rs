@@ -120,6 +120,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             )
             .map_err(|e| {
                 error!(?e, "Error while joining reader, mapper and sink writer");
+                cln_token.cancel();
                 Error::Forwarder(format!(
                     "Error while joining reader, mapper and sink writer: {e:?}"
                 ))
