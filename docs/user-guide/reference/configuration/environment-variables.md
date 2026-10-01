@@ -1,6 +1,14 @@
 # Environment Variables
 
-For the `numa` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](../../../development/debugging.md).
+## Log level control
+
+Numaflow exposes three env vars for controlling log verbosity across its pods:
+
+- `NUMAFLOW_LOG_LEVEL` — sets the log level (`debug`, `info`, `warn`, `error`) for Numaflow-owned components. Overrides the level implied by `NUMAFLOW_DEBUG`.
+- `RUST_LOG` — advanced override for data-plane pods (vertex `numa` container, MonoVertex `numa` container, serving pods). Accepts standard [`tracing-subscriber` EnvFilter syntax](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) (e.g. `warn`, `numaflow_core=debug,info`) and takes precedence over `NUMAFLOW_LOG_LEVEL`.
+- `NUMAFLOW_DEBUG` — development shortcut; sets level to `debug` and may switch log output from JSON to human-readable text. **Note:** the format change may break log shippers expecting JSON — prefer `NUMAFLOW_LOG_LEVEL` when only the level needs changing.
+
+See [Log Levels](log-levels.md) for a full pod inventory, per-component YAML examples, and common recipes.
 
 In [`udf`](../../user-defined-functions/map/map.md), [`udsink`](../../sinks/user-defined-sinks.md) and [`transformer`](../../sources/transformer/overview.md) containers, there are some preset environment variables that can be used directly.
 
