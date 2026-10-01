@@ -76,6 +76,7 @@ impl futures::Stream for JetstreamWatcher {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         // only poll recreate_watcher if it is set. This happens when the watcher has failed.
+        // Take the recreation future out to poll it.
         if let Some(mut future) = self.recreate_future.take() {
             match future.as_mut().poll(cx) {
                 Poll::Ready(watcher) => {
@@ -83,6 +84,8 @@ impl futures::Stream for JetstreamWatcher {
                     // fall through and poll the watcher
                 }
                 Poll::Pending => {
+                    // watcher creation future isn't ready
+                    // put it back so that it can be polled again later.
                     self.recreate_future = Some(future);
                     return Poll::Pending;
                 }
