@@ -57,9 +57,8 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 			CreatedAt:          resource.CreationTimestamp.UTC(),
 			ObservedAt:         resourceObservedAt(resource.CreationTimestamp, resource.Status.Conditions, resource.Status.LastScaledAt),
 			LastScaledAt:       optionalTime(resource.Status.LastScaledAt),
-			// Status and other follow-ups are added here when those routes exist.
-			Capabilities:    []string{"summary"},
-			TruncatedFields: truncatedFields,
+			Capabilities:       []string{"summary", "status"},
+			TruncatedFields:    truncatedFields,
 		},
 		ResourceVersion: resource.ResourceVersion,
 	}, nil

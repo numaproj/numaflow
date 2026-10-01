@@ -36,9 +36,10 @@ type CapabilitiesService interface {
 	GetCapabilities() capabilities.Capabilities
 }
 
-// PipelineVertexSummaryService serves Kubernetes-backed observability reads.
+// PipelineVertexSummaryService serves Kubernetes-backed pipeline vertex observability reads.
 type PipelineVertexSummaryService interface {
 	GetPipelineVertexSummary(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexSummary], error)
+	GetPipelineVertexStatus(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexStatus], error)
 }
 
 // Handler adapts API v2 application services to HTTP handlers.
@@ -76,6 +77,19 @@ func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.N
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
+}
+
+// GetPipelineVertexStatus returns bounded controller detail for one pipeline vertex.
+func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexStatusParams) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
+		return
+	}
+	result, err := h.summaryService.GetPipelineVertexStatus(c.Request.Context(), namespace, pipeline, vertex)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
 }
 
 // toCapabilities translates transport-independent application types into the
@@ -166,6 +180,45 @@ func toHealth(value observability.Health) generated.Health {
 		State:   generated.HealthState(value.State),
 		Reason:  optionalString(value.Reason),
 		Message: optionalString(value.Message),
+	}
+}
+
+func toVertexStatus(value observability.VertexStatus) generated.VertexStatus {
+	conditions := make([]generated.Condition, 0, len(value.Conditions))
+	for _, condition := range value.Conditions {
+		conditions = append(conditions, generated.Condition{
+			Type:               condition.Type,
+			Status:             generated.ConditionStatus(condition.Status),
+			Reason:             condition.Reason,
+			Message:            optionalString(condition.Message),
+			ObservedGeneration: condition.ObservedGeneration,
+			LastTransitionTime: condition.LastTransitionTime,
+		})
+	}
+	return generated.VertexStatus{
+		Ref: generated.TargetRef{
+			Kind:      generated.PipelineVertex,
+			Namespace: value.Ref.Namespace,
+			Pipeline:  value.Ref.Pipeline,
+			Name:      value.Ref.Name,
+			Uid:       value.Ref.UID,
+		},
+		Phase:        value.Phase,
+		DesiredPhase: value.DesiredPhase,
+		Reason:       optionalString(value.Reason),
+		Message:      optionalString(value.Message),
+		Replicas: generated.ReplicaStatus{
+			Current:      value.Replicas.Current,
+			Desired:      value.Replicas.Desired,
+			Ready:        value.Replicas.Ready,
+			Updated:      value.Replicas.Updated,
+			UpdatedReady: value.Replicas.UpdatedReady,
+		},
+		Conditions:         conditions,
+		Generation:         value.Generation,
+		ObservedGeneration: value.ObservedGeneration,
+		ObservedAt:         value.ObservedAt,
+		TruncatedFields:    optionalStrings(value.TruncatedFields),
 	}
 }
 
