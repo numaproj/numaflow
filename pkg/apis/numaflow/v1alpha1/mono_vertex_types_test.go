@@ -775,8 +775,8 @@ func sha256Hex(b []byte) string {
 }
 
 // TestMonoVertex_NonClaimantGolden freezes the pod spec and Service objects of a MonoVertex
-// HTTP source that does not set serviceName (G3: no behavior change for non-claimants).
-// Update the literal hashes below only if a change intentionally rolls non-claimant pods/Services.
+// HTTP source that does not set serviceName. Update the literal hashes below only if a change
+// intentionally rolls non-claimant pods/Services.
 func TestMonoVertex_NonClaimantGolden(t *testing.T) {
 	mv := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{

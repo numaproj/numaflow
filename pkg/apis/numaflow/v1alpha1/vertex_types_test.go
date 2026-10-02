@@ -1068,9 +1068,9 @@ func TestHTTPSourceGetServiceObjs(t *testing.T) {
 	assert.Equal(t, int32(VertexHTTPPort), portNames[VertexHTTPPortName])
 }
 
-// TestVertex_NonClaimantGolden freezes the pod spec and Service objects of a source Vertex
-// HTTP source that does not set serviceName (G3: no behavior change for non-claimants).
-// Update the literal hashes below only if a change intentionally rolls non-claimant pods/Services.
+// TestVertex_NonClaimantGolden freezes the pod spec and Service objects of a source
+// Vertex HTTP source that does not set serviceName. Update the literal hashes below
+// only if a change intentionally rolls non-claimant pods/Services.
 func TestVertex_NonClaimantGolden(t *testing.T) {
 	v := &Vertex{
 		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testVertexName},

@@ -50,10 +50,10 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 		return fmt.Errorf("invalid source: %w", err)
 	}
 	if sn := mvtx.GetSharedHTTPServiceName(); sn != "" {
-		if sn == mvtx.Name || sn == mvtx.GetHeadlessServiceName() || sn == mvtx.GetDaemonServiceName() { // V3
+		if sn == mvtx.Name || sn == mvtx.GetHeadlessServiceName() || sn == mvtx.GetDaemonServiceName() {
 			return fmt.Errorf("monovertex %q: serviceName %q must not equal its own default, headless or daemon Service name", mvtx.Name, sn)
 		}
-		// TODO(shared-http-svc): removed by wiring PR
+		// TODO: removed when end to end wiring is done
 		return fmt.Errorf("monovertex %q: source.http.serviceName is not yet supported", mvtx.Name)
 	}
 	if mvtx.Spec.Sink == nil {
