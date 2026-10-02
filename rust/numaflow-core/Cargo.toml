@@ -10,6 +10,10 @@ sqs-tests = []
 kafka-tests = []
 global-state-tests = []
 all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "global-state-tests"]
+# Embeddable local runner (the `numaflow_core::local` facade used by `nfcli`).
+# Default OFF so the shipping binary's dependency graph is unaffected (see gotcha G16).
+# Pulls in the Rust SDK to serve the replay source for transform/source testing.
+local-runner = ["dep:numaflow", "dep:tempfile"]
 
 [lints]
 workspace = true
@@ -65,6 +69,14 @@ zstd = "0.13.3"
 lz4 = "1.28.1"
 async-trait = "0.1.88"
 tracing-subscriber = "0.3.20"
+
+# Optional deps for the `local-runner` facade only. `numaflow` (the Rust SDK) is used to
+# serve the replay source; `tempfile` gives each replay source its own socket directory.
+# Both mirror the `[dev-dependencies]` entries below so non-feature tests keep working.
+# TODO: when the SDK's published crate is used (numaproj/numaflow-rs#178), update both
+# the optional dep here and the dev-dependency at the same git pin.
+numaflow = { git = "https://github.com/numaproj/numaflow-rs", rev = "128dedad7ed3ccafc40ef23f9530a27be3ddfd0f", optional = true }
+tempfile = { version = "3.11.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3.11.0"
