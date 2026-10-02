@@ -206,11 +206,15 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	// PodDisruptionBudget selecting this MonoVertex's pods - see expectedPods=1 regardless of
 	// reality, silently defeating the PDB. Keep it in sync here too, independent of the
 	// autoscaler, skipping only while paused so Spec.Replicas still holds the pre-pause value
-	// for resume (matching the autoscaler's own pause handling).
-	if monoVtx.Spec.Lifecycle.GetDesiredPhase() != dfv1.MonoVertexPhasePaused {
-		if err := mr.patchScaleSubresourceReplicas(ctx, monoVtx, int32(desiredReplicas)); err != nil {
+	// for resume (matching the autoscaler's own pause handling). Reuses the autoscaler's own
+	// patch method (mr.scaler) rather than a separate copy, so there's one writer of
+	// spec.replicas, invoked from two call sites.
+	if monoVtx.Spec.Lifecycle.GetDesiredPhase() != dfv1.MonoVertexPhasePaused && (monoVtx.Spec.Replicas == nil || *monoVtx.Spec.Replicas != int32(desiredReplicas)) {
+		if err := mr.scaler.PatchMonoVertexReplicas(ctx, monoVtx, int32(desiredReplicas)); err != nil {
 			return fmt.Errorf("failed to patch mono vertex spec.replicas: %w", err)
 		}
+		replicas := int32(desiredReplicas)
+		monoVtx.Spec.Replicas = &replicas
 	}
 
 	// Set metrics
@@ -332,25 +336,6 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.Selector = selector.String()
 	}
 
-	return nil
-}
-
-// patchScaleSubresourceReplicas keeps Spec.Replicas in sync with the given replica count via a
-// spec merge patch, mirroring the autoscaler's own patchMonoVertexReplicas. Spec.Replicas is the
-// field backing the MonoVertex CRD's scale subresource (specReplicasPath: .spec.replicas), which
-// is what Kubernetes' PDB controller - and anything else driven by the generic scale client -
-// reads to size this MonoVertex. Updating the in-memory monoVtx.Spec.Replicas keeps the running
-// reconcile loop's view consistent for anything inspecting it afterwards; the patch itself is
-// what's actually visible to the scale subresource.
-func (mr *monoVertexReconciler) patchScaleSubresourceReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex, desiredReplicas int32) error {
-	if monoVtx.Spec.Replicas != nil && *monoVtx.Spec.Replicas == desiredReplicas {
-		return nil
-	}
-	patchJSON := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)
-	if err := mr.client.Patch(ctx, monoVtx, client.RawPatch(types.MergePatchType, []byte(patchJSON))); err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-	monoVtx.Spec.Replicas = &desiredReplicas
 	return nil
 }
 
