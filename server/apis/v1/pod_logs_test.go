@@ -261,3 +261,67 @@ func TestScopedPodLogsStreamsMatchingPod(t *testing.T) {
 		})
 	}
 }
+
+func TestScopedPodLogsReturnsKubernetesErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	const route = "/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs"
+	const requestURL = "/api/v1/namespaces/test-ns/pipelines/my-pipeline/vertices/my-vertex/pods/test-pod/logs"
+
+	t.Run("pod lookup fails", func(t *testing.T) {
+		h := &handler{kubeClient: fakeClient.NewSimpleClientset()}
+		router := gin.New()
+		router.GET(route, h.PipelinePodLogs)
+
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, requestURL, nil))
+
+		assert.Equal(t, http.StatusOK, response.Code)
+		var body NumaflowAPIResponse
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+		require.NotNil(t, body.ErrMsg)
+		assert.Contains(t, *body.ErrMsg, "Failed to get pod \"test-pod\" in namespace \"test-ns\"")
+	})
+
+	t.Run("log stream fails", func(t *testing.T) {
+		kubeAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/v1/namespaces/test-ns/pods/test-pod":
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(corev1.Pod{
+					TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod",
+						Namespace: "test-ns",
+						Labels: map[string]string{
+							dfv1.KeyPipelineName: "my-pipeline",
+							dfv1.KeyVertexName:   "my-vertex",
+						},
+					},
+				}); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			case "/api/v1/namespaces/test-ns/pods/test-pod/log":
+				http.Error(w, "log backend unavailable", http.StatusInternalServerError)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer kubeAPI.Close()
+
+		kubeClient, err := kubernetes.NewForConfig(&rest.Config{Host: kubeAPI.URL})
+		require.NoError(t, err)
+		h := &handler{kubeClient: kubeClient}
+		router := gin.New()
+		router.GET(route, h.PipelinePodLogs)
+
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, requestURL, nil))
+
+		assert.Equal(t, http.StatusOK, response.Code)
+		var body NumaflowAPIResponse
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+		require.NotNil(t, body.ErrMsg)
+		assert.Contains(t, *body.ErrMsg, "Failed to get pod logs")
+	})
+}
