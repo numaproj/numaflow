@@ -196,6 +196,27 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	desiredReplicas := monoVtx.CalculateReplicas()
 	monoVtx.Status.DesiredReplicas = uint32(desiredReplicas)
 
+	// MonoVertex declares a CRD scale subresource (specReplicasPath: .spec.replicas), which
+	// Kubernetes' PDB controller - and anything else relying on the generic scale client, such
+	// as `kubectl scale` - reads directly. Historically .spec.replicas was only ever written by
+	// the autoscaler (pkg/reconciler/monovertex/scaling), so a MonoVertex whose autoscaler never
+	// fires a scale decision (e.g. a source whose "pending messages" metric is unavailable, or
+	// scale.disabled: true) kept .spec.replicas stuck at its unset default of 1 forever, no
+	// matter how many replicas were actually running. That made the scale subresource - and any
+	// PodDisruptionBudget selecting this MonoVertex's pods - see expectedPods=1 regardless of
+	// reality, silently defeating the PDB. Keep it in sync here too, independent of the
+	// autoscaler, skipping only while paused so Spec.Replicas still holds the pre-pause value
+	// for resume (matching the autoscaler's own pause handling). Reuses the autoscaler's own
+	// patch method (mr.scaler) rather than a separate copy, so there's one writer of
+	// spec.replicas, invoked from two call sites.
+	if monoVtx.Spec.Lifecycle.GetDesiredPhase() != dfv1.MonoVertexPhasePaused && (monoVtx.Spec.Replicas == nil || *monoVtx.Spec.Replicas != int32(desiredReplicas)) {
+		if err := mr.scaler.PatchMonoVertexReplicas(ctx, monoVtx, int32(desiredReplicas)); err != nil {
+			return fmt.Errorf("failed to patch mono vertex spec.replicas: %w", err)
+		}
+		replicas := int32(desiredReplicas)
+		monoVtx.Spec.Replicas = &replicas
+	}
+
 	// Set metrics
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))

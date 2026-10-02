@@ -370,6 +370,93 @@ func Test_orchestratePods(t *testing.T) {
 	})
 }
 
+func Test_orchestratePods_patchesScaleSubresourceReplicas(t *testing.T) {
+	// MonoVertex's CRD declares a scale subresource backed by spec.replicas
+	// (specReplicasPath: .spec.replicas), which is what Kubernetes' PDB controller - and
+	// anything else driven by the generic scale client - reads to size this MonoVertex.
+	// Before this fix, spec.replicas was only ever written by the autoscaler, so a MonoVertex
+	// whose autoscaler never fires a scale decision kept spec.replicas stuck at its unset
+	// default (treated as 1 by getReplicas()) no matter how many replicas were actually
+	// running, which silently defeated any PDB selecting its pods.
+	t.Run("unset spec.replicas is patched to the real desired/running count", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy() // Scale.Min: 2, Spec.Replicas: nil
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.Nil(t, testObj.Spec.Replicas)
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+
+		// In-memory copy is updated immediately.
+		assert.NotNil(t, testObj.Spec.Replicas)
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+
+		// And the patch actually landed on the stored object - i.e. what the scale
+		// subresource (and a PDB reading it) would see.
+		stored := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, stored))
+		assert.NotNil(t, stored.Spec.Replicas)
+		assert.Equal(t, int32(2), *stored.Spec.Replicas)
+	})
+
+	t.Run("stale spec.replicas above scale.max is clamped down to scale.max", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Max = ptr.To[int32](5)
+		testObj.Spec.Replicas = ptr.To[int32](10) // stale value, out of [min,max] range
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(5), *testObj.Spec.Replicas)
+	})
+
+	t.Run("already in sync: no-op, does not error even without an object in the fake client", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](2) // already matches scale.min, the eventual desired value
+		// Deliberately not created in cl: proves the up-to-date case short-circuits before
+		// ever reaching the client, so it can't fail even if the object doesn't exist there.
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+	})
+
+	t.Run("paused: spec.replicas is left untouched so the pre-pause value survives for resume", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](5)
+		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(5), *testObj.Spec.Replicas, "pre-pause spec.replicas must survive untouched for resume")
+	})
+
+	t.Run("converges in one patch: a second reconcile against the patched value is a no-op", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+
+		// Simulate the next reconcile picking up the now-patched object (as the generation-change
+		// watch predicate would deliver): same desired replicas, so this must not re-patch, which
+		// is what keeps the fix from looping forever against its own patch.
+		refetched := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, refetched))
+		assert.NoError(t, r.orchestratePods(context.TODO(), refetched))
+		assert.Equal(t, int32(2), *refetched.Spec.Replicas)
+	})
+}
+
 func Test_orchestrateFixedResources(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	r := fakeReconciler(t, cl)
