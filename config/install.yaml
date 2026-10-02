@@ -7564,6 +7564,8 @@ spec:
                         type: object
                       service:
                         type: boolean
+                      serviceName:
+                        type: string
                     type: object
                   jetstream:
                     properties:
@@ -21146,6 +21148,8 @@ spec:
                               type: object
                             service:
                               type: boolean
+                            serviceName:
+                              type: string
                           type: object
                         jetstream:
                           properties:
@@ -34722,6 +34726,8 @@ spec:
                                   type: object
                                 service:
                                   type: boolean
+                                serviceName:
+                                  type: string
                               type: object
                             jetstream:
                               properties:
@@ -44394,6 +44400,8 @@ spec:
                         type: object
                       service:
                         type: boolean
+                      serviceName:
+                        type: string
                     type: object
                   jetstream:
                     properties:

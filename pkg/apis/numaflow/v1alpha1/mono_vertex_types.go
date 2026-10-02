@@ -204,6 +204,14 @@ func (mv MonoVertex) GetStreaming() bool {
 	return mv.Spec.Streaming != nil && *mv.Spec.Streaming
 }
 
+// GetSharedHTTPServiceName is the nil-safe "is this MonoVertex a claimant" test.
+func (mv MonoVertex) GetSharedHTTPServiceName() string {
+	if mv.Spec.Source == nil || mv.Spec.Source.HTTP == nil {
+		return ""
+	}
+	return mv.Spec.Source.HTTP.SharedServiceName()
+}
+
 func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
 	labels := map[string]string{
 		KeyPartOf:         Project,

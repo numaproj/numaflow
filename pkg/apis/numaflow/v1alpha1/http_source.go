@@ -33,6 +33,20 @@ type HTTPSource struct {
 	// If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
 	// +optional
 	Endpoint string `json:"endpoint,omitempty" protobuf:"bytes,4,opt,name=endpoint"`
+	// ServiceName sets the name of the ClusterIP Service created for this HTTP source
+	// (requires service: true). Objects of the same kind in a namespace that set the same
+	// ServiceName share one Service, which lives until the last of them is deleted.
+	// +optional
+	ServiceName string `json:"serviceName,omitempty" protobuf:"bytes,5,opt,name=serviceName"`
+}
+
+// SharedServiceName returns ServiceName when this HTTP source claims a shared Service
+// (service enabled and ServiceName set), else "".
+func (h HTTPSource) SharedServiceName() string {
+	if h.Service && h.ServiceName != "" {
+		return h.ServiceName
+	}
+	return ""
 }
 
 // GetHTTPSPort returns the configured HTTPS port, or the default VertexHTTPSPort (8443).

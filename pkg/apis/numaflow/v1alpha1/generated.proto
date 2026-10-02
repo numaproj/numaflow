@@ -738,6 +738,12 @@ message HTTPSource {
   // If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
   // +optional
   optional string endpoint = 4;
+
+  // ServiceName sets the name of the ClusterIP Service created for this HTTP source
+  // (requires service: true). Objects of the same kind in a namespace that set the same
+  // ServiceName share one Service, which lives until the last of them is deleted.
+  // +optional
+  optional string serviceName = 5;
 }
 
 message IdleSource {

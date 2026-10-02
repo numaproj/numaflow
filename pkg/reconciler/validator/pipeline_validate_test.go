@@ -603,6 +603,56 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), `pipeline has a Serving source "serving-in" and a reduce vertex "reduce-vtx". Reduce is not supported with Serving source`)
 	})
 
+	t.Run("HTTP source serviceName V6: missing endpoint is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.HTTP = &dfv1.HTTPSource{Service: true, ServiceName: "orders"}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, "requires a non-empty endpoint")
+	})
+
+	t.Run("HTTP source serviceName V4: equal to own vertex default Service name is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.HTTP = &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: testObj.Name + "-input"}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, "must not equal a vertex's default or headless Service name")
+	})
+
+	t.Run("HTTP source serviceName V4: equal to another vertex's headless Service name is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{
+			Name:   "in2",
+			Source: &dfv1.Source{HTTP: &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: testObj.Name + "-input-headless"}},
+		})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "in2", To: "p1"})
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, "must not equal a vertex's default or headless Service name")
+	})
+
+	t.Run("HTTP source serviceName V4: equal to the daemon Service name is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.HTTP = &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: testObj.GetDaemonServiceName()}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, "must not equal the pipeline's daemon Service name")
+	})
+
+	t.Run("HTTP source serviceName V5: duplicate across vertices is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.HTTP = &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: "shared-svc"}
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{
+			Name:   "in2",
+			Source: &dfv1.Source{HTTP: &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: "shared-svc"}},
+		})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "in2", To: "p1"})
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `serviceName "shared-svc" is already used by vertex`)
+	})
+
+	t.Run("HTTP source serviceName passing V1-V6 is rejected only by the gate", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.HTTP = &dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: "shared-svc"}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "input": source.http.serviceName is not yet supported`)
+	})
 }
 
 func TestValidateReducePipeline(t *testing.T) {
@@ -1186,6 +1236,37 @@ func Test_validateHTTPSource(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("V1: invalid serviceName DNS-1035 label is rejected", func(t *testing.T) {
+		err := validateHTTPSource(dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: "Not_Valid"})
+		assert.ErrorContains(t, err, "invalid serviceName")
+	})
+
+	t.Run("V1: invalid serviceName is rejected even with no endpoint set", func(t *testing.T) {
+		// Regression: V1/V2 must not be skipped by the empty-endpoint early return below.
+		err := validateHTTPSource(dfv1.HTTPSource{Service: true, ServiceName: "Not_Valid"})
+		assert.ErrorContains(t, err, "invalid serviceName")
+	})
+
+	t.Run("V2: serviceName without service is rejected", func(t *testing.T) {
+		err := validateHTTPSource(dfv1.HTTPSource{Endpoint: "x", ServiceName: "orders"})
+		assert.ErrorContains(t, err, "requires service: true")
+	})
+
+	t.Run("V2: serviceName without service is rejected even with no endpoint set", func(t *testing.T) {
+		err := validateHTTPSource(dfv1.HTTPSource{ServiceName: "orders"})
+		assert.ErrorContains(t, err, "requires service: true")
+	})
+
+	t.Run("V6: serviceName without endpoint is rejected", func(t *testing.T) {
+		err := validateHTTPSource(dfv1.HTTPSource{Service: true, ServiceName: "orders"})
+		assert.ErrorContains(t, err, "requires a non-empty endpoint")
+	})
+
+	t.Run("serviceName passing V1, V2, V6 is allowed at this layer", func(t *testing.T) {
+		err := validateHTTPSource(dfv1.HTTPSource{Service: true, Endpoint: "x", ServiceName: "orders"})
+		assert.NoError(t, err)
+	})
 }
 
 // TestValidateSink tests the validateSink function with different sink configurations.

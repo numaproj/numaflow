@@ -4487,6 +4487,28 @@ messages. If unset, it defaults to <code>vertices/\<vertex-name\></code>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>serviceName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ServiceName sets the name of the ClusterIP Service created for this HTTP
+source (requires service: true). Objects of the same kind in a namespace
+that set the same ServiceName share one Service, which lives until the
+last of them is deleted.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

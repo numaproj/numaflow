@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -763,4 +766,44 @@ func daemonEmbeddedMonoVertexObject(deploy *appv1.Deployment) string {
 		}
 	}
 	return ""
+}
+
+// sha256Hex is a local helper so the golden tests don't import pkg/shared/util (possible cycle).
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// TestMonoVertex_NonClaimantGolden freezes the pod spec and Service objects of a MonoVertex
+// HTTP source that does not set serviceName (G3: no behavior change for non-claimants).
+// Update the literal hashes below only if a change intentionally rolls non-claimant pods/Services.
+func TestMonoVertex_NonClaimantGolden(t *testing.T) {
+	mv := MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "golden-mvtx",
+			Namespace: "golden-ns",
+		},
+		Spec: MonoVertexSpec{
+			Source: &Source{
+				HTTP: &HTTPSource{
+					Service:  true,
+					Ports:    &Ports{HTTP: ptr.To[int32](8090)},
+					Endpoint: "x",
+				},
+			},
+			Sink: &Sink{},
+		},
+	}
+
+	req := GetMonoVertexPodSpecReq{Image: "test-image", PullPolicy: corev1.PullIfNotPresent}
+	podSpec, err := mv.GetPodSpec(req)
+	assert.NoError(t, err)
+	podSpecJSON, err := json.Marshal(podSpec)
+	assert.NoError(t, err)
+	assert.Equal(t, "47af5f7fc9d0c7fc159cd735e11e401ff43e3e7224e63c3b872d7cec68252228", sha256Hex(podSpecJSON))
+
+	svcs := mv.GetServiceObjs()
+	svcsJSON, err := json.Marshal(svcs)
+	assert.NoError(t, err)
+	assert.Equal(t, "5f62f2ebe9be5c3b2ac44d18d7058bda952880c9a7c655a245b348042f31efb2", sha256Hex(svcsJSON))
 }

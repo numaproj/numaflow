@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -1065,6 +1066,42 @@ func TestHTTPSourceGetServiceObjs(t *testing.T) {
 	}
 	assert.Equal(t, int32(VertexHTTPSPort), portNames[VertexHTTPSPortName])
 	assert.Equal(t, int32(VertexHTTPPort), portNames[VertexHTTPPortName])
+}
+
+// TestVertex_NonClaimantGolden freezes the pod spec and Service objects of a source Vertex
+// HTTP source that does not set serviceName (G3: no behavior change for non-claimants).
+// Update the literal hashes below only if a change intentionally rolls non-claimant pods/Services.
+func TestVertex_NonClaimantGolden(t *testing.T) {
+	v := &Vertex{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testVertexName},
+		Spec: VertexSpec{
+			Replicas:     &testReplicas,
+			PipelineName: testPipelineName,
+			AbstractVertex: AbstractVertex{
+				Name: testVertexSpecName,
+				Source: &Source{
+					HTTP: &HTTPSource{
+						Service:  true,
+						Ports:    &Ports{HTTP: ptr.To[int32](8090)},
+						Endpoint: "x",
+					},
+				},
+			},
+			ToEdges: []CombinedEdge{{Edge: Edge{From: testVertexSpecName, To: "output"}}},
+		},
+	}
+
+	req := GetVertexPodSpecReq{ISBSvcType: ISBSvcTypeJetStream, Image: testFlowImage, PullPolicy: corev1.PullIfNotPresent}
+	podSpec, err := v.GetPodSpec(req)
+	assert.NoError(t, err)
+	podSpecJSON, err := json.Marshal(podSpec)
+	assert.NoError(t, err)
+	assert.Equal(t, "154fa16d803478920b1928dee5e02aaf5190e16dd43a86069faacd05d0889e77", sha256Hex(podSpecJSON))
+
+	svcs := v.GetServiceObjs()
+	svcsJSON, err := json.Marshal(svcs)
+	assert.NoError(t, err)
+	assert.Equal(t, "bb230ff316ed8d4ab0adbff27012aed50fa06c5cd7e9ac4ea79d5c6faddad43d", sha256Hex(svcsJSON))
 }
 
 func TestHTTPSourceIsHTTPConfigured(t *testing.T) {

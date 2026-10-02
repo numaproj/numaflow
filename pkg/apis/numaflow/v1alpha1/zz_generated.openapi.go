@@ -2237,6 +2237,13 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
+					"serviceName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceName sets the name of the ClusterIP Service created for this HTTP source (requires service: true). Objects of the same kind in a namespace that set the same ServiceName share one Service, which lives until the last of them is deleted.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

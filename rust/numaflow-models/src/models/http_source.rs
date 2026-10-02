@@ -28,6 +28,9 @@ pub struct HttpSource {
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
+    /// ServiceName sets the name of the ClusterIP Service created for this HTTP source (requires service: true). Objects of the same kind in a namespace that set the same ServiceName share one Service, which lives until the last of them is deleted.
+    #[serde(rename = "serviceName", skip_serializing_if = "Option::is_none")]
+    pub service_name: Option<String>,
 }
 
 impl HttpSource {
@@ -37,6 +40,7 @@ impl HttpSource {
             endpoint: None,
             ports: None,
             service: None,
+            service_name: None,
         }
     }
 }

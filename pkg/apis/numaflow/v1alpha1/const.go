@@ -42,6 +42,7 @@ const (
 	KeyPauseTimestamp      = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer    = "kubectl.kubernetes.io/default-container"
 	KeyResumeStrategy      = "numaflow.numaproj.io/resume-strategy"
+	KeyHTTPSourceService   = "numaflow.numaproj.io/http-source-service" // label on the shared HTTP source Service and its claimant pods
 
 	DefaultISBSvcName = "default"
 

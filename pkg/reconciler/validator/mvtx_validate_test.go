@@ -252,6 +252,44 @@ func TestValidateMonoVertex(t *testing.T) {
 	})
 }
 
+func httpSourceMvtx(serviceName string) *dfv1.MonoVertex {
+	testObj := testMvtx.DeepCopy()
+	testObj.Spec.Source = &dfv1.Source{
+		HTTP: &dfv1.HTTPSource{
+			Service:     true,
+			Endpoint:    "x",
+			ServiceName: serviceName,
+		},
+	}
+	return testObj
+}
+
+func TestValidateMonoVertex_HTTPSourceServiceName(t *testing.T) {
+	t.Run("V3: equal to own name is rejected", func(t *testing.T) {
+		testObj := httpSourceMvtx(testMvtx.Name)
+		err := ValidateMonoVertex(testObj)
+		assert.ErrorContains(t, err, "must not equal its own default, headless or daemon Service name")
+	})
+
+	t.Run("V3: equal to own headless name is rejected", func(t *testing.T) {
+		testObj := httpSourceMvtx(testMvtx.GetHeadlessServiceName())
+		err := ValidateMonoVertex(testObj)
+		assert.ErrorContains(t, err, "must not equal its own default, headless or daemon Service name")
+	})
+
+	t.Run("V3: equal to own daemon name is rejected", func(t *testing.T) {
+		testObj := httpSourceMvtx(testMvtx.GetDaemonServiceName())
+		err := ValidateMonoVertex(testObj)
+		assert.ErrorContains(t, err, "must not equal its own default, headless or daemon Service name")
+	})
+
+	t.Run("valid serviceName is rejected only by the gate", func(t *testing.T) {
+		testObj := httpSourceMvtx("shared-svc")
+		err := ValidateMonoVertex(testObj)
+		assert.ErrorContains(t, err, "source.http.serviceName is not yet supported")
+	})
+}
+
 func TestValidateCronScaling(t *testing.T) {
 	validScale := func() dfv1.Scale {
 		return dfv1.Scale{

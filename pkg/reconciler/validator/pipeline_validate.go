@@ -157,6 +157,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	httpServiceNames := make(map[string]string) // serviceName -> owning vertex name, for V5
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {
 			return err
@@ -164,6 +165,28 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		// The length of "{pipeline}-{vertex}-headless" can not be longer than 63.
 		if errs := k8svalidation.IsDNS1035Label(fmt.Sprintf("%s-%s-headless", pl.Name, v.Name)); len(errs) > 0 {
 			return fmt.Errorf("the length of the pipeline name plus the vertex name is over the max limit. (%s-%s), %v", pl.Name, v.Name, errs)
+		}
+		if sn := v.GetSharedHTTPServiceName(); sn != "" {
+			for other := range names {
+				if sn == fmt.Sprintf("%s-%s", pl.Name, other) || sn == fmt.Sprintf("%s-%s-headless", pl.Name, other) { // V4
+					return fmt.Errorf("vertex %q: serviceName %q must not equal a vertex's default or headless Service name", v.Name, sn)
+				}
+			}
+			if sn == pl.GetDaemonServiceName() { // V4
+				return fmt.Errorf("vertex %q: serviceName %q must not equal the pipeline's daemon Service name", v.Name, sn)
+			}
+			if owner, ok := httpServiceNames[sn]; ok { // V5
+				return fmt.Errorf("vertex %q: serviceName %q is already used by vertex %q", v.Name, sn, owner)
+			}
+			httpServiceNames[sn] = v.Name
+		}
+	}
+
+	// Gate: runs after V1-V6, so V-rule errors win.
+	// TODO(shared-http-svc): removed by wiring PR
+	for _, v := range pl.Spec.Vertices {
+		if v.GetSharedHTTPServiceName() != "" {
+			return fmt.Errorf("vertex %q: source.http.serviceName is not yet supported", v.Name)
 		}
 	}
 
@@ -643,6 +666,17 @@ var httpEndpointRegex = regexp.MustCompile(`^[A-Za-z0-9\-._~]+(/[A-Za-z0-9\-._~]
 // clean relative path. An invalid value would otherwise be accepted at admission
 // and then crash-loop the source pod when the router is built.
 func validateHTTPSource(http dfv1.HTTPSource) error {
+	if http.ServiceName != "" {
+		if errs := k8svalidation.IsDNS1035Label(http.ServiceName); len(errs) > 0 { // V1
+			return fmt.Errorf("invalid serviceName %q, %v", http.ServiceName, errs)
+		}
+		if !http.Service { // V2
+			return fmt.Errorf("serviceName requires service: true")
+		}
+		if http.Endpoint == "" { // V6
+			return fmt.Errorf("serviceName requires a non-empty endpoint")
+		}
+	}
 	if http.Endpoint == "" {
 		return nil
 	}

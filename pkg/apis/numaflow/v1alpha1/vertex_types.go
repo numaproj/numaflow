@@ -697,6 +697,14 @@ func (av AbstractVertex) IsASource() bool {
 	return av.Source != nil
 }
 
+// GetSharedHTTPServiceName is the nil-safe "is this vertex a claimant" test.
+func (av AbstractVertex) GetSharedHTTPServiceName() string {
+	if av.Source == nil || av.Source.HTTP == nil {
+		return ""
+	}
+	return av.Source.HTTP.SharedServiceName()
+}
+
 func (av AbstractVertex) HasUDTransformer() bool {
 	return av.Source != nil && av.Source.UDTransformer != nil
 }
