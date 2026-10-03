@@ -5210,8 +5210,8 @@ numaflow-controller-config will be used. See
 and
 <a href="https://docs.nats.io/running-a-nats-service/configuration#jetstream">https://docs.nats.io/running-a-nats-service/configuration#jetstream</a>.
 For limits, only “max_payload” is supported for configuration, defaults
-to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but
-max_payload can be set up to 67108864 (64MB). For jetstream, only
+to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of
+headroom for platform injected data. For jetstream, only
 “max_memory_store” and “max_file_store” are supported for configuration,
 do not set “store_dir” as it has been hardcoded.
 </p>
@@ -5260,12 +5260,13 @@ the default configuration in numaflow-controller-config. It accepts a
 YAML format configuration, it may include 4 sections, “stream”,
 “consumer”, “otBucket” and “procBucket”. Available fields under “stream”
 include “retention” (e.g. interest, limits, workerQueue), “maxMsgs”,
-“maxAge” (e.g. 72h), “replicas” (1, 3, 5), “duplicates” (e.g. 5m).
-Available fields under “consumer” include “ackWait” (e.g. 60s) Available
-fields under “otBucket” include “maxValueSize”, “history”, “ttl”
-(e.g. 72h), “maxBytes”, “replicas” (1, 3, 5). Available fields under
-“procBucket” include “maxValueSize”, “history”, “ttl” (e.g. 72h),
-“maxBytes”, “replicas” (1, 3, 5).
+“maxMsgSize” (defaults to 68157440, i.e. 65MB), “maxAge” (e.g. 72h),
+“replicas” (1, 3, 5), “duplicates” (e.g. 5m). Available fields under
+“consumer” include “ackWait” (e.g. 60s) Available fields under
+“otBucket” include “maxValueSize”, “history”, “ttl” (e.g. 72h),
+“maxBytes”, “replicas” (1, 3, 5). Available fields under “procBucket”
+include “maxValueSize”, “history”, “ttl” (e.g. 72h), “maxBytes”,
+“replicas” (1, 3, 5).
 </p>
 
 </td>

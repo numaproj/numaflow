@@ -151,8 +151,8 @@ A sample JetStream configuration:
 ```
 # https://docs.nats.io/reference/config/max_payload
 # Only "max_payload" is supported for configuration in this section.
-# Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
-max_payload: 1048576
+# Max payload size in bytes, defaults to 65 MB, i.e. the gRPC max message size (64 MB) plus 1 MB of headroom for platform injected data.
+max_payload: 68157440
 #
 # https://docs.nats.io/reference/config/jetstream
 # Only configure "max_memory_store" or "max_file_store" in this section, do not set "store_dir" as it has been hardcoded.
@@ -198,6 +198,8 @@ bufferConfig: |
     maxMsgs: 30000
     maxAge: 168h
     maxBytes: -1
+    # Max size of a single message in bytes, defaults to 65 MB (gRPC max message size + 1 MB headroom).
+    maxMsgSize: 68157440
     # 0: File, 1: Memory
     storage: 0
     replicas: 3

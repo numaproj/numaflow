@@ -15,8 +15,8 @@ use crate::error::Error;
 use crate::mark_success;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    MetricLabels, pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
-    pipeline_partition_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
 use crate::pipeline::isb::error::ISBError;
@@ -27,6 +27,8 @@ use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
+/// Type alias for metric labels
+type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
@@ -205,8 +207,11 @@ impl ISBWriterOrchestrator {
         // Build metric labels for each stream once during initialization
         let mut stream_metric_labels = HashMap::new();
         for stream_name in components.writers.keys() {
-            let labels =
-                pipeline_partition_metric_labels(components.vertex_type.as_str(), stream_name);
+            let mut labels = pipeline_metric_labels(components.vertex_type.as_str()).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                (*stream_name).to_string(),
+            ));
             stream_metric_labels.insert(*stream_name, Arc::new(labels));
         }
 
@@ -686,7 +691,6 @@ mod tests {
                     context.clone(),
                     writer_config.clone(),
                     None,
-                    None,
                     cln_token.clone(),
                 )
                 .await
@@ -798,7 +802,6 @@ mod tests {
                     stream.clone(),
                     context.clone(),
                     writer_config.clone(),
-                    None,
                     None,
                     cln_token.clone(),
                 )
@@ -922,7 +925,6 @@ mod tests {
                         context.clone(),
                         vertex1_writer_config.clone(),
                         None,
-                        None,
                         cln_token.clone(),
                     )
                     .await
@@ -939,7 +941,6 @@ mod tests {
                         context.clone(),
                         vertex2_writer_config.clone(),
                         None,
-                        None,
                         cln_token.clone(),
                     )
                     .await
@@ -955,7 +956,6 @@ mod tests {
                         stream.clone(),
                         context.clone(),
                         vertex3_writer_config.clone(),
-                        None,
                         None,
                         cln_token.clone(),
                     )

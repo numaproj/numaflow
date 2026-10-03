@@ -14,8 +14,8 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 use tokio::task::JoinHandle;
@@ -35,8 +35,6 @@ use crate::watermark::WatermarkHandle;
 
 pub(crate) mod sqs;
 pub(crate) use sqs::sqs_metrics;
-
-pub(crate) type MetricLabels = Arc<Vec<(String, String)>>;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -1111,7 +1109,7 @@ impl PipelineMetrics {
         );
         jetstream_isb_registry.register(
             JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
-            "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
+            "Total number of jetstream writes rejected because the message exceeds the max message size",
             metrics.jetstream_isb.max_payload_exceeded_total.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
@@ -1283,18 +1281,6 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
             ),
         ]
     })
-}
-
-pub(crate) fn pipeline_partition_metric_labels(
-    vertex_type: &str,
-    partition_name: &str,
-) -> Vec<(String, String)> {
-    let mut labels = pipeline_metric_labels(vertex_type).clone();
-    labels.push((
-        PIPELINE_PARTITION_NAME_LABEL.to_string(),
-        partition_name.to_string(),
-    ));
-    labels
 }
 
 /// drop metric labels which can be due to buffer-full and retry strategy,
@@ -1642,8 +1628,11 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let metric_labels =
-                            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
+                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+                        metric_labels.push((
+                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                            get_vertex_name().to_string(),
+                        ));
                         pipeline_metrics()
                             .pending_raw
                             .get_or_create(&metric_labels)
@@ -1673,8 +1662,11 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                                     reader_name,
                                 );
                             }
-                            let metric_labels =
-                                pipeline_partition_metric_labels(reader_name, reader_name);
+                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
+                            metric_labels.push((
+                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                reader_name.to_string(),
+                            ));
                             pipeline_metrics()
                                 .pending_raw
                                 .get_or_create(&metric_labels)
@@ -2121,17 +2113,6 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
-        let mut isb_max_payload_labels = common_pipeline_labels.clone();
-        isb_max_payload_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            "test-partition".to_string(),
-        ));
-        pipeline_metrics
-            .jetstream_isb
-            .max_payload_exceeded_total
-            .get_or_create(&isb_max_payload_labels)
-            .inc();
-
         pipeline_metrics
             .forwarder
             .ack_processing_time
@@ -2222,7 +2203,6 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_max_payload_exceeded_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

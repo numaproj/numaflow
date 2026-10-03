@@ -131,7 +131,6 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         .create_writers(
             &config.to_vertex_config,
             config.isb_config.as_ref(),
-            config.vertex_type,
             cln_token.clone(),
         )
         .await?;
@@ -271,7 +270,6 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         .create_writers(
             &config.to_vertex_config,
             config.isb_config.as_ref(),
-            config.vertex_type,
             cln_token.clone(),
         )
         .await?;
@@ -735,7 +733,6 @@ mod tests {
                     streams: vec![input_stream.clone()],
                     ..Default::default()
                 },
-                None,
                 None,
                 cancellation_token.clone(),
             )

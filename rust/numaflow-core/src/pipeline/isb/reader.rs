@@ -25,8 +25,8 @@ use crate::message::{
 };
 use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
-    MetricLabels, jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels,
-    pipeline_metrics, pipeline_partition_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
 use crate::pipeline::isb::error::ISBError;
@@ -43,6 +43,9 @@ use tracing::{error, info, warn};
 
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+
+/// Type alias for metric labels
+type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// ISBReaderOrchestrator component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
@@ -94,8 +97,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         // Build metric labels once during initialization
-        let labels =
-            pipeline_partition_metric_labels(&components.vertex_type, components.stream.name);
+        let mut labels = pipeline_metric_labels(&components.vertex_type).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            components.stream.name.to_string(),
+        ));
         let metric_labels = Arc::new(labels);
 
         // Cache reader name for fast access
@@ -663,7 +669,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
 struct WipParams {
     stream_name: &'static str,
-    labels: MetricLabels,
+    labels: Arc<Vec<(String, String)>>,
     reader: ISBReaderRef,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,

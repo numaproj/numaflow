@@ -31,6 +31,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+// defaultStreamMaxMsgSize is the default max message size of the streams created for the buffers.
+// It is the gRPC max message size (64MB) plus 1MB of headroom for the platform injected data
+// (headers, metadata, etc.) added on top of the user payload.
+const defaultStreamMaxMsgSize = 64*1024*1024 + 1024*1024
+
 type jetStreamSvc struct {
 	jsClient *jsclient.Client
 	js       nats.JetStreamContext
@@ -62,6 +67,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	}
 	v := viper.New()
 	v.SetConfigType("yaml")
+	v.SetDefault("stream.maxMsgSize", defaultStreamMaxMsgSize)
 	if err := v.ReadConfig(bytes.NewBufferString(creatOpts.config)); err != nil {
 		return err
 	}
@@ -183,6 +189,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
+				MaxMsgSize: v.GetInt32("stream.maxMsgSize"),
 				Storage:    nats.StorageType(v.GetInt("stream.storage")),
 				Replicas:   v.GetInt("stream.replicas"),
 				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period

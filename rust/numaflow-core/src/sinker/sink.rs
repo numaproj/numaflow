@@ -4,8 +4,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::{Message, MessageHandle, MessageID, NackOptions};
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metrics,
-    pipeline_partition_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
@@ -664,7 +664,11 @@ impl SinkWriter {
                     .inc_by(dropped_messages_count as u64);
             }
         } else {
-            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
 
             pipeline_metrics()
                 .forwarder
@@ -714,7 +718,11 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         } else {
-            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_total
@@ -752,7 +760,11 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(ons_sink_start.elapsed().as_micros() as f64);
         } else {
-            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .sink_forwarder
                 .onsuccess_sink_write_total
@@ -781,7 +793,11 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc();
         } else {
-            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .write_error_total
@@ -1636,7 +1652,11 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_send_error_metrics_pipeline() {
-        let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
+        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
 
         let before = pipeline_metrics()
             .forwarder

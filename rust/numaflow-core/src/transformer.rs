@@ -4,8 +4,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metrics,
-    pipeline_partition_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::otel;
 use crate::shared::retry::{RetryController, RetryStep};
@@ -172,7 +172,11 @@ impl Transformer {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
         let tracker = self.tracker.clone();
-        let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
+        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
 
         // create a new cancellation token for the transformer component, this token is used for hard
         // shutdown, the parent token is used for graceful shutdown.
@@ -936,7 +940,11 @@ mod tests {
         .await;
 
         // Same label set send_transformer_metrics uses for the drop counter.
-        let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
+        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
         let drop_before = pipeline_metrics()
             .source_forwarder
             .transformer_drop_total
