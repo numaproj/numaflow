@@ -175,9 +175,11 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/metrics", handler.GetVerticesMetrics)
 	// Get all the pods of a vertex.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
+	// Get logs for a pod belonging to a pipeline vertex.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs", handler.PipelinePodLogs)
 	// Get the metrics such as cpu, memory usage for a pod.
 	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
-	// Get pod logs.
+	// Get logs for a Numaflow-managed pod. Prefer the resource-scoped routes above and below.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// Get the pod metrics for a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods-info", handler.GetMonoVertexPodsInfo)
@@ -193,6 +195,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.DELETE("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.DeleteMonoVertex)
 	// Get all the pods of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.ListMonoVertexPods)
+	// Get logs for a pod belonging to a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods/:pod/logs", handler.MonoVertexPodLogs)
 	// Create a mono vertex.
 	r.POST("/namespaces/:namespace/mono-vertices", handler.CreateMonoVertex)
 	// Get the metrics of a mono vertex.

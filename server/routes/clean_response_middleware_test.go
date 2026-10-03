@@ -517,14 +517,14 @@ func TestCleanResponseMiddleware_StreamingViaFlush(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		var bytesReceivedDuringHandler int
-		api.GET("/namespaces/:namespace/pods/:pod/logs", func(c *gin.Context) {
+		api.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs", func(c *gin.Context) {
 			_, _ = c.Writer.WriteString("log line 1\n")
 			c.Writer.Flush()
 			bytesReceivedDuringHandler = w.Body.Len()
 			_, _ = c.Writer.WriteString("log line 2\n")
 		})
 
-		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pods/my-pod/logs?container=numa&follow=true", nil)
+		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pipelines/my-pipeline/vertices/my-vertex/pods/my-pod/logs?container=numa&follow=true", nil)
 		router.ServeHTTP(w, req)
 
 		assert.Greater(t, bytesReceivedDuringHandler, 0, "pod logs handler should stream as soon as it flushes")
