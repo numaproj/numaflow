@@ -624,7 +624,10 @@ mod tests {
         let pending = ISBWriter::async_write(&writer, message).await.unwrap();
         let result = pending.await;
         assert!(
-            matches!(result, Err(crate::pipeline::isb::WriteError::WriteFailed(_))),
+            matches!(
+                result,
+                Err(crate::pipeline::isb::WriteError::WriteFailed(_))
+            ),
             "write should fail since the message exceeds the stream max message size"
         );
 
