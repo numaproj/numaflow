@@ -288,7 +288,7 @@ impl RateLimit<WithoutState> {
             return TokenAvailability::Recompute;
         }
 
-        let fetched = self.token.fetch_update(
+        let fetched = self.token.try_update(
             std::sync::atomic::Ordering::Release,
             std::sync::atomic::Ordering::Acquire,
             |current| {
@@ -616,7 +616,7 @@ impl<S: Store> RateLimit<WithState<S>> {
             .load(std::sync::atomic::Ordering::Relaxed)
             .max(1);
 
-        let fetched = self.token.fetch_update(
+        let fetched = self.token.try_update(
             std::sync::atomic::Ordering::Release,
             std::sync::atomic::Ordering::Acquire,
             |current| {
