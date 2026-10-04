@@ -236,7 +236,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		// Periodically wake them up from 0 replicas to 1, to peek for the incoming messages
 		if secondsSinceLastScale >= float64(monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds()) {
 			log.Infof("MonoVertex %s has slept %v seconds, scaling up to peek.", monoVtx.Name, secondsSinceLastScale)
-			return s.patchMonoVertexReplicas(ctx, monoVtx, 1)
+			return s.PatchMonoVertexReplicas(ctx, monoVtx, 1)
 		} else {
 			log.Infof("MonoVertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds), skip scaling.", monoVtx.Name, secondsSinceLastScale, monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds())
 			return nil
@@ -314,7 +314,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, minReplicas)
 	}
 	if current > maxReplicas || current < minReplicas { // Someone might have manually scaled up/down the MonoVertex
-		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
+		return s.PatchMonoVertexReplicas(ctx, monoVtx, desired)
 	}
 	if desired < current {
 		return s.scaleDown(ctx, monoVtx, current, desired, secondsSinceLastScale, scaleDownCooldown)
@@ -336,7 +336,7 @@ func (s *Scaler) scaleUp(ctx context.Context, monoVtx *dfv1.MonoVertex, current,
 		log.Infof("Cooldown period for scaling up, skip scaling.")
 		return nil
 	}
-	return s.patchMonoVertexReplicas(ctx, monoVtx, current+diff)
+	return s.PatchMonoVertexReplicas(ctx, monoVtx, current+diff)
 }
 
 func (s *Scaler) scaleDown(ctx context.Context, monoVtx *dfv1.MonoVertex, current, desired int32, secondsSinceLastScale, scaleDownCooldown float64) error {
@@ -350,7 +350,7 @@ func (s *Scaler) scaleDown(ctx context.Context, monoVtx *dfv1.MonoVertex, curren
 		log.Infof("Cooldown period for scaling down, skip scaling.")
 		return nil
 	}
-	return s.patchMonoVertexReplicas(ctx, monoVtx, current-diff)
+	return s.PatchMonoVertexReplicas(ctx, monoVtx, current-diff)
 }
 
 func (s *Scaler) desiredReplicas(_ context.Context, monoVtx *dfv1.MonoVertex, processingRate float64, pending int64) int32 {
@@ -447,7 +447,12 @@ func (s *Scaler) Start(ctx context.Context) error {
 	}
 }
 
-func (s *Scaler) patchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex, desiredReplicas int32) error {
+// PatchMonoVertexReplicas patches the MonoVertex's spec.replicas - the field backing its CRD scale
+// subresource (specReplicasPath: .spec.replicas) - to the given value via a merge patch. Callers
+// that need their in-memory copy to reflect the new value afterward are responsible for updating
+// monoVtx.Spec.Replicas themselves. Exported so the autoscaler (this file) and the MonoVertex
+// reconciler (pkg/reconciler/monovertex) share this single code path for writing spec.replicas.
+func (s *Scaler) PatchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := monoVtx.Spec.Replicas
 	patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)

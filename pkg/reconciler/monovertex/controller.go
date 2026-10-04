@@ -196,6 +196,18 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	desiredReplicas := monoVtx.CalculateReplicas()
 	monoVtx.Status.DesiredReplicas = uint32(desiredReplicas)
 
+	// Keep `.spec.replicas` in sync with the replica count actually running. Otherwise
+	// it stays stale whenever the autoscaler skips scaling (e.g. pending metric unavailable),
+	// so a PDB miscounts the expected pods. Skipped while paused so the pre-pause value
+	// survives for resume. Uses the autoscaler's patch helper.
+	if monoVtx.Spec.Lifecycle.GetDesiredPhase() != dfv1.MonoVertexPhasePaused && (monoVtx.Spec.Replicas == nil || *monoVtx.Spec.Replicas != int32(desiredReplicas)) {
+		if err := mr.scaler.PatchMonoVertexReplicas(ctx, monoVtx, int32(desiredReplicas)); err != nil {
+			return fmt.Errorf("failed to patch mono vertex spec.replicas: %w", err)
+		}
+		replicas := int32(desiredReplicas)
+		monoVtx.Spec.Replicas = &replicas
+	}
+
 	// Set metrics
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
