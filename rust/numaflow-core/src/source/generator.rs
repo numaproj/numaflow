@@ -31,7 +31,7 @@ mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
     use pin_project::pin_project;
-    use rand::Rng;
+    use rand::RngExt;
     use tokio::time::MissedTickBehavior;
     use tracing::warn;
 
