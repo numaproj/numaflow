@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: Numaflow API v2
+  version: 2.0.0-alpha.1
+  description: Task-oriented API contracts for Numaflow user interfaces and agents.
+servers:
+  - url: /api/v2
+security:
+  - cookieAuth: []
+paths:
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      summary: Get capabilities available to the current caller
+      tags: [Discovery]
+      x-numaflow-authz-object: "*"
+      x-numaflow-requires-authz: false
+      responses:
+        "200":
+          description: Effective API capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/summary:
+    get:
+      operationId: getPipelineVertexSummary
+      summary: Get a compact pipeline vertex summary
+      tags: [Vertex]
+      x-numaflow-authz-object: pipeline
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/Pipeline"
+        - $ref: "#/components/parameters/Vertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Pipeline vertex summary
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status:
+    get:
+      operationId: getPipelineVertexStatus
+      summary: Get detailed Kubernetes status for a pipeline vertex
+      tags: [Vertex]
+      x-numaflow-authz-object: pipeline
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/Pipeline"
+        - $ref: "#/components/parameters/Vertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Pipeline vertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexStatus"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: numaflow-login
+  parameters:
+    Namespace:
+      name: namespace
+      in: path
+      required: true
+      description: Kubernetes namespace containing the target
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    Pipeline:
+      name: pipeline
+      in: path
+      required: true
+      description: Pipeline name
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    Vertex:
+      name: vertex
+      in: path
+      required: true
+      description: Vertex name within the pipeline
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: ETag from an earlier response
+      schema:
+        type: string
+  headers:
+    ETag:
+      description: Entity tag derived from the Kubernetes resource version
+      schema:
+        type: string
+  responses:
+    NotModified:
+      description: The target has not changed
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
+    Unauthorized:
+      description: The caller could not be authenticated
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: The caller cannot access this target
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The requested target does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationFailed:
+      description: One or more request fields are invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalServerError:
+      description: The request could not be completed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Capabilities:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, operations, limits]
+      properties:
+        apiVersion:
+          type: string
+          example: v2
+        operations:
+          type: array
+          items:
+            type: string
+          example:
+            - getCapabilities
+            - getPipelineVertexSummary
+            - getPipelineVertexStatus
+        limits:
+          $ref: "#/components/schemas/ApiLimits"
+    ApiLimits:
+      type: object
+      additionalProperties: false
+      required: [defaultPageSize, maximumPageSize, maximumLogLines, maximumMetricPoints]
+      properties:
+        defaultPageSize:
+          type: integer
+          minimum: 1
+          example: 50
+        maximumPageSize:
+          type: integer
+          minimum: 1
+          example: 200
+        maximumLogLines:
+          type: integer
+          minimum: 1
+          example: 1000
+        maximumMetricPoints:
+          type: integer
+          minimum: 1
+          example: 2000
+    TargetRef:
+      type: object
+      additionalProperties: false
+      required: [kind, namespace, pipeline, name, uid]
+      properties:
+        kind:
+          $ref: "#/components/schemas/TargetKind"
+        namespace:
+          type: string
+        pipeline:
+          type: string
+        name:
+          type: string
+        uid:
+          type: string
+    TargetKind:
+      type: string
+      enum: [PipelineVertex]
+    VertexType:
+      type: string
+      enum: [Source, Sink, MapUDF, ReduceUDF]
+    Health:
+      description: Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/HealthState"
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+    HealthState:
+      type: string
+      enum: [healthy, warning, critical, inactive, unknown]
+    VertexSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - ref
+        - vertexType
+        - phase
+        - desiredPhase
+        - health
+        - generation
+        - observedGeneration
+        - createdAt
+        - observedAt
+        - capabilities
+      properties:
+        ref:
+          $ref: "#/components/schemas/TargetRef"
+        vertexType:
+          $ref: "#/components/schemas/VertexType"
+        phase:
+          type: string
+        desiredPhase:
+          type: string
+        health:
+          $ref: "#/components/schemas/Health"
+        generation:
+          type: integer
+          format: int64
+        observedGeneration:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        observedAt:
+          type: string
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+          format: date-time
+        lastScaledAt:
+          type: string
+          format: date-time
+        capabilities:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+        truncatedFields:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+    VertexStatus:
+      description: Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+      type: object
+      additionalProperties: false
+      required:
+        - ref
+        - phase
+        - desiredPhase
+        - replicas
+        - conditions
+        - generation
+        - observedGeneration
+        - observedAt
+      properties:
+        ref:
+          $ref: "#/components/schemas/TargetRef"
+        phase:
+          type: string
+        desiredPhase:
+          type: string
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+        replicas:
+          $ref: "#/components/schemas/ReplicaStatus"
+        conditions:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/Condition"
+        generation:
+          type: integer
+          format: int64
+        observedGeneration:
+          type: integer
+          format: int64
+        observedAt:
+          type: string
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+          format: date-time
+        truncatedFields:
+          type: array
+          maxItems: 128
+          items:
+            type: string
+    ReplicaStatus:
+      type: object
+      additionalProperties: false
+      required: [current, desired, ready, updated, updatedReady]
+      properties:
+        current:
+          type: integer
+          format: int64
+          minimum: 0
+        desired:
+          type: integer
+          format: int64
+          minimum: 0
+        ready:
+          type: integer
+          format: int64
+          minimum: 0
+        updated:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedReady:
+          type: integer
+          format: int64
+          minimum: 0
+    Condition:
+      type: object
+      additionalProperties: false
+      required: [type, status, reason, observedGeneration, lastTransitionTime]
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+          enum: ["True", "False", "Unknown"]
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+        observedGeneration:
+          type: integer
+          format: int64
+        lastTransitionTime:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+        retryable:
+          type: boolean
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+    Violation:
+      type: object
+      additionalProperties: false
+      required: [field, reason, message]
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+        allowedValues:
+          type: array
+          items:
+            type: string
