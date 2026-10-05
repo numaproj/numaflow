@@ -45,8 +45,8 @@ type TargetRef struct {
 	UID       string
 }
 
-// Health is controller-reported resource health for summary endpoints. It is not
-// equivalent to v1 pipeline /health (Pod inspection + data-flow health).
+// Health is a compact view of Kubernetes Vertex CR status for summary endpoints.
+// It is not v1 pipeline /health, which inspects live Pods and daemon data-flow.
 type Health struct {
 	State   HealthState
 	Reason  string
@@ -69,6 +69,41 @@ type VertexSummary struct {
 	// This is separate from GET /capabilities operations (OpenAPI operationIds).
 	Capabilities    []string
 	TruncatedFields []string
+}
+
+// ReplicaStatus reports replica counts from the Vertex CR status.
+type ReplicaStatus struct {
+	Current      int64
+	Desired      int64
+	Ready        int64
+	Updated      int64
+	UpdatedReady int64
+}
+
+// Condition is a bounded Kubernetes condition copied from Vertex CR status.
+type Condition struct {
+	Type               string
+	Status             string
+	Reason             string
+	Message            string
+	ObservedGeneration int64
+	LastTransitionTime time.Time
+}
+
+// VertexStatus is the detailed Kubernetes Vertex CR status projection.
+// It does not include live Pod inspection or daemon data-flow health.
+type VertexStatus struct {
+	Ref                TargetRef
+	Phase              string
+	DesiredPhase       string
+	Reason             string
+	Message            string
+	Replicas           ReplicaStatus
+	Conditions         []Condition
+	Generation         int64
+	ObservedGeneration int64
+	ObservedAt         time.Time
+	TruncatedFields    []string
 }
 
 // Result pairs a DTO with the backing CR resourceVersion for HTTP ETag handling.

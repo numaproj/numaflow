@@ -39,7 +39,7 @@ import (
 func TestGetCapabilities(t *testing.T) {
 	service := &fakeCapabilitiesService{capabilities: capabilities.Capabilities{
 		APIVersion: "v2",
-		Operations: []string{"getCapabilities", "getPipelineVertexSummary"},
+		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus"},
 		Limits: capabilities.Limits{
 			DefaultPageSize:     11,
 			MaximumPageSize:     22,
@@ -57,7 +57,7 @@ func TestGetCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.Equal(t, generated.Capabilities{
 		ApiVersion: "v2",
-		Operations: []string{"getCapabilities", "getPipelineVertexSummary"},
+		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus"},
 		Limits: generated.ApiLimits{
 			DefaultPageSize:     11,
 			MaximumPageSize:     22,
@@ -95,7 +95,7 @@ func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
 				ObservedGeneration: 4,
 				CreatedAt:          time.Date(2026, time.September, 23, 10, 0, 0, 0, time.UTC),
 				ObservedAt:         time.Date(2026, time.September, 23, 11, 0, 0, 0, time.UTC),
-				Capabilities:       []string{"summary"},
+				Capabilities:       []string{"summary", "status"},
 			},
 		},
 	}
@@ -167,6 +167,98 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 	}
 }
 
+func TestGetPipelineVertexStatusAndETag(t *testing.T) {
+	statusService := &fakePipelineVertexSummaryService{
+		status: observability.Result[observability.VertexStatus]{
+			ResourceVersion: "18",
+			Value: observability.VertexStatus{
+				Ref: observability.TargetRef{
+					Kind:      observability.TargetKindPipelineVertex,
+					Namespace: "team-a",
+					Pipeline:  "orders",
+					Name:      "map",
+					UID:       "vertex-uid",
+				},
+				Phase:              "Running",
+				DesiredPhase:       "Running",
+				Reason:             "Running",
+				Message:            "Vertex is running",
+				Replicas:           observability.ReplicaStatus{Current: 3, Desired: 4, Ready: 2, Updated: 3, UpdatedReady: 2},
+				Conditions:         []observability.Condition{{Type: "PodsHealthy", Status: "True", Reason: "Ready", Message: "All pods are ready", ObservedGeneration: 4, LastTransitionTime: time.Date(2026, time.September, 23, 11, 0, 0, 0, time.UTC)}},
+				Generation:         4,
+				ObservedGeneration: 4,
+				ObservedAt:         time.Date(2026, time.September, 23, 11, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	router := testRouter(t, &fakeCapabilitiesService{}, statusService)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/pipelines/orders/vertices/map/status", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, `"18"`, recorder.Header().Get("ETag"))
+	assert.Equal(t, "private, no-cache", recorder.Header().Get("Cache-Control"))
+	assert.NotContains(t, recorder.Body.String(), `"data"`)
+	var response generated.VertexStatus
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, int64(4), response.Replicas.Desired)
+	require.Len(t, response.Conditions, 1)
+	assert.Equal(t, generated.ConditionStatus("True"), response.Conditions[0].Status)
+
+	recorder = httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/namespaces/team-a/pipelines/orders/vertices/map/status", nil)
+	request.Header.Set("If-None-Match", `"18"`)
+	router.ServeHTTP(recorder, request)
+	assert.Equal(t, http.StatusNotModified, recorder.Code)
+	assert.Empty(t, recorder.Body.String())
+}
+
+func TestPipelineVertexStatusProblems(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		serviceErr  error
+		status      int
+		problemCode string
+	}{
+		{
+			name:        "invalid Kubernetes name",
+			path:        "/namespaces/TEAM_A/pipelines/orders/vertices/map/status",
+			status:      http.StatusUnprocessableEntity,
+			problemCode: "validation_failed",
+		},
+		{
+			name:        "not found",
+			path:        "/namespaces/team-a/pipelines/orders/vertices/map/status",
+			serviceErr:  apierrors.NewNotFound(schema.GroupResource{Group: "numaflow.numaproj.io", Resource: "vertices"}, "orders-map"),
+			status:      http.StatusNotFound,
+			problemCode: "target_not_found",
+		},
+		{
+			name:        "provider failure",
+			path:        "/namespaces/team-a/pipelines/orders/vertices/map/status",
+			serviceErr:  errors.New("provider unavailable"),
+			status:      http.StatusInternalServerError,
+			problemCode: "target_read_failed",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := testRouter(t, &fakeCapabilitiesService{}, &fakePipelineVertexSummaryService{err: test.serviceErr})
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
+
+			assert.Equal(t, test.status, recorder.Code)
+			assert.Equal(t, "application/problem+json", recorder.Header().Get("Content-Type"))
+			var problem generated.Problem
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
+			assert.Equal(t, test.problemCode, problem.Code)
+			assert.NotContains(t, problem.Detail, "provider unavailable")
+		})
+	}
+}
+
 func testRouter(t *testing.T, capabilitiesService CapabilitiesService, summaryService PipelineVertexSummaryService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -191,9 +283,14 @@ func (f *fakeCapabilitiesService) GetCapabilities() capabilities.Capabilities {
 
 type fakePipelineVertexSummaryService struct {
 	summary observability.Result[observability.VertexSummary]
+	status  observability.Result[observability.VertexStatus]
 	err     error
 }
 
 func (f *fakePipelineVertexSummaryService) GetPipelineVertexSummary(context.Context, string, string, string) (observability.Result[observability.VertexSummary], error) {
 	return f.summary, f.err
+}
+
+func (f *fakePipelineVertexSummaryService) GetPipelineVertexStatus(context.Context, string, string, string) (observability.Result[observability.VertexStatus], error) {
+	return f.status, f.err
 }

@@ -57,16 +57,15 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 			CreatedAt:          resource.CreationTimestamp.UTC(),
 			ObservedAt:         resourceObservedAt(resource.CreationTimestamp, resource.Status.Conditions, resource.Status.LastScaledAt),
 			LastScaledAt:       optionalTime(resource.Status.LastScaledAt),
-			// Status and other follow-ups are added here when those routes exist.
-			Capabilities:    []string{"summary"},
-			TruncatedFields: truncatedFields,
+			Capabilities:       []string{"summary", "status"},
+			TruncatedFields:    truncatedFields,
 		},
 		ResourceVersion: resource.ResourceVersion,
 	}, nil
 }
 
-// normalizeHealth maps Vertex controller state to API v2 HealthState. Generation
-// lag is surfaced as warning/Progressing so agents do not treat stale spec as healthy.
+// normalizeHealth maps Vertex CR status to API v2 HealthState. Generation lag
+// is a warning (Progressing) so agents do not treat a stale spec as healthy.
 func normalizeHealth(resource *dfv1.Vertex) (Health, []string) {
 	phase := resource.Status.Phase
 	desiredPhase := resource.Spec.Lifecycle.GetDesiredPhase()
@@ -109,7 +108,7 @@ func optionalTime(value metav1.Time) *time.Time {
 	return &result
 }
 
-// resourceObservedAt is the latest controller-provided timestamp (not request time).
+// resourceObservedAt is the latest timestamp on the Vertex CR status, not request time.
 func resourceObservedAt(createdAt metav1.Time, conditions []metav1.Condition, timestamps ...metav1.Time) time.Time {
 	observedAt := createdAt.Time
 	for _, timestamp := range timestamps {
