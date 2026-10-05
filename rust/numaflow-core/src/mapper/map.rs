@@ -7,12 +7,7 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::metrics::critical_error_reasons;
-#[cfg(not(test))]
-use crate::runtime_server::runtime;
-use crate::shared::grpc::{
-    DEFAULT_RECONNECT_INTERVAL, UdfReconnectConfig, create_mapper_client, prost_timestamp_from_utc,
-};
+use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
@@ -99,45 +94,17 @@ impl MapHandle {
         tracker: Tracker,
         retry_config: Option<RetryConfig>,
     ) -> error::Result<Self> {
-        Self::new_with_reconnect_config(
-            map_mode,
-            batch_size,
-            read_timeout,
-            graceful_timeout,
-            concurrency,
-            client,
-            tracker,
-            None,
-            retry_config,
-        )
-        .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn new_with_reconnect_config(
-        map_mode: MapMode,
-        batch_size: usize,
-        read_timeout: Duration,
-        graceful_timeout: Duration,
-        concurrency: usize,
-        client: MapClient<Channel>,
-        tracker: Tracker,
-        reconnect_config: Option<UdfReconnectConfig>,
-        retry_config: Option<RetryConfig>,
-    ) -> error::Result<Self> {
         // Based on the map mode, create the appropriate mapper
         let mapper = match map_mode {
             MapMode::Unary => MapperType::Concurrent(ConcurrentMapper::Unary(
-                UserDefinedUnaryMap::new(batch_size, client.clone(), reconnect_config.clone())
-                    .await?,
+                UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
             )),
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
-                UserDefinedStreamMap::new(batch_size, client.clone(), reconnect_config.clone())
-                    .await?,
+                UserDefinedStreamMap::new(batch_size, client.clone()).await?,
             )),
-            MapMode::Batch => MapperType::Batch(
-                UserDefinedBatchMap::new(batch_size, client.clone(), reconnect_config).await?,
-            ),
+            MapMode::Batch => {
+                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
+            }
         };
 
         Ok(Self {
@@ -276,10 +243,6 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
-                    if matches!(error, Error::UdfRedrive(_)) {
-                        warn!(?error, "redrivable map error reached the map error channel");
-                        continue;
-                    }
                     // we only cancel when we get the first error
                     if self.final_result.is_ok() {
                         upstream_cln_token.cancel();
@@ -369,8 +332,7 @@ impl MapHandle {
         }
     }
 
-    /// Runs the batch UDF for one batch. Retries and UDF redrives are handled inside
-    /// [MapBatchTask::execute], so a returned error is always terminal for the component.
+    /// Runs the batch UDF for one batch. A returned error is terminal for the component.
     async fn process_batch(
         &self,
         read_batch: Vec<MessageHandle>,
@@ -457,49 +419,6 @@ fn update_udf_drop_metric_by_n(is_mono_vertex: bool, n: u64) {
 /// since such a message never leaves the mapper).
 fn update_udf_drop_metric(is_mono_vertex: bool) {
     update_udf_drop_metric_by_n(is_mono_vertex, 1);
-}
-
-pub(in crate::mapper) fn map_redrive_error(status: tonic::Status) -> Error {
-    warn!(?status, "map UDF error, redriving after reconnect");
-    critical_error!(
-        VERTEX_TYPE_MAP_UDF,
-        critical_error_reasons::MAP_RUNTIME_ERROR
-    );
-    #[cfg(not(test))]
-    runtime::persist_application_error_with_container(status.clone(), "udf");
-    Error::UdfRedrive(Box::new(status))
-}
-
-pub(in crate::mapper) fn grpc_error_to_redrive<T>(result: error::Result<T>) -> error::Result<T> {
-    result.map_err(|error| match error {
-        Error::Grpc(status) => map_redrive_error(*status),
-        error => error,
-    })
-}
-
-pub(in crate::mapper) async fn reconnect_mapper_client(
-    reconnect_config: &UdfReconnectConfig,
-) -> error::Result<MapClient<Channel>> {
-    let (client, _) = grpc_error_to_redrive(
-        create_mapper_client(
-            reconnect_config.socket_path(),
-            reconnect_config.server_info_path(),
-            reconnect_config.cln_token(),
-            reconnect_config.grpc_max_message_size(),
-            reconnect_config.retry_interval(),
-        )
-        .await,
-    )?;
-    Ok(client)
-}
-
-pub(in crate::mapper) async fn wait_before_map_redrive(
-    cln_token: &CancellationToken,
-) -> error::Result<()> {
-    tokio::select! {
-        _ = cln_token.cancelled() => Err(Error::Cancelled()),
-        _ = tokio::time::sleep(DEFAULT_RECONNECT_INTERVAL) => Ok(()),
-    }
 }
 
 fn update_udf_process_time_metric(is_mono_vertex: bool) {
@@ -1322,36 +1241,5 @@ mod tests {
         let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
         assert!(!msg_plain.nacked());
         assert_eq!(msg_plain.nack_options, None);
-    }
-
-    #[test]
-    fn grpc_error_to_redrive_converts_grpc_errors() {
-        let result: error::Result<()> = Err(Error::Grpc(Box::new(tonic::Status::unavailable(
-            "map unavailable",
-        ))));
-
-        let err = grpc_error_to_redrive(result).expect_err("gRPC error should be redrivable");
-        assert!(matches!(err, Error::UdfRedrive(_)));
-        assert!(err.to_string().contains("map unavailable"));
-    }
-
-    #[test]
-    fn grpc_error_to_redrive_preserves_non_grpc_errors() {
-        let result: error::Result<()> = Err(Error::Mapper("terminal mapper error".to_string()));
-
-        let err = grpc_error_to_redrive(result).expect_err("non-gRPC error should be preserved");
-        assert!(matches!(err, Error::Mapper(_)));
-        assert!(err.to_string().contains("terminal mapper error"));
-    }
-
-    #[tokio::test]
-    async fn wait_before_map_redrive_returns_cancelled_when_token_is_cancelled() {
-        let cln_token = CancellationToken::new();
-        cln_token.cancel();
-
-        let err = wait_before_map_redrive(&cln_token)
-            .await
-            .expect_err("cancelled token should interrupt redrive wait");
-        assert!(matches!(err, Error::Cancelled()));
     }
 }

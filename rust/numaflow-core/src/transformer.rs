@@ -10,7 +10,7 @@ use crate::metrics::{
 use crate::shared::otel;
 use crate::shared::retry::{RetryController, RetryStep};
 use crate::tracker::Tracker;
-use crate::transformer::user_defined::{ReconnectConfig, UserDefinedTransformer};
+use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::{Result, mark_success};
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
@@ -91,13 +91,12 @@ impl Transformer {
         graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
         tracker: Tracker,
-        reconnect_config: ReconnectConfig,
         retry_config: Option<RetryConfig>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client.clone(), reconnect_config).await?,
+            UserDefinedTransformer::new(batch_size, client.clone()).await?,
         );
 
         tokio::spawn(async move {
@@ -205,7 +204,7 @@ impl Transformer {
 
         let message_count = msg_handles.len();
         let dropped_message_count = Arc::new(AtomicUsize::new(0));
-        // Template controller; cloned per message (and per redrive) so each gets a fresh backoff.
+        // Template controller; cloned per message so each gets a fresh backoff.
         let retry_controller = RetryController::new(&self.retry_config);
 
         let transform_futs = msg_handles.into_iter().map(|msg_handle| {
@@ -261,9 +260,6 @@ impl Transformer {
                             } else {
                                 break messages;
                             }
-                        }
-                        Err(Error::UdfRedrive(e)) => {
-                            error!(?e, ?offset, "transformer stream redrive requested");
                         }
                         Err(e) => return Err(e),
                     }
@@ -422,9 +418,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::oneshot;
 
-    const TEST_GRPC_MAX_MESSAGE_SIZE: usize =
-        crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
-
     struct SimpleTransformer;
 
     #[tonic::async_trait]
@@ -479,15 +472,6 @@ mod tests {
             Duration::from_secs(10),
             client,
             tracker.clone(),
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    TEST_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
             None,
         )
         .await?;
@@ -570,15 +554,6 @@ mod tests {
             Duration::from_secs(10),
             client,
             tracker.clone(),
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    TEST_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
             None,
         )
         .await?;
@@ -669,15 +644,6 @@ mod tests {
             Duration::from_millis(10),
             client,
             tracker.clone(),
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    TEST_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
             None,
         )
         .await?;
@@ -705,7 +671,7 @@ mod tests {
             .await;
         assert!(
             matches!(&result, Err(Error::Transformer(e)) if e == "Operation cancelled"),
-            "Expected cancellation to stop redriving the panicking transformer, got {result:?}"
+            "Expected cancellation to stop retrying the panicking transformer, got {result:?}"
         );
 
         // we need to drop the transformer, because if there are any in-flight requests
@@ -840,15 +806,6 @@ mod tests {
             Duration::from_secs(10),
             client,
             tracker,
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    TEST_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
             retry_config,
         )
         .await

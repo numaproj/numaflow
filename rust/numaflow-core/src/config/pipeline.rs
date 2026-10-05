@@ -171,16 +171,6 @@ pub(crate) mod map {
         pub server_info_path: String,
         pub retry_config: Option<RetryConfig>,
     }
-
-    impl UserDefinedConfig {
-        pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
-            crate::shared::grpc::GrpcClientConfig::new(
-                self.socket_path.clone(),
-                self.server_info_path.clone(),
-                self.grpc_max_message_size,
-            )
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
