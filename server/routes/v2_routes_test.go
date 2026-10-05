@@ -29,7 +29,7 @@ import (
 func TestV2AuthRouteMapComesFromOpenAPI(t *testing.T) {
 	routeMap, err := V2AuthRouteMap("/numaflow/")
 	require.NoError(t, err)
-	require.Len(t, routeMap, 2)
+	require.Len(t, routeMap, 3)
 
 	capabilities := routeMap["GET:/numaflow/api/v2/capabilities"]
 	require.NotNil(t, capabilities)
@@ -39,6 +39,11 @@ func TestV2AuthRouteMapComesFromOpenAPI(t *testing.T) {
 	require.NotNil(t, summary)
 	assert.True(t, summary.RequiresAuthZ)
 	assert.Equal(t, "pipeline", summary.Object)
+
+	status := routeMap["GET:/numaflow/api/v2/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status"]
+	require.NotNil(t, status)
+	assert.True(t, status.RequiresAuthZ)
+	assert.Equal(t, "pipeline", status.Object)
 }
 
 func TestV2AuthRouteMapRejectsMissingRequiredExtension(t *testing.T) {

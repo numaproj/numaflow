@@ -10,7 +10,6 @@ use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::shared::create_components;
-use crate::shared::metrics::start_metrics_server;
 use crate::sinker::sink::SinkWriter;
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::serve::nats::NatsServingStore;
@@ -23,10 +22,10 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::{error, info};
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
@@ -85,6 +84,7 @@ pub async fn start_sink_forwarder(
     isb_factory: Arc<dyn ISBFactory>,
     config: PipelineConfig,
     sink: SinkVtxConfig,
+    metrics_state: MetricsState,
 ) -> Result<()> {
     // 1. One-time setup
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
@@ -206,30 +206,17 @@ pub async fn start_sink_forwarder(
             .await?
         };
 
-    start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
-                Box::new(first_sink_writer),
-            ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partitions: from_partitions,
-            }),
-        },
-    )
-    .await;
+    metrics_state.set(
+        ComponentHealthChecks::<WithoutRateLimiter>::Pipeline(Box::new(PipelineComponents::Sink(
+            Box::new(first_sink_writer),
+        ))),
+        watermark_handle.map(|handle| WatermarkFetcherState {
+            watermark_handle: WatermarkHandle::ISB(handle),
+            partitions: from_partitions,
+        }),
+    );
 
-    let results = try_join_all(forwarder_tasks).await.map_err(|e| {
-        error!(?e, "A forwarder task panicked, cancelling token");
-        cln_token.cancel();
-        Error::Forwarder(e.to_string())
-    })?;
-
-    for result in results {
-        info!(?result, "Forwarder task completed");
-        result?;
-    }
+    super::join_forwarder_tasks(forwarder_tasks, &cln_token).await?;
 
     info!("All forwarders have stopped successfully");
     Ok(())
@@ -244,7 +231,7 @@ async fn run_all_sink_forwarders<C>(
     serving_store: Option<ServingStore>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
-    Vec<tokio::task::JoinHandle<Result<()>>>,
+    Vec<AbortOnDropHandle<Result<()>>>,
     SinkWriter,
     PendingReaderTasks,
 )>
@@ -317,10 +304,7 @@ async fn run_sink_forwarder_for_stream<C>(
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,
     isb_factory: &dyn ISBFactory,
-) -> Result<(
-    tokio::task::JoinHandle<Result<()>>,
-    ISBReaderOrchestrator<C>,
-)>
+) -> Result<(AbortOnDropHandle<Result<()>>, ISBReaderOrchestrator<C>)>
 where
     C: NumaflowTypeConfig,
 {
@@ -338,7 +322,9 @@ where
 
     let forwarder = SinkForwarder::<C>::new(isb_reader.clone(), sink_writer).await;
 
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
+    let task = AbortOnDropHandle::new(tokio::spawn(
+        async move { forwarder.start(cln_token).await },
+    ));
     Ok((task, isb_reader))
 }
 
@@ -1027,6 +1013,7 @@ mod tests {
                     Arc::new(JetStreamFactory::new(context.clone())),
                     pipeline_config,
                     sink_vtx_config,
+                    MetricsState::new(),
                 )
                 .await
                 .unwrap();

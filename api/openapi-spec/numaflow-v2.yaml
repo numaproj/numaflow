@@ -60,6 +60,40 @@ paths:
           $ref: "#/components/responses/ValidationFailed"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status:
+    get:
+      operationId: getPipelineVertexStatus
+      summary: Get detailed Kubernetes status for a pipeline vertex
+      tags: [Vertex]
+      x-numaflow-authz-object: pipeline
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/Pipeline"
+        - $ref: "#/components/parameters/Vertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Pipeline vertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexStatus"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
     cookieAuth:
@@ -158,6 +192,7 @@ components:
           example:
             - getCapabilities
             - getPipelineVertexSummary
+            - getPipelineVertexStatus
         limits:
           $ref: "#/components/schemas/ApiLimits"
     ApiLimits:
@@ -203,7 +238,7 @@ components:
       type: string
       enum: [Source, Sink, MapUDF, ReduceUDF]
     Health:
-      description: Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+      description: Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required: [state]
@@ -255,7 +290,7 @@ components:
           format: date-time
         observedAt:
           type: string
-          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
           format: date-time
         lastScaledAt:
           type: string
@@ -270,6 +305,101 @@ components:
           maxItems: 16
           items:
             type: string
+    VertexStatus:
+      description: Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+      type: object
+      additionalProperties: false
+      required:
+        - ref
+        - phase
+        - desiredPhase
+        - replicas
+        - conditions
+        - generation
+        - observedGeneration
+        - observedAt
+      properties:
+        ref:
+          $ref: "#/components/schemas/TargetRef"
+        phase:
+          type: string
+        desiredPhase:
+          type: string
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+        replicas:
+          $ref: "#/components/schemas/ReplicaStatus"
+        conditions:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/Condition"
+        generation:
+          type: integer
+          format: int64
+        observedGeneration:
+          type: integer
+          format: int64
+        observedAt:
+          type: string
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+          format: date-time
+        truncatedFields:
+          type: array
+          maxItems: 128
+          items:
+            type: string
+    ReplicaStatus:
+      type: object
+      additionalProperties: false
+      required: [current, desired, ready, updated, updatedReady]
+      properties:
+        current:
+          type: integer
+          format: int64
+          minimum: 0
+        desired:
+          type: integer
+          format: int64
+          minimum: 0
+        ready:
+          type: integer
+          format: int64
+          minimum: 0
+        updated:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedReady:
+          type: integer
+          format: int64
+          minimum: 0
+    Condition:
+      type: object
+      additionalProperties: false
+      required: [type, status, reason, observedGeneration, lastTransitionTime]
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+          enum: ["True", "False", "Unknown"]
+        reason:
+          type: string
+          maxLength: 256
+        message:
+          type: string
+          maxLength: 1024
+        observedGeneration:
+          type: integer
+          format: int64
+        lastTransitionTime:
+          type: string
+          format: date-time
     Problem:
       type: object
       additionalProperties: false

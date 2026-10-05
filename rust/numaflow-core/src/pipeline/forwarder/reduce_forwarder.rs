@@ -25,7 +25,6 @@ use crate::reduce::reducer::{Reducer, WindowManager};
 use crate::reduce::wal::create_wal_components;
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
-use crate::shared::metrics::start_metrics_server;
 use crate::tracker::Tracker;
 use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
@@ -98,6 +97,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
+    metrics_state: MetricsState,
 ) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
     let tracker = Tracker::new(None, cln_token.clone());
@@ -199,22 +199,17 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
             .await?;
 
-    // Start the metrics server with one of the clients
-    start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Aligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
-                }),
-        },
-    )
-    .await;
+    metrics_state.set(
+        ComponentHealthChecks::<WithoutRateLimiter>::Pipeline(Box::new(
+            PipelineComponents::Reduce(UserDefinedReduce::Aligned(reducer_client.clone())),
+        )),
+        watermark_handle
+            .clone()
+            .map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
+            }),
+    );
 
     let reducer = Reducer::Aligned(
         AlignedReducer::new(
@@ -250,6 +245,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
+    metrics_state: MetricsState,
 ) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
     let tracker = Tracker::new(None, cln_token.clone());
@@ -337,21 +333,17 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
             .await?;
 
-    start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Unaligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
-                }),
-        },
-    )
-    .await;
+    metrics_state.set(
+        ComponentHealthChecks::<WithoutRateLimiter>::Pipeline(Box::new(
+            PipelineComponents::Reduce(UserDefinedReduce::Unaligned(reducer_client.clone())),
+        )),
+        watermark_handle
+            .clone()
+            .map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
+            }),
+    );
 
     let reducer = Reducer::Unaligned(
         UnalignedReducer::new(
@@ -492,6 +484,7 @@ pub(crate) async fn start_reduce_forwarder(
     isb_factory: Arc<dyn ISBFactory>,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
+    metrics_state: MetricsState,
 ) -> crate::error::Result<()> {
     // create fence guard if WAL is configured to make sure the previous WAL instance has exited gracefully
     // before we start resuming from WAL.
@@ -519,6 +512,7 @@ pub(crate) async fn start_reduce_forwarder(
                 config,
                 reduce_vtx_config.clone(),
                 aligned_config.clone(),
+                metrics_state,
             )
             .await
         }
@@ -529,6 +523,7 @@ pub(crate) async fn start_reduce_forwarder(
                 config,
                 reduce_vtx_config.clone(),
                 unaligned_config.clone(),
+                metrics_state,
             )
             .await
         }
@@ -552,6 +547,7 @@ mod tests {
         FromVertexConfig, PipelineConfig, ReduceVtxConfig, ToVertexConfig, VertexConfig, VertexType,
     };
     use crate::message::{IntOffset, Message, MessageID, Offset, StringOffset};
+    use crate::metrics::MetricsState;
     use crate::pipeline::forwarder::reduce_forwarder::{
         FenceGuard, start_aligned_reduce_forwarder, start_reduce_forwarder,
         start_unaligned_reduce_forwarder, wait_for_fence_availability,
@@ -756,6 +752,7 @@ mod tests {
             forwarder_factory,
             pipeline_config,
             reduce_vtx_config,
+            MetricsState::new(),
         ));
 
         let test_messages = [
@@ -1109,6 +1106,7 @@ mod tests {
                     pipeline_config,
                     reduce_vtx_config,
                     aligned_config,
+                    MetricsState::new(),
                 )
                 .await
                 .unwrap();
@@ -1438,6 +1436,7 @@ mod tests {
                     pipeline_config,
                     reduce_vtx_config,
                     unaligned_config,
+                    MetricsState::new(),
                 )
                 .await
                 {
