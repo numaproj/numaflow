@@ -3,6 +3,8 @@ use tokio::sync::oneshot;
 pub mod sink;
 pub mod source;
 
+use crate::source::PulsarOffset;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
@@ -17,7 +19,7 @@ pub enum Error {
     ActorTaskTerminated(oneshot::error::RecvError),
 
     #[error("Received unknown offset for acknowledgement. offset={0}")]
-    UnknownOffset(u64),
+    UnknownOffset(PulsarOffset),
 
     #[error("{0}")]
     Other(String),
