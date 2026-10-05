@@ -46,6 +46,7 @@ impl From<&KVHistoryEntry> for KVEntry {
                 KVWatchOp::Purge => KVWatchOp::Purge,
             },
             created: value.created,
+            revision: value.revision,
         }
     }
 }
@@ -510,9 +511,11 @@ mod tests {
 
         let entry = watch.next().await.unwrap();
         assert_eq!(entry.key, "key1");
+        assert_eq!(entry.revision, 1, "KVEntry must carry the store revision");
 
         let entry = watch.next().await.unwrap();
         assert_eq!(entry.key, "key2");
+        assert_eq!(entry.revision, 2, "revisions must be monotonic per bucket");
     }
 
     #[tokio::test]
