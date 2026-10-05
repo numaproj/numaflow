@@ -64,27 +64,86 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 	}, nil
 }
 
+// GetMonoVertexSummary returns a compact summary for one MonoVertex.
+// It reports controller state and deliberately excludes live Pod and data-flow health.
+func (s *Service) GetMonoVertexSummary(ctx context.Context, namespace, monoVertex string) (Result[VertexSummary], error) {
+	resource, err := s.getMonoVertex(ctx, namespace, monoVertex)
+	if err != nil {
+		return Result[VertexSummary]{}, err
+	}
+
+	health, truncatedFields := normalizeMonoVertexHealth(resource)
+	return Result[VertexSummary]{
+		Value: VertexSummary{
+			Ref: TargetRef{
+				Kind:      TargetKindMonoVertex,
+				Namespace: namespace,
+				Name:      monoVertex,
+				UID:       string(resource.UID),
+			},
+			VertexType:         "MonoVertex",
+			Phase:              string(resource.Status.Phase),
+			DesiredPhase:       string(resource.Spec.Lifecycle.GetDesiredPhase()),
+			Health:             health,
+			Generation:         resource.Generation,
+			ObservedGeneration: resource.Status.ObservedGeneration,
+			CreatedAt:          resource.CreationTimestamp.UTC(),
+			ObservedAt:         resourceObservedAt(resource.CreationTimestamp, resource.Status.Conditions, resource.Status.LastUpdated, resource.Status.LastScaledAt),
+			LastScaledAt:       optionalTime(resource.Status.LastScaledAt),
+			Capabilities:       []string{"summary", "status"},
+			TruncatedFields:    truncatedFields,
+		},
+		ResourceVersion: resource.ResourceVersion,
+	}, nil
+}
+
 // normalizeHealth maps Vertex controller state to API v2 HealthState. Generation
 // lag is surfaced as warning/Progressing so agents do not treat stale spec as healthy.
 func normalizeHealth(resource *dfv1.Vertex) (Health, []string) {
-	phase := resource.Status.Phase
-	desiredPhase := resource.Spec.Lifecycle.GetDesiredPhase()
-	reason := resource.Status.Reason
-	message := resource.Status.Message
+	return normalizeControllerHealth(
+		string(resource.Status.Phase),
+		string(resource.Spec.Lifecycle.GetDesiredPhase()),
+		resource.Generation,
+		resource.Status.ObservedGeneration,
+		resource.Status.IsHealthy(),
+		resource.Status.Reason,
+		resource.Status.Message,
+		"The Vertex controller has not observed the latest generation",
+	)
+}
 
+// normalizeMonoVertexHealth maps MonoVertex controller state to API v2
+// HealthState using the same precedence as pipeline Vertex health.
+func normalizeMonoVertexHealth(resource *dfv1.MonoVertex) (Health, []string) {
+	return normalizeControllerHealth(
+		string(resource.Status.Phase),
+		string(resource.Spec.Lifecycle.GetDesiredPhase()),
+		resource.Generation,
+		resource.Status.ObservedGeneration,
+		resource.Status.IsHealthy(),
+		resource.Status.Reason,
+		resource.Status.Message,
+		"The MonoVertex controller has not observed the latest generation",
+	)
+}
+
+// normalizeControllerHealth applies ordered controller-health rules shared by
+// pipeline Vertices and MonoVertices. It intentionally does not infer health
+// for phase values that their controllers do not currently produce.
+func normalizeControllerHealth(phase, desiredPhase string, generation, observedGeneration int64, healthy bool, reason, message, progressingMessage string) (Health, []string) {
 	state := HealthStateUnknown
 	switch {
-	case phase == dfv1.VertexPhaseFailed:
+	case phase == "Failed":
 		state = HealthStateCritical
-	case phase == dfv1.VertexPhasePaused || desiredPhase == dfv1.VertexPhasePaused:
+	case phase == "Paused" || desiredPhase == "Paused":
 		state = HealthStateInactive
-	case resource.Status.ObservedGeneration == 0 || resource.Generation > resource.Status.ObservedGeneration:
+	case observedGeneration == 0 || generation > observedGeneration:
 		state = HealthStateWarning
 		reason = "Progressing"
-		message = "The Vertex controller has not observed the latest generation"
-	case phase == dfv1.VertexPhaseRunning && resource.Status.IsHealthy():
+		message = progressingMessage
+	case phase == "Running" && healthy:
 		state = HealthStateHealthy
-	case phase == dfv1.VertexPhaseRunning:
+	case phase == "Running":
 		state = HealthStateWarning
 	}
 

@@ -25,6 +25,7 @@ type TargetKind string
 
 const (
 	TargetKindPipelineVertex TargetKind = "PipelineVertex"
+	TargetKindMonoVertex     TargetKind = "MonoVertex"
 )
 
 type HealthState string
@@ -40,9 +41,10 @@ const (
 type TargetRef struct {
 	Kind      TargetKind
 	Namespace string
-	Pipeline  string
-	Name      string
-	UID       string
+	// Pipeline is set for PipelineVertex targets and empty for MonoVertex targets.
+	Pipeline string
+	Name     string
+	UID      string
 }
 
 // Health is controller-reported resource health for summary endpoints. It is not
@@ -53,7 +55,8 @@ type Health struct {
 	Message string
 }
 
-// VertexSummary is the compact projection returned by summary APIs (not a CR dump).
+// VertexSummary is the compact projection returned by pipeline vertex and
+// MonoVertex summary APIs. It is not a CR dump.
 type VertexSummary struct {
 	Ref                TargetRef
 	VertexType         string
@@ -71,7 +74,7 @@ type VertexSummary struct {
 	TruncatedFields []string
 }
 
-// ReplicaStatus reports controller-observed Vertex replica progress.
+// ReplicaStatus reports controller-observed target replica progress.
 type ReplicaStatus struct {
 	Current      int64
 	Desired      int64
@@ -90,8 +93,8 @@ type Condition struct {
 	LastTransitionTime time.Time
 }
 
-// VertexStatus is the detailed controller-only projection for a pipeline vertex.
-// It does not include live Pod inspection or data-flow health.
+// VertexStatus is the detailed controller-only projection for a pipeline vertex
+// or MonoVertex. It does not include live Pod inspection or data-flow health.
 type VertexStatus struct {
 	Ref                TargetRef
 	Phase              string

@@ -39,7 +39,7 @@ import (
 func TestGetCapabilities(t *testing.T) {
 	service := &fakeCapabilitiesService{capabilities: capabilities.Capabilities{
 		APIVersion: "v2",
-		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus"},
+		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus", "getMonoVertexSummary", "getMonoVertexStatus"},
 		Limits: capabilities.Limits{
 			DefaultPageSize:     11,
 			MaximumPageSize:     22,
@@ -47,7 +47,7 @@ func TestGetCapabilities(t *testing.T) {
 			MaximumMetricPoints: 44,
 		},
 	}}
-	router := testRouter(t, service, &fakePipelineVertexSummaryService{})
+	router := testRouter(t, service, &fakeObservabilityService{})
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/capabilities", nil))
@@ -57,7 +57,7 @@ func TestGetCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.Equal(t, generated.Capabilities{
 		ApiVersion: "v2",
-		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus"},
+		Operations: []string{"getCapabilities", "getPipelineVertexSummary", "getPipelineVertexStatus", "getMonoVertexSummary", "getMonoVertexStatus"},
 		Limits: generated.ApiLimits{
 			DefaultPageSize:     11,
 			MaximumPageSize:     22,
@@ -68,7 +68,7 @@ func TestGetCapabilities(t *testing.T) {
 }
 
 func TestNewHandlerRejectsNilService(t *testing.T) {
-	_, err := NewHandler(nil, &fakePipelineVertexSummaryService{})
+	_, err := NewHandler(nil, &fakeObservabilityService{})
 	require.Error(t, err)
 
 	_, err = NewHandler(&fakeCapabilitiesService{}, nil)
@@ -76,7 +76,7 @@ func TestNewHandlerRejectsNilService(t *testing.T) {
 }
 
 func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
-	summaryService := &fakePipelineVertexSummaryService{
+	summaryService := &fakeObservabilityService{
 		summary: observability.Result[observability.VertexSummary]{
 			ResourceVersion: "17",
 			Value: observability.VertexSummary{
@@ -153,7 +153,7 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			router := testRouter(t, &fakeCapabilitiesService{}, &fakePipelineVertexSummaryService{err: test.serviceErr})
+			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
 
@@ -168,7 +168,7 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 }
 
 func TestGetPipelineVertexStatusAndETag(t *testing.T) {
-	statusService := &fakePipelineVertexSummaryService{
+	statusService := &fakeObservabilityService{
 		status: observability.Result[observability.VertexStatus]{
 			ResourceVersion: "18",
 			Value: observability.VertexStatus{
@@ -245,7 +245,7 @@ func TestPipelineVertexStatusProblems(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			router := testRouter(t, &fakeCapabilitiesService{}, &fakePipelineVertexSummaryService{err: test.serviceErr})
+			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
 
@@ -259,10 +259,145 @@ func TestPipelineVertexStatusProblems(t *testing.T) {
 	}
 }
 
-func testRouter(t *testing.T, capabilitiesService CapabilitiesService, summaryService PipelineVertexSummaryService) *gin.Engine {
+func TestGetMonoVertexSummaryAndETag(t *testing.T) {
+	observabilityService := &fakeObservabilityService{
+		monoSummary: observability.Result[observability.VertexSummary]{
+			ResourceVersion: "19",
+			Value: observability.VertexSummary{
+				Ref: observability.TargetRef{
+					Kind:      observability.TargetKindMonoVertex,
+					Namespace: "team-a",
+					Name:      "orders-ingest",
+					UID:       "mono-vertex-uid",
+				},
+				VertexType:         "MonoVertex",
+				Phase:              "Running",
+				DesiredPhase:       "Running",
+				Health:             observability.Health{State: observability.HealthStateHealthy},
+				Generation:         4,
+				ObservedGeneration: 4,
+				CreatedAt:          time.Date(2026, time.September, 30, 10, 0, 0, 0, time.UTC),
+				ObservedAt:         time.Date(2026, time.September, 30, 11, 0, 0, 0, time.UTC),
+				Capabilities:       []string{"summary", "status"},
+			},
+		},
+	}
+	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/summary", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, `"19"`, recorder.Header().Get("ETag"))
+	var response generated.VertexSummary
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, generated.TargetKindMonoVertex, response.Ref.Kind)
+	assert.Nil(t, response.Ref.Pipeline)
+	assert.Equal(t, generated.VertexTypeMonoVertex, response.VertexType)
+
+	recorder = httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/summary", nil)
+	request.Header.Set("If-None-Match", `"19"`)
+	router.ServeHTTP(recorder, request)
+	assert.Equal(t, http.StatusNotModified, recorder.Code)
+	assert.Empty(t, recorder.Body.String())
+}
+
+func TestGetMonoVertexStatusAndETag(t *testing.T) {
+	observabilityService := &fakeObservabilityService{
+		monoStatus: observability.Result[observability.VertexStatus]{
+			ResourceVersion: "20",
+			Value: observability.VertexStatus{
+				Ref: observability.TargetRef{
+					Kind:      observability.TargetKindMonoVertex,
+					Namespace: "team-a",
+					Name:      "orders-ingest",
+					UID:       "mono-vertex-uid",
+				},
+				Phase:              "Running",
+				DesiredPhase:       "Running",
+				Replicas:           observability.ReplicaStatus{Current: 2, Desired: 2, Ready: 2, Updated: 2, UpdatedReady: 2},
+				Conditions:         []observability.Condition{{Type: "DaemonHealthy", Status: "True", Reason: "Ready", Message: "Daemon is ready", ObservedGeneration: 4, LastTransitionTime: time.Date(2026, time.September, 30, 11, 0, 0, 0, time.UTC)}},
+				Generation:         4,
+				ObservedGeneration: 4,
+				ObservedAt:         time.Date(2026, time.September, 30, 11, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/status", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, `"20"`, recorder.Header().Get("ETag"))
+	var response generated.VertexStatus
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Nil(t, response.Ref.Pipeline)
+	assert.Equal(t, int64(2), response.Replicas.Ready)
+	require.Len(t, response.Conditions, 1)
+	assert.Equal(t, "DaemonHealthy", response.Conditions[0].Type)
+
+	recorder = httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/status", nil)
+	request.Header.Set("If-None-Match", `"20"`)
+	router.ServeHTTP(recorder, request)
+	assert.Equal(t, http.StatusNotModified, recorder.Code)
+	assert.Empty(t, recorder.Body.String())
+}
+
+func TestMonoVertexProblems(t *testing.T) {
+	endpoints := []string{"summary", "status"}
+	tests := []struct {
+		name        string
+		path        string
+		serviceErr  error
+		status      int
+		problemCode string
+	}{
+		{
+			name:        "invalid Kubernetes name",
+			path:        "/namespaces/TEAM_A/mono-vertices/orders-ingest",
+			status:      http.StatusUnprocessableEntity,
+			problemCode: "validation_failed",
+		},
+		{
+			name:        "not found",
+			path:        "/namespaces/team-a/mono-vertices/orders-ingest",
+			serviceErr:  apierrors.NewNotFound(schema.GroupResource{Group: "numaflow.numaproj.io", Resource: "monovertices"}, "orders-ingest"),
+			status:      http.StatusNotFound,
+			problemCode: "target_not_found",
+		},
+		{
+			name:        "provider failure",
+			path:        "/namespaces/team-a/mono-vertices/orders-ingest",
+			serviceErr:  errors.New("provider unavailable"),
+			status:      http.StatusInternalServerError,
+			problemCode: "target_read_failed",
+		},
+	}
+	for _, endpoint := range endpoints {
+		for _, test := range tests {
+			t.Run(endpoint+"/"+test.name, func(t *testing.T) {
+				router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
+				recorder := httptest.NewRecorder()
+				router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path+"/"+endpoint, nil))
+
+				assert.Equal(t, test.status, recorder.Code)
+				assert.Equal(t, "application/problem+json", recorder.Header().Get("Content-Type"))
+				var problem generated.Problem
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
+				assert.Equal(t, test.problemCode, problem.Code)
+				assert.NotContains(t, problem.Detail, "provider unavailable")
+			})
+		}
+	}
+}
+
+func testRouter(t *testing.T, capabilitiesService CapabilitiesService, observabilityService ObservabilityService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	handler, err := NewHandler(capabilitiesService, summaryService)
+	handler, err := NewHandler(capabilitiesService, observabilityService)
 	require.NoError(t, err)
 	router := gin.New()
 	generated.RegisterHandlersWithOptions(router, handler, generated.GinServerOptions{
@@ -281,16 +416,26 @@ func (f *fakeCapabilitiesService) GetCapabilities() capabilities.Capabilities {
 	return f.capabilities
 }
 
-type fakePipelineVertexSummaryService struct {
-	summary observability.Result[observability.VertexSummary]
-	status  observability.Result[observability.VertexStatus]
-	err     error
+type fakeObservabilityService struct {
+	summary     observability.Result[observability.VertexSummary]
+	status      observability.Result[observability.VertexStatus]
+	monoSummary observability.Result[observability.VertexSummary]
+	monoStatus  observability.Result[observability.VertexStatus]
+	err         error
 }
 
-func (f *fakePipelineVertexSummaryService) GetPipelineVertexSummary(context.Context, string, string, string) (observability.Result[observability.VertexSummary], error) {
+func (f *fakeObservabilityService) GetPipelineVertexSummary(context.Context, string, string, string) (observability.Result[observability.VertexSummary], error) {
 	return f.summary, f.err
 }
 
-func (f *fakePipelineVertexSummaryService) GetPipelineVertexStatus(context.Context, string, string, string) (observability.Result[observability.VertexStatus], error) {
+func (f *fakeObservabilityService) GetPipelineVertexStatus(context.Context, string, string, string) (observability.Result[observability.VertexStatus], error) {
 	return f.status, f.err
+}
+
+func (f *fakeObservabilityService) GetMonoVertexSummary(context.Context, string, string) (observability.Result[observability.VertexSummary], error) {
+	return f.monoSummary, f.err
+}
+
+func (f *fakeObservabilityService) GetMonoVertexStatus(context.Context, string, string) (observability.Result[observability.VertexStatus], error) {
+	return f.monoStatus, f.err
 }
