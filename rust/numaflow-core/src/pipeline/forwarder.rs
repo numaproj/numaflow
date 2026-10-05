@@ -76,7 +76,6 @@ async fn join_forwarder_tasks(
     Ok(())
 }
 
-/// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
@@ -89,6 +88,7 @@ pub(crate) async fn start_forwarder(
     result
 }
 
+/// Starts the appropriate forwarder based on the pipeline configuration.
 async fn run_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
