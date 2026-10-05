@@ -66,7 +66,7 @@ func (h *Handler) GetCapabilities(c *gin.Context) {
 	c.JSON(http.StatusOK, toCapabilities(h.capabilitiesService.GetCapabilities()))
 }
 
-// GetPipelineVertexSummary returns a compact controller-backed Vertex projection.
+// GetPipelineVertexSummary returns a compact Kubernetes Vertex CR projection.
 func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexSummaryParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return
@@ -79,7 +79,7 @@ func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.N
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
 }
 
-// GetPipelineVertexStatus returns bounded controller detail for one pipeline vertex.
+// GetPipelineVertexStatus returns bounded Kubernetes Vertex CR status for one pipeline vertex.
 func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexStatusParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return

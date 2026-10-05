@@ -64,8 +64,8 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 	}, nil
 }
 
-// normalizeHealth maps Vertex controller state to API v2 HealthState. Generation
-// lag is surfaced as warning/Progressing so agents do not treat stale spec as healthy.
+// normalizeHealth maps Vertex CR status to API v2 HealthState. Generation lag
+// is a warning (Progressing) so agents do not treat a stale spec as healthy.
 func normalizeHealth(resource *dfv1.Vertex) (Health, []string) {
 	phase := resource.Status.Phase
 	desiredPhase := resource.Spec.Lifecycle.GetDesiredPhase()
@@ -108,7 +108,7 @@ func optionalTime(value metav1.Time) *time.Time {
 	return &result
 }
 
-// resourceObservedAt is the latest controller-provided timestamp (not request time).
+// resourceObservedAt is the latest timestamp on the Vertex CR status, not request time.
 func resourceObservedAt(createdAt metav1.Time, conditions []metav1.Condition, timestamps ...metav1.Time) time.Time {
 	observedAt := createdAt.Time
 	for _, timestamp := range timestamps {

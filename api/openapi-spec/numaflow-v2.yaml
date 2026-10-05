@@ -63,7 +63,7 @@ paths:
   /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status:
     get:
       operationId: getPipelineVertexStatus
-      summary: Get detailed controller status for a pipeline vertex
+      summary: Get detailed Kubernetes status for a pipeline vertex
       tags: [Vertex]
       x-numaflow-authz-object: pipeline
       x-numaflow-requires-authz: true
@@ -74,7 +74,7 @@ paths:
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: Pipeline vertex controller status. It excludes live Pod inspection and data-flow health.
+          description: Pipeline vertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -238,7 +238,7 @@ components:
       type: string
       enum: [Source, Sink, MapUDF, ReduceUDF]
     Health:
-      description: Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+      description: Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required: [state]
@@ -290,7 +290,7 @@ components:
           format: date-time
         observedAt:
           type: string
-          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
           format: date-time
         lastScaledAt:
           type: string
@@ -306,7 +306,7 @@ components:
           items:
             type: string
     VertexStatus:
-      description: Detailed controller-reported status. It excludes live Pod inspection and data-flow health.
+      description: Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required:
@@ -346,7 +346,7 @@ components:
           format: int64
         observedAt:
           type: string
-          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
           format: date-time
         truncatedFields:
           type: array
