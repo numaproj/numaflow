@@ -63,7 +63,7 @@ paths:
   /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status:
     get:
       operationId: getPipelineVertexStatus
-      summary: Get detailed controller status for a pipeline vertex
+      summary: Get detailed Kubernetes status for a pipeline vertex
       tags: [Vertex]
       x-numaflow-authz-object: pipeline
       x-numaflow-requires-authz: true
@@ -74,7 +74,7 @@ paths:
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: Pipeline vertex controller status. It excludes live Pod inspection and data-flow health.
+          description: Pipeline vertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -107,7 +107,7 @@ paths:
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: MonoVertex controller summary. It excludes live Pod inspection and data-flow health.
+          description: MonoVertex summary
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -130,7 +130,7 @@ paths:
   /namespaces/{namespace}/mono-vertices/{monoVertex}/status:
     get:
       operationId: getMonoVertexStatus
-      summary: Get detailed controller status for a MonoVertex
+      summary: Get detailed Kubernetes status for a MonoVertex
       tags: [MonoVertex]
       x-numaflow-authz-object: mono-vertex
       x-numaflow-requires-authz: true
@@ -140,7 +140,7 @@ paths:
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: MonoVertex controller status. It excludes live Pod inspection and data-flow health.
+          description: MonoVertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -316,7 +316,7 @@ components:
       type: string
       enum: [Source, Sink, MapUDF, ReduceUDF, MonoVertex]
     Health:
-      description: Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+      description: Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required: [state]
@@ -368,7 +368,7 @@ components:
           format: date-time
         observedAt:
           type: string
-          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          description: Latest condition-transition or scaling timestamp from CR status, not response generation time.
           format: date-time
         lastScaledAt:
           type: string
@@ -384,7 +384,7 @@ components:
           items:
             type: string
     VertexStatus:
-      description: Detailed controller-reported status. It excludes live Pod inspection and data-flow health.
+      description: Detailed Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required:
@@ -424,7 +424,7 @@ components:
           format: int64
         observedAt:
           type: string
-          description: Latest controller-provided condition transition or scaling timestamp, not response generation time.
+          description: Latest condition-transition or scaling timestamp from CR status, not response generation time.
           format: date-time
         truncatedFields:
           type: array

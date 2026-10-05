@@ -25,9 +25,9 @@ import (
 
 const maximumConditions = 32
 
-// GetPipelineVertexStatus returns bounded controller detail for one pipeline vertex.
-// It uses the same logical-name validation as summary and deliberately excludes
-// live Pod and data-flow health.
+// GetPipelineVertexStatus returns bounded Kubernetes Vertex CR status for one
+// pipeline vertex. It uses the same logical-name validation as summary and
+// excludes live Pod inspection and daemon data-flow health.
 func (s *Service) GetPipelineVertexStatus(ctx context.Context, namespace, pipeline, vertex string) (Result[VertexStatus], error) {
 	resource, err := s.getPipelineVertex(ctx, namespace, pipeline, vertex)
 	if err != nil {
@@ -68,8 +68,9 @@ func (s *Service) GetPipelineVertexStatus(ctx context.Context, namespace, pipeli
 	}, nil
 }
 
-// GetMonoVertexStatus returns bounded controller detail for one MonoVertex.
-// It deliberately excludes live Pod inspection and data-flow health.
+// GetMonoVertexStatus returns bounded Kubernetes MonoVertex CR status.
+// It excludes live Pod inspection and daemon data-flow health.
+// DaemonHealthy, when present, is a condition copied from that CR.
 func (s *Service) GetMonoVertexStatus(ctx context.Context, namespace, monoVertex string) (Result[VertexStatus], error) {
 	resource, err := s.getMonoVertex(ctx, namespace, monoVertex)
 	if err != nil {

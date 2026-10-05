@@ -55,7 +55,7 @@ func (s *Service) getPipelineVertex(ctx context.Context, namespace, pipeline, ve
 	return resource, nil
 }
 
-// getMonoVertex loads a MonoVertex whose Kubernetes resource name is the path name.
+// getMonoVertex loads a MonoVertex CR by name. The API path uses that CR name.
 func (s *Service) getMonoVertex(ctx context.Context, namespace, monoVertex string) (*dfv1.MonoVertex, error) {
 	return s.numaflowClient.MonoVertices(namespace).Get(ctx, monoVertex, metav1.GetOptions{})
 }

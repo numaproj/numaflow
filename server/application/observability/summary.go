@@ -65,7 +65,6 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 }
 
 // GetMonoVertexSummary returns a compact summary for one MonoVertex.
-// It reports controller state and deliberately excludes live Pod and data-flow health.
 func (s *Service) GetMonoVertexSummary(ctx context.Context, namespace, monoVertex string) (Result[VertexSummary], error) {
 	resource, err := s.getMonoVertex(ctx, namespace, monoVertex)
 	if err != nil {
@@ -97,10 +96,10 @@ func (s *Service) GetMonoVertexSummary(ctx context.Context, namespace, monoVerte
 	}, nil
 }
 
-// normalizeHealth maps Vertex controller state to API v2 HealthState. Generation
-// lag is surfaced as warning/Progressing so agents do not treat stale spec as healthy.
+// normalizeHealth maps Vertex CR status to API v2 HealthState. Generation lag
+// is a warning (Progressing) so agents do not treat a stale spec as healthy.
 func normalizeHealth(resource *dfv1.Vertex) (Health, []string) {
-	return normalizeControllerHealth(
+	return deriveHealth(
 		string(resource.Status.Phase),
 		string(resource.Spec.Lifecycle.GetDesiredPhase()),
 		resource.Generation,
@@ -108,14 +107,14 @@ func normalizeHealth(resource *dfv1.Vertex) (Health, []string) {
 		resource.Status.IsHealthy(),
 		resource.Status.Reason,
 		resource.Status.Message,
-		"The Vertex controller has not observed the latest generation",
+		"Vertex CR status has not observed the latest generation",
 	)
 }
 
-// normalizeMonoVertexHealth maps MonoVertex controller state to API v2
-// HealthState using the same precedence as pipeline Vertex health.
+// normalizeMonoVertexHealth maps MonoVertex CR status to API v2 HealthState.
+// Generation lag is a warning (Progressing), same rules as normalizeHealth.
 func normalizeMonoVertexHealth(resource *dfv1.MonoVertex) (Health, []string) {
-	return normalizeControllerHealth(
+	return deriveHealth(
 		string(resource.Status.Phase),
 		string(resource.Spec.Lifecycle.GetDesiredPhase()),
 		resource.Generation,
@@ -123,14 +122,13 @@ func normalizeMonoVertexHealth(resource *dfv1.MonoVertex) (Health, []string) {
 		resource.Status.IsHealthy(),
 		resource.Status.Reason,
 		resource.Status.Message,
-		"The MonoVertex controller has not observed the latest generation",
+		"MonoVertex CR status has not observed the latest generation",
 	)
 }
 
-// normalizeControllerHealth applies ordered controller-health rules shared by
-// pipeline Vertices and MonoVertices. It intentionally does not infer health
-// for phase values that their controllers do not currently produce.
-func normalizeControllerHealth(phase, desiredPhase string, generation, observedGeneration int64, healthy bool, reason, message, progressingMessage string) (Health, []string) {
+// deriveHealth applies the shared CR-status rules, in order: Failed, Paused,
+// generation newer than CR status, Running and healthy, other Running.
+func deriveHealth(phase, desiredPhase string, generation, observedGeneration int64, healthy bool, reason, message, progressingMessage string) (Health, []string) {
 	state := HealthStateUnknown
 	switch {
 	case phase == "Failed":
@@ -167,7 +165,7 @@ func optionalTime(value metav1.Time) *time.Time {
 	return &result
 }
 
-// resourceObservedAt is the latest controller-provided timestamp (not request time).
+// resourceObservedAt is the latest timestamp on the CR status, not request time.
 func resourceObservedAt(createdAt metav1.Time, conditions []metav1.Condition, timestamps ...metav1.Time) time.Time {
 	observedAt := createdAt.Time
 	for _, timestamp := range timestamps {

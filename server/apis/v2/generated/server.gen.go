@@ -81,7 +81,7 @@ type Condition struct {
 // ConditionStatus defines model for Condition.Status.
 type ConditionStatus string
 
-// Health Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type Health struct {
 	Message *string     `json:"message,omitempty"`
 	Reason  *string     `json:"reason,omitempty"`
@@ -127,14 +127,14 @@ type TargetRef struct {
 	Uid      string  `json:"uid"`
 }
 
-// VertexStatus Detailed controller-reported status. It excludes live Pod inspection and data-flow health.
+// VertexStatus Detailed Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type VertexStatus struct {
 	Conditions   []Condition `json:"conditions"`
 	DesiredPhase string      `json:"desiredPhase"`
 	Generation   int64       `json:"generation"`
 	Message      *string     `json:"message,omitempty"`
 
-	// ObservedAt Latest controller-provided condition transition or scaling timestamp, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time     `json:"observedAt"`
 	ObservedGeneration int64         `json:"observedGeneration"`
 	Phase              string        `json:"phase"`
@@ -151,11 +151,11 @@ type VertexSummary struct {
 	DesiredPhase string    `json:"desiredPhase"`
 	Generation   int64     `json:"generation"`
 
-	// Health Compact controller-reported resource health. It excludes live Pod inspection and data-flow health.
+	// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 	Health       Health     `json:"health"`
 	LastScaledAt *time.Time `json:"lastScaledAt,omitempty"`
 
-	// ObservedAt Latest controller-provided condition transition or scaling timestamp, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time  `json:"observedAt"`
 	ObservedGeneration int64      `json:"observedGeneration"`
 	Phase              string     `json:"phase"`
@@ -234,13 +234,13 @@ type ServerInterface interface {
 	// Get capabilities available to the current caller
 	// (GET /capabilities)
 	GetCapabilities(c *gin.Context)
-	// Get detailed controller status for a MonoVertex
+	// Get detailed Kubernetes status for a MonoVertex
 	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/status)
 	GetMonoVertexStatus(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexStatusParams)
 	// Get a compact MonoVertex summary
 	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/summary)
 	GetMonoVertexSummary(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexSummaryParams)
-	// Get detailed controller status for a pipeline vertex
+	// Get detailed Kubernetes status for a pipeline vertex
 	// (GET /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status)
 	GetPipelineVertexStatus(c *gin.Context, namespace Namespace, pipeline Pipeline, vertex Vertex, params GetPipelineVertexStatusParams)
 	// Get a compact pipeline vertex summary
@@ -563,43 +563,43 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"h6sxXX9a/zcAAP//6b4jbiQvAAA=",
+	"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",
+	"/G8AAAD//y/GPjcHLwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

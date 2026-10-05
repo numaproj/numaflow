@@ -47,16 +47,15 @@ type TargetRef struct {
 	UID      string
 }
 
-// Health is controller-reported resource health for summary endpoints. It is not
-// equivalent to v1 pipeline /health (Pod inspection + data-flow health).
+// Health is a compact view of Kubernetes Vertex or MonoVertex CR status for summary endpoints.
+// It is not v1 pipeline /health, which inspects live Pods and daemon data-flow.
 type Health struct {
 	State   HealthState
 	Reason  string
 	Message string
 }
 
-// VertexSummary is the compact projection returned by pipeline vertex and
-// MonoVertex summary APIs. It is not a CR dump.
+// VertexSummary is the compact projection returned by summary APIs (not a CR dump).
 type VertexSummary struct {
 	Ref                TargetRef
 	VertexType         string
@@ -68,13 +67,13 @@ type VertexSummary struct {
 	CreatedAt          time.Time
 	ObservedAt         time.Time
 	LastScaledAt       *time.Time
-	// Capabilities lists follow-up actions available for this target (e.g. "summary").
+	// Capabilities lists follow-up actions available for this target (e.g. "summary", "status").
 	// This is separate from GET /capabilities operations (OpenAPI operationIds).
 	Capabilities    []string
 	TruncatedFields []string
 }
 
-// ReplicaStatus reports controller-observed target replica progress.
+// ReplicaStatus reports replica counts from the Vertex or MonoVertex CR status.
 type ReplicaStatus struct {
 	Current      int64
 	Desired      int64
@@ -83,7 +82,7 @@ type ReplicaStatus struct {
 	UpdatedReady int64
 }
 
-// Condition is a bounded controller condition included in a detailed status response.
+// Condition is a bounded Kubernetes condition copied from Vertex or MonoVertex CR status.
 type Condition struct {
 	Type               string
 	Status             string
@@ -93,8 +92,8 @@ type Condition struct {
 	LastTransitionTime time.Time
 }
 
-// VertexStatus is the detailed controller-only projection for a pipeline vertex
-// or MonoVertex. It does not include live Pod inspection or data-flow health.
+// VertexStatus is the detailed Kubernetes CR status projection for a pipeline vertex or MonoVertex.
+// It does not include live Pod inspection or daemon data-flow health.
 type VertexStatus struct {
 	Ref                TargetRef
 	Phase              string

@@ -36,7 +36,7 @@ type CapabilitiesService interface {
 	GetCapabilities() capabilities.Capabilities
 }
 
-// ObservabilityService serves Kubernetes-backed resource observability reads.
+// ObservabilityService serves Kubernetes-backed Vertex and MonoVertex observability reads.
 type ObservabilityService interface {
 	GetPipelineVertexSummary(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexSummary], error)
 	GetPipelineVertexStatus(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexStatus], error)
@@ -68,7 +68,7 @@ func (h *Handler) GetCapabilities(c *gin.Context) {
 	c.JSON(http.StatusOK, toCapabilities(h.capabilitiesService.GetCapabilities()))
 }
 
-// GetPipelineVertexSummary returns a compact controller-backed Vertex projection.
+// GetPipelineVertexSummary returns a compact Kubernetes Vertex CR projection.
 func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexSummaryParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return
@@ -81,7 +81,7 @@ func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.N
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
 }
 
-// GetPipelineVertexStatus returns bounded controller detail for one pipeline vertex.
+// GetPipelineVertexStatus returns bounded Kubernetes Vertex CR status for one pipeline vertex.
 func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex, params generated.GetPipelineVertexStatusParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return
@@ -94,7 +94,7 @@ func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Na
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
 }
 
-// GetMonoVertexSummary returns a compact controller-backed MonoVertex projection.
+// GetMonoVertexSummary returns a compact Kubernetes MonoVertex CR projection.
 func (h *Handler) GetMonoVertexSummary(c *gin.Context, namespace generated.Namespace, monoVertex generated.MonoVertex, params generated.GetMonoVertexSummaryParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"monoVertex", monoVertex}) {
 		return
@@ -107,7 +107,7 @@ func (h *Handler) GetMonoVertexSummary(c *gin.Context, namespace generated.Names
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
 }
 
-// GetMonoVertexStatus returns bounded controller detail for one MonoVertex.
+// GetMonoVertexStatus returns bounded Kubernetes MonoVertex CR status.
 func (h *Handler) GetMonoVertexStatus(c *gin.Context, namespace generated.Namespace, monoVertex generated.MonoVertex, params generated.GetMonoVertexStatusParams) {
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"monoVertex", monoVertex}) {
 		return
