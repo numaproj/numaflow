@@ -145,7 +145,8 @@ func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]scalingutil
 	return parsed, nil
 }
 
-// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time.
+// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time,
+// taking any active cron window into account.
 func (s *Scaler) effectiveScaleBoundsFor(monoVtx *dfv1.MonoVertex, at time.Time) (int32, int32, bool, error) {
 	parsed, err := s.parsedCronSchedulesFor(monoVtx)
 	if err != nil {

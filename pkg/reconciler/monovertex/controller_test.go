@@ -455,6 +455,52 @@ func Test_orchestratePods_patchesScaleSubresourceReplicas(t *testing.T) {
 		assert.NoError(t, r.orchestratePods(context.TODO(), refetched))
 		assert.Equal(t, int32(2), *refetched.Spec.Replicas)
 	})
+
+	t.Run("misconfigured scale.min > scale.max converges to a stable value instead of oscillating", func(t *testing.T) {
+		// min > max used to flip-flop the clamp result every reconcile, re-patching
+		// spec.replicas and churning pods each time.
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](5)
+		testObj.Spec.Scale.Max = ptr.To[int32](2)
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		first := *testObj.Spec.Replicas
+
+		// Repeat reconciles must keep producing the same value.
+		for i := 0; i < 5; i++ {
+			refetched := &dfv1.MonoVertex{}
+			assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, refetched))
+			assert.NoError(t, r.orchestratePods(context.TODO(), refetched))
+			assert.Equal(t, first, *refetched.Spec.Replicas, "spec.replicas must not oscillate across reconciles when min > max")
+		}
+	})
+
+	t.Run("cron window wider than base scale.min/max is clamped back to the base range", func(t *testing.T) {
+		// Base min/max stay the source of truth (numaproj/numaflow#3628); a cron window
+		// outside that range must not let the reconciler exceed it.
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](1)
+		testObj.Spec.Scale.Max = ptr.To[int32](1)
+		testObj.Spec.Scale.Cron = &dfv1.CronScheduling{
+			// Full-day window so the test doesn't depend on the time it happens to run at.
+			Schedules: []dfv1.CronSchedule{{
+				Start: "0 0 0 * * *",
+				End:   "59 59 23 * * *",
+				Min:   ptr.To[int32](10),
+				Max:   ptr.To[int32](10),
+			}},
+		}
+		testObj.Spec.Replicas = ptr.To[int32](10) // e.g. a stale value from before the fix
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(1), *testObj.Spec.Replicas, "reconciler must clamp to the base scale.max, not the wider cron bounds")
+	})
 }
 
 func Test_orchestrateFixedResources(t *testing.T) {
