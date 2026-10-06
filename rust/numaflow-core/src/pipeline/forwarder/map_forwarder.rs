@@ -13,7 +13,6 @@ use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
-use crate::shared::metrics::start_metrics_server;
 use crate::tracker::Tracker;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
@@ -22,10 +21,10 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::{error, info};
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
@@ -99,6 +98,7 @@ pub async fn start_map_forwarder(
     isb_factory: Arc<dyn ISBFactory>,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
+    metrics_state: MetricsState,
 ) -> Result<()> {
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         let store = isb_factory
@@ -218,32 +218,17 @@ pub async fn start_map_forwarder(
         .await?
     };
 
-    let metrics_server_handle = start_metrics_server::<WithoutRateLimiter>(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
-                Box::new(mapper_handle),
-            ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partitions: from_partitions,
-            }),
-        },
-    )
-    .await;
+    metrics_state.set(
+        ComponentHealthChecks::<WithoutRateLimiter>::Pipeline(Box::new(PipelineComponents::Map(
+            Box::new(mapper_handle),
+        ))),
+        watermark_handle.map(|handle| WatermarkFetcherState {
+            watermark_handle: WatermarkHandle::ISB(handle),
+            partitions: from_partitions,
+        }),
+    );
 
-    let results = try_join_all(forwarder_tasks).await.map_err(|e| {
-        error!(?e, "A forwarder task panicked, cancelling token");
-        cln_token.cancel();
-        Error::Forwarder(e.to_string())
-    })?;
-
-    for result in results {
-        info!(?result, "Forwarder task completed");
-        result?;
-    }
-
-    metrics_server_handle.abort();
+    super::join_forwarder_tasks(forwarder_tasks, &cln_token).await?;
 
     info!("All forwarders have stopped successfully");
     Ok(())
@@ -258,7 +243,7 @@ async fn run_all_map_forwarders<C>(
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
-    Vec<tokio::task::JoinHandle<Result<()>>>,
+    Vec<AbortOnDropHandle<Result<()>>>,
     MapHandle,
     PendingReaderTasks,
 )>
@@ -326,10 +311,7 @@ async fn run_map_forwarder_for_stream<C>(
     buffer_writer: ISBWriterOrchestrator,
     rate_limiter: Option<C::RateLimiter>,
     isb_factory: &dyn ISBFactory,
-) -> Result<(
-    tokio::task::JoinHandle<Result<()>>,
-    ISBReaderOrchestrator<C>,
-)>
+) -> Result<(AbortOnDropHandle<Result<()>>, ISBReaderOrchestrator<C>)>
 where
     C: NumaflowTypeConfig,
 {
@@ -347,7 +329,9 @@ where
 
     let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
 
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
+    let task = AbortOnDropHandle::new(tokio::spawn(
+        async move { forwarder.start(cln_token).await },
+    ));
     Ok((task, isb_reader))
 }
 
@@ -591,6 +575,7 @@ mod tests {
                     Arc::new(JetStreamFactory::new(context.clone())),
                     pipeline_config,
                     map_vtx_config,
+                    MetricsState::new(),
                 )
                 .await
                 .unwrap();
