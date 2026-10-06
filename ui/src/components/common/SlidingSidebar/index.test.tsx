@@ -1,7 +1,11 @@
 import React from "react";
 import { render as renderBase, screen, waitFor, fireEvent } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
-import { SidebarType, SlidingSidebar } from "./index";
+import { BrowserRouter, MemoryRouter } from "react-router-dom";
+import {
+  getPodViewBetaSidebarSizing,
+  SidebarType,
+  SlidingSidebar,
+} from "./index";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 
@@ -130,6 +134,21 @@ jest.mock("./partials/ISBUpdate", () => {
 describe("SlidingSidebar", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("calculates Beta sizing for desktop and mobile drawers", () => {
+    expect(getPodViewBetaSidebarSizing(1440)).toEqual({
+      minWidth: 760,
+      preferredWidth: 1120,
+    });
+    expect(getPodViewBetaSidebarSizing(1200)).toEqual({
+      minWidth: 760,
+      preferredWidth: 1104,
+    });
+    expect(getPodViewBetaSidebarSizing(600)).toEqual({
+      minWidth: 600,
+      preferredWidth: 600,
+    });
   });
 
   it("should render missing props", async () => {
@@ -353,6 +372,36 @@ describe("SlidingSidebar", () => {
     );
     await waitFor(() => {
       expect(screen.getByTestId("vertex-details-mock")).toBeInTheDocument();
+    });
+  });
+
+  it("marks a Beta vertex sidebar without changing the VertexDetails contract", async () => {
+    renderBase(
+      <MemoryRouter initialEntries={["/?vertex=test-vertex&podViewVersion=beta"]}>
+        <AppContext.Provider value={mockContext}>
+          <SlidingSidebar
+            pageWidth={1440}
+            slide={true}
+            type={SidebarType.VERTEX_DETAILS}
+            vertexDetailsProps={{
+              namespaceId: "test-namespace",
+              pipelineId: "test-pipeline",
+              vertexId: "test-vertex",
+              vertexSpecs: {},
+              vertexMetrics: {},
+              buffers: [],
+              type: "source",
+              refresh: jest.fn(),
+            }}
+          />
+        </AppContext.Provider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("vertex-details-mock")).toBeInTheDocument();
+      expect(document.querySelector(".sidebar-root--pod-beta")).toBeInTheDocument();
+      expect(document.querySelector(".sidebar-content--pod-beta")).toBeInTheDocument();
     });
   });
 

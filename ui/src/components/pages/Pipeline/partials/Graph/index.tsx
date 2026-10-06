@@ -78,6 +78,7 @@ import monoVertex from "../../../../../images/monoVertex.svg";
 import {
   pushObservabilityState,
 } from "../../../../../utils/observabilityURLState";
+import { resolvePodViewVersion } from "../../../../../utils/podViewPreference";
 import bypass from "../../../../../images/bypass.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
@@ -914,6 +915,7 @@ export default function Graph(props: GraphProps) {
         pushObservabilityState(history, location, {
           vertex: node.id,
           vertexTab: "pods",
+          podViewVersion: resolvePodViewVersion(location.search),
           pod: null,
           container: null,
           logsSearch: null,

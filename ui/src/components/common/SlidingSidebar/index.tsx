@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useMemo,
   useContext,
+  useRef,
 } from "react";
 import Box from "@mui/material/Box";
 import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
@@ -29,6 +30,7 @@ import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
 import slider from "../../../images/slider.png";
 import { clearObservabilitySearch } from "../../../utils/observabilityURLState";
+import { resolvePodViewVersion } from "../../../utils/podViewPreference";
 
 import "./style.css";
 
@@ -58,6 +60,18 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
   [SidebarType.VERSION_DETAILS]: 350,
+};
+
+const POD_VIEW_BETA_MOBILE_BREAKPOINT = 768;
+
+export const getPodViewBetaSidebarSizing = (pageWidth: number) => {
+  if (pageWidth < POD_VIEW_BETA_MOBILE_BREAKPOINT) {
+    return { minWidth: pageWidth, preferredWidth: pageWidth };
+  }
+  return {
+    minWidth: Math.min(760, pageWidth),
+    preferredWidth: Math.min(1120, pageWidth * 0.92),
+  };
 };
 
 export interface SpecEditorModalProps {
@@ -104,20 +118,25 @@ export function SlidingSidebar({
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
   const location = useLocation();
+  const isPodViewBeta =
+    type === SidebarType.VERTEX_DETAILS &&
+    resolvePodViewVersion(location.search) === "beta";
+  const fixedWidth =
+    type === SidebarType.ERRORS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : type === SidebarType.VERSION_DETAILS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
+      : undefined;
+  const betaSizing = getPodViewBetaSidebarSizing(pageWidth);
+  const preferredWidth =
+    fixedWidth ||
+    (isPodViewBeta ? betaSizing.preferredWidth : pageWidth * 0.85);
+  const minWidth =
+    fixedWidth || (isPodViewBeta ? betaSizing.minWidth : pageWidth * 0.5);
   const [width, setWidth] = useState<number>(
-    type === SidebarType.ERRORS
-      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
-      : type === SidebarType.VERSION_DETAILS
-      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
-      : pageWidth * 0.85
+    preferredWidth
   );
-  const [minWidth] = useState<number>(
-    type === SidebarType.ERRORS
-      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
-      : type === SidebarType.VERSION_DETAILS
-      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
-      : pageWidth * 0.5
-  );
+  const previousBetaMode = useRef(isPodViewBeta);
   const [modalOnClose, setModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
@@ -139,12 +158,15 @@ export function SlidingSidebar({
   //   setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
   // }, [type]);
 
-  // Don't allow width greater then pageWidth
+  // Keep a resized drawer usable when its mode or available page width changes.
   useEffect(() => {
-    if (width > pageWidth) {
-      setWidth(pageWidth);
-    }
-  }, [width, pageWidth]);
+    const modeChanged = previousBetaMode.current !== isPodViewBeta;
+    previousBetaMode.current = isPodViewBeta;
+    setWidth((currentWidth) => {
+      if (modeChanged || currentWidth === 0) return preferredWidth;
+      return Math.min(Math.max(currentWidth, minWidth), pageWidth);
+    });
+  }, [isPodViewBeta, minWidth, pageWidth, preferredWidth]);
 
   const dragHandler = useCallback(
     (mouseDownEvent: any) => {
@@ -153,7 +175,7 @@ export function SlidingSidebar({
       const onMouseMove = (mouseMoveEvent: any) => {
         const result = startWidth + startPosition - mouseMoveEvent.pageX;
         if (!minWidth || result >= minWidth) {
-          setWidth(result);
+          setWidth(Math.min(result, pageWidth));
         }
       };
       const onMouseUp = () => {
@@ -162,7 +184,7 @@ export function SlidingSidebar({
       document.body.addEventListener("mousemove", onMouseMove);
       document.body.addEventListener("mouseup", onMouseUp, { once: true });
     },
-    [width, minWidth]
+    [width, minWidth, pageWidth]
   );
 
   const handleClose = useCallback(() => {
@@ -291,6 +313,7 @@ export function SlidingSidebar({
 
   return (
     <Box
+      className={isPodViewBeta ? "sidebar-root--pod-beta" : undefined}
       sx={{
         display: "flex",
         flexDirection: "row",
@@ -321,6 +344,7 @@ export function SlidingSidebar({
         </Box>
       )}
       <Box
+        className={isPodViewBeta ? "sidebar-content--pod-beta" : undefined}
         sx={{
           display: "flex",
           flexDirection: "column",

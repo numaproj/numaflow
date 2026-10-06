@@ -11,6 +11,52 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 0.8rem;
+}
+
+.vertex-details-pod-view-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.6rem;
+  margin-bottom: 1.6rem;
+  padding: 1.2rem 1.6rem;
+  border: 1px solid rgba(0, 119, 197, 0.3);
+  border-radius: 1.2rem;
+  background-color: var(--accent-primary);
+}
+
+.vertex-details-pod-view-banner-copy {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.8rem;
+}
+
+.vertex-details-pod-view-banner-title {
+  color: #ffffff;
+  font-size: 1.4rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.vertex-details-pod-view-banner-beta {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 1rem;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.vertex-details-pod-view-banner-description {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1.2rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vertex-details-header-text {
@@ -26,6 +72,23 @@
 
 .vertex-details-tab-panel {
   height: 100%;
+}
+
+.vertex-details-pod-view-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.vertex-details-pod-view-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.vertex-details-pod-view-content > * {
+  flex: 1;
+  min-width: 0;
 }
 
 .vertex-details-tab-panel-metrics {
@@ -58,4 +121,102 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.vertex-details--pod-beta {
+  min-height: 0;
+}
+
+.vertex-details--pod-beta .vertex-details-header {
+  min-height: 4rem;
+  padding-right: 4.8rem;
+}
+
+.vertex-details--pod-beta .vertex-details-header-actions {
+  gap: 1.2rem;
+}
+
+.vertex-details-beta-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.vertex-details--pod-beta .vertex-details-header-icon {
+  width: 3.6rem;
+}
+
+.vertex-details--pod-beta .vertex-details-header-text {
+  margin-left: 1.2rem;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.vertex-details-beta-title-separator {
+  margin: 0 0.6rem;
+  color: var(--text-tertiary);
+  font-size: 2rem;
+}
+
+.vertex-details-beta-title-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vertex-details--pod-beta .vertex-details-tabs {
+  min-height: 4.4rem;
+}
+
+.vertex-details--pod-beta .vertex-details-tabs > .MuiTabs-scroller {
+  overflow-x: auto !important;
+}
+
+.vertex-details--pod-beta .vertex-details-tab.MuiTab-root,
+.vertex-details--pod-beta .vertex-details-tab-selected.MuiTab-root {
+  min-width: fit-content;
+  padding: 1.2rem 1.6rem;
+  font-size: 1.3rem !important;
+}
+
+.vertex-details--pod-beta .vertex-details-pod-view-content {
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .vertex-details--pod-beta .vertex-details-header {
+    padding-right: 3.6rem;
+  }
+
+  .vertex-details--pod-beta .vertex-details-header-text {
+    display: none;
+  }
+
+  .vertex-details-header-actions {
+    gap: 0.4rem;
+  }
+
+  .pod-view-mode-toggle .MuiToggleButton-root {
+    min-width: 5.8rem;
+    padding-right: 0.8rem;
+    padding-left: 0.8rem;
+  }
+
+  .vertex-details-pod-view-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .vertex-details-pod-view-banner-copy {
+    width: 100%;
+  }
+
+  .vertex-details-pod-view-banner-description {
+    display: none;
+  }
 }
