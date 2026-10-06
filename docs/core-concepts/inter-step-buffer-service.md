@@ -198,8 +198,8 @@ bufferConfig: |
     maxMsgs: 30000
     maxAge: 168h
     maxBytes: -1
-    # Max size of a single message in bytes, defaults to 65 MB (gRPC max message size + 1 MB headroom).
-    maxMsgSize: 68157440
+    # Max size of a single message in bytes, defaults to 32 MB, which is also the max value allowed.
+    maxMsgSize: 33554432
     # 0: File, 1: Memory
     storage: 0
     replicas: 3

@@ -186,36 +186,36 @@ func findTypesRecursive(result *[]interface{}, obj reflect.Value, t reflect.Type
 func generateSecretVolumeSpecs(selector *corev1.SecretKeySelector) (corev1.Volume, corev1.VolumeMount) {
 	volName := strings.ReplaceAll("secret-"+selector.Name, "_", "-")
 	return corev1.Volume{
-			Name: volName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: selector.Name,
-				},
+		Name: volName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: selector.Name,
 			},
-		}, corev1.VolumeMount{
-			Name:      volName,
-			ReadOnly:  true,
-			MountPath: "/var/numaflow/secrets/" + selector.Name,
-		}
+		},
+	}, corev1.VolumeMount{
+		Name:      volName,
+		ReadOnly:  true,
+		MountPath: "/var/numaflow/secrets/" + selector.Name,
+	}
 }
 
 // generateConfigMapVolumeSpecs builds a "volume" and "volumeMount"spec with a configMapKeySelector
 func generateConfigMapVolumeSpecs(selector *corev1.ConfigMapKeySelector) (corev1.Volume, corev1.VolumeMount) {
 	volName := strings.ReplaceAll("cm-"+selector.Name, "_", "-")
 	return corev1.Volume{
-			Name: volName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: selector.Name,
-					},
+		Name: volName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: selector.Name,
 				},
 			},
-		}, corev1.VolumeMount{
-			Name:      volName,
-			ReadOnly:  true,
-			MountPath: "/var/numaflow/config/" + selector.Name,
-		}
+		},
+	}, corev1.VolumeMount{
+		Name:      volName,
+		ReadOnly:  true,
+		MountPath: "/var/numaflow/config/" + selector.Name,
+	}
 }
 
 func uniqueVolumes(vols []corev1.Volume) []corev1.Volume {

@@ -48018,8 +48018,9 @@ data:
             maxMsgs: 100000
             maxAge: 72h
             maxBytes: -1
-            # Max size of a single message in bytes, defaults to 65 MB, i.e. the gRPC max message size (64 MB) plus 1 MB of headroom for platform injected data.
-            maxMsgSize: 68157440
+            # Max size of a single message in bytes, defaults to 32 MB, which is also the max value allowed,
+            # since JetStream file storage does not support messages larger than 32 MB.
+            maxMsgSize: 33554432
             # 0: File, 1: Memory
             storage: 0
             replicas: 3

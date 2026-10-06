@@ -1,16 +1,17 @@
 # Maximum Message Size
 
-The default maximum message size is `65MB`, i.e. the gRPC max message size (`64MB`) plus `1MB` of headroom for
-the platform injected data (headers, metadata, etc.). Large messages increase the storage and memory usage of the Inter-Step Buffer
-Service, so the safest action might be to [enable compression](#enable-compression).
+The default maximum message size is `32MB`. Large messages increase the storage and memory usage of the Inter-Step
+Buffer Service, so the safest action might be to [enable compression](#enable-compression).
 
 The max message size is determined by:
 
 - Max messages size supported by gRPC (default value is `64MB` in Numaflow).
 - Max messages size supported by the Inter-Step Buffer implementation.
 
-If `JetStream` is used as the Inter-Step Buffer implementation, the default max message size for it is configured as `65MB`.
-You can change it by setting the `spec.jetstream.settings` in the `InterStepBufferService` specification.
+If `JetStream` is used as the Inter-Step Buffer implementation, the max message size is limited by the streams created
+for the buffers, using `stream.maxMsgSize` in `spec.jetstream.bufferConfig` of the `InterStepBufferService`
+specification. It defaults to `33554432` (32MB), which is also the max value allowed, since JetStream file storage does
+not support messages larger than 32MB. The buffer creation fails if a bigger value is configured.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -19,12 +20,13 @@ metadata:
   name: default
 spec:
   jetstream:
-    settings: |
-      max_payload: 8388608 # 8MB
+    bufferConfig: |
+      stream:
+        maxMsgSize: 8388608 # 8MB
 ```
 
-The streams created for the buffers also limit the size of a single message using `stream.maxMsgSize` in
-`spec.jetstream.bufferConfig` (defaults to `68157440`, i.e. 65MB).
+The NATS server `max_payload` (configured in `spec.jetstream.settings`) defaults to `68157440` (65MB), so messages
+larger than `stream.maxMsgSize` are rejected by the stream instead of the NATS connection being closed.
 
 Writes rejected because a message exceeds the max message size of the stream are counted by the
 `isb_jetstream_max_payload_exceeded_total` metric.
