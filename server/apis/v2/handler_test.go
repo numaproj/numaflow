@@ -81,7 +81,7 @@ func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
 			ResourceVersion: "17",
 			Value: observability.VertexSummary{
 				Ref: observability.TargetRef{
-					Kind:      observability.TargetKindPipelineVertex,
+					Kind:      observability.TargetKindVertex,
 					Namespace: "team-a",
 					Pipeline:  "orders",
 					Name:      "map",
@@ -111,6 +111,7 @@ func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
 	assert.NotContains(t, recorder.Body.String(), `"data"`)
 	var response generated.VertexSummary
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, generated.TargetKindVertex, response.Ref.Kind)
 	assert.Equal(t, "map", response.Ref.Name)
 	assert.Equal(t, generated.VertexType("MapUDF"), response.VertexType)
 
@@ -124,11 +125,12 @@ func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
 
 func TestPipelineVertexSummaryProblems(t *testing.T) {
 	tests := []struct {
-		name        string
-		path        string
-		serviceErr  error
-		status      int
-		problemCode string
+		name          string
+		path          string
+		serviceErr    error
+		status        int
+		problemCode   string
+		problemDetail string
 	}{
 		{
 			name:        "invalid Kubernetes name",
@@ -137,11 +139,12 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 			problemCode: "validation_failed",
 		},
 		{
-			name:        "not found",
-			path:        "/namespaces/team-a/pipelines/orders/vertices/map/summary",
-			serviceErr:  apierrors.NewNotFound(schema.GroupResource{Group: "numaflow.numaproj.io", Resource: "vertices"}, "orders-map"),
-			status:      http.StatusNotFound,
-			problemCode: "target_not_found",
+			name:          "not found",
+			path:          "/namespaces/team-a/pipelines/orders/vertices/map/summary",
+			serviceErr:    apierrors.NewNotFound(schema.GroupResource{Group: "numaflow.numaproj.io", Resource: "vertices"}, "orders-map"),
+			status:        http.StatusNotFound,
+			problemCode:   "target_not_found",
+			problemDetail: "The requested vertex does not exist",
 		},
 		{
 			name:        "provider failure",
@@ -162,6 +165,9 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 			var problem generated.Problem
 			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
 			assert.Equal(t, test.problemCode, problem.Code)
+			if test.problemDetail != "" {
+				assert.Equal(t, test.problemDetail, problem.Detail)
+			}
 			assert.NotContains(t, problem.Detail, "provider unavailable")
 		})
 	}
@@ -173,7 +179,7 @@ func TestGetPipelineVertexStatusAndETag(t *testing.T) {
 			ResourceVersion: "18",
 			Value: observability.VertexStatus{
 				Ref: observability.TargetRef{
-					Kind:      observability.TargetKindPipelineVertex,
+					Kind:      observability.TargetKindVertex,
 					Namespace: "team-a",
 					Pipeline:  "orders",
 					Name:      "map",
@@ -202,6 +208,7 @@ func TestGetPipelineVertexStatusAndETag(t *testing.T) {
 	assert.NotContains(t, recorder.Body.String(), `"data"`)
 	var response generated.VertexStatus
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, generated.TargetKindVertex, response.Ref.Kind)
 	assert.Equal(t, int64(4), response.Replicas.Desired)
 	require.Len(t, response.Conditions, 1)
 	assert.Equal(t, generated.ConditionStatus("True"), response.Conditions[0].Status)

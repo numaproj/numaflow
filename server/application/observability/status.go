@@ -41,7 +41,7 @@ func (s *Service) GetPipelineVertexStatus(ctx context.Context, namespace, pipeli
 	return Result[VertexStatus]{
 		Value: VertexStatus{
 			Ref: TargetRef{
-				Kind:      TargetKindPipelineVertex,
+				Kind:      TargetKindVertex,
 				Namespace: namespace,
 				Pipeline:  pipeline,
 				Name:      vertex,

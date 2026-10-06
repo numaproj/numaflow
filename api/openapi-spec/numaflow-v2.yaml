@@ -304,14 +304,14 @@ components:
           type: string
         pipeline:
           type: string
-          description: Pipeline name for PipelineVertex targets; omitted for MonoVertex targets.
+          description: Pipeline name for Vertex targets; omitted for MonoVertex targets.
         name:
           type: string
         uid:
           type: string
     TargetKind:
       type: string
-      enum: [PipelineVertex, MonoVertex]
+      enum: [Vertex, MonoVertex]
     VertexType:
       type: string
       enum: [Source, Sink, MapUDF, ReduceUDF, MonoVertex]

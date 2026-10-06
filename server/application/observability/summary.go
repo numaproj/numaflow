@@ -42,7 +42,7 @@ func (s *Service) GetPipelineVertexSummary(ctx context.Context, namespace, pipel
 	return Result[VertexSummary]{
 		Value: VertexSummary{
 			Ref: TargetRef{
-				Kind:      TargetKindPipelineVertex,
+				Kind:      TargetKindVertex,
 				Namespace: namespace,
 				Pipeline:  pipeline,
 				Name:      vertex,

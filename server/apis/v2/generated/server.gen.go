@@ -40,8 +40,8 @@ const (
 
 // Defines values for TargetKind.
 const (
-	TargetKindMonoVertex     TargetKind = "MonoVertex"
-	TargetKindPipelineVertex TargetKind = "PipelineVertex"
+	TargetKindMonoVertex TargetKind = "MonoVertex"
+	TargetKindVertex     TargetKind = "Vertex"
 )
 
 // Defines values for VertexType.
@@ -122,7 +122,7 @@ type TargetRef struct {
 	Name      string     `json:"name"`
 	Namespace string     `json:"namespace"`
 
-	// Pipeline Pipeline name for PipelineVertex targets; omitted for MonoVertex targets.
+	// Pipeline Pipeline name for Vertex targets; omitted for MonoVertex targets.
 	Pipeline *string `json:"pipeline,omitempty"`
 	Uid      string  `json:"uid"`
 }
@@ -583,23 +583,23 @@ var swaggerSpec = []string{
 	"KFvt04Smitm0yl3hCqlhC+sD5RZnqjPjYWBMZYbReJGhAcajS0xoAyLtwrZUrKdwigpFGoWuQqOeYcJD",
 	"dhMpOYLoAqnKCnT06rffgiR0blPSOlYNMzx+A6MgxctsSzQ8RPwFk7yN802c3eYktzXJzvhbQdzfJYC6",
 	"s05ji0DzMe/6jK64GjeKPMQNSqWqGm0tPjYWiOo/Q+1vcTClQsiej6Ari8yVm0dTfj6K8YrJao21Gqhv",
-	"1Eq4wjFmtBvXI3xgvsOpI0K3FqCdiUYM+/6Uz9YVDzL7Q8V3mxcHEi7rzjmCKBHONtZWi/0GCWQqFele",
-	"vuqi9D+JzJmxDdm0m1iq9ZMYaEuW7c6vTglJZ4JSDTUsecxonarrsBT6zkEZs++fL9O6XNs/gLUVnm8X",
-	"Lj3R2XA1nDUguJ6DjnvA7NAi7KhS741Z97ArMH7GUF2mZ5ryyOpcp8DdhI3lqA3kha9nGv0nrtmtxzqk",
-	"vYejsHrer3Q9uhotNur0gKpG+diwG+g2iLj9LpnsdJFu0nFZtxRuHHDhWu+Or62X841PnQ7/sSNHWiFq",
-	"Zaz4WyBuEvp5x+s21MuB52yBetV3HZhUV9rWvfTweh1bqUKr0Ddm/z7p5eE4bxqG3XWxa6VBm3EK/DC5",
-	"f1YcHwbOYzEW8S0/Ar+pyuGt1Wy7Mw7N4KiNOK28aB9gtl7fcYukC6vNmK3vVNdUY/ecRRM6ZuLBllRQ",
-	"/PHugtq6OStT9J931FltRX/gFIpz+YjZLfByVyhYNZCbYMYN2ybILZlhe+3jTw9mCvWh63q1PRqmpWLm",
-	"eWxdoq4q5APDN6UPDe6NxX8VPE2VOdjKpMfljIkWGlCwD/jsJ7lMTGVkiA76oScVQ2HrvjfXl+5FTEFq",
-	"tKsCP1Unk1KjIhZqagopalcRwcy670nTVo1os92e5AaA9dvmiA5PBieDHvBiDien1VxPQMHoiJ6dDE7O",
-	"rEuDmbs791cD+wxduGoGZ7bppL+vzf86T0PDwWDLcPywoXiHT2Qy/n46RTdC8Drs7E7o+eB0E4NG4n7n",
-	"5WGZ0Fde/O1EsRcm50d1OrVK6shDYAGMw4QjMdK94FV9VvX8YK0JM21d9x3TqVygcn3VU6/xMivnl17l",
-	"tSP6N9pZrZxf+20VXK1M/ab+1/2vzedlP5dC9mxoY26lfRle9tuRxSYHWBvRdt/J7+IKbLf02xfjZbJz",
-	"cxC89tgdPtEv77+hd3YUEPHOoOkJmqIX6H+OfmY7G5zvdu7w+e9YFJ0PznYTtY/IjmI/0fyjqSUYDncT",
-	"rD3bvSzCs0jT643rwjgEfW8A8G4u3ozwBqGOegvWjSqPhnrbAOyB9eaV5qcFe6WB7WjXjZ5+IfUvglRw",
-	"v76A1JConX4YNOv5oe5/rT8u+y1UF3tn5A2vrN8QqM1vqPbY+z+YvZv57eJXCv+ZU3jR9YMgWOwTKILf",
-	"6X2HKLE7mW/6ncavOHF04l8NFL+y/184+xcbjfWtUB2Mlxy0wsHS3b11XTcCrIBXKk5HtA8F6y+GdHm/",
-	"/G8AAAD//y/GPjcHLwAA",
+	"1Eq4wjFmtBvXI3xgvsOpI0IzewgmGTHMe+rP1gUPMvdDxW+b9waSLeuOOYIkEc401laL/QYIZCpVnTZ8",
+	"16T/SWTOjG3Apt1EUq2fxEBasmx3PnWXTzoTk2qIYcljRupUWYelzHcOuph9//yY1uXZ/gGrreh8e3Dp",
+	"ic6Gq+GrcfrrOei45WeHFl1HlXZvzLpnXYHxM4XqMj3TlENW5zoF7iZqLEdtIC98/dLoP3HNbT3GIe09",
+	"HIXV836l6tHVZ7FRpwdUMcrHhN0At8HD7XfJY6eLdJOMy7KlcO3/hWu1O762Xr43PnU6/MeOnGiFqJWx",
+	"4m+BuEno5x2v21AfB56zBepVn3VgEl1pU/fSw+t1bKUKrULfmP37opeH47xpEHbXwa51Bm3GKfDD5P5Z",
+	"cXwYOI/FWMS3/Mj7pip/t1av7c44NIOjNuK08qJ9gNl6fcctki6sNmO2vlNdQ43d8xVN6JiJB1tKQfHH",
+	"uwtq6+SsTNF/3lFftRX8gVMnzuUjZrfAy12hYNVAbmIZN2ybILdkhu21jz89mCHUh67r1fZkmJaKmeex",
+	"dYm6qpAPDN+UPjS4NxX/VfAUVeZgK5MelzMmWmhAwT7gs5/cMjGVkaE56IeeVAyFrfveXF+6FzAFqdGu",
+	"CvxUnUxKjYpYqKkppKhdRQQz674nTRs1os12e5Ib+NVvmSM6PBmcDHrAizmcnFZzPAEFoyN6djI4ObMu",
+	"DWbu7txfDewzdOGqGZTZJpP+vjbv6zwFDQeDLcPww4bgHT6RSfj76RTdyMDrsLM7oeeD000MGon7nZeG",
+	"ZUJfefG3E8VelJwf1enUKqkjD4EFMA4TjsRI92JX9VXVc4O1Jsy0dd13TKdygcr1UU+9xsusnF96ldeO",
+	"6N9oZ7Vyfu23VXC1MvWb+l/3vzafl/1cCtmzoY25lfYleNlvRxSbHGBtJNt9F7+LK7Dd0m9fiJfJzs1B",
+	"8Npjd/gkv7z/ht7ZUUDEO4OmJ2iKXqD/OfpZ7Wxwvtu5w+e+Y1F0PjjbTdQ+GjuK/UTzj6SWYDjcTbD2",
+	"TPeyCM8iTa83rgvjEPS9AcC7uXgzwhuEOuotWDeqPBrqbQOwB9abV5mfFuyVBrajXTd6+oXUvwhSwf3a",
+	"AlJDonb6YdCs54a6/7X+uOy3UF3snZE3vKp+Q6A2v5naY+//YPZu5raLXyn8Z07hRdcPgmCxT6AIfpf3",
+	"HaLE7mS+6XcZv+LE0Yl/NVD8yv5/4exfbDTWt0J1MF5y0AoHS3f31nXdCLACXqk4HdE+FKy/GNLl/fK/",
+	"AQAA///RXpcO9y4AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

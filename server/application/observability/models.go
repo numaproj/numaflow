@@ -24,8 +24,8 @@ import "time"
 type TargetKind string
 
 const (
-	TargetKindPipelineVertex TargetKind = "PipelineVertex"
-	TargetKindMonoVertex     TargetKind = "MonoVertex"
+	TargetKindVertex     TargetKind = "Vertex"
+	TargetKindMonoVertex TargetKind = "MonoVertex"
 )
 
 type HealthState string
@@ -41,7 +41,7 @@ const (
 type TargetRef struct {
 	Kind      TargetKind
 	Namespace string
-	// Pipeline is set for PipelineVertex targets and empty for MonoVertex targets.
+	// Pipeline is set for Vertex targets and empty for MonoVertex targets.
 	Pipeline string
 	Name     string
 	UID      string

@@ -75,7 +75,7 @@ func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.N
 	}
 	result, err := h.observabilityService.GetPipelineVertexSummary(c.Request.Context(), namespace, pipeline, vertex)
 	if err != nil {
-		writeServiceError(c, err, "pipeline vertex")
+		writeServiceError(c, err, "vertex")
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
@@ -88,7 +88,7 @@ func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Na
 	}
 	result, err := h.observabilityService.GetPipelineVertexStatus(c.Request.Context(), namespace, pipeline, vertex)
 	if err != nil {
-		writeServiceError(c, err, "pipeline vertex")
+		writeServiceError(c, err, "vertex")
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
