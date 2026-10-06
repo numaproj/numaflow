@@ -4,7 +4,6 @@ import React, {
   useCallback,
   useMemo,
   useContext,
-  useRef,
 } from "react";
 import Box from "@mui/material/Box";
 import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
@@ -62,18 +61,6 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.VERSION_DETAILS]: 350,
 };
 
-const POD_VIEW_BETA_MOBILE_BREAKPOINT = 768;
-
-export const getPodViewBetaSidebarSizing = (pageWidth: number) => {
-  if (pageWidth < POD_VIEW_BETA_MOBILE_BREAKPOINT) {
-    return { minWidth: pageWidth, preferredWidth: pageWidth };
-  }
-  return {
-    minWidth: Math.min(760, pageWidth),
-    preferredWidth: Math.min(1120, pageWidth * 0.92),
-  };
-};
-
 export interface SpecEditorModalProps {
   message?: string;
   iconType?: "info" | "warn";
@@ -121,22 +108,20 @@ export function SlidingSidebar({
   const isPodViewBeta =
     type === SidebarType.VERTEX_DETAILS &&
     resolvePodViewVersion(location.search) === "beta";
-  const fixedWidth =
+  const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
       : type === SidebarType.VERSION_DETAILS
       ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
-      : undefined;
-  const betaSizing = getPodViewBetaSidebarSizing(pageWidth);
-  const preferredWidth =
-    fixedWidth ||
-    (isPodViewBeta ? betaSizing.preferredWidth : pageWidth * 0.85);
-  const minWidth =
-    fixedWidth || (isPodViewBeta ? betaSizing.minWidth : pageWidth * 0.5);
-  const [width, setWidth] = useState<number>(
-    preferredWidth
+      : pageWidth * 0.85
   );
-  const previousBetaMode = useRef(isPodViewBeta);
+  const [minWidth] = useState<number>(
+    type === SidebarType.ERRORS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : type === SidebarType.VERSION_DETAILS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
+      : pageWidth * 0.5
+  );
   const [modalOnClose, setModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
@@ -158,15 +143,12 @@ export function SlidingSidebar({
   //   setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
   // }, [type]);
 
-  // Keep a resized drawer usable when its mode or available page width changes.
+  // Don't allow width greater then pageWidth.
   useEffect(() => {
-    const modeChanged = previousBetaMode.current !== isPodViewBeta;
-    previousBetaMode.current = isPodViewBeta;
-    setWidth((currentWidth) => {
-      if (modeChanged || currentWidth === 0) return preferredWidth;
-      return Math.min(Math.max(currentWidth, minWidth), pageWidth);
-    });
-  }, [isPodViewBeta, minWidth, pageWidth, preferredWidth]);
+    if (width > pageWidth) {
+      setWidth(pageWidth);
+    }
+  }, [width, pageWidth]);
 
   const dragHandler = useCallback(
     (mouseDownEvent: any) => {
@@ -175,7 +157,7 @@ export function SlidingSidebar({
       const onMouseMove = (mouseMoveEvent: any) => {
         const result = startWidth + startPosition - mouseMoveEvent.pageX;
         if (!minWidth || result >= minWidth) {
-          setWidth(Math.min(result, pageWidth));
+          setWidth(result);
         }
       };
       const onMouseUp = () => {
@@ -184,7 +166,7 @@ export function SlidingSidebar({
       document.body.addEventListener("mousemove", onMouseMove);
       document.body.addEventListener("mouseup", onMouseUp, { once: true });
     },
-    [width, minWidth, pageWidth]
+    [width, minWidth]
   );
 
   const handleClose = useCallback(() => {

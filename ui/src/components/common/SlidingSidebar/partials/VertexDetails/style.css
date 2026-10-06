@@ -19,6 +19,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1.6rem;
+  margin-right: 4.8rem;
   margin-bottom: 1.6rem;
   padding: 1.2rem 1.6rem;
   border: 1px solid rgba(0, 119, 197, 0.3);
@@ -210,6 +211,7 @@
     align-items: flex-start;
     flex-direction: column;
     gap: 1rem;
+    margin-right: 3.6rem;
   }
 
   .vertex-details-pod-view-banner-copy {

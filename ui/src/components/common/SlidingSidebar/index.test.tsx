@@ -1,11 +1,7 @@
 import React from "react";
 import { render as renderBase, screen, waitFor, fireEvent } from "@testing-library/react";
 import { BrowserRouter, MemoryRouter } from "react-router-dom";
-import {
-  getPodViewBetaSidebarSizing,
-  SidebarType,
-  SlidingSidebar,
-} from "./index";
+import { SidebarType, SlidingSidebar } from "./index";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 
@@ -134,21 +130,6 @@ jest.mock("./partials/ISBUpdate", () => {
 describe("SlidingSidebar", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  it("calculates Beta sizing for desktop and mobile drawers", () => {
-    expect(getPodViewBetaSidebarSizing(1440)).toEqual({
-      minWidth: 760,
-      preferredWidth: 1120,
-    });
-    expect(getPodViewBetaSidebarSizing(1200)).toEqual({
-      minWidth: 760,
-      preferredWidth: 1104,
-    });
-    expect(getPodViewBetaSidebarSizing(600)).toEqual({
-      minWidth: 600,
-      preferredWidth: 600,
-    });
   });
 
   it("should render missing props", async () => {
