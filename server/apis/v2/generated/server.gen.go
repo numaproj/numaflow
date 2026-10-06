@@ -40,15 +40,17 @@ const (
 
 // Defines values for TargetKind.
 const (
-	PipelineVertex TargetKind = "PipelineVertex"
+	TargetKindMonoVertex TargetKind = "MonoVertex"
+	TargetKindVertex     TargetKind = "Vertex"
 )
 
 // Defines values for VertexType.
 const (
-	MapUDF    VertexType = "MapUDF"
-	ReduceUDF VertexType = "ReduceUDF"
-	Sink      VertexType = "Sink"
-	Source    VertexType = "Source"
+	VertexTypeMapUDF     VertexType = "MapUDF"
+	VertexTypeMonoVertex VertexType = "MonoVertex"
+	VertexTypeReduceUDF  VertexType = "ReduceUDF"
+	VertexTypeSink       VertexType = "Sink"
+	VertexTypeSource     VertexType = "Source"
 )
 
 // ApiLimits defines model for ApiLimits.
@@ -79,7 +81,7 @@ type Condition struct {
 // ConditionStatus defines model for Condition.Status.
 type ConditionStatus string
 
-// Health Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type Health struct {
 	Message *string     `json:"message,omitempty"`
 	Reason  *string     `json:"reason,omitempty"`
@@ -119,18 +121,20 @@ type TargetRef struct {
 	Kind      TargetKind `json:"kind"`
 	Name      string     `json:"name"`
 	Namespace string     `json:"namespace"`
-	Pipeline  string     `json:"pipeline"`
-	Uid       string     `json:"uid"`
+
+	// Pipeline Pipeline name for Vertex targets; omitted for MonoVertex targets.
+	Pipeline *string `json:"pipeline,omitempty"`
+	Uid      string  `json:"uid"`
 }
 
-// VertexStatus Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+// VertexStatus Detailed Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type VertexStatus struct {
 	Conditions   []Condition `json:"conditions"`
 	DesiredPhase string      `json:"desiredPhase"`
 	Generation   int64       `json:"generation"`
 	Message      *string     `json:"message,omitempty"`
 
-	// ObservedAt Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time     `json:"observedAt"`
 	ObservedGeneration int64         `json:"observedGeneration"`
 	Phase              string        `json:"phase"`
@@ -147,11 +151,11 @@ type VertexSummary struct {
 	DesiredPhase string    `json:"desiredPhase"`
 	Generation   int64     `json:"generation"`
 
-	// Health Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+	// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 	Health       Health     `json:"health"`
 	LastScaledAt *time.Time `json:"lastScaledAt,omitempty"`
 
-	// ObservedAt Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time  `json:"observedAt"`
 	ObservedGeneration int64      `json:"observedGeneration"`
 	Phase              string     `json:"phase"`
@@ -173,6 +177,9 @@ type Violation struct {
 
 // IfNoneMatch defines model for IfNoneMatch.
 type IfNoneMatch = string
+
+// MonoVertex defines model for MonoVertex.
+type MonoVertex = string
 
 // Namespace defines model for Namespace.
 type Namespace = string
@@ -198,6 +205,18 @@ type Unauthorized = Problem
 // ValidationFailed defines model for ValidationFailed.
 type ValidationFailed = Problem
 
+// GetMonoVertexStatusParams defines parameters for GetMonoVertexStatus.
+type GetMonoVertexStatusParams struct {
+	// IfNoneMatch ETag from an earlier response
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetMonoVertexSummaryParams defines parameters for GetMonoVertexSummary.
+type GetMonoVertexSummaryParams struct {
+	// IfNoneMatch ETag from an earlier response
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetPipelineVertexStatusParams defines parameters for GetPipelineVertexStatus.
 type GetPipelineVertexStatusParams struct {
 	// IfNoneMatch ETag from an earlier response
@@ -215,6 +234,12 @@ type ServerInterface interface {
 	// Get capabilities available to the current caller
 	// (GET /capabilities)
 	GetCapabilities(c *gin.Context)
+	// Get detailed Kubernetes status for a MonoVertex
+	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/status)
+	GetMonoVertexStatus(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexStatusParams)
+	// Get a compact MonoVertex summary
+	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/summary)
+	GetMonoVertexSummary(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexSummaryParams)
 	// Get detailed Kubernetes status for a pipeline vertex
 	// (GET /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status)
 	GetPipelineVertexStatus(c *gin.Context, namespace Namespace, pipeline Pipeline, vertex Vertex, params GetPipelineVertexStatusParams)
@@ -245,6 +270,124 @@ func (siw *ServerInterfaceWrapper) GetCapabilities(c *gin.Context) {
 	}
 
 	siw.Handler.GetCapabilities(c)
+}
+
+// GetMonoVertexStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetMonoVertexStatus(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace Namespace
+
+	err = bindSimpleString("namespace", c.Param("namespace"), &namespace, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "monoVertex" -------------
+	var monoVertex MonoVertex
+
+	err = bindSimpleString("monoVertex", c.Param("monoVertex"), &monoVertex, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter monoVertex: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMonoVertexStatusParams
+
+	headers := c.Request.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-None-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = bindSimpleString("If-None-Match", valueList[0], &IfNoneMatch, false)
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetMonoVertexStatus(c, namespace, monoVertex, params)
+}
+
+// GetMonoVertexSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetMonoVertexSummary(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace Namespace
+
+	err = bindSimpleString("namespace", c.Param("namespace"), &namespace, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "monoVertex" -------------
+	var monoVertex MonoVertex
+
+	err = bindSimpleString("monoVertex", c.Param("monoVertex"), &monoVertex, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter monoVertex: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMonoVertexSummaryParams
+
+	headers := c.Request.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-None-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = bindSimpleString("If-None-Match", valueList[0], &IfNoneMatch, false)
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetMonoVertexSummary(c, namespace, monoVertex, params)
 }
 
 // GetPipelineVertexStatus operation middleware
@@ -411,6 +554,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/capabilities", wrapper.GetCapabilities)
+	router.GET(options.BaseURL+"/namespaces/:namespace/mono-vertices/:monoVertex/status", wrapper.GetMonoVertexStatus)
+	router.GET(options.BaseURL+"/namespaces/:namespace/mono-vertices/:monoVertex/summary", wrapper.GetMonoVertexSummary)
 	router.GET(options.BaseURL+"/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status", wrapper.GetPipelineVertexStatus)
 	router.GET(options.BaseURL+"/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/summary", wrapper.GetPipelineVertexSummary)
 }
@@ -418,41 +563,43 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"x6spXX9d/y8AAP//rRp8y0UmAAA=",
+	"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",
+	"AQAA///RXpcO9y4AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

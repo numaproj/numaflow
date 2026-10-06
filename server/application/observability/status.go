@@ -41,7 +41,7 @@ func (s *Service) GetPipelineVertexStatus(ctx context.Context, namespace, pipeli
 	return Result[VertexStatus]{
 		Value: VertexStatus{
 			Ref: TargetRef{
-				Kind:      TargetKindPipelineVertex,
+				Kind:      TargetKindVertex,
 				Namespace: namespace,
 				Pipeline:  pipeline,
 				Name:      vertex,
@@ -62,6 +62,48 @@ func (s *Service) GetPipelineVertexStatus(ctx context.Context, namespace, pipeli
 			Generation:         resource.Generation,
 			ObservedGeneration: resource.Status.ObservedGeneration,
 			ObservedAt:         resourceObservedAt(resource.CreationTimestamp, resource.Status.Conditions, resource.Status.LastScaledAt),
+			TruncatedFields:    statusTruncatedFields(reasonTruncated, messageTruncated, conditionTruncations),
+		},
+		ResourceVersion: resource.ResourceVersion,
+	}, nil
+}
+
+// GetMonoVertexStatus returns bounded Kubernetes MonoVertex CR status.
+// It excludes live Pod inspection and daemon data-flow health.
+// DaemonHealthy, when present, is a condition copied from that CR.
+func (s *Service) GetMonoVertexStatus(ctx context.Context, namespace, monoVertex string) (Result[VertexStatus], error) {
+	resource, err := s.getMonoVertex(ctx, namespace, monoVertex)
+	if err != nil {
+		return Result[VertexStatus]{}, err
+	}
+
+	reason, reasonTruncated := truncateString(resource.Status.Reason, maximumReasonLength)
+	message, messageTruncated := truncateString(resource.Status.Message, maximumMessageLength)
+	conditions, conditionTruncations := normalizeConditions(resource.Status.Conditions)
+
+	return Result[VertexStatus]{
+		Value: VertexStatus{
+			Ref: TargetRef{
+				Kind:      TargetKindMonoVertex,
+				Namespace: namespace,
+				Name:      monoVertex,
+				UID:       string(resource.UID),
+			},
+			Phase:        string(resource.Status.Phase),
+			DesiredPhase: string(resource.Spec.Lifecycle.GetDesiredPhase()),
+			Reason:       reason,
+			Message:      message,
+			Replicas: ReplicaStatus{
+				Current:      int64(resource.Status.Replicas),
+				Desired:      int64(resource.Status.DesiredReplicas),
+				Ready:        int64(resource.Status.ReadyReplicas),
+				Updated:      int64(resource.Status.UpdatedReplicas),
+				UpdatedReady: int64(resource.Status.UpdatedReadyReplicas),
+			},
+			Conditions:         conditions,
+			Generation:         resource.Generation,
+			ObservedGeneration: resource.Status.ObservedGeneration,
+			ObservedAt:         resourceObservedAt(resource.CreationTimestamp, resource.Status.Conditions, resource.Status.LastUpdated, resource.Status.LastScaledAt),
 			TruncatedFields:    statusTruncatedFields(reasonTruncated, messageTruncated, conditionTruncations),
 		},
 		ResourceVersion: resource.ResourceVersion,

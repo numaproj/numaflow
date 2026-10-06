@@ -27,7 +27,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 )
 
-// Service loads Vertex (and later MonoVertex) CRs and maps them to API v2 DTOs.
+// Service loads Vertex and MonoVertex CRs and maps them to API v2 DTOs.
 type Service struct {
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
 }
@@ -53,4 +53,9 @@ func (s *Service) getPipelineVertex(ctx context.Context, namespace, pipeline, ve
 		return nil, apierrors.NewNotFound(dfv1.Resource("vertices"), resourceName)
 	}
 	return resource, nil
+}
+
+// getMonoVertex loads a MonoVertex CR by name. The API path uses that CR name.
+func (s *Service) getMonoVertex(ctx context.Context, namespace, monoVertex string) (*dfv1.MonoVertex, error) {
+	return s.numaflowClient.MonoVertices(namespace).Get(ctx, monoVertex, metav1.GetOptions{})
 }
