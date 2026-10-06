@@ -25,8 +25,8 @@ use crate::message::{
 };
 use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
-    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
+    jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
+    pipeline_partition_metric_labels,
 };
 use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
 use crate::pipeline::isb::error::ISBError;
@@ -97,11 +97,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         // Build metric labels once during initialization
-        let mut labels = pipeline_metric_labels(&components.vertex_type).clone();
-        labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            components.stream.name.to_string(),
-        ));
+        let labels =
+            pipeline_partition_metric_labels(&components.vertex_type, components.stream.name);
         let metric_labels = Arc::new(labels);
 
         // Cache reader name for fast access

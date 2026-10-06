@@ -1404,6 +1404,19 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+/// pipeline metric labels with the partition name label added.
+pub(crate) fn pipeline_partition_metric_labels(
+    vertex_type: &str,
+    partition_name: &str,
+) -> Vec<(String, String)> {
+    let mut labels = pipeline_metric_labels(vertex_type).clone();
+    labels.push((
+        PIPELINE_PARTITION_NAME_LABEL.to_string(),
+        partition_name.to_string(),
+    ));
+    labels
+}
+
 /// drop metric labels which can be due to buffer-full and retry strategy,
 /// or due to conditional forwarding rules not being met, or user setting "to_drop"
 pub(crate) fn pipeline_drop_metric_labels(
@@ -1699,11 +1712,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-                        metric_labels.push((
-                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                            get_vertex_name().to_string(),
-                        ));
+                        let metric_labels =
+                            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
                         pipeline_metrics()
                             .pending_raw
                             .get_or_create(&metric_labels)
@@ -1733,11 +1743,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                                     reader_name,
                                 );
                             }
-                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
-                            metric_labels.push((
-                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                reader_name.to_string(),
-                            ));
+                            let metric_labels =
+                                pipeline_partition_metric_labels(reader_name, reader_name);
                             pipeline_metrics()
                                 .pending_raw
                                 .get_or_create(&metric_labels)
