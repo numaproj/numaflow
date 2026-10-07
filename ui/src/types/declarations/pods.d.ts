@@ -126,6 +126,33 @@ export interface PodSpecificInfoProps {
   totalCPU: string;
   totalMemory: string;
 }
+
+/** PodRuntimeInfo is the v1 pods-info response normalized for Pod View presenters. */
+export interface PodRuntimeInfo {
+  name: string;
+  status?: string;
+  message?: string;
+  reason?: string;
+  totalCPU?: string;
+  totalMemory?: string;
+  containerDetailsMap: Record<string, ContainerInfoProps>;
+}
+
+export type PodSeverity = "critical" | "warning" | "healthy" | "unknown";
+
+export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
+
+/** PodFleetItem joins pod specification, live usage, and runtime status for Beta presentation. */
+export interface PodFleetItem {
+  pod: Pod;
+  details?: PodDetail;
+  runtime?: PodRuntimeInfo;
+  severity: PodSeverity;
+  maxCPUPercent?: number;
+  maxMemoryPercent?: number;
+  restartCount: number;
+}
+
 export interface PodInfoProps {
   namespaceId: string;
   pipelineId: string;

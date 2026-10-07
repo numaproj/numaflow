@@ -1,0 +1,96 @@
+.pod-inspector {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.pod-inspector-card {
+  padding: 1.6rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+}
+
+.pod-inspector-card--termination {
+  border-color: color-mix(in srgb, #d1071f 35%, var(--border-secondary));
+}
+
+.pod-inspector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pod-inspector-status {
+  padding: 0.3rem 0.7rem;
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.pod-inspector-name {
+  overflow: hidden;
+  margin: 0 0 1.2rem;
+  color: var(--text-tertiary);
+  font-family: monospace;
+  font-size: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-inspector-card p {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+
+.pod-inspector-muted {
+  color: var(--text-tertiary) !important;
+  font-size: 1.1rem !important;
+}
+
+.pod-inspector-card dl {
+  margin: 0;
+}
+
+.pod-inspector-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--border-secondary);
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+}
+
+.pod-inspector-row strong {
+  max-width: 62%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-inspector-danger {
+  color: #d1071f !important;
+}
+
+[data-theme="dark"] .pod-inspector-danger {
+  color: #ff6b7a !important;
+}
