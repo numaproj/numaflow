@@ -19,18 +19,40 @@ const severityOrder: Record<PodSeverity, number> = {
   unknown: 3,
 };
 
+const isCrashLoop = (status?: string) => Boolean(status && /crash/i.test(status));
+
 const hasCriticalStatus = (status?: string) =>
-  Boolean(status && /(crash|error|fail|oom)/i.test(status));
+  Boolean(status && /(error|fail|oom)/i.test(status));
 
 const hasWarningStatus = (status?: string) =>
   Boolean(status && /(pending|waiting|unknown)/i.test(status));
+
+export type PodStatusTone = "running" | "failed" | "neutral";
+
+/** chipLabel shows the replica number that fits a 38px fleet chip. */
+export function chipLabel(podName: string): string {
+  const parts = podName.split("-");
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (/^\d+$/.test(parts[index])) return parts[index];
+  }
+  return parts[parts.length - 1] || podName;
+}
+
+/** podStatusTone maps a Kubernetes pod status to the design's status color. */
+export function podStatusTone(status?: string): PodStatusTone {
+  if (!status) return "neutral";
+  if (status.toLowerCase() === "running") return "running";
+  if (/(crash|error|fail|oom)/i.test(status)) return "failed";
+  return "neutral";
+}
 
 export function classifyPod(
   maxCPUPercent: number | undefined,
   maxMemoryPercent: number | undefined,
   runtime?: PodRuntimeInfo,
-  restartCount = 0
+  _restartCount = 0
 ): PodSeverity {
+  if (isCrashLoop(runtime?.status)) return "unknown";
   if (hasCriticalStatus(runtime?.status)) return "critical";
   if (
     (maxCPUPercent !== undefined && maxCPUPercent > 75) ||
@@ -38,16 +60,14 @@ export function classifyPod(
   ) {
     return "critical";
   }
-  if (hasWarningStatus(runtime?.status) || restartCount > 0) return "warning";
+  if (hasWarningStatus(runtime?.status)) return "warning";
   if (
     (maxCPUPercent !== undefined && maxCPUPercent > 30) ||
     (maxMemoryPercent !== undefined && maxMemoryPercent > 50)
   ) {
     return "warning";
   }
-  if (!runtime?.status || (maxCPUPercent === undefined && maxMemoryPercent === undefined)) {
-    return "unknown";
-  }
+  if (!runtime?.status) return "unknown";
   return runtime.status.toLowerCase() === "running" ? "healthy" : "warning";
 }
 

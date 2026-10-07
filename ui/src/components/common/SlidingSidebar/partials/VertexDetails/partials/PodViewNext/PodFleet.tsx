@@ -14,7 +14,9 @@ import {
 } from "../../../../../../../types/declarations/pods";
 import {
   buildPodFleetItems,
+  chipLabel,
   filterAndSortPodFleet,
+  podStatusTone,
   PodFleetFilter,
 } from "./podFleetModel";
 
@@ -34,11 +36,6 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "warning", label: "Warning" },
   { value: "healthy", label: "Healthy" },
 ];
-
-const shortPodName = (podName: string) => {
-  const parts = podName.split("-");
-  return parts.slice(-2).join("-");
-};
 
 /** PodFleet renders the selectable, filterable fleet health surface for Beta Pod View. */
 export function PodFleet({
@@ -154,7 +151,7 @@ export function PodFleet({
                 aria-label={`Select ${item.pod.name}, ${status}`}
                 onClick={() => onPodSelect(item.pod)}
               >
-                <span>{shortPodName(item.pod.name)}</span>
+                <span>{chipLabel(item.pod.name)}</span>
                 {item.restartCount > 0 && <span className="pod-fleet-restart-marker" />}
               </button>
             </Tooltip>
@@ -170,7 +167,14 @@ export function PodFleet({
         <div className="pod-fleet-selected" data-testid="pod-fleet-selected">
           <span>Selected:</span>
           <strong title={selectedPod.name}>{selectedPod.name}</strong>
-          <span>{runtimeByName.get(selectedPod.name)?.status || "Unknown"}</span>
+          <span
+            className={`pod-fleet-status pod-fleet-status--${podStatusTone(
+              runtimeByName.get(selectedPod.name)?.status
+            )}`}
+            data-testid="pod-fleet-selected-status"
+          >
+            {runtimeByName.get(selectedPod.name)?.status || "Unknown"}
+          </span>
         </div>
       )}
     </section>

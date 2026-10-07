@@ -18,6 +18,8 @@ import {
   POD_MEMORY_UTILIZATION,
 } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 
+import { podStatusTone } from "./podFleetModel";
+
 import "./podInspector.css";
 
 interface PodInspectorProps {
@@ -88,7 +90,13 @@ export function PodInspector({
       <section className="pod-inspector-card">
         <div className="pod-inspector-heading">
           <span>Pod Overview</span>
-          <span className="pod-inspector-status">{runtime?.status || "Unknown"}</span>
+          <span
+            className={`pod-inspector-status pod-inspector-status--${podStatusTone(
+              runtime?.status
+            )}`}
+          >
+            {runtime?.status || "Unknown"}
+          </span>
         </div>
         <p className="pod-inspector-name" title={pod.name}>{pod.name}</p>
         <dl>

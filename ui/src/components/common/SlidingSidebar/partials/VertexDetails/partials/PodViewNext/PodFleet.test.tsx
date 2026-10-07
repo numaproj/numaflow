@@ -58,6 +58,10 @@ describe("PodFleet", () => {
     );
 
     expect(screen.getByText("All 2")).toBeVisible();
+    expect(screen.getByTestId(`pod-fleet-cell-${alpha.name}`)).toHaveTextContent("alpha");
+    expect(screen.getByTestId("pod-fleet-selected-status")).toHaveClass(
+      "pod-fleet-status--running"
+    );
     fireEvent.click(screen.getByTestId("pods-filter-critical"));
     expect(screen.queryByTestId(`pod-fleet-cell-${alpha.name}`)).not.toBeInTheDocument();
     const critical = screen.getByTestId(`pod-fleet-cell-${bravo.name}`);

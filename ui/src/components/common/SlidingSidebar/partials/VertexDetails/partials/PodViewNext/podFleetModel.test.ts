@@ -1,7 +1,9 @@
 import {
   buildPodFleetItems,
+  chipLabel,
   classifyPod,
   filterAndSortPodFleet,
+  podStatusTone,
 } from "./podFleetModel";
 import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
 
@@ -15,7 +17,7 @@ const pod = (name: string): Pod => ({
 
 describe("podFleetModel", () => {
   it.each([
-    ["CrashLoopBackOff", 1, 1, "critical"],
+    ["CrashLoopBackOff", 1, 1, "unknown"],
     ["Running", 76, 10, "critical"],
     ["Running", 10, 86, "critical"],
     ["Pending", 1, 1, "warning"],
@@ -37,6 +39,20 @@ describe("podFleetModel", () => {
 
   it("classifies absent runtime and resource evidence as unknown", () => {
     expect(classifyPod(undefined, undefined)).toBe("unknown");
+  });
+
+  it("keeps a running pod green when usage is missing and ignores restarts", () => {
+    const running = {
+      name: "pod",
+      status: "Running",
+      containerDetailsMap: {},
+    };
+    expect(classifyPod(undefined, undefined, running)).toBe("healthy");
+    expect(classifyPod(10, 10, running, 4)).toBe("healthy");
+    expect(chipLabel("simple-mono-vertex-mv-0-a94xj")).toBe("0");
+    expect(chipLabel("pipeline-vertex-alpha")).toBe("alpha");
+    expect(podStatusTone("Running")).toBe("running");
+    expect(podStatusTone("OOMKilled")).toBe("failed");
   });
 
   it("derives fleet items and filters/sorts a copy of their input", () => {

@@ -42,6 +42,16 @@
   text-transform: none;
 }
 
+.pod-inspector-status--running {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.pod-inspector-status--failed {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
 .pod-inspector-name {
   overflow: hidden;
   margin: 0 0 1.2rem;
