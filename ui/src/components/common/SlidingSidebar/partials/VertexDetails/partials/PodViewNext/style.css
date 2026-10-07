@@ -1,0 +1,11 @@
+.pod-view-next {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pod-view-next > * {
+  flex: 1;
+  min-width: 0;
+}

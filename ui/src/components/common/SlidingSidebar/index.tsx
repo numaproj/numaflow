@@ -29,6 +29,7 @@ import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
 import slider from "../../../images/slider.png";
 import { clearObservabilitySearch } from "../../../utils/observabilityURLState";
+import { resolvePodViewVersion } from "../../../utils/podViewPreference";
 
 import "./style.css";
 
@@ -104,6 +105,9 @@ export function SlidingSidebar({
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
   const location = useLocation();
+  const isPodViewBeta =
+    type === SidebarType.VERTEX_DETAILS &&
+    resolvePodViewVersion(location.search) === "beta";
   const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
@@ -139,7 +143,7 @@ export function SlidingSidebar({
   //   setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
   // }, [type]);
 
-  // Don't allow width greater then pageWidth
+  // Don't allow width greater then pageWidth.
   useEffect(() => {
     if (width > pageWidth) {
       setWidth(pageWidth);
@@ -291,6 +295,7 @@ export function SlidingSidebar({
 
   return (
     <Box
+      className={isPodViewBeta ? "sidebar-root--pod-beta" : undefined}
       sx={{
         display: "flex",
         flexDirection: "row",
@@ -321,6 +326,7 @@ export function SlidingSidebar({
         </Box>
       )}
       <Box
+        className={isPodViewBeta ? "sidebar-content--pod-beta" : undefined}
         sx={{
           display: "flex",
           flexDirection: "column",

@@ -3,6 +3,7 @@ import { History, Location } from "history";
 export const OBSERVABILITY_PARAM_NAMES = [
   "vertex",
   "vertexTab",
+  "podViewVersion",
   "specLine",
   "pod",
   "container",
