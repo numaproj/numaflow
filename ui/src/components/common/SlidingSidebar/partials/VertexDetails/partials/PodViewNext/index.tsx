@@ -1,3 +1,4 @@
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Containers } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/Containers";
@@ -123,8 +124,14 @@ export function PodViewNext(props: PodsProps) {
             />
           </div>
         ) : (
-          <section className="pod-view-next-empty">
-            Select a pod to inspect its containers, logs, and metrics.
+          <section className="pod-view-next-empty" data-testid="pod-view-unselected">
+            <div className="pod-view-next-empty-icon" aria-hidden="true">
+              <LayersOutlinedIcon />
+            </div>
+            <p className="pod-view-next-empty-title">Select a pod</p>
+            <p className="pod-view-next-empty-subtitle">
+              Click a chip above to inspect logs and metrics
+            </p>
           </section>
         )}
       </div>

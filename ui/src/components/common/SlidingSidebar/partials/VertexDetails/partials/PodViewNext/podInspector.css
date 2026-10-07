@@ -1,8 +1,11 @@
 .pod-inspector {
   display: flex;
+  max-height: 100%;
+  min-height: 0;
   min-width: 0;
   flex-direction: column;
   gap: 1.2rem;
+  overflow-y: auto;
 }
 
 .pod-inspector-card {
@@ -93,4 +96,11 @@
 
 [data-theme="dark"] .pod-inspector-danger {
   color: #ff6b7a !important;
+}
+
+@media (max-width: 960px) {
+  .pod-inspector {
+    max-height: none;
+    overflow: visible;
+  }
 }

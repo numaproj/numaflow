@@ -1,5 +1,5 @@
 .pod-fleet {
-  padding: 1.6rem;
+  padding: 2rem;
   border: 1px solid var(--border-secondary);
   border-radius: 1.2rem;
   background: var(--bg-primary);
@@ -39,12 +39,14 @@
 }
 
 .pod-fleet-filter-group .MuiToggleButton-root {
-  gap: 0.5rem;
-  padding: 0.5rem 0.9rem;
+  height: 2.8rem;
+  gap: 0.6rem;
+  padding: 0 1.2rem;
   border-color: var(--border-primary);
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 600;
+  line-height: 1;
   text-transform: none;
 }
 
@@ -80,7 +82,7 @@
 
 .pod-fleet-search .MuiInputBase-root,
 .pod-fleet-sort .MuiInputBase-root {
-  height: 3.4rem;
+  height: 3.6rem;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 1.2rem;
@@ -106,7 +108,7 @@
 .pod-fleet-cell {
   position: relative;
   display: grid;
-  width: 5.8rem;
+  width: 3.8rem;
   height: 3.8rem;
   place-items: center;
   padding: 0 0.4rem;

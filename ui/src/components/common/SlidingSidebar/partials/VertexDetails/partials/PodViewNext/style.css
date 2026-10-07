@@ -1,29 +1,39 @@
 .pod-view-next {
   display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
   background: var(--bg-secondary);
 }
 
 .pod-view-next-scroll {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 1.6rem;
 }
 
 .pod-view-next-workspace {
   display: grid;
+  flex: 1;
   grid-template-columns: minmax(0, 2fr) minmax(25rem, 0.9fr);
-  gap: 1.6rem;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 2.4rem;
+  min-height: 0;
   margin-top: 1.6rem;
+  overflow: hidden;
 }
 
 .pod-view-next-logs {
   display: flex;
+  height: 100%;
+  max-height: 100%;
   min-width: 0;
-  min-height: 52rem;
+  min-height: 0;
   flex-direction: column;
   border: 1px solid var(--border-secondary);
   border-radius: 1.2rem;
@@ -59,7 +69,56 @@
   flex: 1;
 }
 
-.pod-view-next-empty,
+.pod-view-next-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 42rem;
+  margin-top: 1.6rem;
+  padding: 2.4rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+  text-align: center;
+}
+
+.pod-view-next-empty-icon {
+  display: flex;
+  width: 4.8rem;
+  height: 4.8rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.2rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.6rem;
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+}
+
+.pod-view-next-empty-icon svg {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.pod-view-next-empty-title,
+.pod-view-next-empty-subtitle {
+  margin: 0;
+}
+
+.pod-view-next-empty-title {
+  color: var(--text-secondary);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.pod-view-next-empty-subtitle {
+  margin-top: 0.4rem;
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+}
+
 .pod-view-next-state {
   display: grid;
   min-height: 24rem;
@@ -85,8 +144,22 @@
 }
 
 @media (max-width: 960px) {
+  .pod-view-next-scroll {
+    overflow: auto;
+  }
+
   .pod-view-next-workspace {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    flex: initial;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .pod-view-next-logs {
+    height: clamp(36rem, 65vh, 60rem);
+    max-height: none;
+    min-height: 0;
   }
 }
 
