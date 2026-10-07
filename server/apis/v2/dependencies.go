@@ -35,9 +35,9 @@ func NewClusterHandler() (*Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Numaflow client: %w", err)
 	}
-	summaryService, err := observability.NewService(numaflowClient.NumaflowV1alpha1())
+	observabilityService, err := observability.NewService(numaflowClient.NumaflowV1alpha1())
 	if err != nil {
 		return nil, err
 	}
-	return NewHandler(capabilities.NewService(), summaryService)
+	return NewHandler(capabilities.NewService(), observabilityService)
 }

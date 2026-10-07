@@ -40,15 +40,17 @@ const (
 
 // Defines values for TargetKind.
 const (
-	PipelineVertex TargetKind = "PipelineVertex"
+	TargetKindMonoVertex TargetKind = "MonoVertex"
+	TargetKindVertex     TargetKind = "Vertex"
 )
 
 // Defines values for VertexType.
 const (
-	MapUDF    VertexType = "MapUDF"
-	ReduceUDF VertexType = "ReduceUDF"
-	Sink      VertexType = "Sink"
-	Source    VertexType = "Source"
+	VertexTypeMapUDF     VertexType = "MapUDF"
+	VertexTypeMonoVertex VertexType = "MonoVertex"
+	VertexTypeReduceUDF  VertexType = "ReduceUDF"
+	VertexTypeSink       VertexType = "Sink"
+	VertexTypeSource     VertexType = "Source"
 )
 
 // ApiLimits defines model for ApiLimits.
@@ -79,7 +81,7 @@ type Condition struct {
 // ConditionStatus defines model for Condition.Status.
 type ConditionStatus string
 
-// Health Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type Health struct {
 	Message *string     `json:"message,omitempty"`
 	Reason  *string     `json:"reason,omitempty"`
@@ -119,18 +121,20 @@ type TargetRef struct {
 	Kind      TargetKind `json:"kind"`
 	Name      string     `json:"name"`
 	Namespace string     `json:"namespace"`
-	Pipeline  string     `json:"pipeline"`
-	Uid       string     `json:"uid"`
+
+	// Pipeline Pipeline name for Vertex targets; omitted for MonoVertex targets.
+	Pipeline *string `json:"pipeline,omitempty"`
+	Uid      string  `json:"uid"`
 }
 
-// VertexStatus Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+// VertexStatus Detailed Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 type VertexStatus struct {
 	Conditions   []Condition `json:"conditions"`
 	DesiredPhase string      `json:"desiredPhase"`
 	Generation   int64       `json:"generation"`
 	Message      *string     `json:"message,omitempty"`
 
-	// ObservedAt Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time     `json:"observedAt"`
 	ObservedGeneration int64         `json:"observedGeneration"`
 	Phase              string        `json:"phase"`
@@ -147,11 +151,11 @@ type VertexSummary struct {
 	DesiredPhase string    `json:"desiredPhase"`
 	Generation   int64     `json:"generation"`
 
-	// Health Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+	// Health Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
 	Health       Health     `json:"health"`
 	LastScaledAt *time.Time `json:"lastScaledAt,omitempty"`
 
-	// ObservedAt Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+	// ObservedAt Latest condition-transition or scaling timestamp from CR status, not response generation time.
 	ObservedAt         time.Time  `json:"observedAt"`
 	ObservedGeneration int64      `json:"observedGeneration"`
 	Phase              string     `json:"phase"`
@@ -173,6 +177,9 @@ type Violation struct {
 
 // IfNoneMatch defines model for IfNoneMatch.
 type IfNoneMatch = string
+
+// MonoVertex defines model for MonoVertex.
+type MonoVertex = string
 
 // Namespace defines model for Namespace.
 type Namespace = string
@@ -198,6 +205,18 @@ type Unauthorized = Problem
 // ValidationFailed defines model for ValidationFailed.
 type ValidationFailed = Problem
 
+// GetMonoVertexStatusParams defines parameters for GetMonoVertexStatus.
+type GetMonoVertexStatusParams struct {
+	// IfNoneMatch ETag from an earlier response
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetMonoVertexSummaryParams defines parameters for GetMonoVertexSummary.
+type GetMonoVertexSummaryParams struct {
+	// IfNoneMatch ETag from an earlier response
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetPipelineVertexStatusParams defines parameters for GetPipelineVertexStatus.
 type GetPipelineVertexStatusParams struct {
 	// IfNoneMatch ETag from an earlier response
@@ -215,6 +234,12 @@ type ServerInterface interface {
 	// Get capabilities available to the current caller
 	// (GET /capabilities)
 	GetCapabilities(c *gin.Context)
+	// Get detailed Kubernetes status for a MonoVertex
+	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/status)
+	GetMonoVertexStatus(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexStatusParams)
+	// Get a compact MonoVertex summary
+	// (GET /namespaces/{namespace}/mono-vertices/{monoVertex}/summary)
+	GetMonoVertexSummary(c *gin.Context, namespace Namespace, monoVertex MonoVertex, params GetMonoVertexSummaryParams)
 	// Get detailed Kubernetes status for a pipeline vertex
 	// (GET /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/status)
 	GetPipelineVertexStatus(c *gin.Context, namespace Namespace, pipeline Pipeline, vertex Vertex, params GetPipelineVertexStatusParams)
@@ -245,6 +270,124 @@ func (siw *ServerInterfaceWrapper) GetCapabilities(c *gin.Context) {
 	}
 
 	siw.Handler.GetCapabilities(c)
+}
+
+// GetMonoVertexStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetMonoVertexStatus(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace Namespace
+
+	err = bindSimpleString("namespace", c.Param("namespace"), &namespace, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "monoVertex" -------------
+	var monoVertex MonoVertex
+
+	err = bindSimpleString("monoVertex", c.Param("monoVertex"), &monoVertex, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter monoVertex: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMonoVertexStatusParams
+
+	headers := c.Request.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-None-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = bindSimpleString("If-None-Match", valueList[0], &IfNoneMatch, false)
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetMonoVertexStatus(c, namespace, monoVertex, params)
+}
+
+// GetMonoVertexSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetMonoVertexSummary(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace Namespace
+
+	err = bindSimpleString("namespace", c.Param("namespace"), &namespace, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter namespace: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "monoVertex" -------------
+	var monoVertex MonoVertex
+
+	err = bindSimpleString("monoVertex", c.Param("monoVertex"), &monoVertex, true)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter monoVertex: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMonoVertexSummaryParams
+
+	headers := c.Request.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-None-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = bindSimpleString("If-None-Match", valueList[0], &IfNoneMatch, false)
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-None-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetMonoVertexSummary(c, namespace, monoVertex, params)
 }
 
 // GetPipelineVertexStatus operation middleware
@@ -411,6 +554,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/capabilities", wrapper.GetCapabilities)
+	router.GET(options.BaseURL+"/namespaces/:namespace/mono-vertices/:monoVertex/status", wrapper.GetMonoVertexStatus)
+	router.GET(options.BaseURL+"/namespaces/:namespace/mono-vertices/:monoVertex/summary", wrapper.GetMonoVertexSummary)
 	router.GET(options.BaseURL+"/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status", wrapper.GetPipelineVertexStatus)
 	router.GET(options.BaseURL+"/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/summary", wrapper.GetPipelineVertexSummary)
 }

@@ -493,6 +493,8 @@ pub(crate) async fn start_reduce_forwarder(
         let fence_file_path = storage_config.path.join(fence_file_name);
 
         let fence_timeout = Duration::from_secs(300); // 5 minutes
+        // The wait can be longer than the liveness budget of the user-defined container.
+        let _sidecars_assumed_live = metrics_state.assume_sidecars_live();
         if let Err(e) = wait_for_fence_availability(&fence_file_path, fence_timeout).await {
             error!(
                 ?e,
@@ -537,7 +539,7 @@ mod tests {
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::reduce::{
         AlignedReducerConfig, AlignedWindowConfig, AlignedWindowType, FixedWindowConfig,
-        UserDefinedConfig,
+        StorageConfig, UserDefinedConfig,
     };
     use crate::config::pipeline::isb::{
         BufferReaderConfig, BufferWriterConfig, ISBClientConfig, Stream,
@@ -547,7 +549,7 @@ mod tests {
         FromVertexConfig, PipelineConfig, ReduceVtxConfig, ToVertexConfig, VertexConfig, VertexType,
     };
     use crate::message::{IntOffset, Message, MessageID, Offset, StringOffset};
-    use crate::metrics::MetricsState;
+    use crate::metrics::{MetricsState, create_metrics_tls_config, start_metrics_https_server};
     use crate::pipeline::forwarder::reduce_forwarder::{
         FenceGuard, start_aligned_reduce_forwarder, start_reduce_forwarder,
         start_unaligned_reduce_forwarder, wait_for_fence_availability,
@@ -570,6 +572,7 @@ mod tests {
     use tokio::fs;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
+    use tokio_util::task::AbortOnDropHandle;
 
     struct Counter {}
 
@@ -1487,6 +1490,244 @@ mod tests {
             .expect("failed to send shutdown signal");
 
         Ok(())
+    }
+
+    /// The liveness probe of the user-defined container goes to the metrics server of the numa
+    /// container. That probe must pass while the forwarder waits for a stale fence file.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sidecar_livez_passes_during_fence_wait() -> crate::Result<()> {
+        let reduce_server = start_server(
+            "reducer",
+            |socket_path, server_info_path, shutdown_rx| async move {
+                reduce::Server::new(CounterCreator {})
+                    .with_socket_file(socket_path)
+                    .with_server_info_file(server_info_path)
+                    .start_with_shutdown(shutdown_rx)
+                    .await
+                    .expect("reduce server failed");
+            },
+        );
+        let vertex = FenceWaitVertex::new(
+            &reduce_server.socket_path(),
+            &reduce_server.server_info_path(),
+        )
+        .await;
+
+        let cancellation_token = CancellationToken::new();
+        let forwarder_task = vertex.start_forwarder(&cancellation_token);
+
+        vertex.wait_for_status("/sidecar-livez", 204).await;
+        assert!(
+            vertex.fence_file.exists(),
+            "the forwarder must still wait for the fence file"
+        );
+        assert_eq!(vertex.status("/readyz").await, 500);
+
+        fs::remove_file(&vertex.fence_file).await.unwrap();
+        vertex.wait_for_status("/readyz", 204).await;
+        assert_eq!(vertex.status("/sidecar-livez").await, 204);
+
+        cancellation_token.cancel();
+        tokio::time::timeout(Duration::from_secs(5), forwarder_task)
+            .await
+            .expect("reduce forwarder did not stop")
+            .expect("reduce forwarder task panicked")?;
+        reduce_server.shutdown();
+
+        Ok(())
+    }
+
+    /// The sidecar liveness probe passes without health checks only during the fence wait. If the
+    /// user-defined container does not start, the probe must fail after the wait, so that
+    /// Kubernetes restarts the container.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sidecar_livez_fails_after_fence_wait_when_udf_does_not_start() {
+        let never_started = TempDir::new().unwrap();
+        let vertex = FenceWaitVertex::new(
+            &never_started.path().join("reducer.sock"),
+            &never_started.path().join("reducer-server-info"),
+        )
+        .await;
+
+        let cancellation_token = CancellationToken::new();
+        let forwarder_task = vertex.start_forwarder(&cancellation_token);
+
+        vertex.wait_for_status("/sidecar-livez", 204).await;
+
+        fs::remove_file(&vertex.fence_file).await.unwrap();
+        vertex.wait_for_status("/sidecar-livez", 500).await;
+        assert_eq!(vertex.status("/readyz").await, 500);
+
+        cancellation_token.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(5), forwarder_task)
+            .await
+            .expect("reduce forwarder did not stop")
+            .expect("reduce forwarder task panicked");
+        assert!(
+            result.is_err(),
+            "the forwarder cannot start without its user-defined container"
+        );
+    }
+
+    /// A reduce vertex with persistence. A fence file from a previous instance blocks its start,
+    /// and its metrics server listens on a port that the operating system selects.
+    struct FenceWaitVertex {
+        _wal_dir: TempDir,
+        fence_file: std::path::PathBuf,
+        metrics_port: u16,
+        metrics_state: MetricsState,
+        _metrics_server: AbortOnDropHandle<()>,
+        pipeline_config: PipelineConfig,
+        reduce_vtx_config: ReduceVtxConfig,
+        client: reqwest::Client,
+    }
+
+    impl FenceWaitVertex {
+        async fn new(socket_path: &std::path::Path, server_info_path: &std::path::Path) -> Self {
+            const INPUT_VERTEX: &str = "fence-wait-input-vertex";
+            const OUTPUT_VERTEX: &str = "fence-wait-output-vertex";
+            const VERTEX_NAME: &str = "fence-wait-reduce-vertex";
+
+            let wal_dir = TempDir::new().unwrap();
+            let fence_file = wal_dir.path().join(format!("{VERTEX_NAME}-0"));
+            fs::write(&fence_file, "").await.unwrap();
+
+            let metrics_state = MetricsState::new();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let metrics_port = listener.local_addr().unwrap().port();
+            let tls_config = create_metrics_tls_config().await.unwrap();
+            let server_state = metrics_state.clone();
+            let metrics_server = AbortOnDropHandle::new(tokio::spawn(async move {
+                start_metrics_https_server(listener, tls_config, server_state)
+                    .await
+                    .expect("metrics server failed");
+            }));
+
+            let input_stream = Stream::new("fence_wait_input", INPUT_VERTEX, 0);
+            let output_stream = Stream::new("fence_wait_output", OUTPUT_VERTEX, 0);
+
+            let reduce_vtx_config = ReduceVtxConfig {
+                keyed: true,
+                wal_storage_config: Some(StorageConfig {
+                    path: wal_dir.path().to_path_buf(),
+                    ..Default::default()
+                }),
+                reducer_config: crate::config::components::reduce::ReducerConfig::Aligned(
+                    AlignedReducerConfig {
+                        window_config: AlignedWindowConfig {
+                            window_type: AlignedWindowType::Fixed(FixedWindowConfig {
+                                length: Duration::from_secs(60),
+                                streaming: false,
+                            }),
+                            allowed_lateness: Duration::ZERO,
+                            is_keyed: true,
+                        },
+                        user_defined_config: UserDefinedConfig {
+                            grpc_max_message_size: 5 * 1024 * 1024,
+                            socket_path: leak(socket_path),
+                            server_info_path: leak(server_info_path),
+                        },
+                    },
+                ),
+            };
+            let pipeline_config = PipelineConfig {
+                pipeline_name: "fence-wait-pipeline",
+                vertex_name: VERTEX_NAME,
+                replica: 0,
+                batch_size: 10,
+                concurrency: 20,
+                read_timeout: Duration::from_millis(20),
+                graceful_shutdown_time: Duration::from_millis(100),
+                isb_client_config: ISBClientConfig::InMemory,
+                from_vertex_config: vec![FromVertexConfig {
+                    name: INPUT_VERTEX,
+                    reader_config: BufferReaderConfig {
+                        streams: vec![input_stream],
+                        wip_ack_interval: Duration::from_millis(5),
+                        max_ack_pending: 20,
+                    },
+                    partitions: 1,
+                }],
+                to_vertex_config: vec![ToVertexConfig {
+                    name: OUTPUT_VERTEX,
+                    partitions: 1,
+                    writer_config: BufferWriterConfig {
+                        streams: vec![output_stream.clone()],
+                        ..Default::default()
+                    },
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                }],
+                vertex_config: VertexConfig::Reduce(reduce_vtx_config.clone()),
+                vertex_type: VertexType::ReduceUDF,
+                watermark_config: None,
+                ..Default::default()
+            };
+
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap();
+
+            Self {
+                _wal_dir: wal_dir,
+                fence_file,
+                metrics_port,
+                metrics_state,
+                _metrics_server: metrics_server,
+                pipeline_config,
+                reduce_vtx_config,
+                client,
+            }
+        }
+
+        fn start_forwarder(
+            &self,
+            cancellation_token: &CancellationToken,
+        ) -> tokio::task::JoinHandle<crate::Result<()>> {
+            tokio::spawn(start_reduce_forwarder(
+                cancellation_token.clone(),
+                Arc::new(InMemoryFactory::new()),
+                self.pipeline_config.clone(),
+                self.reduce_vtx_config.clone(),
+                self.metrics_state.clone(),
+            ))
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("https://127.0.0.1:{}{path}", self.metrics_port)
+        }
+
+        async fn status(&self, path: &str) -> u16 {
+            self.client
+                .get(self.url(path))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+
+        async fn wait_for_status(&self, path: &str, expected: u16) {
+            let url = self.url(path);
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    if let Ok(response) = self.client.get(&url).send().await
+                        && response.status().as_u16() == expected
+                    {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("{url} did not return {expected} in time"));
+        }
+    }
+
+    fn leak(path: &std::path::Path) -> &'static str {
+        Box::leak(path.to_string_lossy().into_owned().into_boxed_str())
     }
 
     #[tokio::test]
