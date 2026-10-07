@@ -1,0 +1,52 @@
+.pod-view-mode-toggle.MuiToggleButtonGroup-root {
+  align-items: center;
+  height: 3.2rem;
+  padding: 0.2rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 9999px;
+  background-color: rgba(0, 56, 98, 0.22);
+}
+
+.pod-view-mode-toggle .MuiToggleButtonGroup-grouped {
+  border: 0 !important;
+  margin: 0 !important;
+}
+
+.pod-view-mode-toggle .MuiToggleButton-root {
+  min-width: 6.4rem;
+  margin: 0 !important;
+  padding: 0.4rem 1rem;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.pod-view-mode-toggle .MuiToggleButton-root.Mui-selected {
+  border-radius: 9999px !important;
+  background-color: #ffffff;
+  color: var(--accent-primary);
+}
+
+.pod-view-mode-toggle .MuiToggleButton-root.Mui-selected:hover,
+.pod-view-mode-toggle .MuiToggleButton-root:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.pod-view-mode-toggle .MuiToggleButton-root.Mui-selected:hover {
+  background-color: #ffffff;
+}
+
+.pod-view-mode-toggle .MuiToggleButton-root:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -4px;
+}
+
+[data-theme="dark"] .pod-view-mode-toggle .MuiToggleButton-root.Mui-selected {
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+}

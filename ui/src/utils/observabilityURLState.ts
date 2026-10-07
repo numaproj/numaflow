@@ -5,6 +5,7 @@ export const OBSERVABILITY_PARAM_NAMES = [
   "isbTab",
   "vertex",
   "vertexTab",
+  "podViewVersion",
   "specLine",
   "pod",
   "container",
