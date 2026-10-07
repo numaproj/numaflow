@@ -22,10 +22,21 @@ describe("observability URL state", () => {
 
   it("removes empty values and clears only observability state", () => {
     const search = clearObservabilitySearch(
-      "?namespace=default&pipeline=demo&vertex=input&pod=demo-input-0&logsSearch=error"
+      "?namespace=default&pipeline=demo&vertex=input&podViewVersion=beta&pod=demo-input-0&logsSearch=error"
     );
 
     expect(search).toBe("?namespace=default&pipeline=demo");
+  });
+
+  it("round-trips the selected pod view without changing nested state", () => {
+    expect(
+      updateObservabilitySearch(
+        "?namespace=default&vertex=input&pod=input-0&logsSearch=error",
+        { podViewVersion: "beta" }
+      )
+    ).toBe(
+      "?namespace=default&vertex=input&pod=input-0&logsSearch=error&podViewVersion=beta"
+    );
   });
 
   it("parses booleans with a caller supplied default", () => {

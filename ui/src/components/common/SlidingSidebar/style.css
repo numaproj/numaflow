@@ -7,3 +7,19 @@
 .sidebar-drawer > .MuiDrawer-paper {
   overflow-y: visible !important;
 }
+
+.sidebar-root--pod-beta {
+  background-color: var(--bg-secondary);
+}
+
+.sidebar-content--pod-beta {
+  padding-right: 2.4rem !important;
+  padding-left: 2.4rem !important;
+}
+
+@media (max-width: 767px) {
+  .sidebar-content--pod-beta {
+    padding-right: 1.6rem !important;
+    padding-left: 1.6rem !important;
+  }
+}
