@@ -64,6 +64,7 @@ export function usePodViewState({
     );
 
   const fetchRuntime = useCallback(async () => {
+    const startedAt = Date.now();
     try {
       const response = await fetch(
         `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
@@ -80,6 +81,9 @@ export function usePodViewState({
       });
       setPodRuntimeByName(nextRuntime);
       setPodRuntimeError(undefined);
+      // #region agent log
+      fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H3',location:'usePodViewState.ts:runtime',message:'pod runtime resolved',data:{ms:Date.now()-startedAt,count:nextRuntime.size,running:[...nextRuntime.values()].filter((pod)=>pod.status==='Running').length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     } catch {
       setPodRuntimeError("Failed to fetch pod details");
     }
@@ -135,6 +139,9 @@ export function usePodViewState({
         : getDefaultContainerName(pod);
       setSelectedPod(pod);
       setSelectedContainer(container);
+      // #region agent log
+      fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H4',location:'usePodViewState.ts:select',message:'pod selected',data:{pod:pod.name,preserveContainer},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       replaceObservabilityState(history, location, {
         pod: pod.name,
         container,

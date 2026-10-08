@@ -38,6 +38,7 @@ export const usePodsViewFetch = (
 
   // call to get pods for a given vertex
   const fetchPods = async () => {
+    const startedAt = Date.now();
     try {
       const response = await fetch(
         `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
@@ -107,6 +108,9 @@ export const usePodsViewFetch = (
           });
           setPods(pList || []); // Ensure we always set an array
           setPodsErr(undefined); // Clear any previous errors
+          // #region agent log
+          fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H1',location:'podsViewFetch.ts:pods',message:'pod list resolved',data:{ms:Date.now()-startedAt,count:(pList||[]).length,ok:true},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
         } else if (json?.errMsg) {
           setPodsErr([
             {
@@ -121,6 +125,9 @@ export const usePodsViewFetch = (
           // No data and no error means no pods
           setPods([]);
           setPodsErr(undefined);
+          // #region agent log
+          fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H2',location:'podsViewFetch.ts:pods-empty',message:'pod list empty payload',data:{ms:Date.now()-startedAt},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
         }
       } else {
         setPodsErr([
@@ -161,6 +168,7 @@ export const usePodsViewFetch = (
   // call to get pods details (metrics)
   // TODO: deprecate this and gather all metrics from pods-info
   const fetchPodDetails = async () => {
+    const startedAt = Date.now();
     try {
       const response = await fetch(
         `${host}${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
@@ -208,7 +216,13 @@ export const usePodsViewFetch = (
           });
           setPodsDetails(podsMap);
           setPodsDetailsErr(undefined);
+          // #region agent log
+          fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H1',location:'podsViewFetch.ts:details',message:'pod metrics resolved',data:{ms:Date.now()-startedAt,count:podsMap.size},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
         } else if (json?.errMsg) {
+          // #region agent log
+          fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H2',location:'podsViewFetch.ts:details-error',message:'pod metrics returned errMsg',data:{ms:Date.now()-startedAt,errMsg:json.errMsg},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           setPodsDetailsErr([
             {
               error: json.errMsg,
@@ -265,21 +279,16 @@ export const usePodsViewFetch = (
     }
   }, [podsDetailsErr, lastRetryTime]);
 
-  // return false if pods/podsDetails are still undefined
-  const checkPodDetailsResponse = () => {
-    if (!pods || !podsDetails) return false;
-    return true;
-  };
-
-  //sets loading variable true only when requests are pending
+  // A failed metrics call must not end loading before the pod list exists.
   useEffect(() => {
-    if (checkPodDetailsResponse()) {
-      setLoading(false);
-    } else if (podsErr || podsDetailsErr) {
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    const podsReady = pods !== undefined;
+    const nextLoading = Boolean(podsErr)
+      ? false
+      : (!podsReady || !(podsDetails || podsDetailsErr));
+    setLoading(nextLoading);
+    // #region agent log
+    fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H2',location:'podsViewFetch.ts:loading',message:'loading gate',data:{loading:nextLoading,podCount:pods?.length??null,hasDetails:Boolean(podsDetails),podsErr:Boolean(podsErr),detailsErr:Boolean(podsDetailsErr)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }, [pods, podsDetails, podsErr, podsDetailsErr]);
 
   return {

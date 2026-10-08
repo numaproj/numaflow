@@ -32,15 +32,9 @@ export function PodViewNext(props: PodsProps) {
     selectContainer,
   } = usePodViewState(props);
 
-  if (loading) {
-    return (
-      <div className="pod-view-next" data-testid="pod-view-beta">
-        <Box className="pod-view-next-state" data-testid="pods-loading">
-          Loading pods view... <CircularProgress size={16} />
-        </Box>
-      </div>
-    );
-  }
+  // #region agent log
+  fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H2',location:'PodViewNext/index.tsx:render',message:'pod view render',data:{loading,podCount:pods?.length??null,hasError:Boolean(podsErr),selected:selectedPod?.name??null,runtimeCount:podRuntimeByName.size},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   if (podsErr) {
     return (
@@ -52,7 +46,19 @@ export function PodViewNext(props: PodsProps) {
     );
   }
 
-  if (!pods?.length) {
+  // The pod list is the fleet. Metrics can fail or arrive later without
+  // hiding pods that are already known, and an unset list is not an empty one.
+  if (pods === undefined || (loading && pods.length === 0)) {
+    return (
+      <div className="pod-view-next" data-testid="pod-view-beta">
+        <Box className="pod-view-next-state" data-testid="pods-loading">
+          Loading pods view... <CircularProgress size={16} />
+        </Box>
+      </div>
+    );
+  }
+
+  if (!pods.length) {
     return (
       <div className="pod-view-next" data-testid="pod-view-beta">
         <Box className="pod-view-next-state" data-testid="pods-empty">

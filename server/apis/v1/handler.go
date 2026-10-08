@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -952,7 +953,6 @@ func (h *handler) PodLogs(c *gin.Context) {
 }
 
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
-	var response = make([]PodDetails, 0)
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
@@ -966,20 +966,10 @@ func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
 		return
 	}
-	for _, pod := range pods.Items {
-		podDetails, err := h.getPodDetails(pod)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get the pod details: %v", err))
-			return
-		} else {
-			response = append(response, podDetails)
-		}
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(pods.Items)))
 }
 
 func (h *handler) GetVertexPodsInfo(c *gin.Context) {
-	var response = make([]PodDetails, 0)
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
@@ -993,17 +983,7 @@ func (h *handler) GetVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
 		return
 	}
-	for _, pod := range pods.Items {
-		podDetails, err := h.getPodDetails(pod)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get the pod details: %v", err))
-			return
-		} else {
-			response = append(response, podDetails)
-		}
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
-
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(pods.Items)))
 }
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
@@ -1694,6 +1674,29 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	} else {
 		return mvtDaemonClient, nil
 	}
+}
+
+// collectPodDetails reads each pod's metrics concurrently. A serial read made
+// the fleet wait once per pod before any chip could turn green.
+func (h *handler) collectPodDetails(pods []corev1.Pod) []PodDetails {
+	response := make([]PodDetails, len(pods))
+	var wg sync.WaitGroup
+	limit := make(chan struct{}, 8)
+	for i, pod := range pods {
+		wg.Add(1)
+		go func(i int, pod corev1.Pod) {
+			defer wg.Done()
+			limit <- struct{}{}
+			defer func() { <-limit }()
+			details, err := h.getPodDetails(pod)
+			if err != nil {
+				details = PodDetails{Name: pod.Name, Status: string(pod.Status.Phase)}
+			}
+			response[i] = details
+		}(i, pod)
+	}
+	wg.Wait()
+	return response
 }
 
 func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {

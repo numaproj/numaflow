@@ -97,7 +97,7 @@ describe("PodViewNext", () => {
   });
 
   it.each([
-    ["loading", { loading: true }, "pods-loading"],
+    ["loading", { loading: true, pods: undefined }, "pods-loading"],
     ["error", { podsErr: new Error("pods failed") }, "pods-error"],
     ["empty", { pods: [] }, "pods-empty"],
   ])("renders the %s state without mounting the workspace", (_, state, testId) => {
