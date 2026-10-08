@@ -71,7 +71,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	if err := v.ReadConfig(bytes.NewBufferString(creatOpts.config)); err != nil {
 		return err
 	}
-	if maxMsgSize := v.GetInt64("stream.maxMsgSize"); maxMsgSize > maxStreamMaxMsgSize {
+	if maxMsgSize := v.GetSizeInBytes("stream.maxMsgSize"); maxMsgSize > maxStreamMaxMsgSize {
 		return fmt.Errorf("invalid stream.maxMsgSize %d, it can not be greater than %d (32MB)", maxMsgSize, maxStreamMaxMsgSize)
 	}
 
