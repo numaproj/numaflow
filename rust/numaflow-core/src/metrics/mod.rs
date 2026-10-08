@@ -38,6 +38,8 @@ use crate::watermark::WatermarkHandle;
 pub(crate) mod sqs;
 pub(crate) use sqs::sqs_metrics;
 
+pub(crate) type MetricLabels = Arc<Vec<(String, String)>>;
+
 // SDK information
 const SDK_INFO: &str = "sdk_info";
 const COMPONENT: &str = "component";

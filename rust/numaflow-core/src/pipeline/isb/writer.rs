@@ -15,7 +15,7 @@ use crate::error::Error;
 use crate::mark_success;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    MetricLabels, pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
     pipeline_partition_metric_labels,
 };
 use crate::pipeline::isb::dyn_adapter::ISBWriterRef;
@@ -27,8 +27,6 @@ use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
-/// Type alias for metric labels
-type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 

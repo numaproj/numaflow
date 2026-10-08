@@ -25,8 +25,8 @@ use crate::message::{
 };
 use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
-    jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
-    pipeline_partition_metric_labels,
+    MetricLabels, jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels,
+    pipeline_metrics, pipeline_partition_metric_labels,
 };
 use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
 use crate::pipeline::isb::error::ISBError;
@@ -43,9 +43,6 @@ use tracing::{error, info, warn};
 
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
-
-/// Type alias for metric labels
-type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// ISBReaderOrchestrator component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
@@ -666,7 +663,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
 struct WipParams {
     stream_name: &'static str,
-    labels: Arc<Vec<(String, String)>>,
+    labels: MetricLabels,
     reader: ISBReaderRef,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,

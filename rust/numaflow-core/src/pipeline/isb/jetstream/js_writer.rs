@@ -17,14 +17,12 @@ use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
 use crate::message::{Message, MessageType};
 use crate::metrics::{
-    jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
+    MetricLabels, jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels,
+    pipeline_metrics,
 };
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
 use crate::shared::otel;
-
-/// Type alias for metric labels
-type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
