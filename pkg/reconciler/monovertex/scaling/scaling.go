@@ -408,15 +408,21 @@ func (s *Scaler) Start(ctx context.Context) error {
 	// Function assign() moves an element in the list from the front to the back,
 	// and send to the channel so that it can be picked up by a worker.
 	assign := func() {
+		// Unlock before sending, so busy workers can't block StartWatching.
 		s.lock.Lock()
-		defer s.lock.Unlock()
-		if s.monoVtxList.Len() == 0 {
+		e := s.monoVtxList.Front()
+		if e != nil {
+			s.monoVtxList.MoveToBack(e)
+		}
+		s.lock.Unlock()
+		if e == nil {
 			return
 		}
-		e := s.monoVtxList.Front()
 		if key, ok := e.Value.(string); ok {
-			s.monoVtxList.MoveToBack(e)
-			keyCh <- key
+			select {
+			case keyCh <- key:
+			case <-ctx.Done():
+			}
 		}
 	}
 
