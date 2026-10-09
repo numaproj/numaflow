@@ -677,7 +677,7 @@ mod tests {
 
         // Metric series are keyed by the error label, prepended to the buffer labels.
         let labels_for = |error: &str| {
-            let mut labels = vec![("error".to_string(), error.to_string())];
+            let mut labels = vec![("reason".to_string(), error.to_string())];
             labels.extend(jetstream_isb_metrics_labels(stream.name));
             labels
         };
