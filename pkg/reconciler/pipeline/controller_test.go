@@ -18,6 +18,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1389,5 +1390,74 @@ func TestIsLifecycleChange(t *testing.T) {
 			result := isLifecycleChange(pl)
 			assert.Equal(t, test.expectedResult, result)
 		})
+	}
+}
+
+func Test_pauseInterruptedByResume(t *testing.T) {
+	setup := func(t *testing.T) (context.Context, *pipelineReconciler, client.Client, types.NamespacedName) {
+		t.Helper()
+		ctx := context.TODO()
+		cl := fake.NewClientBuilder().WithStatusSubresource(&dfv1.Pipeline{}).Build()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		assert.NoError(t, cl.Create(ctx, testIsbSvc))
+		pl := testPipeline.DeepCopy()
+		assert.NoError(t, cl.Create(ctx, pl))
+		key := types.NamespacedName{Namespace: pl.Namespace, Name: pl.Name}
+		r := fakeReconciler(t, cl)
+		reconcileAndPersistPhase(t, ctx, r, cl, key)
+		return ctx, r, cl, key
+	}
+
+	setDesiredPhase := func(t *testing.T, ctx context.Context, cl client.Client, key types.NamespacedName, phase dfv1.PipelinePhase) {
+		t.Helper()
+		pl := &dfv1.Pipeline{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}
+		patch := fmt.Sprintf(`{"spec":{"lifecycle":{"desiredPhase":%q}}}`, phase)
+		assert.NoError(t, cl.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patch))))
+	}
+
+	t.Run("first pause reconcile records the pausing phase", func(t *testing.T) {
+		ctx, r, cl, key := setup(t)
+		setDesiredPhase(t, ctx, cl, key, dfv1.PipelinePhasePaused)
+		reconcileAndPersistPhase(t, ctx, r, cl, key)
+
+		pl := &dfv1.Pipeline{}
+		assert.NoError(t, cl.Get(ctx, key, pl))
+		assert.Equal(t, dfv1.PipelinePhasePausing, pl.Status.Phase)
+		assert.NotEmpty(t, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
+	})
+
+	t.Run("resume requested before the pausing phase is recorded resumes the source", func(t *testing.T) {
+		ctx, r, cl, key := setup(t)
+		setDesiredPhase(t, ctx, cl, key, dfv1.PipelinePhasePaused)
+		pl := &dfv1.Pipeline{}
+		assert.NoError(t, cl.Get(ctx, key, pl))
+		_, err := r.pausePipeline(ctx, pl.DeepCopy())
+		assert.NoError(t, err)
+		setDesiredPhase(t, ctx, cl, key, dfv1.PipelinePhaseRunning)
+		reconcileAndPersistPhase(t, ctx, r, cl, key)
+
+		assert.NoError(t, cl.Get(ctx, key, pl))
+		assert.Equal(t, dfv1.PipelinePhaseRunning, pl.Status.Phase)
+		assert.Empty(t, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
+		vertices, err := r.findExistingVertices(ctx, pl)
+		assert.NoError(t, err)
+		source := vertices[pl.Name+"-"+pl.Spec.Vertices[0].Name]
+		assert.Equal(t, dfv1.VertexPhaseRunning, source.Spec.Lifecycle.GetDesiredPhase())
+	})
+
+}
+
+func reconcileAndPersistPhase(t *testing.T, ctx context.Context, r *pipelineReconciler, cl client.Client, key types.NamespacedName) {
+	t.Helper()
+	pl := &dfv1.Pipeline{}
+	assert.NoError(t, cl.Get(ctx, key, pl))
+	plCopy := pl.DeepCopy()
+	_, err := r.reconcile(ctx, plCopy)
+	assert.NoError(t, err)
+	if pl.Status.Phase != plCopy.Status.Phase {
+		patch := fmt.Sprintf(`{"status":{"phase":%q}}`, plCopy.Status.Phase)
+		assert.NoError(t, cl.Status().Patch(ctx, &dfv1.Pipeline{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}, client.RawPatch(types.MergePatchType, []byte(patch))))
 	}
 }
