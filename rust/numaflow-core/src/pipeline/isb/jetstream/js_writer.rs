@@ -103,7 +103,7 @@ fn record_max_payload_exceeded(
         }
     };
 
-    let mut labels = vec![("error".to_string(), error_desc)];
+    let mut labels = vec![("reason".to_string(), error_desc)];
     labels.extend(buffer_labels.iter().cloned());
 
     pipeline_metrics()
