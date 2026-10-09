@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::runtime_server::runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
     source_transform_client::SourceTransformClient, source_transform_response,
@@ -12,19 +11,13 @@ use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
 
 use crate::config::get_vertex_name;
-use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::metrics::critical_error_reasons;
-use crate::shared::grpc::{
-    UdfReconnectConfig, create_transformer_client, prost_timestamp_from_utc, utc_from_timestamp,
-};
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
-
-pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 // fields which will not be changed
 struct ParentMessageInfo {
@@ -86,8 +79,6 @@ pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
-    batch_size: usize,
-    reconnect_config: ReconnectConfig,
 }
 
 /// Aborts the background task when the UserDefinedTransformer is dropped.
@@ -120,7 +111,6 @@ impl UserDefinedTransformer {
     pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
-        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_stream(batch_size, &mut client).await?;
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
@@ -133,8 +123,6 @@ impl UserDefinedTransformer {
             read_tx,
             senders: sender_map,
             task_handle,
-            batch_size,
-            reconnect_config,
         })
     }
 
@@ -189,14 +177,6 @@ impl UserDefinedTransformer {
         }
     }
 
-    fn record_udf_error(status: &Status) {
-        critical_error!(
-            VERTEX_TYPE_SOURCE,
-            critical_error_reasons::SOURCE_TRANSFORMER_RUNTIME_ERROR
-        );
-        runtime::persist_application_error_with_container(status.clone(), "transformer");
-    }
-
     // receive responses from the server and gets the corresponding oneshot sender from the map
     // and sends the response.
     async fn receive_responses(
@@ -208,13 +188,11 @@ impl UserDefinedTransformer {
                 Ok(Some(resp)) => resp,
                 Ok(None) => {
                     let status = Status::unavailable("source transformer stream closed");
-                    Self::record_udf_error(&status);
-                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(status)));
+                    Self::drain_senders(&sender_map, Error::Grpc(Box::new(status)));
                     break;
                 }
                 Err(e) => {
-                    Self::record_udf_error(&e);
-                    Self::drain_senders(&sender_map, Error::UdfRedrive(Box::new(e.clone())));
+                    Self::drain_senders(&sender_map, Error::Grpc(Box::new(e)));
                     break;
                 }
             };
@@ -234,31 +212,6 @@ impl UserDefinedTransformer {
                 let _ = sender.send(Ok(response_messages));
             }
         }
-    }
-
-    async fn reconnect(&mut self) -> Result<()> {
-        let (mut client, _) = create_transformer_client(
-            self.reconnect_config.socket_path(),
-            self.reconnect_config.server_info_path(),
-            self.reconnect_config.cln_token(),
-            self.reconnect_config.grpc_max_message_size(),
-            self.reconnect_config.retry_interval(),
-        )
-        .await?;
-        let (read_tx, resp_stream) = Self::create_stream(self.batch_size, &mut client).await?;
-        Self::drain_senders(
-            &self.senders,
-            Error::UdfRedrive(Box::new(Status::unavailable(
-                "source transformer reconnecting",
-            ))),
-        );
-        self.task_handle.abort();
-        self.read_tx = read_tx;
-        self.task_handle = tokio::spawn(Self::receive_responses(
-            Arc::clone(&self.senders),
-            resp_stream,
-        ));
-        Ok(())
     }
 
     async fn queue_request(
@@ -291,10 +244,10 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        if self.task_handle.is_finished()
-            && let Err(e) = self.reconnect().await
-        {
-            let _ = respond_to.send(Err(e));
+        if self.task_handle.is_finished() {
+            let _ = respond_to.send(Err(Error::Grpc(Box::new(Status::unavailable(
+                "source transformer stream closed",
+            )))));
             return;
         }
 
@@ -310,25 +263,16 @@ impl UserDefinedTransformer {
         let request: SourceTransformRequest = message.into();
 
         let Some((msg_info, respond_to)) = self
-            .queue_request(&key, msg_info, respond_to, request.clone())
+            .queue_request(&key, msg_info, respond_to, request)
             .await
         else {
             return;
         };
 
-        if let Err(e) = self.reconnect().await {
-            let _ = respond_to.send(Err(e));
-            return;
-        }
-
-        if let Some((_, respond_to)) = self
-            .queue_request(&key, msg_info, respond_to, request)
-            .await
-        {
-            let _ = respond_to.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
-                "source transformer stream closed after reconnect",
-            )))));
-        }
+        let _ = respond_to.send(Err(Error::Grpc(Box::new(Status::unavailable(format!(
+            "source transformer stream closed before sending request for offset {}",
+            msg_info.offset
+        ))))));
     }
 }
 
@@ -343,7 +287,6 @@ mod tests {
     use numaflow::sourcetransform;
     use numaflow_pb::common::metadata;
     use tempfile::TempDir;
-    use tokio_util::sync::CancellationToken;
 
     use super::*;
     use crate::message::StringOffset;
@@ -388,15 +331,6 @@ mod tests {
         let mut client = UserDefinedTransformer::new(
             500,
             SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?),
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await?;
 
@@ -442,7 +376,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn transformer_drains_pending_senders_with_udf_redrive() {
+    async fn transformer_drains_pending_senders_with_grpc_error() {
         let sender_map: ResponseSenderMap = Arc::new(Mutex::new(HashMap::new()));
         let (first_tx, first_rx) = oneshot::channel();
         let (second_tx, second_rx) = oneshot::channel();
@@ -468,7 +402,7 @@ mod tests {
 
         UserDefinedTransformer::drain_senders(
             &sender_map,
-            crate::error::Error::UdfRedrive(Box::new(Status::unavailable(
+            crate::error::Error::Grpc(Box::new(Status::unavailable(
                 "source transformer stream closed",
             ))),
         );
@@ -481,11 +415,11 @@ mod tests {
         );
         assert!(matches!(
             first_rx.await.unwrap(),
-            Err(crate::error::Error::UdfRedrive(_))
+            Err(crate::error::Error::Grpc(_))
         ));
         assert!(matches!(
             second_rx.await.unwrap(),
-            Err(crate::error::Error::UdfRedrive(_))
+            Err(crate::error::Error::Grpc(_))
         ));
     }
 
@@ -613,15 +547,6 @@ mod tests {
         let mut client = UserDefinedTransformer::new(
             500,
             SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await.unwrap()),
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .unwrap();

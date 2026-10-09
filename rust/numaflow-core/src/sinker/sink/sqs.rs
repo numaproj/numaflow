@@ -485,15 +485,6 @@ pub mod tests {
             Duration::from_millis(100),
             cln_token.clone(),
             true,
-            crate::source::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    64 * 1024 * 1024,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))

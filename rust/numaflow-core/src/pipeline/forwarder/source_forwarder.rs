@@ -878,15 +878,6 @@ mod tests {
             Duration::from_secs(10),
             client,
             tracker.clone(),
-            crate::transformer::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
             None,
         )
         .await
@@ -921,15 +912,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            crate::source::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
