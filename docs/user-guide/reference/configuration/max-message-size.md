@@ -10,7 +10,7 @@ The max message size is determined by:
 
 If `JetStream` is used as the Inter-Step Buffer implementation, the max message size is limited by the streams created
 for the buffers, using `stream.maxMsgSize` in `spec.jetstream.bufferConfig` of the `InterStepBufferService`
-specification. It defaults to `33554432` (32MB), which is also the max value allowed, since JetStream file storage does
+specification. It defaults to `33553408` (32MB - 1KB), which is also the max value allowed, since JetStream file storage does
 not support messages larger than 32MB. The buffer creation fails if a bigger value is configured.
 
 ```yaml

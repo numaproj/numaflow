@@ -31,10 +31,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// maxStreamMaxMsgSize is the max message size (32MB) allowed for the streams created for the buffers.
-// JetStream file storage rejects any message record larger than 32MB with "message too large",
-// regardless of the max_payload and max_msg_size settings, so it is also used as the default.
-const maxStreamMaxMsgSize = 32 * 1024 * 1024
+// maxStreamMaxMsgSize is the max message size allowed for the streams created for the buffers.
+// JetStream file storage rejects any message record larger than 32MB with "message too large".
+// Provide 1KB headroom as overhead.
+const maxStreamMaxMsgSize = 32*1024*1024 - 1024
 
 type jetStreamSvc struct {
 	jsClient *jsclient.Client
@@ -71,7 +71,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	if err := v.ReadConfig(bytes.NewBufferString(creatOpts.config)); err != nil {
 		return err
 	}
-	if maxMsgSize := v.GetSizeInBytes("stream.maxMsgSize"); maxMsgSize > maxStreamMaxMsgSize {
+	if maxMsgSize := v.GetSizeInBytes("stream.maxMsgSize"); maxMsgSize <= 0 || maxMsgSize > maxStreamMaxMsgSize {
 		return fmt.Errorf("invalid stream.maxMsgSize %d, it can not be greater than %d (32MB)", maxMsgSize, maxStreamMaxMsgSize)
 	}
 

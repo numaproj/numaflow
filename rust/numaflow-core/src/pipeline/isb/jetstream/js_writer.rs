@@ -7,6 +7,7 @@ use async_nats::jetstream::context::{PublishAckFuture, PublishError, PublishErro
 use async_nats::jetstream::message::PublishMessage;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::{Context, ErrorCode};
+use async_nats::{HeaderMap, header};
 use bytes::{Bytes, BytesMut};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -43,13 +44,46 @@ struct BufferInfo {
 }
 
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
+const NATS_HEADER_PREAMBLE: &[u8] = b"NATS/1.0\r\n";
+const NATS_HEADER_TERMINATOR: &[u8] = b"\r\n";
+
+/// Returns the number of bytes NATS adds to the HPUB body for the supplied headers.
+///
+/// NATS applies `max_payload` to the HPUB body, which is the encoded header block plus
+/// the application payload. Keep this in sync with async-nats header encoding.
+fn nats_header_block_len(headers: &HeaderMap) -> usize {
+    if headers.is_empty() {
+        return 0;
+    }
+
+    NATS_HEADER_PREAMBLE.len()
+        + headers
+            .iter()
+            .map(|(name, values)| {
+                values
+                    .iter()
+                    .map(|value| {
+                        AsRef::<str>::as_ref(name).len()
+                            + b": ".len()
+                            + value.as_str().len()
+                            + b"\r\n".len()
+                    })
+                    .sum::<usize>()
+            })
+            .sum::<usize>()
+        + NATS_HEADER_TERMINATOR.len()
+}
 
 /// Returns true if the publish was rejected by JetStream because the message exceeds the
 /// maximum message size allowed by the stream.
 fn is_max_payload_exceeded(err: &PublishError) -> bool {
     std::error::Error::source(err)
         .and_then(|source| source.downcast_ref::<async_nats::jetstream::Error>())
-        .is_some_and(|e| e.error_code() == ErrorCode::STREAM_MESSAGE_EXCEEDS_MAXIMUM)
+        .is_some_and(|e| {
+            e.error_code() == ErrorCode::STREAM_MESSAGE_EXCEEDS_MAXIMUM
+                || (e.error_code() == ErrorCode::STREAM_STORE_FAILED
+                    && e.to_string().contains("too large"))
+        })
 }
 
 /// Records the max payload exceeded metric if the publish ack failed because the message
@@ -57,15 +91,25 @@ fn is_max_payload_exceeded(err: &PublishError) -> bool {
 fn record_max_payload_exceeded(
     stream_name: &'static str,
     buffer_labels: &MetricLabels,
-    err: &PublishError,
+    err: Option<&PublishError>,
+    client_reported: bool,
 ) {
-    if !is_max_payload_exceeded(err) {
-        return;
-    }
+    let error_desc = if client_reported {
+        "self-reported".to_string()
+    } else {
+        match err {
+            Some(e) if is_max_payload_exceeded(e) => e.to_string(),
+            _ => return,
+        }
+    };
+
+    let mut labels = vec![("error".to_string(), error_desc)];
+    labels.extend(buffer_labels.iter().cloned());
+
     pipeline_metrics()
         .jetstream_isb
         .max_payload_exceeded_total
-        .get_or_create(buffer_labels)
+        .get_or_create(&labels)
         .inc();
     warn!(
         stream = stream_name,
@@ -89,6 +133,8 @@ pub(crate) struct JetStreamWriter {
     writer_config: BufferWriterConfig,
     /// Cached metric labels to avoid repeated allocations
     buffer_labels: MetricLabels,
+    /// Max NATS payload (bytes), cached at construction to avoid cloning ServerInfo per publish.
+    max_payload: usize,
 }
 
 impl JetStreamWriter {
@@ -111,13 +157,14 @@ impl JetStreamWriter {
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
 
-        let js_writer = Self {
+        let mut js_writer = Self {
             stream,
             js_ctx,
             compression_type,
             is_full: Arc::clone(&is_full),
             writer_config,
             buffer_labels,
+            max_payload: 0, // will be updated later
         };
 
         // Spawn background task to monitor this stream's fullness
@@ -129,6 +176,8 @@ impl JetStreamWriter {
                 .map_err(|e| {
                     Error::ISB(ISBError::BufferInfo(format!("Failed to get stream: {}", e)))
                 })?;
+
+            js_writer.max_payload = js_writer.js_ctx.client().server_info().max_payload;
 
             let consumer: PullConsumer = js_writer
                 .js_ctx
@@ -219,9 +268,23 @@ impl JetStreamWriter {
             let payload: BytesMut = message
                 .try_into()
                 .expect("message serialization should not fail");
-            let mut publish = PublishMessage::build().payload(payload.freeze());
-            if !skip_dedup {
-                publish = publish.message_id(&id);
+            let payload = payload.freeze();
+            let payload_len = payload.len();
+            let (publish, publish_size) = if skip_dedup {
+                (PublishMessage::build().payload(payload), payload_len)
+            } else {
+                let mut headers = HeaderMap::new();
+                headers.insert(header::NATS_MESSAGE_ID, id.as_str());
+                let publish_size = payload_len + nats_header_block_len(&headers);
+                (
+                    PublishMessage::build().payload(payload).headers(headers),
+                    publish_size,
+                )
+            };
+            // Server drops the connection in this case and doesn't return PublishError to be evaluated
+            // self report the metric in this case.
+            if publish_size > self.max_payload && self.max_payload > 0 {
+                record_max_payload_exceeded(self.stream.name, &self.buffer_labels, None, true);
             }
             self.js_ctx.send_publish(self.stream.name, publish).await
         };
@@ -298,6 +361,12 @@ impl JetStreamWriter {
             let payload: Bytes = message
                 .try_into()
                 .expect("message serialization should not fail");
+
+            // Server drops the connection in this case and doesn't return PublishError to be evaluated
+            // self report the metric in this case with a different label.
+            if payload.len() > self.max_payload && self.max_payload > 0 {
+                record_max_payload_exceeded(self.stream.name, &self.buffer_labels, None, true);
+            }
             self.js_ctx.publish(self.stream.name, payload).await
         };
 
@@ -329,7 +398,12 @@ impl JetStreamWriter {
                     }
                 }
                 Err(e) => {
-                    record_max_payload_exceeded(self.stream.name, &self.buffer_labels, &e);
+                    record_max_payload_exceeded(
+                        self.stream.name,
+                        &self.buffer_labels,
+                        Some(&e),
+                        false,
+                    );
                     error!(?e, "awaiting publish ack failed");
                     Err(WriteError::WriteFailed(e.to_string()))
                 }
@@ -470,7 +544,7 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
         Ok(Box::pin(async move {
             // Await the PAF to get the PublishAck
             let ack = paf.await.map_err(|e| {
-                record_max_payload_exceeded(stream_name, &buffer_labels, &e);
+                record_max_payload_exceeded(stream_name, &buffer_labels, Some(&e), false);
                 crate::pipeline::isb::WriteError::WriteFailed(e.to_string())
             })?;
 
@@ -596,11 +670,21 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         assert!(!writer.is_full());
 
-        let labels = jetstream_isb_metrics_labels(stream.name);
-        let before = pipeline_metrics()
+        assert_eq!(
+            writer.max_payload,
+            context.client().server_info().max_payload
+        );
+
+        // Metric series are keyed by the error label, prepended to the buffer labels.
+        let labels_for = |error: &str| {
+            let mut labels = vec![("error".to_string(), error.to_string())];
+            labels.extend(jetstream_isb_metrics_labels(stream.name));
+            labels
+        };
+        let self_reported_before = pipeline_metrics()
             .jetstream_isb
             .max_payload_exceeded_total
-            .get_or_create(&labels)
+            .get_or_create(&labels_for("self-reported"))
             .get();
 
         let message = Message {
@@ -620,21 +704,29 @@ mod tests {
         };
 
         let pending = ISBWriter::async_write(&writer, message).await.unwrap();
-        let result = pending.await;
-        assert!(
-            matches!(
-                result,
-                Err(crate::pipeline::isb::WriteError::WriteFailed(_))
+        let err = match pending.await {
+            Err(crate::pipeline::isb::WriteError::WriteFailed(err)) => err,
+            other => panic!(
+                "write should fail since the message exceeds the stream max message size, got {:?}",
+                other.map(|_| ())
             ),
-            "write should fail since the message exceeds the stream max message size"
-        );
+        };
 
-        let after = pipeline_metrics()
+        // Rejected by the stream (10054), recorded with the server error as the label.
+        let server_rejected = pipeline_metrics()
             .jetstream_isb
             .max_payload_exceeded_total
-            .get_or_create(&labels)
+            .get_or_create(&labels_for(&err))
             .get();
-        assert_eq!(after, before + 1);
+        assert_eq!(server_rejected, 1);
+
+        // Below the server max_payload, so the pre-send check must not fire.
+        let self_reported_after = pipeline_metrics()
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&labels_for("self-reported"))
+            .get();
+        assert_eq!(self_reported_after, self_reported_before);
 
         cln_token.cancel();
         context.delete_stream(stream.name).await.unwrap();
