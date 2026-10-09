@@ -370,6 +370,152 @@ func Test_orchestratePods(t *testing.T) {
 	})
 }
 
+func Test_orchestratePods_patchesScaleSubresourceReplicas(t *testing.T) {
+	// MonoVertex's CRD declares a scale subresource backed by spec.replicas
+	// (specReplicasPath: .spec.replicas), which is what Kubernetes' PDB controller - and
+	// anything else driven by the generic scale client - reads to size this MonoVertex.
+	// Before this fix, spec.replicas was only ever written by the autoscaler, so a MonoVertex
+	// whose autoscaler never fires a scale decision kept spec.replicas stuck at its unset
+	// default (treated as 1 by getReplicas()) no matter how many replicas were actually
+	// running, which silently defeated any PDB selecting its pods.
+	t.Run("unset spec.replicas is patched to the real desired/running count", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy() // Scale.Min: 2, Spec.Replicas: nil
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.Nil(t, testObj.Spec.Replicas)
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+
+		// In-memory copy is updated immediately.
+		assert.NotNil(t, testObj.Spec.Replicas)
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+
+		// And the patch actually landed on the stored object - i.e. what the scale
+		// subresource (and a PDB reading it) would see.
+		stored := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, stored))
+		assert.NotNil(t, stored.Spec.Replicas)
+		assert.Equal(t, int32(2), *stored.Spec.Replicas)
+	})
+
+	t.Run("stale spec.replicas above scale.max is clamped down to scale.max", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Max = ptr.To[int32](5)
+		testObj.Spec.Replicas = ptr.To[int32](10) // stale value, out of [min,max] range
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(5), *testObj.Spec.Replicas)
+	})
+
+	t.Run("already in sync: no-op, does not error even without an object in the fake client", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](2) // already matches scale.min, the eventual desired value
+		// Deliberately not created in cl: proves the up-to-date case short-circuits before
+		// ever reaching the client, so it can't fail even if the object doesn't exist there.
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+	})
+
+	t.Run("paused: spec.replicas is left untouched so the pre-pause value survives for resume", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](5)
+		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(5), *testObj.Spec.Replicas, "pre-pause spec.replicas must survive untouched for resume")
+	})
+
+	t.Run("converges in one patch: a second reconcile against the patched value is a no-op", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+
+		// Simulate the next reconcile picking up the now-patched object (as the generation-change
+		// watch predicate would deliver): same desired replicas, so this must not re-patch, which
+		// is what keeps the fix from looping forever against its own patch.
+		refetched := &dfv1.MonoVertex{}
+		assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, refetched))
+		assert.NoError(t, r.orchestratePods(context.TODO(), refetched))
+		assert.Equal(t, int32(2), *refetched.Spec.Replicas)
+	})
+
+	t.Run("misconfigured scale.min > scale.max converges to a stable value instead of oscillating", func(t *testing.T) {
+		// min > max used to flip-flop the clamp result every reconcile, re-patching
+		// spec.replicas and churning pods each time.
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](5)
+		testObj.Spec.Scale.Max = ptr.To[int32](2)
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		first := *testObj.Spec.Replicas
+
+		// Repeat reconciles must keep producing the same value.
+		for i := 0; i < 5; i++ {
+			refetched := &dfv1.MonoVertex{}
+			assert.NoError(t, cl.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, refetched))
+			assert.NoError(t, r.orchestratePods(context.TODO(), refetched))
+			assert.Equal(t, first, *refetched.Spec.Replicas, "spec.replicas must not oscillate across reconciles when min > max")
+		}
+	})
+
+	t.Run("patch response does not overwrite in-memory status", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+		testObj.Status.ObservedGeneration = 42 // set earlier in reconcile(), not yet persisted
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+		assert.Equal(t, int64(42), testObj.Status.ObservedGeneration)
+		assert.Equal(t, uint32(2), testObj.Status.DesiredReplicas)
+	})
+
+	t.Run("cron window wider than base scale.min/max is clamped back to the base range", func(t *testing.T) {
+		// Base min/max stay the source of truth (numaproj/numaflow#3628); a cron window
+		// outside that range must not let the reconciler exceed it.
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](1)
+		testObj.Spec.Scale.Max = ptr.To[int32](1)
+		testObj.Spec.Scale.Cron = &dfv1.CronScheduling{
+			// Full-day window so the test doesn't depend on the time it happens to run at.
+			Schedules: []dfv1.CronSchedule{{
+				Start: "0 0 0 * * *",
+				End:   "59 59 23 * * *",
+				Min:   ptr.To[int32](10),
+				Max:   ptr.To[int32](10),
+			}},
+		}
+		testObj.Spec.Replicas = ptr.To[int32](10) // e.g. a stale value from before the fix
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(1), *testObj.Spec.Replicas, "reconciler must clamp to the base scale.max, not the wider cron bounds")
+	})
+}
+
 func Test_orchestrateFixedResources(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	r := fakeReconciler(t, cl)
