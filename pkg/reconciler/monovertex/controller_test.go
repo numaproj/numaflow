@@ -478,6 +478,19 @@ func Test_orchestratePods_patchesScaleSubresourceReplicas(t *testing.T) {
 		}
 	})
 
+	t.Run("patch response does not overwrite in-memory status", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		assert.NoError(t, cl.Create(context.TODO(), testObj))
+		testObj.Status.ObservedGeneration = 42 // set earlier in reconcile(), not yet persisted
+
+		assert.NoError(t, r.orchestratePods(context.TODO(), testObj))
+		assert.Equal(t, int32(2), *testObj.Spec.Replicas)
+		assert.Equal(t, int64(42), testObj.Status.ObservedGeneration)
+		assert.Equal(t, uint32(2), testObj.Status.DesiredReplicas)
+	})
+
 	t.Run("cron window wider than base scale.min/max is clamped back to the base range", func(t *testing.T) {
 		// Base min/max stay the source of truth (numaproj/numaflow#3628); a cron window
 		// outside that range must not let the reconciler exceed it.
