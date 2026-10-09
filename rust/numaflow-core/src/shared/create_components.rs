@@ -10,7 +10,7 @@ use crate::config::monovertex::BypassConditions;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
@@ -330,6 +330,24 @@ pub(crate) async fn create_transformer(
     Ok(None)
 }
 
+/// Resolves the socket path a UDS mapper client should connect to, given the configured path and
+/// the map mode reported by server-info.
+///
+/// Batch/stream mappers listen on dedicated sockets. Historically this override was
+/// unconditional, which silently discarded any non-default socket path. We now only substitute the
+/// batch/stream socket when the configured path is still the default map socket, so an explicitly
+/// configured path (the CLI's, or any custom mount) is preserved. `server_info_path` is
+/// intentionally left untouched — all map modes share `mapper-server-info`.
+fn resolve_map_socket_path(configured: String, mode: MapMode) -> String {
+    match mode {
+        MapMode::Unary => configured,
+        MapMode::Batch if configured == DEFAULT_MAP_SOCKET => DEFAULT_BATCH_MAP_SOCKET.into(),
+        MapMode::Stream if configured == DEFAULT_MAP_SOCKET => DEFAULT_STREAM_MAP_SOCKET.into(),
+        // Non-default path for batch/stream: honor the caller's explicit choice.
+        MapMode::Batch | MapMode::Stream => configured,
+    }
+}
+
 pub(crate) async fn create_mapper(
     batch_size: usize,
     read_timeout: Duration,
@@ -387,19 +405,15 @@ pub(crate) async fn create_mapper(
                     .await?)
                 }
                 Protocol::UDS => {
-                    // based on the map mode that is set in the server info, we will override the socket path
-                    // so that the clients can connect to the appropriate socket.
-                    let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
-                        MapMode::Unary => config,
-                        MapMode::Batch => {
-                            config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
-                            config
-                        }
-                        MapMode::Stream => {
-                            config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
-                            config
-                        }
-                    };
+                    // Based on the map mode reported by server-info we may need to point the client
+                    // at the batch/stream socket. We only override when the caller left the socket
+                    // at the *default* map socket; an explicitly configured path (e.g. the CLI's
+                    // custom socket, or any future custom mount) is honored as-is. Overriding
+                    // unconditionally used to silently ignore non-default socket configs.
+                    config.socket_path = resolve_map_socket_path(
+                        std::mem::take(&mut config.socket_path),
+                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                    );
 
                     let (map_grpc_client, _) = grpc::create_mapper_client(
                         PathBuf::from(config.socket_path.clone()),
@@ -908,6 +922,43 @@ mod tests {
         create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
         wait_until_transformer_ready,
     };
+
+    use super::resolve_map_socket_path;
+    use crate::config::pipeline::map::MapMode;
+    use crate::config::pipeline::{
+        DEFAULT_BATCH_MAP_SOCKET, DEFAULT_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
+    };
+
+    #[test]
+    fn resolve_map_socket_path_overrides_only_default() {
+        // Default map socket + Batch/Stream → the dedicated socket is substituted.
+        assert_eq!(
+            resolve_map_socket_path(DEFAULT_MAP_SOCKET.to_string(), MapMode::Batch),
+            DEFAULT_BATCH_MAP_SOCKET
+        );
+        assert_eq!(
+            resolve_map_socket_path(DEFAULT_MAP_SOCKET.to_string(), MapMode::Stream),
+            DEFAULT_STREAM_MAP_SOCKET
+        );
+        // A custom path is preserved for every mode (the bug this fixes).
+        assert_eq!(
+            resolve_map_socket_path("/tmp/custom.sock".to_string(), MapMode::Batch),
+            "/tmp/custom.sock"
+        );
+        assert_eq!(
+            resolve_map_socket_path("/tmp/custom.sock".to_string(), MapMode::Stream),
+            "/tmp/custom.sock"
+        );
+        // Unary never overrides, default or not.
+        assert_eq!(
+            resolve_map_socket_path(DEFAULT_MAP_SOCKET.to_string(), MapMode::Unary),
+            DEFAULT_MAP_SOCKET
+        );
+        assert_eq!(
+            resolve_map_socket_path("/tmp/custom.sock".to_string(), MapMode::Unary),
+            "/tmp/custom.sock"
+        );
+    }
 
     struct SimpleSource {}
 
