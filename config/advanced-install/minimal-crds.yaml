@@ -100,7 +100,6 @@ spec:
           spec:
             properties:
               replicas:
-                default: 1
                 format: int32
                 type: integer
             type: object
@@ -291,7 +290,6 @@ spec:
           spec:
             properties:
               replicas:
-                default: 1
                 format: int32
                 type: integer
             type: object
