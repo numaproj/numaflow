@@ -245,7 +245,7 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(read_batch) = chunk_stream.next().await {
-                    // We are in shutting down mode, NAK all messages
+                    // Forwarder attempt is draining after an error; NAK all messages
                     if self.shutting_down_on_err {
                         for msg in read_batch {
                             msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
@@ -269,8 +269,11 @@ impl SinkWriter {
                         }
                         Err(e) => {
                             mark_failed_batch!(read_batch, &e);
-                            // Critical error, cancel upstream and initiate shutdown
-                            error!(?e, "Error writing to sink, initiating shutdown.");
+                            // Critical error: cancel the current forwarder attempt and drain.
+                            error!(
+                                ?e,
+                                "Error writing to sink; cancelling forwarder attempt and draining"
+                            );
                             cln_token.cancel();
                             self.final_result = Err(e);
                             self.shutting_down_on_err = true;

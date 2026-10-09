@@ -262,7 +262,7 @@ impl MapHandle {
 
                     // if there are errors then we need to drain the stream and nack
                     if self.shutting_down_on_err {
-                        warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                        warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is draining after an error; not accepting the message");
                         read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                     } else {
                         let permit = Arc::clone(&ctx.semaphore).acquire_owned()
@@ -315,7 +315,7 @@ impl MapHandle {
             // if there are errors then we need to drain the stream and nack
             if self.shutting_down_on_err {
                 for read_msg in read_batch {
-                    warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                    warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is draining after an error; not accepting the message");
                     read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                 }
                 continue;
