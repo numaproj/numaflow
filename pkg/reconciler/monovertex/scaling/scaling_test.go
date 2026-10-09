@@ -425,3 +425,25 @@ func TestParsedCronSchedulesForUIDChange(t *testing.T) {
 	assert.Equal(t, "0 0 11 * * *", parsed[0].Schedule.Start)
 	assert.Equal(t, 2, scaler.cronScheduleCache.Len())
 }
+
+func TestStartWatchingWithBusyWorkers(t *testing.T) {
+	scaler := NewScaler(fake.NewClientBuilder().Build(), WithWorkers(0), WithTaskInterval(1))
+	scaler.StartWatching("key1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = scaler.Start(ctx) }()
+	// No worker ever receives key1, so the assigner stays blocked on it.
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		scaler.StartWatching("key2")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("StartWatching blocked while no worker was free")
+	}
+	assert.True(t, scaler.Contains("key2"))
+}

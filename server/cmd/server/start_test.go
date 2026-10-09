@@ -20,12 +20,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/numaproj/numaflow/server/authz"
 )
 
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 45, len(got))
+		assert.Equal(t, 47, len(got))
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/isb-services/:isb-service/jetstream")
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/pipelines/:pipeline/isb/streams")
 		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/pipelines/:pipeline/isb/consumers")
@@ -35,11 +38,22 @@ func TestCreateAuthRouteMap(t *testing.T) {
 		assert.Contains(t, got, "GET:api/v2/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status")
 		assert.Contains(t, got, "GET:api/v2/namespaces/:namespace/mono-vertices/:monoVertex/summary")
 		assert.Contains(t, got, "GET:api/v2/namespaces/:namespace/mono-vertices/:monoVertex/status")
+
+		routeObjects := map[string]string{
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs": authz.ObjectPipeline,
+			"GET:api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pods/:pod/logs":           authz.ObjectMonoVertex,
+			"GET:api/v1/namespaces/:namespace/pods/:pod/logs":                                      authz.ObjectAll,
+		}
+		for route, expectedObject := range routeObjects {
+			routeInfo, ok := got[route]
+			require.True(t, ok, "route %q is missing", route)
+			assert.Equal(t, expectedObject, routeInfo.Object)
+		}
 	})
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 45, len(got))
+		assert.Equal(t, 47, len(got))
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}

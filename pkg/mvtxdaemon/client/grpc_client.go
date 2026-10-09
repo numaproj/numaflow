@@ -19,9 +19,11 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
@@ -38,7 +40,13 @@ func NewGRPCClient(address string) (MonoVertexDaemonClient, error) {
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 	}
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials.NewTLS(config)))
+	conn, err := grpc.NewClient(address,
+		grpc.WithTransportCredentials(credentials.NewTLS(config)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    30 * time.Second,
+			Timeout: 10 * time.Second,
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
