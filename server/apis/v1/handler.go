@@ -984,8 +984,11 @@ func (h *handler) podLogs(c *gin.Context, requiredLabels map[string]string) {
 }
 
 func podMatchesLogScope(pod *corev1.Pod, requiredLabels map[string]string) bool {
+	if !isNumaflowManagedPod(pod) {
+		return false
+	}
 	if len(requiredLabels) == 0 {
-		return isNumaflowManagedPod(pod)
+		return true
 	}
 	for key, value := range requiredLabels {
 		if value == "" || pod.Labels[key] != value {
@@ -997,8 +1000,24 @@ func podMatchesLogScope(pod *corev1.Pod, requiredLabels map[string]string) bool 
 
 func isNumaflowManagedPod(pod *corev1.Pod) bool {
 	labels := pod.Labels
-	return labels[dfv1.KeyMonoVertexName] != "" ||
-		(labels[dfv1.KeyPipelineName] != "" && labels[dfv1.KeyVertexName] != "")
+	if labels[dfv1.KeyPartOf] != dfv1.Project {
+		return false
+	}
+
+	switch labels[dfv1.KeyManagedBy] {
+	case dfv1.ControllerPipeline:
+		return labels[dfv1.KeyPipelineName] != ""
+	case dfv1.ControllerVertex:
+		return labels[dfv1.KeyPipelineName] != "" && labels[dfv1.KeyVertexName] != ""
+	case dfv1.ControllerMonoVertex:
+		return labels[dfv1.KeyMonoVertexName] != ""
+	case dfv1.ControllerISBSvc:
+		return labels[dfv1.KeyISBSvcName] != ""
+	case dfv1.ControllerServingPipeline:
+		return labels[dfv1.KeyServingPipelineName] != ""
+	default:
+		return false
+	}
 }
 
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {

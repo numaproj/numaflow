@@ -37,11 +37,42 @@ import (
 
 func TestPodMatchesLogScope(t *testing.T) {
 	pipelinePod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:       dfv1.Project,
+		dfv1.KeyManagedBy:    dfv1.ControllerVertex,
+		dfv1.KeyComponent:    dfv1.ComponentVertex,
 		dfv1.KeyPipelineName: "my-pipeline",
 		dfv1.KeyVertexName:   "my-vertex",
 	}}}
 	monoVertexPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:         dfv1.Project,
+		dfv1.KeyManagedBy:      dfv1.ControllerMonoVertex,
+		dfv1.KeyComponent:      dfv1.ComponentMonoVertex,
 		dfv1.KeyMonoVertexName: "my-mono-vertex",
+	}}}
+	daemonPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:       dfv1.Project,
+		dfv1.KeyManagedBy:    dfv1.ControllerPipeline,
+		dfv1.KeyComponent:    dfv1.ComponentDaemon,
+		dfv1.KeyPipelineName: "my-pipeline",
+	}}}
+	sideInputManagerPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:        dfv1.Project,
+		dfv1.KeyManagedBy:     dfv1.ControllerPipeline,
+		dfv1.KeyComponent:     dfv1.ComponentSideInputManager,
+		dfv1.KeyPipelineName:  "my-pipeline",
+		dfv1.KeySideInputName: "my-side-input",
+	}}}
+	isbServicePod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:     dfv1.Project,
+		dfv1.KeyManagedBy:  dfv1.ControllerISBSvc,
+		dfv1.KeyComponent:  dfv1.ComponentISBSvc,
+		dfv1.KeyISBSvcName: "my-isb-service",
+	}}}
+	servingPipelinePod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+		dfv1.KeyPartOf:              dfv1.Project,
+		dfv1.KeyManagedBy:           dfv1.ControllerServingPipeline,
+		dfv1.KeyComponent:           dfv1.ComponentServingServer,
+		dfv1.KeyServingPipelineName: "my-serving-pipeline",
 	}}}
 	unrelatedPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
 		"app": "unrelated",
@@ -98,10 +129,33 @@ func TestPodMatchesLogScope(t *testing.T) {
 		},
 		{name: "legacy route accepts pipeline pod", pod: pipelinePod, expected: true},
 		{name: "legacy route accepts mono vertex pod", pod: monoVertexPod, expected: true},
+		{name: "legacy route accepts pipeline daemon pod", pod: daemonPod, expected: true},
+		{name: "legacy route accepts side input manager pod", pod: sideInputManagerPod, expected: true},
+		{name: "legacy route accepts ISB service pod", pod: isbServicePod, expected: true},
+		{name: "legacy route accepts serving pipeline pod", pod: servingPipelinePod, expected: true},
 		{name: "legacy route rejects unrelated pod", pod: unrelatedPod, expected: false},
+		{
+			name: "legacy route rejects an unknown manager",
+			pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+				dfv1.KeyPartOf:       dfv1.Project,
+				dfv1.KeyManagedBy:    "unrelated-controller",
+				dfv1.KeyPipelineName: "my-pipeline",
+			}}},
+			expected: false,
+		},
+		{
+			name: "legacy route rejects spoofed resource labels without Numaflow ownership",
+			pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+				dfv1.KeyPipelineName: "my-pipeline",
+				dfv1.KeyVertexName:   "my-vertex",
+			}}},
+			expected: false,
+		},
 		{
 			name: "legacy route rejects partial pipeline labels",
 			pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+				dfv1.KeyPartOf:       dfv1.Project,
+				dfv1.KeyManagedBy:    dfv1.ControllerVertex,
 				dfv1.KeyPipelineName: "my-pipeline",
 			}}},
 			expected: false,
@@ -112,6 +166,18 @@ func TestPodMatchesLogScope(t *testing.T) {
 			pod:  pipelinePod,
 			requiredLabels: map[string]string{
 				dfv1.KeyPipelineName: "",
+				dfv1.KeyVertexName:   "my-vertex",
+			},
+			expected: false,
+		},
+		{
+			name: "scoped route rejects matching labels without Numaflow ownership",
+			pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+				dfv1.KeyPipelineName: "my-pipeline",
+				dfv1.KeyVertexName:   "my-vertex",
+			}}},
+			requiredLabels: map[string]string{
+				dfv1.KeyPipelineName: "my-pipeline",
 				dfv1.KeyVertexName:   "my-vertex",
 			},
 			expected: false,
@@ -200,6 +266,9 @@ func TestScopedPodLogsStreamsMatchingPod(t *testing.T) {
 			route:      "/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs",
 			requestURL: "/api/v1/namespaces/test-ns/pipelines/my-pipeline/vertices/my-vertex/pods/test-pod/logs?container=main&follow=true&tailLines=25",
 			labels: map[string]string{
+				dfv1.KeyPartOf:       dfv1.Project,
+				dfv1.KeyManagedBy:    dfv1.ControllerVertex,
+				dfv1.KeyComponent:    dfv1.ComponentVertex,
 				dfv1.KeyPipelineName: "my-pipeline",
 				dfv1.KeyVertexName:   "my-vertex",
 			},
@@ -210,6 +279,9 @@ func TestScopedPodLogsStreamsMatchingPod(t *testing.T) {
 			route:      "/api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pods/:pod/logs",
 			requestURL: "/api/v1/namespaces/test-ns/mono-vertices/my-mono-vertex/pods/test-pod/logs?container=main&follow=true&tailLines=25",
 			labels: map[string]string{
+				dfv1.KeyPartOf:         dfv1.Project,
+				dfv1.KeyManagedBy:      dfv1.ControllerMonoVertex,
+				dfv1.KeyComponent:      dfv1.ComponentMonoVertex,
 				dfv1.KeyMonoVertexName: "my-mono-vertex",
 			},
 			handle: (*handler).MonoVertexPodLogs,
@@ -294,6 +366,9 @@ func TestScopedPodLogsReturnsKubernetesErrors(t *testing.T) {
 						Name:      "test-pod",
 						Namespace: "test-ns",
 						Labels: map[string]string{
+							dfv1.KeyPartOf:       dfv1.Project,
+							dfv1.KeyManagedBy:    dfv1.ControllerVertex,
+							dfv1.KeyComponent:    dfv1.ComponentVertex,
 							dfv1.KeyPipelineName: "my-pipeline",
 							dfv1.KeyVertexName:   "my-vertex",
 						},
