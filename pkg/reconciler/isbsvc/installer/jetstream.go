@@ -445,7 +445,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	// nats-server fails to start if max_payload is higher than max_pending (defaults to 64MB),
 	// so max_pending is raised to max_payload when needed.
 	maxPending := uint(defaultNatsMaxPending)
-	if maxPayload := v.GetSizeInBytes("max_payload"); maxPayload > maxPending {
+	if maxPayload := v.GetSizeInBytes("max_payload"); maxPayload <= 0 || maxPayload > maxPending {
 		maxPending = maxPayload
 	}
 	var confTpl *template.Template

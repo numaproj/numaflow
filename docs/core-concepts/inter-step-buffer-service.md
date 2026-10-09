@@ -198,7 +198,7 @@ bufferConfig: |
     maxMsgs: 30000
     maxAge: 168h
     maxBytes: -1
-    # Max size of a single message in bytes, defaults to 32 MB, which is also the max value allowed.
+    # Max size of a single message in bytes, defaults to 32 MB - 1KB, which is also the max value allowed.
     maxMsgSize: 33553408
     # 0: File, 1: Memory
     storage: 0
