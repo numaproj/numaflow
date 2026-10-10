@@ -31,6 +31,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -148,6 +149,27 @@ func TestJetStreamCreateObjects(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(c.Data))
 		assert.Contains(t, c.Annotations, dfv1.KeyHash)
+	})
+
+	t.Run("test max_pending follows max_payload", func(t *testing.T) {
+		for _, tc := range []struct {
+			maxPayload string
+			maxPending string
+		}{
+			{maxPayload: "1048576", maxPending: "max_pending: 67108864\n"},
+			{maxPayload: "68157440", maxPending: "max_pending: 68157440\n"},
+		} {
+			testObj := testJetStreamIsbSvc.DeepCopy()
+			testObj.Spec.JetStream.Settings = ptr.To("max_payload: " + tc.maxPayload)
+			i.isbSvc = testObj
+			err := i.createConfigMap(ctx)
+			assert.NoError(t, err)
+			c := &corev1.ConfigMap{}
+			err = cl.Get(ctx, types.NamespacedName{Namespace: testObj.Namespace, Name: generateJetStreamConfigMapName(testObj)}, c)
+			assert.NoError(t, err)
+			assert.Contains(t, c.Data[dfv1.JetStreamConfigMapKey], "max_payload: "+tc.maxPayload+"\n")
+			assert.Contains(t, c.Data[dfv1.JetStreamConfigMapKey], tc.maxPending)
+		}
 	})
 }
 

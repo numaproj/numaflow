@@ -1256,7 +1256,7 @@ impl PipelineMetrics {
         );
         jetstream_isb_registry.register(
             JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
-            "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
+            "Total number of jetstream writes rejected because the message exceeds the max message size",
             metrics.jetstream_isb.max_payload_exceeded_total.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
@@ -1430,6 +1430,7 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+/// pipeline metric labels with the partition name label added.
 pub(crate) fn pipeline_partition_metric_labels(
     vertex_type: &str,
     partition_name: &str,
@@ -2298,17 +2299,6 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
-        let mut isb_max_payload_labels = common_pipeline_labels.clone();
-        isb_max_payload_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            "test-partition".to_string(),
-        ));
-        pipeline_metrics
-            .jetstream_isb
-            .max_payload_exceeded_total
-            .get_or_create(&isb_max_payload_labels)
-            .inc();
-
         pipeline_metrics
             .forwarder
             .ack_processing_time
@@ -2399,7 +2389,6 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_max_payload_exceeded_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

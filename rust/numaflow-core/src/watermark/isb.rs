@@ -885,7 +885,6 @@ mod tests {
                         ..Default::default()
                     },
                     None,
-                    None,
                     CancellationToken::new(),
                 )
                 .await
