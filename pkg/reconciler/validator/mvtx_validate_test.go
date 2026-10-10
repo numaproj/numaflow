@@ -167,6 +167,39 @@ func TestValidateMonoVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid maxUnavailable")
 	})
 
+	t.Run("test negative scale min", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](-1)
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scale: min number of replicas should not be smaller than 0")
+	})
+
+	t.Run("test scale min greater than max", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](5)
+		testObj.Spec.Scale.Max = ptr.To[int32](2)
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scale: max number of replicas (2) should be greater than or equal to min (5)")
+	})
+
+	t.Run("test scale min greater than default max", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](dfv1.DefaultMaxReplicas + 1)
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "should be greater than or equal to min")
+	})
+
+	t.Run("test scale min equal to max", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Scale.Min = ptr.To[int32](3)
+		testObj.Spec.Scale.Max = ptr.To[int32](3)
+		err := ValidateMonoVertex(testObj)
+		assert.NoError(t, err)
+	})
+
 	t.Run("test omitted cron timezone defaults to UTC", func(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		testObj.Spec.Scale.Cron = &dfv1.CronScheduling{
@@ -250,6 +283,71 @@ func TestValidateMonoVertex(t *testing.T) {
 		err = ValidateMonoVertex(testObj)
 		assert.NoError(t, err)
 	})
+}
+
+func TestValidateScaleReplicas(t *testing.T) {
+	tests := []struct {
+		name      string
+		scale     dfv1.Scale
+		wantError string
+	}{
+		{
+			name:  "min and max omitted",
+			scale: dfv1.Scale{},
+		},
+		{
+			name:  "min smaller than max",
+			scale: dfv1.Scale{Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+		},
+		{
+			name:  "min equal to max",
+			scale: dfv1.Scale{Min: ptr.To[int32](5), Max: ptr.To[int32](5)},
+		},
+		{
+			name:  "min and max are zero",
+			scale: dfv1.Scale{Min: ptr.To[int32](0), Max: ptr.To[int32](0)},
+		},
+		{
+			name:  "min equal to default max",
+			scale: dfv1.Scale{Min: ptr.To[int32](dfv1.DefaultMaxReplicas)},
+		},
+		{
+			name:      "min is negative",
+			scale:     dfv1.Scale{Min: ptr.To[int32](-1)},
+			wantError: "min number of replicas should not be smaller than 0",
+		},
+		{
+			name:      "max is negative",
+			scale:     dfv1.Scale{Max: ptr.To[int32](-1)},
+			wantError: "max number of replicas (-1) should be greater than or equal to min (0)",
+		},
+		{
+			name:      "min greater than max",
+			scale:     dfv1.Scale{Min: ptr.To[int32](3), Max: ptr.To[int32](2)},
+			wantError: "max number of replicas (2) should be greater than or equal to min (3)",
+		},
+		{
+			name:      "min greater than default max",
+			scale:     dfv1.Scale{Min: ptr.To[int32](dfv1.DefaultMaxReplicas + 1)},
+			wantError: "should be greater than or equal to min",
+		},
+		{
+			name:      "min greater than max when autoscaling is disabled",
+			scale:     dfv1.Scale{Disabled: true, Min: ptr.To[int32](3), Max: ptr.To[int32](2)},
+			wantError: "max number of replicas (2) should be greater than or equal to min (3)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateScaleReplicas(tc.scale)
+			if tc.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantError)
+			}
+		})
+	}
 }
 
 func TestValidateCronScaling(t *testing.T) {
