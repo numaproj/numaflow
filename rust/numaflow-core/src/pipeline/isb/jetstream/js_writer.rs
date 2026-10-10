@@ -634,13 +634,13 @@ mod tests {
             "write should fail since the message exceeds the stream max message size"
         );
 
-        // Below the server max_payload, so the pre-send check must not fire.
+        // Rejected by the stream (10054), so the metric is recorded once.
         let after = pipeline_metrics()
             .jetstream_isb
             .max_payload_exceeded_total
             .get_or_create(&labels)
             .get();
-        assert_eq!(after, before);
+        assert_eq!(after, before + 1);
 
         cln_token.cancel();
         context.delete_stream(stream.name).await.unwrap();
