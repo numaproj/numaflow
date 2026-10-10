@@ -44,7 +44,6 @@ impl From<numaflow_pulsar::Error> for Error {
     fn from(value: numaflow_pulsar::Error) -> Self {
         match value {
             numaflow_pulsar::Error::Pulsar(e) => Error::Source(e.to_string()),
-            numaflow_pulsar::Error::UnknownOffset(_) => Error::Source(value.to_string()),
             numaflow_pulsar::Error::AckPendingExceeded(pending) => {
                 Error::AckPendingExceeded(pending)
             }
@@ -580,6 +579,95 @@ mod tests {
 
         let ack_result = source.ack(offsets).await;
         assert!(ack_result.is_ok(), "ack failed: {ack_result:?}");
+
+        wait_for_backlog_zero(&local, false, &subscription, Duration::from_secs(15)).await;
+    }
+
+    /// A batch ack that fails partway is retried with the whole batch, so the retry must skip
+    /// the offsets that were already acked and still ack the rest.
+    #[tokio::test]
+    async fn test_pulsar_source_ack_retry_after_partial_batch_ack() {
+        let local = format!("i4-{}", get_rand_str());
+        let topic = full_topic(&local);
+        let subscription = format!("sub-{}", get_rand_str());
+
+        create_non_partitioned_topic(&local).await;
+        create_subscription(&local, &subscription).await;
+
+        produce(&topic, vec!["a0".into(), "a1".into(), "a2".into()], false).await;
+
+        let mut source =
+            new_test_source(&topic, &subscription, 10, Duration::from_millis(500)).await;
+
+        let messages = read_until(&mut source, 3, Duration::from_secs(15)).await;
+        assert_eq!(messages.len(), 3);
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
+        let first_offset = offsets
+            .first()
+            .cloned()
+            .expect("expected at least one offset");
+
+        // Only the first offset of the batch was acked before the failure.
+        source
+            .ack(vec![first_offset])
+            .await
+            .expect("ack of the first offset failed");
+
+        let retry_result = source.ack(offsets).await;
+        assert!(retry_result.is_ok(), "ack retry failed: {retry_result:?}");
+
+        wait_for_backlog_zero(&local, false, &subscription, Duration::from_secs(15)).await;
+    }
+
+    /// Same as [test_pulsar_source_ack_retry_after_partial_batch_ack], but for nack.
+    #[tokio::test]
+    async fn test_pulsar_source_nack_retry_after_partial_batch_nack() {
+        let local = format!("i5-{}", get_rand_str());
+        let topic = full_topic(&local);
+        let subscription = format!("sub-{}", get_rand_str());
+
+        create_non_partitioned_topic(&local).await;
+        create_subscription(&local, &subscription).await;
+
+        produce(&topic, vec!["n0".into(), "n1".into(), "n2".into()], false).await;
+
+        let mut source =
+            new_test_source(&topic, &subscription, 10, Duration::from_millis(500)).await;
+
+        let messages = read_until(&mut source, 3, Duration::from_secs(15)).await;
+        assert_eq!(messages.len(), 3);
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
+        let nack_offsets: Vec<NackOffset> = offsets
+            .iter()
+            .cloned()
+            .map(|offset| NackOffset {
+                offset,
+                option: None,
+            })
+            .collect();
+        let first_nack_offset = nack_offsets
+            .first()
+            .cloned()
+            .expect("expected at least one offset");
+
+        // Only the first offset of the batch was nacked before the failure.
+        source
+            .nack(vec![first_nack_offset])
+            .await
+            .expect("nack of the first offset failed");
+
+        let retry_result = source.nack(nack_offsets).await;
+        assert!(retry_result.is_ok(), "nack retry failed: {retry_result:?}");
+
+        let redelivered = read_until(&mut source, 3, Duration::from_secs(15)).await;
+        assert_eq!(redelivered.len(), 3);
+        let offsets_set: HashSet<Offset> = offsets.into_iter().collect();
+        let redelivered_set: HashSet<Offset> =
+            redelivered.iter().map(|m| m.offset.clone()).collect();
+        assert_eq!(redelivered_set, offsets_set);
+
+        let ack_offsets: Vec<Offset> = redelivered.into_iter().map(|m| m.offset).collect();
+        source.ack(ack_offsets).await.expect("ack failed");
 
         wait_for_backlog_zero(&local, false, &subscription, Duration::from_secs(15)).await;
     }

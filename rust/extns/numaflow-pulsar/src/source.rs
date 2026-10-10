@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result, TlsConfig};
 
@@ -326,13 +326,15 @@ impl ConsumerReaderActor {
         Some(Ok(messages))
     }
 
+    /// Acks the given offsets. If an ack fails, the failed offset and the ones after it stay
+    /// pending and the error is returned so that the caller can retry the batch. Offsets that are
+    /// no longer pending (e.g., acked by an earlier attempt of the same batch) are skipped.
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
         for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                return Err(Error::UnknownOffset(offset));
+            let Some(pending) = self.message_ids.remove(&offset) else {
+                warn!(%offset, "Received ACK request for unknown offset");
+                continue;
             };
 
             let Err(e) = self
@@ -342,19 +344,19 @@ impl ConsumerReaderActor {
             else {
                 continue;
             };
-            // Insert offset back
+            // Insert offset back so that the retry can ack it.
             self.message_ids.insert(offset, pending);
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
     }
 
+    /// Nacks the given offsets, with the same partial failure semantics as [Self::ack_messages].
     async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
         for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                return Err(Error::UnknownOffset(offset));
+            let Some(pending) = self.message_ids.remove(&offset) else {
+                warn!(%offset, "Received NACK request for unknown offset");
+                continue;
             };
 
             let Err(e) = self
@@ -364,7 +366,7 @@ impl ConsumerReaderActor {
             else {
                 continue;
             };
-            // Insert offset back
+            // Insert offset back so that the retry can nack it.
             self.message_ids.insert(offset, pending);
             return Err(Error::Pulsar(e.into()));
         }
