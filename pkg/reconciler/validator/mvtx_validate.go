@@ -81,10 +81,33 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 		return fmt.Errorf("invalid maxUnavailable: %w", err)
 	}
 
+	if err := validateScaleReplicas(mvtx.Spec.Scale); err != nil {
+		return fmt.Errorf("invalid scale: %w", err)
+	}
+
 	if err := validateCronScaling(mvtx.Spec.Scale); err != nil {
 		return fmt.Errorf("invalid scale.cron: %w", err)
 	}
 
+	return nil
+}
+
+// validateScaleReplicas validates the min and max replicas of the autoscaling config.
+// An unset max falls back to the default max replicas.
+func validateScaleReplicas(scale dfv1.Scale) error {
+	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
+	if scale.Min != nil {
+		min = *scale.Min
+	}
+	if scale.Max != nil {
+		max = *scale.Max
+	}
+	if min < 0 {
+		return fmt.Errorf("min number of replicas should not be smaller than 0")
+	}
+	if min > max {
+		return fmt.Errorf("max number of replicas (%d) should be greater than or equal to min (%d)", max, min)
+	}
 	return nil
 }
 

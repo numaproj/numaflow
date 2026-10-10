@@ -217,18 +217,8 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if err := validateCronScaling(v.Scale); err != nil {
 		return fmt.Errorf("vertex %q: invalid scale.cron: %w", v.Name, err)
 	}
-	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
-	if v.Scale.Min != nil {
-		min = *v.Scale.Min
-	}
-	if v.Scale.Max != nil {
-		max = *v.Scale.Max
-	}
-	if min < 0 {
-		return fmt.Errorf("vertex %q: min number of replicas should not be smaller than 0", v.Name)
-	}
-	if min > max {
-		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
+	if err := validateScaleReplicas(v.Scale); err != nil {
+		return fmt.Errorf("vertex %q: %w", v.Name, err)
 	}
 	if v.Partitions != nil {
 		if *v.Partitions < 0 {
