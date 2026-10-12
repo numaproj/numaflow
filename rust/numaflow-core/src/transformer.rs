@@ -665,13 +665,12 @@ mod tests {
         };
 
         let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
-        cln_token.cancel();
         let result = transformer
             .transform_batch(vec![MessageHandle::new(message, ack_tx)], cln_token, None)
             .await;
         assert!(
-            matches!(&result, Err(Error::Transformer(e)) if e == "Operation cancelled"),
-            "Expected cancellation to stop retrying the panicking transformer, got {result:?}"
+            matches!(&result, Err(Error::Grpc(_))),
+            "Expected panicking transformer to surface as a gRPC error, got {result:?}"
         );
 
         // we need to drop the transformer, because if there are any in-flight requests

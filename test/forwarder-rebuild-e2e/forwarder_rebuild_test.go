@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package redrive_e2e
+package forwarder_rebuild_e2e
 
 import (
 	"context"
@@ -40,7 +40,7 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type RedriveSuite struct {
+type ForwarderRebuildSuite struct {
 	E2ESuite
 }
 
@@ -100,7 +100,7 @@ func monoVertexHasContainerError(replicaErrors []*mvtxdaemonpb.ReplicaErrors, co
 	return false
 }
 
-func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
+func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromUDFCrash() {
 	w := s.Given().Pipeline("@testdata/runtime-error-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -121,29 +121,33 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromUDFCrash() {
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not-json")))
 
+	// Map hard-exits produce a transport-level gRPC failure that is persisted under "numa".
 	assert.Eventually(s.T(), func() bool {
-		return httpBodyContains("https://localhost:8941", "/runtime/errors", `"container":"udf"`)
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the p1 pod runtime endpoint")
+		return httpBodyContains("https://localhost:8941", "/runtime/errors", `"container":"numa"`)
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the p1 pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "p1")
-		return err == nil && vertexHasContainerError(replicaErrors, "udf")
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the daemon for vertex p1")
+		return err == nil && vertexHasContainerError(replicaErrors, "numa")
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the daemon for vertex p1")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
 			"https://localhost:8141",
 			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "p1"),
-			`"container":"udf"`,
+			`"container":"numa"`,
 		)
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the UX server for vertex p1")
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the UX server for vertex p1")
 
-	w.Expect().VertexNumaStable(podSnapshot, "p1")
+	w.Expect().
+		VertexPodLogContains("p1", "Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("p1", "Starting map forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexNumaStable(podSnapshot, "p1")
 }
 
-func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
+func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromSinkCrash() {
 	w := s.Given().Pipeline("@testdata/runtime-error-sink-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -181,10 +185,13 @@ func (s *RedriveSuite) TestPipelineRuntimeErrorsFromSinkCrash() {
 		)
 	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the UX server for vertex out")
 
-	w.Expect().VertexNumaStable(podSnapshot, "out")
+	w.Expect().
+		VertexPodLogContains("out", "Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("out", "Starting sink forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexNumaStable(podSnapshot, "out")
 }
 
-func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
+func (s *ForwarderRebuildSuite) TestMonoVertexForwarderRebuildFromUDFCrash() {
 	monoVertexName := "runtime-error-monovertex"
 	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
@@ -210,29 +217,33 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromUDFCrash() {
 		w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("not-json")))
 	}()
 
+	// Map hard-exits produce a transport-level gRPC failure that is persisted under "numa".
 	assert.Eventually(s.T(), func() bool {
-		return httpBodyContains("https://localhost:8943", "/runtime/errors", `"container":"udf"`)
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the monovertex pod runtime endpoint")
+		return httpBodyContains("https://localhost:8943", "/runtime/errors", `"container":"numa"`)
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the monovertex pod runtime endpoint")
 
 	assert.Eventually(s.T(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		replicaErrors, err := client.GetMonoVertexErrors(ctx, monoVertexName)
-		return err == nil && monoVertexHasContainerError(replicaErrors, "udf")
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the monovertex daemon")
+		return err == nil && monoVertexHasContainerError(replicaErrors, "numa")
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the monovertex daemon")
 
 	assert.Eventually(s.T(), func() bool {
 		return httpBodyContains(
 			"https://localhost:8143",
 			fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/errors", Namespace, monoVertexName),
-			`"container":"udf"`,
+			`"container":"numa"`,
 		)
-	}, 2*time.Minute, time.Second, "udf runtime error not reported by the UX server for the monovertex")
+	}, 2*time.Minute, time.Second, "numa runtime error not reported by the UX server for the monovertex")
 
-	w.Expect().MonoVertexNumaStable(podSnapshot)
+	w.Expect().
+		MonoVertexPodLogContains("Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		MonoVertexPodLogContains("Forwarder is starting", PodLogCheckOptionWithContainer("numa")).
+		MonoVertexNumaStable(podSnapshot)
 }
 
-func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
+func (s *ForwarderRebuildSuite) TestMonoVertexForwarderRebuildFromSinkCrash() {
 	monoVertexName := "runtime-error-sink-monovertex"
 	w := s.Given().MonoVertex("@testdata/runtime-error-sink-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
@@ -269,9 +280,12 @@ func (s *RedriveSuite) TestMonoVertexRuntimeErrorsFromSinkCrash() {
 		)
 	}, 2*time.Minute, time.Second, "udsink runtime error not reported by the UX server for the monovertex")
 
-	w.Expect().MonoVertexNumaStable(podSnapshot)
+	w.Expect().
+		MonoVertexPodLogContains("Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		MonoVertexPodLogContains("Forwarder is starting", PodLogCheckOptionWithContainer("numa")).
+		MonoVertexNumaStable(podSnapshot)
 }
 
-func TestRedriveSuite(t *testing.T) {
-	suite.Run(t, new(RedriveSuite))
+func TestForwarderRebuildSuite(t *testing.T) {
+	suite.Run(t, new(ForwarderRebuildSuite))
 }
