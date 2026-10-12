@@ -686,7 +686,6 @@ mod tests {
                     context.clone(),
                     writer_config.clone(),
                     None,
-                    None,
                     cln_token.clone(),
                 )
                 .await
@@ -798,7 +797,6 @@ mod tests {
                     stream.clone(),
                     context.clone(),
                     writer_config.clone(),
-                    None,
                     None,
                     cln_token.clone(),
                 )
@@ -922,7 +920,6 @@ mod tests {
                         context.clone(),
                         vertex1_writer_config.clone(),
                         None,
-                        None,
                         cln_token.clone(),
                     )
                     .await
@@ -939,7 +936,6 @@ mod tests {
                         context.clone(),
                         vertex2_writer_config.clone(),
                         None,
-                        None,
                         cln_token.clone(),
                     )
                     .await
@@ -955,7 +951,6 @@ mod tests {
                         stream.clone(),
                         context.clone(),
                         vertex3_writer_config.clone(),
-                        None,
                         None,
                         cln_token.clone(),
                     )

@@ -1,15 +1,17 @@
 # Maximum Message Size
 
-The default maximum message size is `1MB`. There's a way to increase this limit in case you want to, but please think it
-through before doing so. The safest action might be to [enable compression](#enable-compression).
+The default maximum message size is `32MB`. Large messages increase the storage and memory usage of the Inter-Step
+Buffer Service, so the safest action might be to [enable compression](#enable-compression).
 
 The max message size is determined by:
 
 - Max messages size supported by gRPC (default value is `64MB` in Numaflow).
 - Max messages size supported by the Inter-Step Buffer implementation.
 
-If `JetStream` is used as the Inter-Step Buffer implementation, the default max message size for it is configured as `1MB`.
-You can change it by setting the `spec.jetstream.settings` in the `InterStepBufferService` specification.
+If `JetStream` is used as the Inter-Step Buffer implementation, the max message size is limited by the streams created
+for the buffers, using `stream.maxMsgSize` in `spec.jetstream.bufferConfig` of the `InterStepBufferService`
+specification. It defaults to `33553408` (32MB - 1KB), which is also the max value allowed, since JetStream file storage does
+not support messages larger than 32MB. The buffer creation fails if a bigger value is configured.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -18,11 +20,16 @@ metadata:
   name: default
 spec:
   jetstream:
-    settings: |
-      max_payload: 8388608 # 8MB
+    bufferConfig: |
+      stream:
+        maxMsgSize: 8388608 # 8MB
 ```
 
-It's not recommended to use values over `8388608` (8MB) but `max_payload` can be set up to `67108864` (64MB).
+The NATS server `max_payload` (configured in `spec.jetstream.settings`) defaults to `68157440` (65MB), so messages
+larger than `stream.maxMsgSize` are rejected by the stream instead of the NATS connection being closed.
+
+Writes rejected because a message exceeds the max message size of the stream are counted by the
+`isb_jetstream_max_payload_exceeded_total` metric.
 
 Please be aware that if you increase the max message size of the `InterStepBufferService`, you probably will also need to
 change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the 
@@ -30,13 +37,6 @@ pipeline will make each of the Inter-Step Buffer need at least 800MB of disk spa
 consumption will also be high, that will probably cause the Inter-Step Buffer Service to crash. In that case, you might 
 need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
 Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer-service.md#buffer-configuration) for more details.
-
-## Identify Oversized Messages
-
-Pipeline vertex pods expose `isb_jetstream_max_payload_exceeded_total` for JetStream
-publish attempts that exceed the server-advertised `max_payload`. Labels identify the
-pipeline, vertex, replica, and partition. Vertex logs include a structured warning
-with the attempted publish size and the limit.
 
 ## Enable Compression
 
