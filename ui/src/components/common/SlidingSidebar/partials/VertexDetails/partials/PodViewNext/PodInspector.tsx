@@ -1,7 +1,8 @@
-import { ReactNode, useContext, useMemo } from "react";
+import { ReactNode, useContext } from "react";
 import { AppContext } from "../../../../../../../App";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
 import {
+  ago,
   getPodContainerUsePercentages,
 } from "../../../../../../../utils";
 import {
@@ -33,7 +34,19 @@ interface PodInspectorProps {
   runtime?: PodRuntimeInfo;
 }
 
-const displayQuantity = (value?: string, suffix?: string) => value || `—${suffix || ""}`;
+const EMPTY = "—";
+
+const normalizeCPU = (value?: string) =>
+  value?.endsWith("n") ? `${(parseFloat(value) / 1e6).toFixed(2)}m` : value;
+
+const normalizeMemory = (value?: string) =>
+  value?.endsWith("Ki") ? `${(parseFloat(value) / 1024).toFixed(2)}Mi` : value;
+
+/** formatUsage renders `usage / request (percent)`, omitting the percent when either side is unknown. */
+const formatUsage = (used?: string, requested?: string, percent?: number) => {
+  const base = `${used || EMPTY} / ${requested || EMPTY}`;
+  return percent === undefined ? base : `${base} (${percent.toFixed(2)}%)`;
+};
 
 function InspectorRow({
   label,
@@ -47,12 +60,30 @@ function InspectorRow({
   return (
     <div className="pod-inspector-row">
       <span>{label}</span>
-      <strong className={danger ? "pod-inspector-danger" : undefined}>{children}</strong>
+      <strong
+        className={danger ? "pod-inspector-danger" : undefined}
+        title={typeof children === "string" ? children : undefined}
+      >
+        {children}
+      </strong>
     </div>
   );
 }
 
-/** PodInspector presents selected pod and container runtime data without owning fetch or selection state. */
+function StatusPill({ status }: { status?: string }) {
+  return (
+    <span
+      className={`pod-inspector-status pod-inspector-status--${podStatusTone(status)}`}
+    >
+      {status || "Unknown"}
+    </span>
+  );
+}
+
+/**
+ * PodInspector scopes runtime details to two cards: the selected pod as a whole
+ * and the selected container chip. It does not own fetch or selection state.
+ */
 export function PodInspector({
   namespaceId,
   pipelineId,
@@ -64,130 +95,137 @@ export function PodInspector({
   runtime,
 }: PodInspectorProps) {
   const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
+  const metricsProps = {
+    disableMetricsCharts,
+    namespaceId,
+    pipelineId,
+    vertexId,
+    type,
+    pod,
+  };
   const containerInfo: ContainerInfoProps | undefined = containerName
     ? runtime?.containerDetailsMap?.[containerName]
     : undefined;
-  const usage = useMemo(
-    () =>
-      containerName && podDetails
-        ? getPodContainerUsePercentages(pod, podDetails, containerName)
-        : {},
-    [containerName, pod, podDetails]
-  );
+  const usage =
+    containerName && podDetails
+      ? getPodContainerUsePercentages(pod, podDetails, containerName)
+      : {};
   const containerUsage = containerName
     ? podDetails?.containerMap.get(containerName)
     : undefined;
   const containerSpec = containerName
     ? pod.containerSpecMap.get(containerName)
     : undefined;
-  const restartCount = Object.values(runtime?.containerDetailsMap || {}).reduce(
+  const podRestarts = Object.values(runtime?.containerDetailsMap || {}).reduce(
     (count, item) => count + (item?.restartCount || 0),
     0
   );
+  const containerRestarts = containerInfo?.restartCount ?? 0;
+  const exitCode = containerInfo?.lastTerminationExitCode;
 
   return (
     <aside className="pod-inspector" data-testid="pod-inspector">
-      <section className="pod-inspector-card">
+      <section className="pod-inspector-card" data-testid="pod-overview">
         <div className="pod-inspector-heading">
           <span>Pod Overview</span>
-          <span
-            className={`pod-inspector-status pod-inspector-status--${podStatusTone(
-              runtime?.status
-            )}`}
-          >
-            {runtime?.status || "Unknown"}
-          </span>
+          <StatusPill status={runtime?.status} />
         </div>
-        <p className="pod-inspector-name" title={pod.name}>{pod.name}</p>
         <dl>
-          <InspectorRow label="Container">{containerName || "—"}</InspectorRow>
-          <InspectorRow label="State">{containerInfo?.state || "Unknown"}</InspectorRow>
-          <InspectorRow label="Restarts" danger={restartCount > 0}>{restartCount}</InspectorRow>
+          <InspectorRow label="Name">{pod.name}</InspectorRow>
+          <InspectorRow label="Restarts" danger={podRestarts > 0}>
+            {podRestarts}
+          </InspectorRow>
+          <InspectorRow label="CPU">
+            {runtime?.totalCPU ? (
+              <MetricsModalWrapper
+                {...metricsProps}
+                metricDisplayName={POD_CPU_UTILIZATION}
+                value={runtime.totalCPU}
+              />
+            ) : (
+              EMPTY
+            )}
+          </InspectorRow>
+          <InspectorRow label="Memory">
+            {runtime?.totalMemory ? (
+              <MetricsModalWrapper
+                {...metricsProps}
+                metricDisplayName={POD_MEMORY_UTILIZATION}
+                value={runtime.totalMemory}
+              />
+            ) : (
+              EMPTY
+            )}
+          </InspectorRow>
           {runtime?.reason && (
             <InspectorRow label="Reason" danger>{runtime.reason}</InspectorRow>
+          )}
+          {runtime?.message && (
+            <InspectorRow label="Message" danger>{runtime.message}</InspectorRow>
           )}
         </dl>
       </section>
 
-      {containerInfo?.lastTerminationReason && (
-        <section className="pod-inspector-card pod-inspector-card--termination">
-          <div className="pod-inspector-heading">Last Termination</div>
-          <p>{containerInfo.lastTerminationReason}</p>
-          {containerInfo.lastTerminationMessage && (
-            <p className="pod-inspector-muted">{containerInfo.lastTerminationMessage}</p>
-          )}
-          {containerInfo.lastTerminationExitCode !== undefined &&
-            containerInfo.lastTerminationExitCode !== null && (
-              <InspectorRow label="Exit code" danger>
-                {containerInfo.lastTerminationExitCode}
-              </InspectorRow>
-            )}
-        </section>
-      )}
-
-      <section className="pod-inspector-card">
-        <div className="pod-inspector-heading">Resources</div>
+      <section className="pod-inspector-card" data-testid="container-overview">
+        <div className="pod-inspector-heading">
+          <span>Container Overview</span>
+          <StatusPill status={containerInfo?.state} />
+        </div>
         <dl>
+          <InspectorRow label="Name">{containerName || EMPTY}</InspectorRow>
+          <InspectorRow label="Last Started">
+            {containerInfo?.lastStartedAt
+              ? ago(new Date(containerInfo.lastStartedAt), 2)
+              : EMPTY}
+          </InspectorRow>
           <InspectorRow label="CPU">
             <MetricsModalWrapper
-              disableMetricsCharts={disableMetricsCharts}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              vertexId={vertexId}
-              type={type}
+              {...metricsProps}
               metricDisplayName={CONTAINER_CPU_UTILIZATION}
-              value={`${displayQuantity(containerUsage?.cpu)} / ${displayQuantity(containerSpec?.cpu)}`}
-              pod={pod}
+              value={formatUsage(
+                normalizeCPU(containerUsage?.cpu),
+                containerSpec?.cpu,
+                usage.cpuPercent
+              )}
             />
           </InspectorRow>
           <InspectorRow label="Memory">
             <MetricsModalWrapper
-              disableMetricsCharts={disableMetricsCharts}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              vertexId={vertexId}
-              type={type}
+              {...metricsProps}
               metricDisplayName={CONTAINER_MEMORY_UTILIZATION}
-              value={`${displayQuantity(containerUsage?.memory)} / ${displayQuantity(containerSpec?.memory)}`}
-              pod={pod}
+              value={formatUsage(
+                normalizeMemory(containerUsage?.memory),
+                containerSpec?.memory,
+                usage.memoryPercent
+              )}
             />
           </InspectorRow>
-          <InspectorRow label="CPU usage">
-            {usage.cpuPercent === undefined ? "—" : `${usage.cpuPercent.toFixed(1)}%`}
+          <InspectorRow label="Restarts" danger={containerRestarts > 0}>
+            {containerRestarts}
           </InspectorRow>
-          <InspectorRow label="Memory usage">
-            {usage.memoryPercent === undefined ? "—" : `${usage.memoryPercent.toFixed(1)}%`}
-          </InspectorRow>
-        </dl>
-      </section>
-
-      <section className="pod-inspector-card">
-        <div className="pod-inspector-heading">Quick Metrics</div>
-        <dl>
-          <InspectorRow label="Pod CPU">
-            <MetricsModalWrapper
-              disableMetricsCharts={disableMetricsCharts}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              vertexId={vertexId}
-              type={type}
-              metricDisplayName={POD_CPU_UTILIZATION}
-              value={runtime?.totalCPU || "—"}
-              pod={pod}
-            />
-          </InspectorRow>
-          <InspectorRow label="Pod memory">
-            <MetricsModalWrapper
-              disableMetricsCharts={disableMetricsCharts}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              vertexId={vertexId}
-              type={type}
-              metricDisplayName={POD_MEMORY_UTILIZATION}
-              value={runtime?.totalMemory || "—"}
-              pod={pod}
-            />
-          </InspectorRow>
+          {containerInfo?.waitingReason && (
+            <InspectorRow label="Waiting Reason" danger>
+              {containerInfo.waitingReason}
+            </InspectorRow>
+          )}
+          {containerInfo?.waitingMessage && (
+            <InspectorRow label="Waiting Message" danger>
+              {containerInfo.waitingMessage}
+            </InspectorRow>
+          )}
+          {containerInfo?.lastTerminationReason && (
+            <InspectorRow label="Last Termination" danger>
+              {containerInfo.lastTerminationReason}
+            </InspectorRow>
+          )}
+          {containerInfo?.lastTerminationMessage && (
+            <InspectorRow label="Termination Message" danger>
+              {containerInfo.lastTerminationMessage}
+            </InspectorRow>
+          )}
+          {exitCode !== undefined && exitCode !== null && (
+            <InspectorRow label="Exit Code" danger>{exitCode}</InspectorRow>
+          )}
         </dl>
       </section>
     </aside>

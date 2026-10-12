@@ -15,10 +15,6 @@
   background: var(--bg-primary);
 }
 
-.pod-inspector-card--termination {
-  border-color: color-mix(in srgb, #d1071f 35%, var(--border-secondary));
-}
-
 .pod-inspector-heading {
   display: flex;
   align-items: center;
@@ -52,27 +48,6 @@
   color: #ef4444;
 }
 
-.pod-inspector-name {
-  overflow: hidden;
-  margin: 0 0 1.2rem;
-  color: var(--text-tertiary);
-  font-family: monospace;
-  font-size: 1.1rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pod-inspector-card p {
-  color: var(--text-secondary);
-  font-size: 1.2rem;
-  line-height: 1.5;
-}
-
-.pod-inspector-muted {
-  color: var(--text-tertiary) !important;
-  font-size: 1.1rem !important;
-}
-
 .pod-inspector-card dl {
   margin: 0;
 }
@@ -86,6 +61,10 @@
   border-top: 1px solid var(--border-secondary);
   color: var(--text-tertiary);
   font-size: 1.2rem;
+}
+
+.pod-inspector-row > span {
+  flex-shrink: 0;
 }
 
 .pod-inspector-row strong {

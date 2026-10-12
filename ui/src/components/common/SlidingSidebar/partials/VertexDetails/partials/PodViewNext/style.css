@@ -58,6 +58,18 @@
   text-transform: uppercase;
 }
 
+.pod-view-next-containers .pod-container-chip--selected.MuiChip-root,
+.PodLogs-focus-context .pod-container-chip--selected.MuiChip-root {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
+.pod-view-next-containers .pod-container-chip--selected.MuiChip-clickable:hover,
+.PodLogs-focus-context .pod-container-chip--selected.MuiChip-clickable:hover {
+  background: var(--accent-primary);
+}
+
 .pod-view-next-log-card {
   display: flex;
   flex: 1;
