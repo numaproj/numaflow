@@ -158,7 +158,9 @@
   outline-offset: 0.2rem;
 }
 
-.pod-fleet-cell--selected {
+/* Bootstrap reboot's `button:focus:not(:focus-visible) { outline: 0 }` hides the ring on mouse focus. */
+.pod-fleet-cell--selected,
+.pod-fleet-cell--selected:focus:not(:focus-visible) {
   outline: 0.2rem solid #0ea5e9;
   outline-offset: 0.2rem;
 }

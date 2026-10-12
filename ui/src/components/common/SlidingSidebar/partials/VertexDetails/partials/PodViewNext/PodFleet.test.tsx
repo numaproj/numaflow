@@ -45,6 +45,39 @@ const runtime = new Map<string, PodRuntimeInfo>([
 ]);
 
 describe("PodFleet", () => {
+  it("outlines only the pod the parent has selected", () => {
+    const { rerender } = render(
+      <PodFleet
+        pods={[alpha, bravo]}
+        detailsByName={details}
+        runtimeByName={runtime}
+        selectedPod={undefined}
+        onPodSelect={jest.fn()}
+      />
+    );
+
+    expect(document.querySelectorAll(".pod-fleet-cell--selected")).toHaveLength(0);
+    expect(screen.queryByTestId("pod-fleet-selected")).not.toBeInTheDocument();
+
+    rerender(
+      <PodFleet
+        pods={[alpha, bravo]}
+        detailsByName={details}
+        runtimeByName={runtime}
+        selectedPod={bravo}
+        onPodSelect={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId(`pod-fleet-cell-${bravo.name}`)).toHaveClass(
+      "pod-fleet-cell--selected"
+    );
+    expect(screen.getByTestId(`pod-fleet-cell-${alpha.name}`)).not.toHaveClass(
+      "pod-fleet-cell--selected"
+    );
+    expect(screen.getByTestId("pod-fleet-selected")).toHaveTextContent(bravo.name);
+  });
+
   it("filters, searches, and selects pods", () => {
     const onPodSelect = jest.fn();
     render(

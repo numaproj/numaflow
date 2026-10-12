@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
@@ -48,11 +48,6 @@ export function PodFleet({
   const [filter, setFilter] = useState<PodFleetFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<PodFleetSort>("severity");
-  const [highlightedPod, setHighlightedPod] = useState<Pod | undefined>(selectedPod);
-  const [, startSelection] = useTransition();
-  useEffect(() => {
-    setHighlightedPod(selectedPod);
-  }, [selectedPod]);
   const items = useMemo(
     () => buildPodFleetItems(pods, detailsByName, runtimeByName),
     [pods, detailsByName, runtimeByName]
@@ -138,7 +133,7 @@ export function PodFleet({
       </div>
       <div className="pod-fleet-grid" data-testid="pod-fleet-grid">
         {visibleItems.map((item) => {
-          const isSelected = highlightedPod?.name === item.pod.name;
+          const isSelected = selectedPod?.name === item.pod.name;
           const status = item.runtime?.status || "Unknown";
           return (
             <Tooltip
@@ -154,10 +149,7 @@ export function PodFleet({
                 data-testid={`pod-fleet-cell-${item.pod.name}`}
                 aria-pressed={isSelected}
                 aria-label={`Select ${item.pod.name}, ${status}`}
-                onClick={() => {
-                  setHighlightedPod(item.pod);
-                  startSelection(() => onPodSelect(item.pod));
-                }}
+                onClick={() => onPodSelect(item.pod)}
               >
                 <span>{chipLabel(item.pod.name)}</span>
                 {item.restartCount > 0 && <span className="pod-fleet-restart-marker" />}
@@ -171,17 +163,17 @@ export function PodFleet({
           No pods match the current filters.
         </p>
       )}
-      {highlightedPod && (
+      {selectedPod && (
         <div className="pod-fleet-selected" data-testid="pod-fleet-selected">
           <span>Selected:</span>
-          <strong title={highlightedPod.name}>{highlightedPod.name}</strong>
+          <strong title={selectedPod.name}>{selectedPod.name}</strong>
           <span
             className={`pod-fleet-status pod-fleet-status--${podStatusTone(
-              runtimeByName.get(highlightedPod.name)?.status
+              runtimeByName.get(selectedPod.name)?.status
             )}`}
             data-testid="pod-fleet-selected-status"
           >
-            {runtimeByName.get(highlightedPod.name)?.status || "Unknown"}
+            {runtimeByName.get(selectedPod.name)?.status || "Unknown"}
           </span>
         </div>
       )}
