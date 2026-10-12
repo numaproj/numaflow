@@ -32,10 +32,6 @@ export function PodViewNext(props: PodsProps) {
     selectContainer,
   } = usePodViewState(props);
 
-  // #region agent log
-  fetch('http://localhost:7291/ingest/5019ad4a-9ec9-4ffe-943a-8dfb3c72b60e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e970b3'},body:JSON.stringify({sessionId:'e970b3',hypothesisId:'H2',location:'PodViewNext/index.tsx:render',message:'pod view render',data:{loading,podCount:pods?.length??null,hasError:Boolean(podsErr),selected:selectedPod?.name??null,runtimeCount:podRuntimeByName.size},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   if (podsErr) {
     return (
       <div className="pod-view-next" data-testid="pod-view-beta">
