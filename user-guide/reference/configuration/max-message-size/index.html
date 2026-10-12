@@ -3816,17 +3816,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#identify-oversized-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Identify Oversized Messages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#enable-compression" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5337,17 +5326,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#identify-oversized-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Identify Oversized Messages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#enable-compression" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5407,36 +5385,37 @@
 
 
 <h1 id="maximum-message-size">Maximum Message Size<a class="headerlink" href="#maximum-message-size" title="Permanent link">&para;</a></h1>
-<p>The default maximum message size is <code>1MB</code>. There's a way to increase this limit in case you want to, but please think it
-through before doing so. The safest action might be to <a href="#enable-compression">enable compression</a>.</p>
+<p>The default maximum message size is <code>32MB</code>. Large messages increase the storage and memory usage of the Inter-Step
+Buffer Service, so the safest action might be to <a href="#enable-compression">enable compression</a>.</p>
 <p>The max message size is determined by:</p>
 <ul>
 <li>Max messages size supported by gRPC (default value is <code>64MB</code> in Numaflow).</li>
 <li>Max messages size supported by the Inter-Step Buffer implementation.</li>
 </ul>
-<p>If <code>JetStream</code> is used as the Inter-Step Buffer implementation, the default max message size for it is configured as <code>1MB</code>.
-You can change it by setting the <code>spec.jetstream.settings</code> in the <code>InterStepBufferService</code> specification.</p>
+<p>If <code>JetStream</code> is used as the Inter-Step Buffer implementation, the max message size is limited by the streams created
+for the buffers, using <code>stream.maxMsgSize</code> in <code>spec.jetstream.bufferConfig</code> of the <code>InterStepBufferService</code>
+specification. It defaults to <code>33553408</code> (32MB - 1KB), which is also the max value allowed, since JetStream file storage does
+not support messages larger than 32MB. The buffer creation fails if a bigger value is configured.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
 <span class="nt">metadata</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">settings</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<span class="w">      </span><span class="no">max_payload: 8388608 # 8MB</span>
+<span class="w">    </span><span class="nt">bufferConfig</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">      </span><span class="no">stream:</span>
+<span class="w">        </span><span class="no">maxMsgSize: 8388608 # 8MB</span>
 </code></pre></div>
-<p>It's not recommended to use values over <code>8388608</code> (8MB) but <code>max_payload</code> can be set up to <code>67108864</code> (64MB).</p>
+<p>The NATS server <code>max_payload</code> (configured in <code>spec.jetstream.settings</code>) defaults to <code>68157440</code> (65MB), so messages
+larger than <code>stream.maxMsgSize</code> are rejected by the stream instead of the NATS connection being closed.</p>
+<p>Writes rejected because a message exceeds the max message size of the stream are counted by the
+<code>isb_jetstream_max_payload_exceeded_total</code> metric.</p>
 <p>Please be aware that if you increase the max message size of the <code>InterStepBufferService</code>, you probably will also need to
 change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the 
 pipeline will make each of the Inter-Step Buffer need at least 800MB of disk space to store the messages, and the memory
 consumption will also be high, that will probably cause the Inter-Step Buffer Service to crash. In that case, you might 
 need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
 Check out the <a href="../../../../core-concepts/inter-step-buffer-service/#buffer-configuration">Inter-Step Buffer Service</a> for more details.</p>
-<h2 id="identify-oversized-messages">Identify Oversized Messages<a class="headerlink" href="#identify-oversized-messages" title="Permanent link">&para;</a></h2>
-<p>Pipeline vertex pods expose <code>isb_jetstream_max_payload_exceeded_total</code> for JetStream
-publish attempts that exceed the server-advertised <code>max_payload</code>. Labels identify the
-pipeline, vertex, replica, and partition. Vertex logs include a structured warning
-with the attempted publish size and the limit.</p>
 <h2 id="enable-compression">Enable Compression<a class="headerlink" href="#enable-compression" title="Permanent link">&para;</a></h2>
 <p>Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 
 reduce the storage and network cost to ISB. Enabling compression will help in ISB stability and should be used if the 
