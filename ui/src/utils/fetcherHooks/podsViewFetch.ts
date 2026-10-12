@@ -21,7 +21,8 @@ export const usePodsViewFetch = (
   selectedPod: Pod | undefined,
   type: string,
   setSelectedPod: Dispatch<SetStateAction<Pod | undefined>>,
-  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>
+  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>,
+  { autoSelectFirstPod = true }: { autoSelectFirstPod?: boolean } = {}
 ) => {
   const [pods, setPods] = useState<Pod[] | undefined>(undefined);
   const [podsDetails, setPodsDetails] = useState<
@@ -144,13 +145,19 @@ export const usePodsViewFetch = (
     fetchPods();
   }, [vertexId, requestKey, host]);
 
+  // Without auto-select, a selection is only cleared when its pod disappears.
   useEffect(() => {
     if (pods?.length) {
-      if (
-        !(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))
-      ) {
+      const selectionExists = Boolean(
+        selectedPod && pods.find((pod) => pod?.name === selectedPod?.name)
+      );
+      if (selectionExists) return;
+      if (autoSelectFirstPod) {
         setSelectedPod(pods[0]);
         setSelectedContainer(pods[0]?.containers[0]);
+      } else if (selectedPod) {
+        setSelectedPod(undefined);
+        setSelectedContainer(undefined);
       }
     } else {
       setSelectedPod(undefined);

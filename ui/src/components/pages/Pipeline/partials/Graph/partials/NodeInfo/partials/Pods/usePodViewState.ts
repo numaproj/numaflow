@@ -14,31 +14,46 @@ import {
 } from "../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../types/declarations/app";
 
-/** getDefaultContainerName honors the API's sidecar-first container ordering. */
-export function getDefaultContainerName(pod: Pod | undefined): string | undefined {
+/**
+ * getDefaultContainerName returns `defaultContainer` when the pod runs it,
+ * otherwise the first container in the API's sidecar-first ordering.
+ */
+export function getDefaultContainerName(
+  pod: Pod | undefined,
+  defaultContainer?: string
+): string | undefined {
+  if (defaultContainer && pod?.containers?.includes(defaultContainer)) {
+    return defaultContainer;
+  }
   return pod?.containers?.[0];
 }
 
 export function resolveContainerForPod(
   pod: Pod | undefined,
-  preferredContainer: string | undefined
+  preferredContainer: string | undefined,
+  defaultContainer?: string
 ): string | undefined {
   if (!pod) return undefined;
   return preferredContainer && pod.containers.includes(preferredContainer)
     ? preferredContainer
-    : getDefaultContainerName(pod);
+    : getDefaultContainerName(pod, defaultContainer);
+}
+
+export interface PodViewStateOptions {
+  /** Classic selects the first pod on load; Beta waits for an explicit click or a `pod` URL param. */
+  autoSelectFirstPod?: boolean;
+  /** Container chosen when a pod is selected, if the pod runs it. */
+  defaultContainer?: string;
 }
 
 /**
  * usePodViewState owns the v1 Pod View data and selection contract shared by
  * Classic and Beta presenters; it deliberately does not own their layout.
  */
-export function usePodViewState({
-  namespaceId,
-  pipelineId,
-  vertexId,
-  type,
-}: PodsProps) {
+export function usePodViewState(
+  { namespaceId, pipelineId, vertexId, type }: PodsProps,
+  { autoSelectFirstPod = true, defaultContainer }: PodViewStateOptions = {}
+) {
   const { host } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
   const location = useLocation();
@@ -60,7 +75,8 @@ export function usePodViewState({
       selectedPod,
       type,
       setSelectedPod,
-      setSelectedContainer
+      setSelectedContainer,
+      { autoSelectFirstPod }
     );
 
   const fetchRuntime = useCallback(async () => {
@@ -114,10 +130,18 @@ export function usePodViewState({
     const requestedPod = requestedPodName
       ? pods.find((pod) => pod.name === requestedPodName)
       : undefined;
-    const pod = requestedPod || selectedPod || pods[0];
+    const pod = autoSelectFirstPod
+      ? requestedPod || selectedPod || pods[0]
+      : requestedPod || selectedPod;
+    if (!pod) {
+      // A stale or container-only link must not leave a selection the view does not show.
+      replaceObservabilityState(history, location, { pod: null, container: null });
+      return;
+    }
     const container = resolveContainerForPod(
       pod,
-      requestedContainer || selectedContainer
+      requestedContainer || selectedContainer,
+      defaultContainer
     );
     if (pod?.name !== selectedPod?.name) setSelectedPod(pod);
     if (container !== selectedContainer) setSelectedContainer(container);
@@ -125,14 +149,22 @@ export function usePodViewState({
       pod: pod?.name,
       container,
     });
-  }, [history, location, pods, selectedContainer, selectedPod]);
+  }, [
+    autoSelectFirstPod,
+    defaultContainer,
+    history,
+    location,
+    pods,
+    selectedContainer,
+    selectedPod,
+  ]);
 
   const selectPod = useCallback(
     (pod: Pod | undefined, preserveContainer: boolean) => {
       if (!pod) return;
       const container = preserveContainer
-        ? resolveContainerForPod(pod, selectedContainer)
-        : getDefaultContainerName(pod);
+        ? resolveContainerForPod(pod, selectedContainer, defaultContainer)
+        : getDefaultContainerName(pod, defaultContainer);
       setSelectedPod(pod);
       setSelectedContainer(container);
       replaceObservabilityState(history, location, {
@@ -140,7 +172,7 @@ export function usePodViewState({
         container,
       });
     },
-    [history, location, selectedContainer]
+    [defaultContainer, history, location, selectedContainer]
   );
 
   const selectContainer = useCallback(

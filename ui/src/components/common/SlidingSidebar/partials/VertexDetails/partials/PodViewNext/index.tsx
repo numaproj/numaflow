@@ -5,11 +5,20 @@ import { Containers } from "../../../../../../pages/Pipeline/partials/Graph/part
 import { PodDetail } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails";
 import { PodFocusControls } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodFocusControls";
 import { PodsProps } from "../../../../../../../types/declarations/pods";
-import { usePodViewState } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
+import {
+  getDefaultContainerName,
+  PodViewStateOptions,
+  usePodViewState,
+} from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
 import { PodFleet } from "./PodFleet";
 import { PodInspector } from "./PodInspector";
 
 import "./style.css";
+
+const BETA_SELECTION: PodViewStateOptions = {
+  autoSelectFirstPod: false,
+  defaultContainer: "numa",
+};
 
 /**
  * PodViewNext owns the Beta Pod View presentation while preserving the shared
@@ -30,7 +39,7 @@ export function PodViewNext(props: PodsProps) {
     selectPodFromFleet,
     selectPodFromSearch,
     selectContainer,
-  } = usePodViewState(props);
+  } = usePodViewState(props, BETA_SELECTION);
 
   if (podsErr) {
     return (
@@ -65,7 +74,9 @@ export function PodViewNext(props: PodsProps) {
   }
 
   const activeContainer =
-    selectedContainer || selectedPod?.containers?.[0] || "";
+    selectedContainer ||
+    getDefaultContainerName(selectedPod, BETA_SELECTION.defaultContainer) ||
+    "";
   const focusControls = selectedPod ? (
     <PodFocusControls
       pods={pods}

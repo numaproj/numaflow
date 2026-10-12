@@ -5,7 +5,12 @@ import { usePodViewState } from "../../../../../../pages/Pipeline/partials/Graph
 
 jest.mock(
   "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState",
-  () => ({ usePodViewState: jest.fn() })
+  () => ({
+    ...jest.requireActual(
+      "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState"
+    ),
+    usePodViewState: jest.fn(),
+  })
 );
 jest.mock("./PodFleet", () => ({
   PodFleet: () => <div data-testid="pod-fleet" />,
@@ -74,6 +79,15 @@ describe("PodViewNext", () => {
       container.querySelector(".pod-view-next-workspace")
     ).toBeInTheDocument();
     expect(container.querySelector(".pod-view-next-logs")).toBeInTheDocument();
+  });
+
+  it("asks for explicit pod selection with numa as the default container", () => {
+    renderPodView();
+
+    expect(mockedUsePodViewState).toHaveBeenCalledWith(
+      expect.objectContaining({ vertexId: "vertex" }),
+      { autoSelectFirstPod: false, defaultContainer: "numa" }
+    );
   });
 
   it("shows the unselected prompt without mounting logs", () => {
