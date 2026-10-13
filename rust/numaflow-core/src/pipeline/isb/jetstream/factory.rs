@@ -11,7 +11,6 @@ use tokio_util::sync::CancellationToken;
 use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::metrics::MetricLabels;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::dyn_adapter::{ISBReaderRef, ISBWriterRef};
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
@@ -68,7 +67,6 @@ impl ISBFactory for JetStreamFactory {
         stream: Stream,
         writer_config: BufferWriterConfig,
         isb_config: Option<&ISBConfig>,
-        metric_labels: Option<MetricLabels>,
         cln_token: CancellationToken,
     ) -> Result<ISBWriterRef> {
         let compression_type = isb_config.map(|c| c.compression.compress_type);
@@ -78,7 +76,6 @@ impl ISBFactory for JetStreamFactory {
                 self.kv.context().clone(),
                 writer_config,
                 compression_type,
-                metric_labels,
                 cln_token,
             )
             .await?,

@@ -110,6 +110,8 @@ function getShortPodName(podName: string): string {
 
 export function PodLogs({
   namespaceId,
+  pipelineId,
+  vertexId,
   podName,
   containerName,
   type,
@@ -213,6 +215,8 @@ export function PodLogs({
 
   const { logs, previousLogs } = usePodLogStream({
     namespaceId,
+    pipelineId,
+    vertexId,
     podName,
     containerName,
     type,

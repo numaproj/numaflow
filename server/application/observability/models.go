@@ -24,7 +24,8 @@ import "time"
 type TargetKind string
 
 const (
-	TargetKindPipelineVertex TargetKind = "PipelineVertex"
+	TargetKindVertex     TargetKind = "Vertex"
+	TargetKindMonoVertex TargetKind = "MonoVertex"
 )
 
 type HealthState string
@@ -40,12 +41,13 @@ const (
 type TargetRef struct {
 	Kind      TargetKind
 	Namespace string
-	Pipeline  string
-	Name      string
-	UID       string
+	// Pipeline is set for Vertex targets and empty for MonoVertex targets.
+	Pipeline string
+	Name     string
+	UID      string
 }
 
-// Health is a compact view of Kubernetes Vertex CR status for summary endpoints.
+// Health is a compact view of Kubernetes Vertex or MonoVertex CR status for summary endpoints.
 // It is not v1 pipeline /health, which inspects live Pods and daemon data-flow.
 type Health struct {
 	State   HealthState
@@ -65,13 +67,13 @@ type VertexSummary struct {
 	CreatedAt          time.Time
 	ObservedAt         time.Time
 	LastScaledAt       *time.Time
-	// Capabilities lists follow-up actions available for this target (e.g. "summary").
+	// Capabilities lists follow-up actions available for this target (e.g. "summary", "status").
 	// This is separate from GET /capabilities operations (OpenAPI operationIds).
 	Capabilities    []string
 	TruncatedFields []string
 }
 
-// ReplicaStatus reports replica counts from the Vertex CR status.
+// ReplicaStatus reports replica counts from the Vertex or MonoVertex CR status.
 type ReplicaStatus struct {
 	Current      int64
 	Desired      int64
@@ -80,7 +82,7 @@ type ReplicaStatus struct {
 	UpdatedReady int64
 }
 
-// Condition is a bounded Kubernetes condition copied from Vertex CR status.
+// Condition is a bounded Kubernetes condition copied from Vertex or MonoVertex CR status.
 type Condition struct {
 	Type               string
 	Status             string
@@ -90,7 +92,7 @@ type Condition struct {
 	LastTransitionTime time.Time
 }
 
-// VertexStatus is the detailed Kubernetes Vertex CR status projection.
+// VertexStatus is the detailed Kubernetes CR status projection for a pipeline vertex or MonoVertex.
 // It does not include live Pod inspection or daemon data-flow health.
 type VertexStatus struct {
 	Ref                TargetRef

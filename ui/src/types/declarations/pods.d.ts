@@ -140,6 +140,8 @@ export interface PodInfoProps {
 
 export interface PodLogsProps {
   namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
   podName: string;
   containerName: string;
   type: string;

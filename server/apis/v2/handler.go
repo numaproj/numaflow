@@ -36,27 +36,29 @@ type CapabilitiesService interface {
 	GetCapabilities() capabilities.Capabilities
 }
 
-// PipelineVertexSummaryService serves Kubernetes-backed pipeline vertex observability reads.
-type PipelineVertexSummaryService interface {
+// ObservabilityService serves Kubernetes-backed Vertex and MonoVertex observability reads.
+type ObservabilityService interface {
 	GetPipelineVertexSummary(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexSummary], error)
 	GetPipelineVertexStatus(ctx context.Context, namespace, pipeline, vertex string) (observability.Result[observability.VertexStatus], error)
+	GetMonoVertexSummary(ctx context.Context, namespace, monoVertex string) (observability.Result[observability.VertexSummary], error)
+	GetMonoVertexStatus(ctx context.Context, namespace, monoVertex string) (observability.Result[observability.VertexStatus], error)
 }
 
 // Handler adapts API v2 application services to HTTP handlers.
 type Handler struct {
-	capabilitiesService CapabilitiesService
-	summaryService      PipelineVertexSummaryService
+	capabilitiesService  CapabilitiesService
+	observabilityService ObservabilityService
 }
 
 // NewHandler builds the API v2 HTTP adapter from discovery and observability services.
-func NewHandler(capabilitiesService CapabilitiesService, summaryService PipelineVertexSummaryService) (*Handler, error) {
+func NewHandler(capabilitiesService CapabilitiesService, observabilityService ObservabilityService) (*Handler, error) {
 	if capabilitiesService == nil {
 		return nil, fmt.Errorf("capabilities service is required")
 	}
-	if summaryService == nil {
-		return nil, fmt.Errorf("pipeline vertex summary service is required")
+	if observabilityService == nil {
+		return nil, fmt.Errorf("observability service is required")
 	}
-	return &Handler{capabilitiesService: capabilitiesService, summaryService: summaryService}, nil
+	return &Handler{capabilitiesService: capabilitiesService, observabilityService: observabilityService}, nil
 }
 
 var _ generated.ServerInterface = (*Handler)(nil)
@@ -71,9 +73,9 @@ func (h *Handler) GetPipelineVertexSummary(c *gin.Context, namespace generated.N
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return
 	}
-	result, err := h.summaryService.GetPipelineVertexSummary(c.Request.Context(), namespace, pipeline, vertex)
+	result, err := h.observabilityService.GetPipelineVertexSummary(c.Request.Context(), namespace, pipeline, vertex)
 	if err != nil {
-		writeServiceError(c, err)
+		writeServiceError(c, err, "vertex")
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
@@ -84,9 +86,35 @@ func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Na
 	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
 		return
 	}
-	result, err := h.summaryService.GetPipelineVertexStatus(c.Request.Context(), namespace, pipeline, vertex)
+	result, err := h.observabilityService.GetPipelineVertexStatus(c.Request.Context(), namespace, pipeline, vertex)
 	if err != nil {
-		writeServiceError(c, err)
+		writeServiceError(c, err, "vertex")
+		return
+	}
+	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
+}
+
+// GetMonoVertexSummary returns a compact Kubernetes MonoVertex CR projection.
+func (h *Handler) GetMonoVertexSummary(c *gin.Context, namespace generated.Namespace, monoVertex generated.MonoVertex, params generated.GetMonoVertexSummaryParams) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"monoVertex", monoVertex}) {
+		return
+	}
+	result, err := h.observabilityService.GetMonoVertexSummary(c.Request.Context(), namespace, monoVertex)
+	if err != nil {
+		writeServiceError(c, err, "MonoVertex")
+		return
+	}
+	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexSummary(result.Value))
+}
+
+// GetMonoVertexStatus returns bounded Kubernetes MonoVertex CR status.
+func (h *Handler) GetMonoVertexStatus(c *gin.Context, namespace generated.Namespace, monoVertex generated.MonoVertex, params generated.GetMonoVertexStatusParams) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"monoVertex", monoVertex}) {
+		return
+	}
+	result, err := h.observabilityService.GetMonoVertexStatus(c.Request.Context(), namespace, monoVertex)
+	if err != nil {
+		writeServiceError(c, err, "MonoVertex")
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
@@ -132,12 +160,12 @@ func validateNames(c *gin.Context, fields ...nameField) bool {
 }
 
 // writeServiceError maps Kubernetes read failures to stable Problem codes without leaking provider text.
-func writeServiceError(c *gin.Context, err error) {
+func writeServiceError(c *gin.Context, err error, target string) {
 	if apierrors.IsNotFound(err) {
-		WriteProblem(c, http.StatusNotFound, "target_not_found", "Target not found", "The requested pipeline vertex does not exist", nil)
+		WriteProblem(c, http.StatusNotFound, "target_not_found", "Target not found", fmt.Sprintf("The requested %s does not exist", target), nil)
 		return
 	}
-	WriteProblem(c, http.StatusInternalServerError, "target_read_failed", "Target read failed", "Failed to read the requested pipeline vertex", nil)
+	WriteProblem(c, http.StatusInternalServerError, "target_read_failed", "Target read failed", fmt.Sprintf("Failed to read the requested %s", target), nil)
 }
 
 // writeVersioned sets an ETag from the CR resourceVersion and honors If-None-Match with 304.
@@ -154,13 +182,7 @@ func writeVersioned[T any](c *gin.Context, resourceVersion string, ifNoneMatch *
 
 func toVertexSummary(value observability.VertexSummary) generated.VertexSummary {
 	return generated.VertexSummary{
-		Ref: generated.TargetRef{
-			Kind:      generated.PipelineVertex,
-			Namespace: value.Ref.Namespace,
-			Pipeline:  value.Ref.Pipeline,
-			Name:      value.Ref.Name,
-			Uid:       value.Ref.UID,
-		},
+		Ref:                toTargetRef(value.Ref),
 		VertexType:         generated.VertexType(value.VertexType),
 		Phase:              value.Phase,
 		DesiredPhase:       value.DesiredPhase,
@@ -196,13 +218,7 @@ func toVertexStatus(value observability.VertexStatus) generated.VertexStatus {
 		})
 	}
 	return generated.VertexStatus{
-		Ref: generated.TargetRef{
-			Kind:      generated.PipelineVertex,
-			Namespace: value.Ref.Namespace,
-			Pipeline:  value.Ref.Pipeline,
-			Name:      value.Ref.Name,
-			Uid:       value.Ref.UID,
-		},
+		Ref:          toTargetRef(value.Ref),
 		Phase:        value.Phase,
 		DesiredPhase: value.DesiredPhase,
 		Reason:       optionalString(value.Reason),
@@ -219,6 +235,16 @@ func toVertexStatus(value observability.VertexStatus) generated.VertexStatus {
 		ObservedGeneration: value.ObservedGeneration,
 		ObservedAt:         value.ObservedAt,
 		TruncatedFields:    optionalStrings(value.TruncatedFields),
+	}
+}
+
+func toTargetRef(value observability.TargetRef) generated.TargetRef {
+	return generated.TargetRef{
+		Kind:      generated.TargetKind(value.Kind),
+		Namespace: value.Namespace,
+		Pipeline:  optionalString(value.Pipeline),
+		Name:      value.Name,
+		Uid:       value.UID,
 	}
 }
 

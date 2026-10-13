@@ -139,6 +139,8 @@ function installFetchMock() {
 
 const defaultParams: UsePodLogStreamParams = {
   namespaceId: "ns",
+  pipelineId: "my-mono-vertex",
+  vertexId: "my-mono-vertex",
   podName: "pod-a",
   containerName: "numa",
   type: "monoVertex",
@@ -156,26 +158,32 @@ describe("buildPodLogsUrl", () => {
       buildPodLogsUrl({
         host: "http://localhost",
         namespaceId: "ns",
+        pipelineId: "my-pipeline",
+        vertexId: "my-vertex",
         podName: "pod-a",
         containerName: "numa",
+        type: "pipeline",
       })
     ).toBe(
-      `http://localhost/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=true&tailLines=${MAX_LOGS}`
+      `http://localhost/api/v1/namespaces/ns/pipelines/my-pipeline/vertices/my-vertex/pods/pod-a/logs?container=numa&follow=true&tailLines=${MAX_LOGS}`
     );
   });
 
-  it("appends previous=true when requested", () => {
+  it("builds the mono vertex URL and appends previous=true", () => {
     expect(
       buildPodLogsUrl({
         host: "",
         namespaceId: "ns",
+        pipelineId: "my-mono-vertex",
+        vertexId: "my-mono-vertex",
         podName: "pod-a",
         containerName: "numa",
+        type: "monoVertex",
         previous: true,
         tailLines: 500,
       })
     ).toBe(
-      "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=true&tailLines=500&previous=true"
+      "/api/v1/namespaces/ns/mono-vertices/my-mono-vertex/pods/pod-a/logs?container=numa&follow=true&tailLines=500&previous=true"
     );
   });
 
@@ -184,13 +192,16 @@ describe("buildPodLogsUrl", () => {
       buildPodLogsUrl({
         host: "",
         namespaceId: "ns",
+        pipelineId: "my-pipeline",
+        vertexId: "my-vertex",
         podName: "pod-a",
         containerName: "numa",
+        type: "pipeline",
         follow: false,
         tailLines: 1500,
       })
     ).toBe(
-      "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=false&tailLines=1500"
+      "/api/v1/namespaces/ns/pipelines/my-pipeline/vertices/my-vertex/pods/pod-a/logs?container=numa&follow=false&tailLines=1500"
     );
   });
 
@@ -199,14 +210,17 @@ describe("buildPodLogsUrl", () => {
       buildPodLogsUrl({
         host: "",
         namespaceId: "ns",
+        pipelineId: "my-mono-vertex",
+        vertexId: "my-mono-vertex",
         podName: "pod-a",
         containerName: "numa",
+        type: "monoVertex",
         previous: true,
         follow: false,
         tailLines: 5000,
       })
     ).toBe(
-      "/api/v1/namespaces/ns/pods/pod-a/logs?container=numa&follow=false&tailLines=5000&previous=true"
+      "/api/v1/namespaces/ns/mono-vertices/my-mono-vertex/pods/pod-a/logs?container=numa&follow=false&tailLines=5000&previous=true"
     );
   });
 });
@@ -325,6 +339,33 @@ describe("usePodLogStream lifecycle", () => {
     expect(
       result.current.logs.some((line) => line.includes("from-pod-a"))
     ).toBe(false);
+  });
+
+  it("restarts the live fetch when the resource context changes", async () => {
+    const { handles } = installFetchMock();
+    const pipelineParams: UsePodLogStreamParams = {
+      ...defaultParams,
+      type: "pipeline",
+      pipelineId: "pipeline-a",
+      vertexId: "vertex-a",
+    };
+
+    const { rerender } = renderHook(
+      (props: UsePodLogStreamParams) => usePodLogStream(props),
+      { initialProps: pipelineParams }
+    );
+
+    await waitFor(() => expect(handles.length).toBe(1));
+    const first = handles[0];
+    expect(first.url).toContain("/pipelines/pipeline-a/vertices/vertex-a/");
+
+    rerender({ ...pipelineParams, vertexId: "vertex-b" });
+
+    await waitFor(() => expect(first.signal.aborted).toBe(true));
+    await waitFor(() => expect(handles.length).toBe(2));
+    expect(handles[1].url).toContain(
+      "/pipelines/pipeline-a/vertices/vertex-b/"
+    );
   });
 
   it("aborts the previous-logs fetch when showPreviousLogs is toggled off", async () => {
