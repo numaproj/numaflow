@@ -215,7 +215,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	// check if any changes related to pause/resume lifecycle for the pipeline
 	oldPhase := pl.Status.Phase
-	if isLifecycleChange(pl) && oldPhase != pl.GetDesiredPhase() {
+	if isLifecycleChange(pl) && (oldPhase != pl.GetDesiredPhase() || isStrandedPause(pl)) {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -233,6 +233,10 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
+}
+
+func isStrandedPause(pl *dfv1.Pipeline) bool {
+	return pl.GetDesiredPhase() == dfv1.PipelinePhaseRunning && pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != ""
 }
 
 // isLifecycleChange determines whether there has been a change requested in the lifecycle
