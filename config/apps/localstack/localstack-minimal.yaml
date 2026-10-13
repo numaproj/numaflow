@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: localstack
+spec:
+  ports:
+    - name: edge
+      port: 4566
+      targetPort: edge
+  selector:
+    app: localstack
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localstack
+  template:
+    metadata:
+      labels:
+        app: localstack
+    spec:
+      containers:
+        - name: localstack
+          image: localstack/localstack:4.8.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SERVICES
+              value: sqs
+            - name: EAGER_SERVICE_LOADING
+              value: "1"
+            - name: LOCALSTACK_HOST
+              value: localstack:4566
+            - name: SQS_ENDPOINT_STRATEGY
+              value: path
+          ports:
+            - name: edge
+              containerPort: 4566
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: edge
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi

@@ -1,0 +1,46 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: sqs-native-dlq
+spec:
+  containerTemplate:
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        value: test
+      - name: AWS_SECRET_ACCESS_KEY
+        value: test
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AWS_EC2_METADATA_DISABLED
+        value: "true"
+  source:
+    sqs:
+      queueNames: "orders-source,refunds-source"
+      deadLetterQueues: "orders-dlq,refunds-dlq"
+      maxReceiveCount: 2
+      awsRegion: us-east-1
+      queueOwnerAWSAccountID: "000000000000"
+      endpointUrl: http://localstack:4566
+      visibilityTimeout: 1
+      maxNumberOfMessages: 1
+      waitTimeSeconds: 1
+  udf:
+    container:
+      # Return the SDK's native NACK response for every message.
+      image: quay.io/numaio/numaflow-python/map-forward-message:stable
+      imagePullPolicy: IfNotPresent
+      command: [python]
+      args:
+        - -c
+        - |
+          from pynumaflow.mapper import MapServer, Message, Messages
+
+          def nack(_keys, _datum):
+              return Messages(Message.to_nack())
+
+          MapServer(nack).start()
+  sink:
+    log: {}
+  scale:
+    min: 1
+    max: 1

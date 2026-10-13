@@ -141,11 +141,13 @@ guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-que
 
 ### Native Dead-Letter Queues
 
-Set `deadLetterQueues` to have Numaflow configure each source queue's native AWS
-SQS `RedrivePolicy` during source startup. AWS SQS—not Numaflow—then moves a
-message to the corresponding DLQ after it has been received more than
-`maxReceiveCount` times. Numaflow does not copy failed messages or maintain a
-separate receive counter.
+Set `deadLetterQueues` to have Numaflow validate each source queue's native AWS
+SQS `RedrivePolicy` during source startup. The queue owner must create each DLQ
+and configure the source queue's redrive policy before starting the MonoVertex.
+Numaflow only reads the existing policy; it does not create queues or change
+queue attributes. SQS itself moves a message to the corresponding DLQ after it
+has been received more than `maxReceiveCount` times. Numaflow does not copy
+failed messages or maintain a separate receive counter.
 
 For a single source queue, the existing `queueName` form remains supported:
 
@@ -185,17 +187,13 @@ In addition to the permissions used for normal message consumption, the pod or
 assumed IAM role needs:
 
 - `sqs:GetQueueUrl` for every configured source and DLQ
-- `sqs:GetQueueAttributes` for every configured DLQ
-- `sqs:SetQueueAttributes` for every configured source queue
-
-Amazon SQS does not support granting
-[`SetQueueAttributes`](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SetQueueAttributes.html)
-through cross-account queue permissions. For a source queue owned by another
-AWS account, configure `assumeRole` (or equivalent credentials) for a role in
-the queue owner's account that has this permission.
+- `sqs:GetQueueAttributes` for every configured source and DLQ
 
 Startup fails before actors begin polling if a source or DLQ cannot be resolved,
-if a DLQ has no `QueueArn`, or if a redrive policy cannot be applied.
+if a DLQ has no `QueueArn`, or if a source queue's `RedrivePolicy` is missing,
+malformed, or does not contain the expected DLQ ARN and `maxReceiveCount`.
+Attribute-read failures identify the required `sqs:GetQueueAttributes`
+permission. All source/DLQ pairs are validated before any source actor starts.
 
 #### Read and Failure Behavior
 
