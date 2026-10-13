@@ -6,26 +6,29 @@ import {
   PodDetail,
   PodFleetItem,
   PodFleetSort,
+  PodReadRates,
   PodRuntimeInfo,
   PodSeverity,
 } from "../../../../../../../types/declarations/pods";
 
 export type PodFleetFilter = "all" | PodSeverity;
 
+/** Platform containers are excluded from CPU/memory severity; only user-defined containers count. */
+export const PLATFORM_CONTAINERS = new Set(["numa"]);
+
+/** A pod must read nothing for this long, and be at least this old, before it is idle. */
+export const IDLE_WINDOW_MS = 15 * 60_000;
+
+export const IDLE_HINT =
+  "No messages read in the last 15 min. This usually means there are more replicas than source partitions; reduce replicas or add partitions.";
+
 const severityOrder: Record<PodSeverity, number> = {
   critical: 0,
   warning: 1,
-  healthy: 2,
-  unknown: 3,
+  idle: 2,
+  healthy: 3,
+  unknown: 4,
 };
-
-const isCrashLoop = (status?: string) => Boolean(status && /crash/i.test(status));
-
-const hasCriticalStatus = (status?: string) =>
-  Boolean(status && /(error|fail|oom)/i.test(status));
-
-const hasWarningStatus = (status?: string) =>
-  Boolean(status && /(pending|waiting|unknown)/i.test(status));
 
 export type PodStatusTone = "running" | "failed" | "neutral";
 
@@ -46,42 +49,84 @@ export function podStatusTone(status?: string): PodStatusTone {
   return "neutral";
 }
 
-export function classifyPod(
-  maxCPUPercent: number | undefined,
-  maxMemoryPercent: number | undefined,
-  runtime?: PodRuntimeInfo,
-  _restartCount = 0
-): PodSeverity {
-  if (isCrashLoop(runtime?.status)) return "unknown";
-  if (hasCriticalStatus(runtime?.status)) return "critical";
-  if (
-    (maxCPUPercent !== undefined && maxCPUPercent > 75) ||
-    (maxMemoryPercent !== undefined && maxMemoryPercent > 85)
-  ) {
-    return "critical";
+/**
+ * unhealthyReason returns why a pod is not healthy: a phase other than Running, or any
+ * container that is not running (e.g. waiting in CrashLoopBackOff). Undefined means healthy
+ * or not yet known.
+ */
+export function unhealthyReason(runtime?: PodRuntimeInfo): string | undefined {
+  if (!runtime?.status) return undefined;
+  if (runtime.status !== "Running") return runtime.reason || runtime.status;
+  for (const [name, info] of Object.entries(runtime.containerDetailsMap || {})) {
+    if (info?.state && info.state !== "Running") {
+      return `${name}: ${info.waitingReason || info.lastTerminationReason || info.state}`;
+    }
   }
-  if (hasWarningStatus(runtime?.status)) return "warning";
-  if (
-    (maxCPUPercent !== undefined && maxCPUPercent > 30) ||
-    (maxMemoryPercent !== undefined && maxMemoryPercent > 50)
-  ) {
-    return "warning";
+  return undefined;
+}
+
+export interface ClassifyPodInput {
+  runtime?: PodRuntimeInfo;
+  /** Highest CPU/memory usage among user-defined containers, as % of request. */
+  maxCPUPercent?: number;
+  maxMemoryPercent?: number;
+  /** Undefined when per-pod rates are unavailable; idle is then never inferred. */
+  readRates?: PodReadRates;
+  createdAt?: string;
+  now?: number;
+}
+
+/**
+ * classifyPod applies the fleet colour rules in precedence order Red > Yellow > Grey > Green:
+ * critical (pod unhealthy), warning (a user-defined container above 100% of its CPU or memory
+ * request), idle (no reads for 15 min on a pod at least 15 min old), healthy otherwise. Pods
+ * without runtime status are unknown unless an earlier rule already matched.
+ */
+export function classifyPod({
+  runtime,
+  maxCPUPercent,
+  maxMemoryPercent,
+  readRates,
+  createdAt,
+  now = Date.now(),
+}: ClassifyPodInput): { severity: PodSeverity; reason?: string } {
+  const unhealthy = unhealthyReason(runtime);
+  if (unhealthy) return { severity: "critical", reason: unhealthy };
+
+  const overCPU = maxCPUPercent !== undefined && maxCPUPercent > 100;
+  const overMemory = maxMemoryPercent !== undefined && maxMemoryPercent > 100;
+  if (overCPU || overMemory) {
+    const parts = [
+      overCPU ? `CPU ${Math.round(maxCPUPercent as number)}%` : undefined,
+      overMemory ? `memory ${Math.round(maxMemoryPercent as number)}%` : undefined,
+    ].filter(Boolean);
+    return { severity: "warning", reason: `${parts.join(", ")} of request` };
   }
-  if (!runtime?.status) return "unknown";
-  return runtime.status.toLowerCase() === "running" ? "healthy" : "warning";
+
+  const created = createdAt ? Date.parse(createdAt) : NaN;
+  const oldEnough = Number.isNaN(created) || now - created >= IDLE_WINDOW_MS;
+  if (readRates?.rate15m === 0 && oldEnough) {
+    return { severity: "idle", reason: IDLE_HINT };
+  }
+
+  if (!runtime?.status) return { severity: "unknown" };
+  return { severity: "healthy" };
 }
 
 /** buildPodFleetItems derives display data without mutating the v1 fetch results. */
 export function buildPodFleetItems(
   pods: Pod[] = [],
   detailsByName?: Map<string, PodDetail>,
-  runtimeByName: Map<string, PodRuntimeInfo> = new Map()
+  runtimeByName: Map<string, PodRuntimeInfo> = new Map(),
+  ratesByName?: Map<string, PodReadRates>,
+  now: number = Date.now()
 ): PodFleetItem[] {
   return pods.map((pod) => {
     const details = detailsByName?.get(pod.name);
     let maxCPUPercent: number | undefined;
     let maxMemoryPercent: number | undefined;
     details?.containerMap.forEach((_container, name) => {
+      if (PLATFORM_CONTAINERS.has(name)) return;
       const usage = getPodContainerUsePercentages(pod, details, name);
       if (usage.cpuPercent !== undefined) {
         maxCPUPercent = Math.max(maxCPUPercent ?? 0, usage.cpuPercent);
@@ -95,14 +140,28 @@ export function buildPodFleetItems(
       (count, container) => count + (container?.restartCount || 0),
       0
     );
+    // A pod that never read has no counter series, so a missing entry is zero reads.
+    const readRates = ratesByName
+      ? ratesByName.get(pod.name) ?? { rate5m: 0, rate15m: 0 }
+      : undefined;
+    const { severity, reason } = classifyPod({
+      runtime,
+      maxCPUPercent,
+      maxMemoryPercent,
+      readRates,
+      createdAt: pod.createdAt,
+      now,
+    });
     return {
       pod,
       details,
       runtime,
       maxCPUPercent,
       maxMemoryPercent,
+      readRates,
       restartCount,
-      severity: classifyPod(maxCPUPercent, maxMemoryPercent, runtime, restartCount),
+      severity,
+      reason,
     };
   });
 }

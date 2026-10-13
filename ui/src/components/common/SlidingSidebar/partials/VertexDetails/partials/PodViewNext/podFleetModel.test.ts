@@ -3,92 +3,153 @@ import {
   chipLabel,
   classifyPod,
   filterAndSortPodFleet,
+  IDLE_HINT,
+  IDLE_WINDOW_MS,
   podStatusTone,
+  unhealthyReason,
 } from "./podFleetModel";
-import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
+import {
+  ContainerInfoProps,
+  Pod,
+  PodDetail,
+  PodRuntimeInfo,
+} from "../../../../../../../types/declarations/pods";
 
-const pod = (name: string): Pod => ({
+const NOW = Date.parse("2026-10-13T12:00:00Z");
+const OLD = new Date(NOW - IDLE_WINDOW_MS - 1).toISOString();
+
+const pod = (name: string, createdAt = OLD): Pod => ({
   name,
-  containers: ["main"],
+  containers: ["numa", "udf"],
   containerSpecMap: new Map([
-    ["main", { name: "main", cpuParsed: 10, memoryParsed: 10 }],
+    ["numa", { name: "numa", cpuParsed: 10, memoryParsed: 10 }],
+    ["udf", { name: "udf", cpuParsed: 10, memoryParsed: 10 }],
+  ]),
+  createdAt,
+});
+
+const container = (overrides: Partial<ContainerInfoProps> = {}): ContainerInfoProps => ({
+  state: "Running",
+  restartCount: 0,
+  lastStartedAt: "",
+  ...overrides,
+});
+
+const running = (containerDetailsMap: Record<string, ContainerInfoProps> = {}): PodRuntimeInfo => ({
+  name: "pod",
+  status: "Running",
+  containerDetailsMap,
+});
+
+const usage = (numa: number, udf: number): PodDetail => ({
+  name: "pod",
+  containerMap: new Map([
+    ["numa", { name: "numa", cpuParsed: numa, memoryParsed: 1 }],
+    ["udf", { name: "udf", cpuParsed: udf, memoryParsed: 1 }],
   ]),
 });
 
-describe("podFleetModel", () => {
-  it.each([
-    ["CrashLoopBackOff", 1, 1, "unknown"],
-    ["Running", 76, 10, "critical"],
-    ["Running", 10, 86, "critical"],
-    ["Pending", 1, 1, "warning"],
-    ["Running", 31, 10, "warning"],
-    ["Running", 10, 51, "warning"],
-    ["Running", 10, 10, "healthy"],
-  ] as const)(
-    "classifies %s with CPU %s and memory %s as %s",
-    (status, cpu, memory, expected) => {
-      expect(
-        classifyPod(cpu, memory, {
-          name: "pod",
-          status,
-          containerDetailsMap: {},
-        })
-      ).toBe(expected);
-    }
-  );
+describe("classifyPod", () => {
+  const busy = { rate5m: 5, rate15m: 5 };
+  const silent = { rate5m: 0, rate15m: 0 };
 
-  it("classifies absent runtime and resource evidence as unknown", () => {
-    expect(classifyPod(undefined, undefined)).toBe("unknown");
+  it.each([
+    ["crash loop beats overload and idle", running({ udf: container({ state: "Waiting", waitingReason: "CrashLoopBackOff" }) }), 200, silent, "critical"],
+    ["a non-running phase is critical", { name: "p", status: "Pending", containerDetailsMap: {} }, 0, busy, "critical"],
+    ["overload beats idle", running(), 101, silent, "warning"],
+    ["exactly 100% is not overloaded", running(), 100, busy, "healthy"],
+    ["no reads for 15 min is idle", running(), 50, silent, "idle"],
+    ["reads in the window are healthy", running(), 50, busy, "healthy"],
+    ["recent reads that stopped within 15 min stay healthy", running(), 50, { rate5m: 0, rate15m: 0.2 }, "healthy"],
+  ] as const)("%s", (_name, runtime, cpu, readRates, expected) => {
+    expect(
+      classifyPod({ runtime, maxCPUPercent: cpu, readRates, createdAt: OLD, now: NOW }).severity
+    ).toBe(expected);
   });
 
-  it("keeps a running pod green when usage is missing and ignores restarts", () => {
-    const running = {
-      name: "pod",
-      status: "Running",
-      containerDetailsMap: {},
-    };
-    expect(classifyPod(undefined, undefined, running)).toBe("healthy");
-    expect(classifyPod(10, 10, running, 4)).toBe("healthy");
+  it("never marks young pods or pods without rate data idle", () => {
+    const young = new Date(NOW - 60_000).toISOString();
+    expect(
+      classifyPod({ runtime: running(), readRates: silent, createdAt: young, now: NOW }).severity
+    ).toBe("healthy");
+    expect(classifyPod({ runtime: running(), createdAt: OLD, now: NOW }).severity).toBe("healthy");
+  });
+
+  it("explains each severity and falls back to unknown without runtime", () => {
+    expect(
+      classifyPod({ runtime: running(), readRates: silent, createdAt: OLD, now: NOW }).reason
+    ).toBe(IDLE_HINT);
+    expect(classifyPod({ runtime: running(), maxMemoryPercent: 140, now: NOW }).reason).toBe(
+      "memory 140% of request"
+    );
+    expect(classifyPod({}).severity).toBe("unknown");
+    expect(
+      unhealthyReason(running({ udsink: container({ state: "Terminated", lastTerminationReason: "OOMKilled" }) }))
+    ).toBe("udsink: OOMKilled");
+  });
+});
+
+describe("podFleetModel helpers", () => {
+  it("formats chip labels and status tones", () => {
     expect(chipLabel("simple-mono-vertex-mv-0-a94xj")).toBe("0");
     expect(chipLabel("pipeline-vertex-alpha")).toBe("alpha");
     expect(podStatusTone("Running")).toBe("running");
     expect(podStatusTone("OOMKilled")).toBe("failed");
   });
 
-  it("derives fleet items and filters/sorts a copy of their input", () => {
-    const healthy = pod("alpha");
-    const critical = pod("bravo");
+  it("excludes numa from usage and treats pods missing from rate data as silent", () => {
+    const hotNuma = pod("hot-numa");
+    const hotUdf = pod("hot-udf");
+    const quiet = pod("quiet");
     const details = new Map<string, PodDetail>([
-      [
-        "alpha",
-        {
-          name: "alpha",
-          containerMap: new Map([
-            ["main", { name: "main", cpuParsed: 1, memoryParsed: 1 }],
-          ]),
-        },
-      ],
-      [
-        "bravo",
-        {
-          name: "bravo",
-          containerMap: new Map([
-            ["main", { name: "main", cpuParsed: 8, memoryParsed: 1 }],
-          ]),
-        },
-      ],
+      ["hot-numa", usage(50, 2)],
+      ["hot-udf", usage(1, 15)],
+      ["quiet", usage(1, 1)],
     ]);
-    const runtime = new Map<string, PodRuntimeInfo>([
-      ["alpha", { name: "alpha", status: "Running", containerDetailsMap: {} }],
-      ["bravo", { name: "bravo", status: "Running", containerDetailsMap: {} }],
+    const runtime = new Map<string, PodRuntimeInfo>(
+      ["hot-numa", "hot-udf", "quiet"].map((name) => [name, { ...running(), name }])
+    );
+    const rates = new Map([
+      ["hot-numa", { rate5m: 3, rate15m: 3 }],
+      ["hot-udf", { rate5m: 9, rate15m: 9 }],
     ]);
 
-    const items = buildPodFleetItems([healthy, critical], details, runtime);
-    const criticalOnly = filterAndSortPodFleet(items, "critical", "", "severity");
-    const nameSorted = filterAndSortPodFleet(items, "all", "", "name");
+    const items = buildPodFleetItems([hotNuma, hotUdf, quiet], details, runtime, rates, NOW);
 
-    expect(criticalOnly.map((item) => item.pod.name)).toEqual(["bravo"]);
-    expect(nameSorted.map((item) => item.pod.name)).toEqual(["alpha", "bravo"]);
-    expect(items.map((item) => item.pod.name)).toEqual(["alpha", "bravo"]);
+    expect(items.map((item) => [item.pod.name, item.severity])).toEqual([
+      ["hot-numa", "healthy"],
+      ["hot-udf", "warning"],
+      ["quiet", "idle"],
+    ]);
+    expect(items[0].maxCPUPercent).toBe(20);
+    expect(items[2].readRates).toEqual({ rate5m: 0, rate15m: 0 });
+    expect(buildPodFleetItems([quiet], details, runtime, undefined, NOW)[0].severity).toBe("healthy");
+  });
+
+  it("filters by severity and sorts red, yellow, grey, green", () => {
+    const items = buildPodFleetItems(
+      [pod("a"), pod("b"), pod("c"), pod("d")],
+      new Map([["b", usage(1, 20)]]),
+      new Map<string, PodRuntimeInfo>([
+        ["a", { ...running(), name: "a" }],
+        ["b", { ...running(), name: "b" }],
+        ["c", { ...running(), name: "c" }],
+        ["d", { name: "d", status: "Failed", containerDetailsMap: {} }],
+      ]),
+      new Map([
+        ["a", { rate5m: 1, rate15m: 1 }],
+        ["b", { rate5m: 1, rate15m: 1 }],
+      ]),
+      NOW
+    );
+
+    expect(filterAndSortPodFleet(items, "all", "", "severity").map((item) => item.pod.name)).toEqual([
+      "d",
+      "b",
+      "c",
+      "a",
+    ]);
+    expect(filterAndSortPodFleet(items, "idle", "", "name").map((item) => item.pod.name)).toEqual(["c"]);
+    expect(items.map((item) => item.pod.name)).toEqual(["a", "b", "c", "d"]);
   });
 });

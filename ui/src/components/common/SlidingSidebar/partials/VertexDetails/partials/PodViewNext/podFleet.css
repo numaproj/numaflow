@@ -77,6 +77,10 @@
   --pod-severity: #f59e0b;
 }
 
+.pod-fleet-filter-dot--idle {
+  --pod-severity: #94a3b8;
+}
+
 .pod-fleet-filter-dot--healthy {
   --pod-severity: #4ade80;
 }
@@ -143,9 +147,22 @@
   --pod-chip-fg: #ffffff;
 }
 
+.pod-fleet-cell--idle {
+  --pod-chip-bg: #94a3b8;
+  --pod-chip-fg: #ffffff;
+}
+
 .pod-fleet-cell--unknown {
-  --pod-chip-bg: #cbd5e1;
+  --pod-chip-bg: #ffffff;
   --pod-chip-fg: #64748b;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.pod-fleet-tooltip {
+  display: flex;
+  max-width: 32rem;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 .pod-fleet-cell:hover {

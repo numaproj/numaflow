@@ -12,6 +12,9 @@ jest.mock(
     usePodViewState: jest.fn(),
   })
 );
+jest.mock("./usePodReadRates", () => ({
+  usePodReadRates: jest.fn(() => undefined),
+}));
 jest.mock("./PodFleet", () => ({
   PodFleet: () => <div data-testid="pod-fleet" />,
 }));

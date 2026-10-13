@@ -12,6 +12,7 @@ import {
 } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
 import { PodFleet } from "./PodFleet";
 import { PodInspector } from "./PodInspector";
+import { usePodReadRates } from "./usePodReadRates";
 
 import "./style.css";
 
@@ -40,6 +41,12 @@ export function PodViewNext(props: PodsProps) {
     selectPodFromSearch,
     selectContainer,
   } = usePodViewState(props, BETA_SELECTION);
+  const readRates = usePodReadRates({
+    namespaceId: props.namespaceId,
+    pipelineId: props.pipelineId,
+    vertexId: props.vertexId,
+    type: props.type,
+  });
 
   if (podsErr) {
     return (
@@ -94,6 +101,7 @@ export function PodViewNext(props: PodsProps) {
           pods={pods}
           detailsByName={podsDetails}
           runtimeByName={podRuntimeByName}
+          readRates={readRates}
           selectedPod={selectedPod}
           onPodSelect={selectPodFromFleet}
         />

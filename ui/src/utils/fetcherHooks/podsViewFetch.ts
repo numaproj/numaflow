@@ -104,6 +104,7 @@ export const usePodsViewFetch = (
               name: pod?.metadata?.name,
               containers,
               containerSpecMap,
+              createdAt: pod?.metadata?.creationTimestamp,
             };
           });
           setPods(pList || []); // Ensure we always set an array
