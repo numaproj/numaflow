@@ -26,7 +26,7 @@ pub enum Error {
 /// Represents the SASL authentication mechanism for connecting to Kafka.
 ///
 /// See the [Kafka Security documentation](https://kafka.apache.org/documentation/#security_sasl) for more details on each mechanism.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum KafkaSaslAuth {
     /// SASL/PLAIN authentication mechanism.
     ///
@@ -80,6 +80,56 @@ pub enum KafkaSaslAuth {
         /// OAuth2 token endpoint URL.
         token_endpoint: String,
     },
+}
+
+impl std::fmt::Debug for KafkaSaslAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KafkaSaslAuth::Plain { username, .. } => f
+                .debug_struct("Plain")
+                .field("username", username)
+                .field("password", &"***")
+                .finish(),
+            KafkaSaslAuth::ScramSha256 { username, .. } => f
+                .debug_struct("ScramSha256")
+                .field("username", username)
+                .field("password", &"***")
+                .finish(),
+            KafkaSaslAuth::ScramSha512 { username, .. } => f
+                .debug_struct("ScramSha512")
+                .field("username", username)
+                .field("password", &"***")
+                .finish(),
+            KafkaSaslAuth::Gssapi {
+                service_name,
+                realm,
+                username,
+                password,
+                keytab,
+                kerberos_config,
+                auth_type,
+            } => f
+                .debug_struct("Gssapi")
+                .field("service_name", service_name)
+                .field("realm", realm)
+                .field("username", username)
+                .field("password", &password.as_ref().map(|_| "***"))
+                .field("keytab", &keytab.as_ref().map(|_| "***"))
+                .field("kerberos_config", &kerberos_config.as_ref().map(|_| "***"))
+                .field("auth_type", auth_type)
+                .finish(),
+            KafkaSaslAuth::Oauth {
+                client_id,
+                token_endpoint,
+                ..
+            } => f
+                .debug_struct("Oauth")
+                .field("client_id", client_id)
+                .field("client_secret", &"***")
+                .field("token_endpoint", token_endpoint)
+                .finish(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -563,5 +613,74 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect::<HashMap<String, String>>();
         assert_eq!(config.config_map().clone(), expected_config);
+    }
+
+    #[test]
+    fn test_sasl_auth_debug_redacts_plain_password() {
+        let auth = KafkaSaslAuth::Plain {
+            username: "user".to_string(),
+            password: "hunter2-secret-password".to_string(),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("hunter2-secret-password"));
+        assert!(debug_output.contains("username"));
+        assert!(debug_output.contains("user"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_sasl_auth_debug_redacts_scram_passwords() {
+        for auth in [
+            KafkaSaslAuth::ScramSha256 {
+                username: "user256".to_string(),
+                password: "scram256-secret-password".to_string(),
+            },
+            KafkaSaslAuth::ScramSha512 {
+                username: "user512".to_string(),
+                password: "scram512-secret-password".to_string(),
+            },
+        ] {
+            let debug_output = format!("{:?}", auth);
+            assert!(!debug_output.contains("scram256-secret-password"));
+            assert!(!debug_output.contains("scram512-secret-password"));
+            assert!(debug_output.contains("***"));
+        }
+    }
+
+    #[test]
+    fn test_sasl_auth_debug_redacts_gssapi_credentials() {
+        let auth = KafkaSaslAuth::Gssapi {
+            service_name: "kafka".to_string(),
+            realm: "EXAMPLE.COM".to_string(),
+            username: "principal".to_string(),
+            password: Some("gssapi-secret-password".to_string()),
+            keytab: Some(
+                "-----BEGIN KEYTAB-----\ngssapi-secret-keytab-data\n-----END KEYTAB-----"
+                    .to_string(),
+            ),
+            kerberos_config: Some("[libdefaults]\n default_keytab = SECRET_PATH".to_string()),
+            auth_type: "KRB5_USER_AUTH".to_string(),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("gssapi-secret-password"));
+        assert!(!debug_output.contains("gssapi-secret-keytab-data"));
+        assert!(!debug_output.contains("SECRET_PATH"));
+        assert!(debug_output.contains("principal"));
+        assert!(debug_output.contains("EXAMPLE.COM"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_sasl_auth_debug_redacts_oauth_client_secret() {
+        let auth = KafkaSaslAuth::Oauth {
+            client_id: "my-client".to_string(),
+            client_secret: "oauth-secret-client-secret".to_string(),
+            token_endpoint: "https://token.example.com".to_string(),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("oauth-secret-client-secret"));
+        assert!(debug_output.contains("my-client"));
+        assert!(debug_output.contains("https://token.example.com"));
+        assert!(debug_output.contains("***"));
     }
 }
