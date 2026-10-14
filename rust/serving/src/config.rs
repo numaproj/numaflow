@@ -74,7 +74,7 @@ impl Default for UserDefinedStoreConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Deserialize, Clone, PartialEq)]
 pub struct Settings {
     /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
     /// The client may also set the value of this header when sending the payload.
@@ -94,6 +94,50 @@ pub struct Settings {
     pub nats_basic_auth: Option<(String, String)>,
     pub js_message_stream: &'static str,
     pub jetstream_url: &'static str,
+}
+
+impl std::fmt::Debug for Settings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Settings")
+            .field("tid_header", &self.tid_header)
+            .field("pod_hash", &self.pod_hash)
+            .field("app_listen_https_port", &self.app_listen_https_port)
+            .field("app_listen_http_port", &self.app_listen_http_port)
+            .field("metrics_server_listen_port", &self.metrics_server_listen_port)
+            .field("upstream_addr", &self.upstream_addr)
+            .field("drain_timeout_secs", &self.drain_timeout_secs)
+            .field("store_type", &self.store_type)
+            .field("js_callback_store", &self.js_callback_store)
+            .field("js_response_store", &self.js_response_store)
+            .field("js_status_store", &self.js_status_store)
+            .field(
+                "api_auth_token",
+                &self.api_auth_token.as_ref().map(|_| "***"),
+            )
+            .field("pipeline_spec", &self.pipeline_spec)
+            .field(
+                "nats_basic_auth",
+                &self
+                    .nats_basic_auth
+                    .as_ref()
+                    .map(|(user, _)| (user.as_str(), "***")),
+            )
+            .field("js_message_stream", &self.js_message_stream)
+            .field("jetstream_url", &redact_url_userinfo(self.jetstream_url))
+            .finish()
+    }
+}
+
+/// Strips any `user:password@` userinfo from the authority of a URL, so
+/// credentials embedded in connection URLs never reach logs.
+fn redact_url_userinfo(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let rest = &url[scheme_end + 3..];
+        if let Some(at) = rest.find('@') {
+            return format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..]);
+        }
+    }
+    url.to_string()
 }
 
 #[derive(Default, Debug, Deserialize, Clone, PartialEq)]
@@ -386,5 +430,38 @@ mod tests {
             },
         };
         assert_eq!(settings, expected_config);
+    }
+
+    #[test]
+    fn test_settings_debug_redacts_secrets() {
+        let settings = Settings {
+            api_auth_token: Some("secret-api-auth-token".to_string()),
+            nats_basic_auth: Some((
+                "nats-user".to_string(),
+                "secret-nats-password".to_string(),
+            )),
+            jetstream_url: "nats://nats-user:secret-url-password@nats-host:4222",
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("secret-api-auth-token"));
+        assert!(!debug_output.contains("secret-nats-password"));
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(debug_output.contains("nats-user"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_redact_url_userinfo() {
+        assert_eq!(
+            redact_url_userinfo("nats://user:pass@host:4222"),
+            "nats://***@host:4222"
+        );
+        assert_eq!(
+            redact_url_userinfo("nats://user@host:4222"),
+            "nats://***@host:4222"
+        );
+        assert_eq!(redact_url_userinfo("nats://host:4222"), "nats://host:4222");
+        assert_eq!(redact_url_userinfo("localhost:4222"), "localhost:4222");
     }
 }
