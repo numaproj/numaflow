@@ -29,11 +29,25 @@ pub enum Error {
 
 /// Represents the authentication method used to connect to NATS.
 /// https://numaflow.numaproj.io/user-guide/sources/nats/#auth
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum NatsAuth {
     Basic { username: String, password: String },
     NKey(String),
     Token(String),
+}
+
+impl std::fmt::Debug for NatsAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NatsAuth::Basic { username, .. } => f
+                .debug_struct("Basic")
+                .field("username", username)
+                .field("password", &"***")
+                .finish(),
+            NatsAuth::NKey(_) => write!(f, "NKey(***)"),
+            NatsAuth::Token(_) => write!(f, "Token(***)"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -253,5 +267,33 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
                 .contains(client_cert_snippet)
         );
         assert!(!debug_output.contains(client_cert_snippet));
+    }
+
+    #[test]
+    fn test_nats_auth_debug_redacts_basic_password() {
+        let auth = NatsAuth::Basic {
+            username: "nats-user".to_string(),
+            password: "nats-secret-password".to_string(),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("nats-secret-password"));
+        assert!(debug_output.contains("nats-user"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_nats_auth_debug_redacts_nkey() {
+        let auth = NatsAuth::NKey("SUAC-secret-nkey-material".to_string());
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("SUAC-secret-nkey-material"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_nats_auth_debug_redacts_token() {
+        let auth = NatsAuth::Token("secret-nats-token".to_string());
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("secret-nats-token"));
+        assert!(debug_output.contains("***"));
     }
 }
