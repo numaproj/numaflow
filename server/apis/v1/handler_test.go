@@ -372,6 +372,7 @@ func TestHandler_GetMonoVertexPodsInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 			c.Params = gin.Params{
 				{Key: "namespace", Value: tt.namespace},
 				{Key: "mono-vertex", Value: tt.monoVertex},
@@ -573,6 +574,7 @@ func TestHandler_GetVertexPodsInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 			c.Params = gin.Params{
 				{Key: "namespace", Value: tt.namespace},
 				{Key: "pipeline", Value: tt.pipeline},
@@ -815,7 +817,7 @@ func TestHandler_GetPodDetails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			podDetails, err := h.getPodDetails(tt.pod)
+			podDetails, err := h.getPodDetails(context.Background(), tt.pod)
 
 			assert.Equal(t, tt.expectedErr, err)
 			assert.Equal(t, tt.expectedDetails, podDetails)

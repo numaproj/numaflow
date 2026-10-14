@@ -3,61 +3,23 @@
 import {
   ChangeEvent,
   useCallback,
-  useContext,
-  useEffect,
   useMemo,
-  useState,
 } from "react";
-import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
 import Autocomplete from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
-import { EventType } from "@visx/event/lib/types";
 import { Containers } from "./partials/Containers";
 import { PodDetail } from "./partials/PodDetails";
 import { SearchablePodsHeatMap } from "./partials/SearchablePodsHeatMap";
 import { ContainerInfo } from "./partials/PodDetails/partials/ContainerInfo";
-import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/podsViewFetch";
-import { notifyError } from "../../../../../../../../../utils/error";
-import { AppContext, AppContextProps } from "../../../../../../../../../App";
-import { getBaseHref } from "../../../../../../../../../utils";
-import {
-  ContainerInfoProps,
-  Hexagon,
-  Pod,
-  PodSpecificInfoProps,
-  PodsProps,
-} from "../../../../../../../../../types/declarations/pods";
-import { replaceObservabilityState } from "../../../../../../../../../utils/observabilityURLState";
-
-/** API order puts Always-restart init (user/UD) containers first, then main. */
-function getDefaultContainerName(pod: Pod | undefined): string | undefined {
-  return pod?.containers?.[0];
-}
-
-function resolveContainerForPod(
-  pod: Pod | undefined,
-  preferredContainer: string | undefined
-): string | undefined {
-  if (!pod) {
-    return undefined;
-  }
-  if (
-    preferredContainer &&
-    pod.containers?.includes(preferredContainer)
-  ) {
-    return preferredContainer;
-  }
-  return getDefaultContainerName(pod);
-}
+import { PodsProps } from "../../../../../../../../../types/declarations/pods";
+import { PodFocusControls } from "./partials/PodFocusControls";
+import { usePodViewState } from "./usePodViewState";
 
 export function Pods(props: PodsProps) {
-  const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
-  const history = useHistory();
-  const location = useLocation();
 
   if (!namespaceId || !pipelineId || !vertexId) {
     return (
@@ -67,179 +29,29 @@ export function Pods(props: PodsProps) {
     );
   }
 
-  const [selectedPod, setSelectedPod] = useState<Pod | undefined>(undefined);
-  const [selectedContainer, setSelectedContainer] = useState<
-    string | undefined
-  >(undefined);
-
-  const { pods, podsDetails, podsErr, podsDetailsErr, loading } =
-    usePodsViewFetch(
-      namespaceId,
-      pipelineId,
-      vertexId,
-      selectedPod,
-      type,
-      setSelectedPod,
-      setSelectedContainer
-    );
-
-  const [containerInfo, setContainerInfo] = useState<
-    ContainerInfoProps | undefined
-  >(undefined);
-  const [podSpecificInfo, setPodSpecificInfo] = useState<
-    PodSpecificInfoProps | undefined
-  >(undefined);
-  const [requestKey, setRequestKey] = useState(`${Date.now()}`);
-
-  const getContainerInfo = useCallback((podsData, podName, containerName) => {
-    const selectedPod = podsData?.find((pod) => pod?.name === podName);
-    if (selectedPod) {
-      return selectedPod?.containerDetailsMap[containerName];
-    } else {
-      return null;
-    }
-  }, []);
-
-  const getPodSpecificInfo = useCallback((podsData, podName) => {
-    const podSpecificInfo: PodSpecificInfoProps = {};
-    const selectedPod = podsData?.find((pod) => pod?.name === podName);
-    if (selectedPod) {
-      podSpecificInfo.name = selectedPod?.name;
-      podSpecificInfo.reason = selectedPod?.reason;
-      podSpecificInfo.status = selectedPod?.status;
-      podSpecificInfo.message = selectedPod?.message;
-      podSpecificInfo.totalCPU = selectedPod?.totalCPU;
-      podSpecificInfo.totalMemory = selectedPod?.totalMemory;
-      let restartCount = 0;
-      for (const container in selectedPod?.containerDetailsMap) {
-        restartCount +=
-          selectedPod?.containerDetailsMap?.[container].restartCount;
-      }
-      podSpecificInfo.restartCount = restartCount;
-    }
-    return podSpecificInfo;
-  }, []);
-
-  useEffect(() => {
-    const fetchPodInfo = async () => {
-      try {
-        const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
-            type === "monoVertex"
-              ? `/mono-vertices`
-              : `/pipelines/${pipelineId}/vertices`
-          }/${vertexId}/pods-info?refreshKey=${requestKey}`
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch pod details");
-        }
-        const data = await response.json();
-        const containerInfo = getContainerInfo(
-          data?.data,
-          selectedPod?.name,
-          selectedContainer
-        );
-        const podSpecificInfo = getPodSpecificInfo(
-          data?.data,
-          selectedPod?.name
-        );
-        setContainerInfo(containerInfo);
-        setPodSpecificInfo(podSpecificInfo);
-      } catch (error) {
-        setContainerInfo({ error: "Failed to fetch pod details" });
-      }
-    };
-    fetchPodInfo();
-  }, [
-    namespaceId,
-    host,
-    getBaseHref,
-    type,
-    pipelineId,
-    vertexId,
-    getContainerInfo,
-    getPodSpecificInfo,
-    requestKey,
+  const {
+    pods,
+    podsDetails,
+    podsErr,
+    loading,
     selectedPod,
     selectedContainer,
-    setPodSpecificInfo,
-    setContainerInfo,
-  ]);
+    selectedPodDetails,
+    containerInfo,
+    podSpecificInfo,
+    selectPodFromFleet,
+    selectPodFromSearch,
+    selectContainer,
+  } = usePodViewState(props);
 
-  useEffect(() => {
-    // Refresh pod details every 30 sec
-    const interval = setInterval(() => {
-      setRequestKey(`${Date.now()}`);
-    }, 30000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
-
-  // This useEffect notifies about the errors while querying for the pods of the vertex
-  useEffect(() => {
-    if (podsErr) notifyError(podsErr);
-  }, [podsErr]);
-
-  // This useEffect notifies about the errors while querying for the pods details of the vertex
-  useEffect(() => {
-    if (podsDetailsErr) notifyError(podsDetailsErr);
-  }, [podsDetailsErr]);
-
-  useEffect(() => {
-    if (!pods?.length) return;
-    const params = new URLSearchParams(location.search);
-    const requestedPodName = params.get("pod");
-    const requestedContainer = params.get("container");
-    if (!requestedPodName && !requestedContainer) return;
-    const requestedPod = requestedPodName
-      ? pods.find((pod) => pod.name === requestedPodName)
-      : undefined;
-    const pod = requestedPod || selectedPod || pods[0];
-    const container = resolveContainerForPod(pod, requestedContainer || selectedContainer);
-    if (pod?.name !== selectedPod?.name) setSelectedPod(pod);
-    if (container !== selectedContainer) setSelectedContainer(container);
-    replaceObservabilityState(history, location, {
-      pod: pod?.name,
-      container,
-    });
-  }, [pods, location.search, selectedPod, selectedContainer, history, location]);
-
-  const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
+  const handlePodClick = useCallback((_event: Element, p: any) => {
     const nextPod = p?.data?.pod;
-    setSelectedPod(nextPod);
-    const container = getDefaultContainerName(nextPod);
-    setSelectedContainer(container);
-    replaceObservabilityState(history, location, {
-      pod: nextPod?.name,
-      container,
-    });
-  }, [history, location]);
+    if (nextPod) selectPodFromFleet(nextPod);
+  }, [selectPodFromFleet]);
 
   const handleContainerClick = useCallback((containerName: string) => {
-    setSelectedContainer(containerName);
-    replaceObservabilityState(history, location, { container: containerName });
-  }, [history, location]);
-
-  const handleFocusPodChange = useCallback(
-    (_event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
-      if (!newValue || !pods) {
-        return;
-      }
-      const nextPod = pods.find((pod) => pod.name === newValue);
-      if (!nextPod) {
-        return;
-      }
-      setSelectedPod(nextPod);
-      const container = resolveContainerForPod(nextPod, selectedContainer);
-      setSelectedContainer(container);
-      replaceObservabilityState(history, location, {
-        pod: nextPod.name,
-        container,
-      });
-    },
-    [pods, selectedContainer, history, location]
-  );
+    selectContainer(containerName);
+  }, [selectContainer]);
 
   const containerSelector = useMemo(() => {
     return (
@@ -258,90 +70,25 @@ export function Pods(props: PodsProps) {
     );
   }, [selectedPod, selectedContainer, handleContainerClick]);
 
-  const podAutocompleteProps = useMemo(() => {
-    return {
-      options: pods?.map((pod) => pod.name) ?? [],
-      getOptionLabel: (option: string) => option,
-    };
-  }, [pods]);
-
   const focusControls = useMemo(() => {
     if (!pods || !selectedPod) {
       return null;
     }
     return (
-      <>
-        <Box className="PodLogs-focus-context-pod">
-          <span className="PodLogs-focus-context-label">Pod</span>
-          <Autocomplete
-            {...podAutocompleteProps}
-            disableClearable
-            id="focus-pod-select"
-            data-testid="logs-focus-pod-select"
-            ListboxProps={{
-              sx: {
-                fontSize: "1.2rem",
-                // Cap height so a large pod fleet scrolls instead of filling the dialog.
-                maxHeight: "24rem",
-                overflow: "auto",
-              },
-            }}
-            componentsProps={{
-              popper: {
-                sx: { zIndex: (theme) => theme.zIndex.modal + 4 },
-              },
-            }}
-            sx={{
-              width: "100%",
-              minWidth: 0,
-              "& .MuiOutlinedInput-root": {
-                height: "3.2rem",
-                fontSize: "1.2rem",
-                paddingTop: 0,
-                paddingBottom: 0,
-              },
-              "& .MuiAutocomplete-input": {
-                textOverflow: "ellipsis",
-              },
-            }}
-            autoHighlight
-            onChange={handleFocusPodChange}
-            value={selectedPod.name}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                variant="outlined"
-                size="small"
-                title={selectedPod.name}
-                inputProps={{
-                  ...params.inputProps,
-                  "aria-label": "Select pod",
-                  autoComplete: "new-password",
-                  style: { fontSize: "1.2rem" },
-                }}
-              />
-            )}
-          />
-        </Box>
-        <Box className="PodLogs-focus-context-container">
-          <span className="PodLogs-focus-context-label">Container</span>
-          <Box data-testid="logs-focus-containers">
-            <Containers
-              pod={selectedPod}
-              containerName={selectedContainer}
-              handleContainerClick={handleContainerClick}
-            />
-          </Box>
-        </Box>
-      </>
+      <PodFocusControls
+        pods={pods}
+        selectedPod={selectedPod}
+        selectedContainer={selectedContainer}
+        onPodSelect={selectPodFromSearch}
+        onContainerSelect={selectContainer}
+      />
     );
   }, [
     pods,
     selectedPod,
     selectedContainer,
-    podAutocompleteProps,
-    handleFocusPodChange,
-    handleContainerClick,
+    selectPodFromSearch,
+    selectContainer,
   ]);
 
   const podDetail = useMemo(() => {
@@ -376,17 +123,11 @@ export function Pods(props: PodsProps) {
       if (newValue) {
         if (pods) {
           const pod = pods?.find((pod) => pod.name === newValue);
-          const container = resolveContainerForPod(pod, selectedContainer);
-          setSelectedPod(pod);
-          setSelectedContainer(container);
-          replaceObservabilityState(history, location, {
-            pod: pod?.name,
-            container,
-          });
+          selectPodFromSearch(pod);
         }
       }
     },
-    [pods, selectedContainer, history, location]
+    [pods, selectPodFromSearch]
   );
 
   const podSearchDetails = (
@@ -404,7 +145,8 @@ export function Pods(props: PodsProps) {
         <Box>
           {pods && selectedPod && (
             <Autocomplete
-              {...podAutocompleteProps}
+              options={pods.map((pod) => pod.name)}
+              getOptionLabel={(option: string) => option}
               disablePortal
               disableClearable
               id="pod-select"
@@ -438,11 +180,6 @@ export function Pods(props: PodsProps) {
         </Box>
       </Box>
     </Box>
-  );
-
-  const selectedPodDetails = useMemo(
-    () => podsDetails?.get(selectedPod?.name),
-    [podsDetails, selectedPod]
   );
 
   if (loading) {

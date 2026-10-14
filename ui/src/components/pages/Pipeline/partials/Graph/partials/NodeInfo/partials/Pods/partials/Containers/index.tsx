@@ -15,12 +15,16 @@ export function Containers(props: ContainerProps) {
         sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}
       >
         {pod?.containers?.map((c: string) => {
+          const isSelected = container === c;
           return (
             <Chip
               data-testid={`${pod?.name}-${c}`}
+              data-selected={isSelected}
               key={c}
               label={c}
-              variant={container === c ? undefined : "outlined"}
+              aria-pressed={isSelected}
+              className={isSelected ? "pod-container-chip--selected" : undefined}
+              variant={isSelected ? "filled" : "outlined"}
               onClick={() => handleContainerClick(c)}
               sx={{ fontSize: "1.3rem" }}
             />

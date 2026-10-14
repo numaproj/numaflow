@@ -601,8 +601,7 @@ export function VertexDetails({
           role="tabpanel"
           hidden={tabValue !== PODS_VIEW_TAB_INDEX}
         >
-          {tabValue === PODS_VIEW_TAB_INDEX && (
-            <div className="vertex-details-pod-view-content">
+          <div className="vertex-details-pod-view-content">
               {podViewVersion === "beta" ? (
                 <PodViewNext
                   namespaceId={namespaceId}
@@ -618,8 +617,7 @@ export function VertexDetails({
                   type={type}
                 />
               )}
-            </div>
-          )}
+          </div>
         </div>
         {!disableMetricsCharts && (
           <div

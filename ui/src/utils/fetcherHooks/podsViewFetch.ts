@@ -21,7 +21,8 @@ export const usePodsViewFetch = (
   selectedPod: Pod | undefined,
   type: string,
   setSelectedPod: Dispatch<SetStateAction<Pod | undefined>>,
-  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>
+  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>,
+  { autoSelectFirstPod = true }: { autoSelectFirstPod?: boolean } = {}
 ) => {
   const [pods, setPods] = useState<Pod[] | undefined>(undefined);
   const [podsDetails, setPodsDetails] = useState<
@@ -103,6 +104,7 @@ export const usePodsViewFetch = (
               name: pod?.metadata?.name,
               containers,
               containerSpecMap,
+              createdAt: pod?.metadata?.creationTimestamp,
             };
           });
           setPods(pList || []); // Ensure we always set an array
@@ -144,13 +146,19 @@ export const usePodsViewFetch = (
     fetchPods();
   }, [vertexId, requestKey, host]);
 
+  // Without auto-select, a selection is only cleared when its pod disappears.
   useEffect(() => {
     if (pods?.length) {
-      if (
-        !(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))
-      ) {
+      const selectionExists = Boolean(
+        selectedPod && pods.find((pod) => pod?.name === selectedPod?.name)
+      );
+      if (selectionExists) return;
+      if (autoSelectFirstPod) {
         setSelectedPod(pods[0]);
         setSelectedContainer(pods[0]?.containers[0]);
+      } else if (selectedPod) {
+        setSelectedPod(undefined);
+        setSelectedContainer(undefined);
       }
     } else {
       setSelectedPod(undefined);
@@ -265,21 +273,13 @@ export const usePodsViewFetch = (
     }
   }, [podsDetailsErr, lastRetryTime]);
 
-  // return false if pods/podsDetails are still undefined
-  const checkPodDetailsResponse = () => {
-    if (!pods || !podsDetails) return false;
-    return true;
-  };
-
-  //sets loading variable true only when requests are pending
+  // A failed metrics call must not end loading before the pod list exists.
   useEffect(() => {
-    if (checkPodDetailsResponse()) {
-      setLoading(false);
-    } else if (podsErr || podsDetailsErr) {
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    const podsReady = pods !== undefined;
+    const nextLoading = podsErr
+      ? false
+      : !podsReady || !(podsDetails || podsDetailsErr);
+    setLoading(nextLoading);
   }, [pods, podsDetails, podsErr, podsDetailsErr]);
 
   return {

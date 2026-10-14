@@ -1,0 +1,95 @@
+.pod-inspector {
+  display: flex;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.2rem;
+  overflow-y: auto;
+}
+
+.pod-inspector-card {
+  padding: 1.6rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+}
+
+.pod-inspector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pod-inspector-status {
+  padding: 0.3rem 0.7rem;
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.pod-inspector-status--running {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.pod-inspector-status--failed {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.pod-inspector-card dl {
+  margin: 0;
+}
+
+.pod-inspector-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--border-secondary);
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+}
+
+.pod-inspector-row > span {
+  flex-shrink: 0;
+}
+
+.pod-inspector-row strong {
+  max-width: 62%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-inspector-danger {
+  color: #d1071f !important;
+}
+
+[data-theme="dark"] .pod-inspector-danger {
+  color: #ff6b7a !important;
+}
+
+@media (max-width: 960px) {
+  .pod-inspector {
+    max-height: none;
+    overflow: visible;
+  }
+}
