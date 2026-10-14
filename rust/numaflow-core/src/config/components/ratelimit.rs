@@ -63,10 +63,7 @@ impl std::fmt::Debug for RedactedRedisStoreDebug<'_> {
             .field("db", &self.0.db)
             .field("mode", &self.0.mode)
             .field("sentinel", &self.0.sentinel)
-            .field(
-                "url",
-                &self.0.url.as_deref().map(redact_url_userinfo),
-            )
+            .field("url", &self.0.url.as_deref().map(redact_url_userinfo))
             .finish()
     }
 }
@@ -202,6 +199,9 @@ mod tests {
             redact_url_userinfo("rediss://user@host:6379"),
             "rediss://***@host:6379"
         );
-        assert_eq!(redact_url_userinfo("redis://host:6379"), "redis://host:6379");
+        assert_eq!(
+            redact_url_userinfo("redis://host:6379"),
+            "redis://host:6379"
+        );
     }
 }

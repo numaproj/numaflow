@@ -103,7 +103,10 @@ impl std::fmt::Debug for Settings {
             .field("pod_hash", &self.pod_hash)
             .field("app_listen_https_port", &self.app_listen_https_port)
             .field("app_listen_http_port", &self.app_listen_http_port)
-            .field("metrics_server_listen_port", &self.metrics_server_listen_port)
+            .field(
+                "metrics_server_listen_port",
+                &self.metrics_server_listen_port,
+            )
             .field("upstream_addr", &self.upstream_addr)
             .field("drain_timeout_secs", &self.drain_timeout_secs)
             .field("store_type", &self.store_type)
@@ -436,10 +439,7 @@ mod tests {
     fn test_settings_debug_redacts_secrets() {
         let settings = Settings {
             api_auth_token: Some("secret-api-auth-token".to_string()),
-            nats_basic_auth: Some((
-                "nats-user".to_string(),
-                "secret-nats-password".to_string(),
-            )),
+            nats_basic_auth: Some(("nats-user".to_string(), "secret-nats-password".to_string())),
             jetstream_url: "nats://nats-user:secret-url-password@nats-host:4222",
             ..Default::default()
         };
