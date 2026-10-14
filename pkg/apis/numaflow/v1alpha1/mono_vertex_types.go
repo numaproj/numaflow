@@ -106,6 +106,11 @@ func (mv MonoVertex) CalculateReplicas() int {
 	if s := mv.Spec.Scale; !s.Disabled {
 		max := int(s.GetMaxReplicas())
 		min := int(s.GetMinReplicas())
+		// If misconfigured (min > max), collapse to min so the clamp below is stable
+		// instead of oscillating between min and max across reconciles.
+		if min > max {
+			max = min
+		}
 		if desiredReplicas < min {
 			desiredReplicas = min
 		} else if desiredReplicas > max {
