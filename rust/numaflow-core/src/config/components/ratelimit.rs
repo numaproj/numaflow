@@ -1,6 +1,6 @@
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica, is_mono_vertex};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct RateLimitConfig {
     /// Key prefix for the rate limiter. This is fixed for a given Vertex/MonoVertex.
     pub(crate) key_prefix: &'static str,
@@ -20,6 +20,67 @@ pub(crate) struct RateLimitConfig {
     pub(crate) resume: bool,
     /// TTL for the rate limiter state in seconds.
     pub(crate) ttl: usize,
+}
+
+impl std::fmt::Debug for RateLimitConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimitConfig")
+            .field("key_prefix", &self.key_prefix)
+            .field("processor_id", &self.processor_id)
+            .field("max", &self.max)
+            .field("min", &self.min)
+            .field("ramp_up_duration", &self.ramp_up_duration)
+            .field("store", &self.store.as_deref().map(RedactedStoreDebug))
+            .field("modes", &self.modes)
+            .field("resume", &self.resume)
+            .field("ttl", &self.ttl)
+            .finish()
+    }
+}
+
+/// Debug wrapper stripping userinfo from the Redis URL, which may embed
+/// credentials (`redis://user:password@host`). The generated model types
+/// derive Debug and cannot be changed.
+struct RedactedStoreDebug<'a>(&'a numaflow_models::models::RateLimiterStore);
+
+impl std::fmt::Debug for RedactedStoreDebug<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimiterStore")
+            .field("in_memory_store", &self.0.in_memory_store)
+            .field(
+                "redis_store",
+                &self.0.redis_store.as_deref().map(RedactedRedisStoreDebug),
+            )
+            .finish()
+    }
+}
+
+struct RedactedRedisStoreDebug<'a>(&'a numaflow_models::models::RateLimiterRedisStore);
+
+impl std::fmt::Debug for RedactedRedisStoreDebug<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimiterRedisStore")
+            .field("db", &self.0.db)
+            .field("mode", &self.0.mode)
+            .field("sentinel", &self.0.sentinel)
+            .field(
+                "url",
+                &self.0.url.as_deref().map(redact_url_userinfo),
+            )
+            .finish()
+    }
+}
+
+/// Strips any `user:password@` userinfo from the authority of a URL, so
+/// credentials embedded in connection URLs never reach logs.
+fn redact_url_userinfo(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let rest = &url[scheme_end + 3..];
+        if let Some(at) = rest.find('@') {
+            return format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..]);
+        }
+    }
+    url.to_string()
 }
 
 impl Default for RateLimitConfig {
@@ -90,5 +151,57 @@ impl RateLimitConfig {
                 .unwrap_or(std::time::Duration::from_secs(180))
                 .as_secs() as usize,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use numaflow_models::models::{RateLimiterRedisStore, RateLimiterStore};
+
+    #[test]
+    fn test_rate_limit_config_debug_redacts_redis_url_credentials() {
+        let mut redis_store = RateLimiterRedisStore::new("single".to_string());
+        redis_store.url = Some("redis://redis-user:secret-redis-password@redis-host:6379/0".into());
+        let mut store = RateLimiterStore::new();
+        store.redis_store = Some(Box::new(redis_store));
+
+        let config = RateLimitConfig {
+            store: Some(Box::new(store)),
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(!debug_output.contains("secret-redis-password"));
+        assert!(!debug_output.contains("redis-user"));
+        assert!(debug_output.contains("redis-host:6379"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_rate_limit_config_debug_keeps_clean_redis_url() {
+        let mut redis_store = RateLimiterRedisStore::new("single".to_string());
+        redis_store.url = Some("redis://redis-host:6379/0".into());
+        let mut store = RateLimiterStore::new();
+        store.redis_store = Some(Box::new(redis_store));
+
+        let config = RateLimitConfig {
+            store: Some(Box::new(store)),
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(debug_output.contains("redis://redis-host:6379/0"));
+    }
+
+    #[test]
+    fn test_redact_url_userinfo() {
+        assert_eq!(
+            redact_url_userinfo("redis://user:pass@host:6379/0"),
+            "redis://***@host:6379/0"
+        );
+        assert_eq!(
+            redact_url_userinfo("rediss://user@host:6379"),
+            "rediss://***@host:6379"
+        );
+        assert_eq!(redact_url_userinfo("redis://host:6379"), "redis://host:6379");
     }
 }
