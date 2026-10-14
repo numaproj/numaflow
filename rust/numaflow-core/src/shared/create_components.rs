@@ -837,7 +837,7 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
 
     Ok(Some(TlsConfig {
         insecure_skip_verify: false,
-        ca_cert,
+        ca_cert: ca_cert.map(Into::into),
         client_auth,
     }))
 }

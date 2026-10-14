@@ -236,7 +236,7 @@ fn parse_kafka_auth_config(
 
         Some(numaflow_kafka::TlsConfig {
             insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-            ca_cert,
+            ca_cert: ca_cert.map(Into::into),
             client_auth: tls_client_auth_certs,
         })
     } else {
@@ -616,7 +616,10 @@ mod kafka_tests {
         let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
         if let SourceType::Kafka(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                tls_config.ca_cert.unwrap(),
+                "test-ca-cert".to_string().into()
+            );
             let client_auth = tls_config.client_auth.as_ref().unwrap();
             assert_eq!(client_auth.client_cert, "test-cert");
             assert_eq!(client_auth.client_cert_private_key, "test-key");
