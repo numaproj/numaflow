@@ -12,13 +12,25 @@ use uuid::Uuid;
 
 use crate::{Error, NatsAuth, Result, TlsConfig, tls};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct NatsSourceConfig {
     pub addr: String,
     pub subject: String,
     pub queue: String,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
+}
+
+impl std::fmt::Debug for NatsSourceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NatsSourceConfig")
+            .field("addr", &crate::redact_url_userinfo(&self.addr))
+            .field("subject", &self.subject)
+            .field("queue", &self.queue)
+            .field("auth", &self.auth)
+            .field("tls", &self.tls)
+            .finish()
+    }
 }
 
 /// NatsMessage represents a Numaflow Message which can be converted from a Nats message
@@ -87,7 +99,7 @@ impl NatsActor {
         let client = async_nats::connect_with_options(&config.addr, conn_opts)
             .await
             .map_err(|err| Error::Connection {
-                server: config.addr.to_string(),
+                server: crate::redact_url_userinfo(&config.addr),
                 error: err.to_string(),
             })?;
 

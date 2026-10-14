@@ -95,7 +95,7 @@ impl TryFrom<&str> for ConsumerDeliverPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
@@ -104,6 +104,20 @@ pub struct JetstreamSourceConfig {
     pub filter_subjects: Vec<String>,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
+}
+
+impl std::fmt::Debug for JetstreamSourceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JetstreamSourceConfig")
+            .field("addr", &crate::redact_url_userinfo(&self.addr))
+            .field("stream", &self.stream)
+            .field("consumer", &self.consumer)
+            .field("deliver_policy", &self.deliver_policy)
+            .field("filter_subjects", &self.filter_subjects)
+            .field("auth", &self.auth)
+            .field("tls", &self.tls)
+            .finish()
+    }
 }
 
 /// Message represents a message received from Jetstream which can be converted to Numaflow Message.
@@ -217,7 +231,7 @@ impl JetstreamActor {
         let client = async_nats::connect_with_options(&config.addr, conn_opts)
             .await
             .map_err(|err| Error::Connection {
-                server: config.addr.to_string(),
+                server: crate::redact_url_userinfo(&config.addr),
                 error: err.to_string(),
             })?;
 

@@ -95,6 +95,18 @@ impl TlsCaCert {
     }
 }
 
+/// Strips any `user:password@` userinfo from the authority of a URL, so
+/// credentials embedded in connection URLs never reach logs or errors.
+pub(crate) fn redact_url_userinfo(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let rest = &url[scheme_end + 3..];
+        if let Some(at) = rest.find('@') {
+            return format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..]);
+        }
+    }
+    url.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,5 +307,67 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         let debug_output = format!("{:?}", auth);
         assert!(!debug_output.contains("secret-nats-token"));
         assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_redact_url_userinfo() {
+        assert_eq!(
+            redact_url_userinfo("nats://user:pass@host:4222"),
+            "nats://***@host:4222"
+        );
+        assert_eq!(
+            redact_url_userinfo("nats://user@host:4222"),
+            "nats://***@host:4222"
+        );
+        assert_eq!(redact_url_userinfo("nats://host:4222"), "nats://host:4222");
+    }
+
+    #[test]
+    fn test_nats_source_config_debug_redacts_addr_credentials() {
+        let config = nats::NatsSourceConfig {
+            addr: "nats://nats-user:secret-url-password@nats-host:4222".to_string(),
+            subject: "my-subject".to_string(),
+            queue: "my-queue".to_string(),
+            auth: Some(NatsAuth::Basic {
+                username: "auth-user".to_string(),
+                password: "secret-auth-password".to_string(),
+            }),
+            tls: None,
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(!debug_output.contains("secret-auth-password"));
+        assert!(debug_output.contains("nats-host:4222"));
+        assert!(debug_output.contains("my-subject"));
+    }
+
+    #[test]
+    fn test_jetstream_source_config_debug_redacts_addr_credentials() {
+        let config = jetstream::JetstreamSourceConfig {
+            addr: "nats://nats-user:secret-url-password@nats-host:4222".to_string(),
+            stream: "my-stream".to_string(),
+            consumer: "my-consumer".to_string(),
+            deliver_policy: jetstream::ConsumerDeliverPolicy::ALL,
+            filter_subjects: vec!["subj.>".to_string()],
+            auth: Some(NatsAuth::Token("secret-token".to_string())),
+            tls: None,
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(!debug_output.contains("secret-token"));
+        assert!(debug_output.contains("nats-host:4222"));
+        assert!(debug_output.contains("my-stream"));
+    }
+
+    #[test]
+    fn test_connection_error_display_redacts_server_credentials() {
+        let err = Error::Connection {
+            server: redact_url_userinfo("nats://user:secret-url-password@host:4222"),
+            error: "connection refused".to_string(),
+        };
+        let display_output = err.to_string();
+        let debug_output = format!("{:?}", err);
+        assert!(!display_output.contains("secret-url-password"));
+        assert!(!debug_output.contains("secret-url-password"));
     }
 }

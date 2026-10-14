@@ -189,12 +189,24 @@ pub mod config {
     impl std::fmt::Debug for ClientConfig {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("ClientConfig")
-                .field("url", &self.url)
+                .field("url", &redact_url_userinfo(&self.url))
                 .field("user", &self.user)
                 .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
                 .field("tls_enabled", &self.tls_enabled)
                 .finish()
         }
+    }
+
+    /// Strips any `user:password@` userinfo from the authority of a URL, so
+    /// credentials embedded in connection URLs never reach logs.
+    fn redact_url_userinfo(url: &str) -> String {
+        if let Some(scheme_end) = url.find("://") {
+            let rest = &url[scheme_end + 3..];
+            if let Some(at) = rest.find('@') {
+                return format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..]);
+            }
+        }
+        url.to_string()
     }
 
     impl Default for ClientConfig {
@@ -272,6 +284,30 @@ pub mod config {
             assert_eq!(config.url, "nats://localhost:4222");
             assert_eq!(config.user, None);
             assert_eq!(config.password, None);
+        }
+
+        #[test]
+        fn test_client_config_debug_redacts_credentials() {
+            let config = ClientConfig {
+                url: "nats://js-user:secret-url-password@nats-host:4222".to_string(),
+                user: Some("js-user".to_string()),
+                password: Some("secret-password".to_string()),
+                tls_enabled: true,
+            };
+            let debug_output = format!("{:?}", config);
+            assert!(!debug_output.contains("secret-url-password"));
+            assert!(!debug_output.contains("secret-password"));
+            assert!(debug_output.contains("nats-host:4222"));
+            assert!(debug_output.contains("js-user"));
+        }
+
+        #[test]
+        fn test_redact_url_userinfo() {
+            assert_eq!(
+                redact_url_userinfo("nats://user:pass@host:4222"),
+                "nats://***@host:4222"
+            );
+            assert_eq!(redact_url_userinfo("nats://host:4222"), "nats://host:4222");
         }
     }
 }
