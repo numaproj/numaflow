@@ -29,11 +29,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -50,6 +51,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
@@ -954,7 +956,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
-	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c.Request.Context(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
 	})
 	if err != nil {
@@ -966,12 +968,12 @@ func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
 		return
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(pods.Items)))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(c.Request.Context(), pods.Items)))
 }
 
 func (h *handler) GetVertexPodsInfo(c *gin.Context) {
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
-	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c.Request.Context(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
 	})
 	if err != nil {
@@ -983,7 +985,7 @@ func (h *handler) GetVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
 		return
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(pods.Items)))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(c.Request.Context(), pods.Items)))
 }
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
@@ -1676,30 +1678,28 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
-// collectPodDetails reads each pod's metrics concurrently. A serial read made
-// the fleet wait once per pod before any chip could turn green.
-func (h *handler) collectPodDetails(pods []corev1.Pod) []PodDetails {
+// collectPodDetails reads pod details concurrently, preserving pod order. A failed
+// read falls back to name and phase so one bad pod cannot hide the rest of the fleet.
+func (h *handler) collectPodDetails(ctx context.Context, pods []corev1.Pod) []PodDetails {
 	response := make([]PodDetails, len(pods))
-	var wg sync.WaitGroup
-	limit := make(chan struct{}, 8)
+	var group errgroup.Group
+	group.SetLimit(8)
 	for i, pod := range pods {
-		wg.Add(1)
-		go func(i int, pod corev1.Pod) {
-			defer wg.Done()
-			limit <- struct{}{}
-			defer func() { <-limit }()
-			details, err := h.getPodDetails(pod)
+		group.Go(func() error {
+			details, err := h.getPodDetails(ctx, pod)
 			if err != nil {
+				logging.FromContext(ctx).Warnw("Failed to get pod details", "pod", pod.Name, zap.Error(err))
 				details = PodDetails{Name: pod.Name, Status: string(pod.Status.Phase)}
 			}
 			response[i] = details
-		}(i, pod)
+			return nil
+		})
 	}
-	wg.Wait()
+	_ = group.Wait()
 	return response
 }
 
-func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
+func (h *handler) getPodDetails(ctx context.Context, pod corev1.Pod) (PodDetails, error) {
 	podDetails := PodDetails{
 		Name:    pod.Name,
 		Status:  string(pod.Status.Phase),
@@ -1714,8 +1714,12 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 	podDetails.ContainerDetailsMap = containerDetails
 
 	// cpu/memory details of a pod
-	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
-	if err == nil {
+	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+	if err != nil {
+		logging.FromContext(ctx).Debugw("Failed to get pod metrics", "pod", pod.Name, zap.Error(err))
+		return podDetails, err
+	}
+	{
 		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
 		totalMemory := resource.NewQuantity(0, resource.BinarySI)
 		for _, container := range podMetrics.Containers {
