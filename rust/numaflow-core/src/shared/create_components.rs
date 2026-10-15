@@ -764,15 +764,18 @@ pub(crate) fn parse_nats_auth(
                 )
                 .map_err(|e| Error::Config(format!("Failed to get password secret: {e:?}")))?;
 
-                Ok(Some(numaflow_nats::NatsAuth::Basic { username, password }))
+                Ok(Some(numaflow_nats::NatsAuth::Basic {
+                    username,
+                    password: password.into(),
+                }))
             } else if let Some(nkey_auth) = auth.nkey {
                 let nkey = get_secret_from_volume(&nkey_auth.name, &nkey_auth.key)
                     .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
-                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey)))
+                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey.into())))
             } else if let Some(token_auth) = auth.token {
                 let token = get_secret_from_volume(&token_auth.name, &token_auth.key)
                     .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
-                Ok(Some(numaflow_nats::NatsAuth::Token(token)))
+                Ok(Some(numaflow_nats::NatsAuth::Token(token.into())))
             } else {
                 Err(Error::Config(
                     "Authentication is specified, but auth setting is empty".into(),
@@ -828,8 +831,8 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
                 )?;
 
             Some(TlsClientAuthCerts {
-                client_cert,
-                client_cert_private_key,
+                client_cert: client_cert.into(),
+                client_cert_private_key: client_cert_private_key.into(),
             })
         }
         None => None,
@@ -837,7 +840,7 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
 
     Ok(Some(TlsConfig {
         insecure_skip_verify: false,
-        ca_cert,
+        ca_cert: ca_cert.map(Into::into),
         client_auth,
     }))
 }

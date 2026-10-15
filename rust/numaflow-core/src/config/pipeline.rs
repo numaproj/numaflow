@@ -57,7 +57,7 @@ pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
 pub(crate) mod isb;
 pub(crate) mod watermark;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct PipelineConfig {
     pub(crate) pipeline_name: &'static str,
     pub(crate) vertex_name: &'static str,
@@ -119,7 +119,7 @@ impl Default for PipelineConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SourceVtxConfig {
     pub(crate) source_config: SourceConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
@@ -191,7 +191,7 @@ pub(crate) struct SinkVtxConfig {
     pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) enum VertexConfig {
     Source(SourceVtxConfig),
     Sink(Box<SinkVtxConfig>),
@@ -775,6 +775,79 @@ mod tests {
         BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
 
+    fn assert_vertex_config(actual: VertexConfig, expected: VertexConfig) {
+        match (actual, expected) {
+            (VertexConfig::Source(actual), VertexConfig::Source(expected)) => {
+                assert_eq!(actual.transformer_config, expected.transformer_config);
+                assert_eq!(
+                    actual.source_config.read_ahead,
+                    expected.source_config.read_ahead
+                );
+                match (
+                    actual.source_config.source_type,
+                    expected.source_config.source_type,
+                ) {
+                    (SourceType::Generator(actual), SourceType::Generator(expected)) => {
+                        assert_eq!(actual, expected)
+                    }
+                    (SourceType::Pulsar(actual), SourceType::Pulsar(expected)) => {
+                        assert_eq!(actual, expected)
+                    }
+                    (SourceType::Jetstream(actual), SourceType::Jetstream(expected)) => {
+                        assert_eq!(actual.addr, expected.addr);
+                        assert_eq!(actual.stream, expected.stream);
+                        assert_eq!(actual.consumer, expected.consumer);
+                        assert_eq!(actual.filter_subjects, expected.filter_subjects);
+                        assert_eq!(actual.deliver_policy, expected.deliver_policy);
+                        assert!(actual.auth.is_none() && expected.auth.is_none());
+                        assert!(actual.tls.is_none() && expected.tls.is_none());
+                    }
+                    (actual, expected) => {
+                        panic!("Unexpected source configs: {actual:?}, {expected:?}")
+                    }
+                }
+            }
+            (VertexConfig::Sink(actual), VertexConfig::Sink(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (VertexConfig::Map(actual), VertexConfig::Map(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (VertexConfig::Reduce(actual), VertexConfig::Reduce(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (actual, expected) => panic!("Unexpected vertex configs: {actual:?}, {expected:?}"),
+        }
+    }
+
+    fn assert_pipeline_config(actual: PipelineConfig, expected: PipelineConfig) {
+        assert_eq!(actual.pipeline_name, expected.pipeline_name);
+        assert_eq!(actual.vertex_name, expected.vertex_name);
+        assert_eq!(actual.replica, expected.replica);
+        assert_eq!(actual.batch_size, expected.batch_size);
+        assert_eq!(actual.concurrency, expected.concurrency);
+        assert_eq!(actual.writer_concurrency, expected.writer_concurrency);
+        assert_eq!(actual.read_timeout, expected.read_timeout);
+        assert_eq!(
+            actual.graceful_shutdown_time,
+            expected.graceful_shutdown_time
+        );
+        assert_eq!(actual.isb_client_config, expected.isb_client_config);
+        assert_eq!(actual.from_vertex_config, expected.from_vertex_config);
+        assert_eq!(actual.to_vertex_config, expected.to_vertex_config);
+        assert_vertex_config(actual.vertex_config, expected.vertex_config);
+        assert_eq!(actual.vertex_type, expected.vertex_type);
+        assert_eq!(actual.metrics_config, expected.metrics_config);
+        assert_eq!(actual.watermark_config, expected.watermark_config);
+        assert_eq!(actual.callback_config, expected.callback_config);
+        assert_eq!(actual.isb_config, expected.isb_config);
+        assert_eq!(actual.rate_limit, expected.rate_limit);
+        assert_eq!(
+            actual.ordered_processing_enabled,
+            expected.ordered_processing_enabled
+        );
+    }
+
     #[test]
     fn test_default_pipeline_config() {
         let expected = PipelineConfig {
@@ -805,7 +878,7 @@ mod tests {
         };
 
         let config = PipelineConfig::default();
-        assert_eq!(config, expected);
+        assert_pipeline_config(config, expected);
     }
 
     #[test]
@@ -918,7 +991,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1013,7 +1086,7 @@ mod tests {
                 read_ahead: false,
                 source_type: SourceType::Jetstream(
                     numaflow_nats::jetstream::JetstreamSourceConfig {
-                        addr: "jetstream-server.internal".to_string(),
+                        addr: "nats://jetstream-server.internal".parse().unwrap(),
                         stream: "testing-numaflow".to_string(),
                         consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
                         filter_subjects: vec![],
@@ -1026,7 +1099,7 @@ mod tests {
             transformer_config: None,
         });
 
-        assert_eq!(pipeline_config.vertex_config, expected_vertex_config);
+        assert_vertex_config(pipeline_config.vertex_config, expected_vertex_config);
     }
 
     #[test]
@@ -1086,7 +1159,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1162,7 +1235,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1257,7 +1330,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]

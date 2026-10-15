@@ -22,7 +22,7 @@ pub(crate) const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SourceConfig {
     /// for high-throughput use-cases we read-ahead the next batch before the previous batch has
     /// been acked (or completed). For most cases it should be set to false.
@@ -80,7 +80,7 @@ impl SourceSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) enum SourceType {
     Generator(GeneratorConfig),
     UserDefined(UserDefinedConfig),
@@ -293,7 +293,11 @@ impl TryFrom<JetstreamSourceSpec> for SourceType {
         }
 
         let js_config = JetstreamSourceConfig {
-            addr: value.spec.url,
+            addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                &value.spec.url,
+                "nats",
+            )
+            .map_err(|e| Error::Config(format!("Invalid JetStream URL: {e}")))?,
             consumer,
             stream: value.spec.stream,
             deliver_policy,
@@ -313,7 +317,10 @@ impl TryFrom<Box<numaflow_models::models::NatsSource>> for SourceType {
         let auth = parse_nats_auth(value.auth)?;
         let tls = parse_tls_config(value.tls)?;
         let nats_config = NatsSourceConfig {
-            addr: value.url,
+            addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                &value.url, "nats",
+            )
+            .map_err(|e| Error::Config(format!("Invalid NATS URL: {e}")))?,
             subject: value.subject,
             queue: value.queue,
             auth,
@@ -524,9 +531,12 @@ mod tests {
                 value: None,
             }))
             .unwrap();
+        let SourceType::Generator(config) = source else {
+            panic!("Expected SourceType::Generator");
+        };
         assert_eq!(
-            source,
-            SourceType::Generator(GeneratorConfig {
+            config,
+            GeneratorConfig {
                 content: Bytes::from("hello world\n"),
                 duration: Duration::from_secs(1),
                 jitter: Duration::from_secs(0),
@@ -534,7 +544,7 @@ mod tests {
                 rpu: 1,
                 value: None,
                 msg_size_bytes: 8,
-            })
+            }
         );
     }
 
@@ -673,9 +683,9 @@ mod jetstream_tests {
                 panic!("Basic auth creds must be set");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
+            assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
             assert_eq!(config.consumer, "numaflow-test-stream");
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(
                 config.deliver_policy,
                 ConsumerDeliverPolicy::by_start_sequence(10)
@@ -732,10 +742,19 @@ mod jetstream_tests {
         .unwrap();
         if let SourceType::Jetstream(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&tls_config.ca_cert.unwrap()),
+                "test-ca-cert"
+            );
             let client_auth = tls_config.client_auth.as_ref().unwrap();
-            assert_eq!(client_auth.client_cert, "test-cert");
-            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert),
+                "test-cert"
+            );
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert_private_key),
+                "test-key"
+            );
             assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Jetstream");
@@ -1120,8 +1139,8 @@ mod nats_source_tests {
                 panic!("Basic auth creds must be set");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
+            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
         } else {
@@ -1146,7 +1165,7 @@ mod nats_source_tests {
 
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
             assert!(config.auth.is_none());
@@ -1204,10 +1223,19 @@ mod nats_source_tests {
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&tls_config.ca_cert.unwrap()),
+                "test-ca-cert"
+            );
             let client_auth = tls_config.client_auth.as_ref().unwrap();
-            assert_eq!(client_auth.client_cert, "test-cert");
-            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert),
+                "test-cert"
+            );
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert_private_key),
+                "test-key"
+            );
             assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Nats");
