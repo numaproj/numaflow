@@ -17,7 +17,7 @@ use tracing::{error, info, warn};
 
 use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct KafkaSourceConfig {
     /// The list of Kafka brokers to connect to.
     pub brokers: Vec<String>,

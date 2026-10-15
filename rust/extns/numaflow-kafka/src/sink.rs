@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::{KafkaSaslAuth, TlsConfig};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct KafkaSinkConfig {
     /// The Kafka brokers to connect to.
     pub brokers: Vec<String>,
