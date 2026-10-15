@@ -50,6 +50,8 @@ pub struct SqsSourceConfig {
     // Required fields
     pub region: &'static str,
     pub queue_names: Vec<&'static str>,
+    pub dead_letter_queue_names: Vec<&'static str>,
+    pub max_receive_count: Option<i32>,
     pub queue_owner_aws_account_id: &'static str,
 
     // Optional fields
@@ -578,11 +580,169 @@ pub struct SqsSourceBuilder {
     vertex_replica: u16,
 }
 
+async fn resolve_queue_url(
+    client: &Client,
+    queue_name: &str,
+    queue_owner_aws_account_id: &str,
+) -> Result<String> {
+    let output = client
+        .get_queue_url()
+        .queue_name(queue_name)
+        .queue_owner_aws_account_id(queue_owner_aws_account_id)
+        .send()
+        .await
+        .map_err(|err| {
+            Error::Sqs(format!(
+                "failed to resolve SQS queue {queue_name:?}: {}",
+                extract_aws_error(&err)
+            ))
+        })?;
+
+    output.queue_url.ok_or_else(|| {
+        SqsSourceError::from(Error::Other(format!(
+            "SQS queue {queue_name:?} did not return a queue URL"
+        )))
+    })
+}
+
+async fn resolve_dead_letter_queue_arn(
+    client: &Client,
+    queue_name: &str,
+    queue_url: &str,
+) -> Result<String> {
+    let output = client
+        .get_queue_attributes()
+        .queue_url(queue_url)
+        .attribute_names(QueueAttributeName::QueueArn)
+        .send()
+        .await
+        .map_err(|err| {
+            Error::Sqs(format!(
+                "failed to read QueueArn for SQS dead-letter queue {queue_name:?} using sqs:GetQueueAttributes; ensure the IAM role allows this action: {}",
+                extract_aws_error(&err)
+            ))
+        })?;
+
+    output
+        .attributes
+        .and_then(|attributes| attributes.get(&QueueAttributeName::QueueArn).cloned())
+        .ok_or_else(|| {
+            SqsSourceError::from(Error::Other(format!(
+                "SQS dead-letter queue {queue_name:?} did not return QueueArn"
+            )))
+        })
+}
+
+#[derive(Debug, PartialEq)]
+struct RedrivePolicy {
+    dead_letter_target_arn: String,
+    max_receive_count: i32,
+}
+
+fn parse_redrive_policy(policy: &str) -> std::result::Result<RedrivePolicy, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(policy).map_err(|err| format!("invalid JSON: {err}"))?;
+    let policy = value
+        .as_object()
+        .ok_or_else(|| "expected a JSON object".to_string())?;
+
+    let dead_letter_target_arn = policy
+        .get("deadLetterTargetArn")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "missing or invalid deadLetterTargetArn".to_string())?
+        .to_string();
+
+    let max_receive_count = match policy.get("maxReceiveCount") {
+        Some(serde_json::Value::String(value)) => value
+            .parse::<i32>()
+            .map_err(|_| format!("invalid maxReceiveCount {value:?}: expected an integer"))?,
+        Some(serde_json::Value::Number(value)) => value
+            .as_i64()
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| format!("invalid maxReceiveCount {value}: expected a 32-bit integer"))?,
+        Some(value) => {
+            return Err(format!(
+                "invalid maxReceiveCount {value}: expected a string or integer"
+            ));
+        }
+        None => return Err("missing maxReceiveCount".to_string()),
+    };
+
+    Ok(RedrivePolicy {
+        dead_letter_target_arn,
+        max_receive_count,
+    })
+}
+
+async fn read_redrive_policy(
+    client: &Client,
+    source_queue_name: &str,
+    source_queue_url: &str,
+) -> Result<RedrivePolicy> {
+    let output = client
+        .get_queue_attributes()
+        .queue_url(source_queue_url)
+        .attribute_names(QueueAttributeName::RedrivePolicy)
+        .send()
+        .await
+        .map_err(|err| {
+            Error::Sqs(format!(
+                "failed to read RedrivePolicy for SQS source queue {source_queue_name:?} using sqs:GetQueueAttributes; ensure the IAM role allows this action: {}",
+                extract_aws_error(&err)
+            ))
+        })?;
+
+    let policy = output
+        .attributes
+        .and_then(|attributes| attributes.get(&QueueAttributeName::RedrivePolicy).cloned())
+        .ok_or_else(|| {
+            Error::Other(format!(
+                "SQS source queue {source_queue_name:?} is missing RedrivePolicy"
+            ))
+        })?;
+
+    parse_redrive_policy(&policy).map_err(|reason| {
+        Error::Other(format!(
+            "SQS source queue {source_queue_name:?} has malformed RedrivePolicy: {reason}"
+        ))
+        .into()
+    })
+}
+
+fn validate_redrive_policy(
+    source_queue_name: &str,
+    dead_letter_queue_name: &str,
+    expected_dead_letter_queue_arn: &str,
+    expected_max_receive_count: i32,
+    actual: &RedrivePolicy,
+) -> Result<()> {
+    if actual.dead_letter_target_arn != expected_dead_letter_queue_arn {
+        return Err(Error::InvalidConfig(format!(
+            "SQS source queue {source_queue_name:?} has RedrivePolicy deadLetterTargetArn {:?}, expected {:?} for configured dead-letter queue {dead_letter_queue_name:?}",
+            actual.dead_letter_target_arn, expected_dead_letter_queue_arn
+        ))
+        .into());
+    }
+
+    if actual.max_receive_count != expected_max_receive_count {
+        return Err(Error::InvalidConfig(format!(
+            "SQS source queue {source_queue_name:?} has RedrivePolicy maxReceiveCount {}, expected {} for configured dead-letter queue {dead_letter_queue_name:?}",
+            actual.max_receive_count, expected_max_receive_count
+        ))
+        .into());
+    }
+
+    Ok(())
+}
+
 impl Default for SqsSourceBuilder {
     fn default() -> Self {
         Self::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec![""],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -668,6 +828,55 @@ impl SqsSourceBuilder {
             }
         }
 
+        let max_receive_count = if self.config.dead_letter_queue_names.is_empty() {
+            if self.config.max_receive_count.is_some() {
+                return Err(SqsSourceError::from(Error::InvalidConfig(
+                    "max_receive_count requires at least one dead-letter queue".to_string(),
+                )));
+            }
+            None
+        } else {
+            if self.config.dead_letter_queue_names.len() != self.config.queue_names.len() {
+                return Err(SqsSourceError::from(Error::InvalidConfig(format!(
+                    "expected one dead-letter queue for each source queue: expected {}, got {}",
+                    self.config.queue_names.len(),
+                    self.config.dead_letter_queue_names.len()
+                ))));
+            }
+
+            for (source_queue_name, dead_letter_queue_name) in self
+                .config
+                .queue_names
+                .iter()
+                .zip(&self.config.dead_letter_queue_names)
+            {
+                if dead_letter_queue_name.is_empty() {
+                    return Err(SqsSourceError::from(Error::InvalidConfig(
+                        "SQS dead-letter queue name must not be empty".to_string(),
+                    )));
+                }
+                if source_queue_name == dead_letter_queue_name {
+                    return Err(SqsSourceError::from(Error::InvalidConfig(format!(
+                        "SQS source queue {source_queue_name:?} cannot be its own dead-letter queue"
+                    ))));
+                }
+                if source_queue_name.ends_with(".fifo") != dead_letter_queue_name.ends_with(".fifo")
+                {
+                    return Err(SqsSourceError::from(Error::InvalidConfig(format!(
+                        "SQS source queue {source_queue_name:?} and dead-letter queue {dead_letter_queue_name:?} must both be FIFO queues or both be standard queues"
+                    ))));
+                }
+            }
+
+            let max_receive_count = self.config.max_receive_count.unwrap_or(10);
+            if !(1..=1000).contains(&max_receive_count) {
+                return Err(SqsSourceError::from(Error::InvalidConfig(format!(
+                    "max_receive_count must be between 1 and 1000, got {max_receive_count}"
+                ))));
+            }
+            Some(max_receive_count)
+        };
+
         let shared_client = match self.client {
             Some(client) => Some(client),
             None if self.clients.is_none() => {
@@ -689,17 +898,12 @@ impl SqsSourceBuilder {
                     Error::InvalidConfig(format!("missing SQS client for queue {queue_name}"))
                 })?;
 
-            let get_queue_url_output = sqs_client
-                .get_queue_url()
-                .queue_name(*queue_name)
-                .queue_owner_aws_account_id(self.config.queue_owner_aws_account_id)
-                .send()
-                .await
-                .map_err(|err| Error::Sqs(extract_aws_error(&err)))?;
-
-            let queue_url = get_queue_url_output
-                .queue_url
-                .ok_or_else(|| Error::Other("Queue URL not found".to_string()))?;
+            let queue_url = resolve_queue_url(
+                &sqs_client,
+                queue_name,
+                self.config.queue_owner_aws_account_id,
+            )
+            .await?;
 
             tracing::info!(
                 queue_url,
@@ -709,6 +913,40 @@ impl SqsSourceBuilder {
             );
 
             resolved_queues.push((*queue_name, sqs_client, queue_url));
+        }
+
+        // Validate every configured source/DLQ pair before starting any actors.
+        // Queue ownership remains external: startup only reads attributes and
+        // never creates queues or changes their RedrivePolicy.
+        if let Some(max_receive_count) = max_receive_count {
+            for ((source_queue_name, sqs_client, source_queue_url), dead_letter_queue_name) in
+                resolved_queues
+                    .iter()
+                    .zip(&self.config.dead_letter_queue_names)
+            {
+                let dead_letter_queue_url = resolve_queue_url(
+                    sqs_client,
+                    dead_letter_queue_name,
+                    self.config.queue_owner_aws_account_id,
+                )
+                .await?;
+                let redrive_policy =
+                    read_redrive_policy(sqs_client, source_queue_name, source_queue_url).await?;
+                let dead_letter_queue_arn = resolve_dead_letter_queue_arn(
+                    sqs_client,
+                    dead_letter_queue_name,
+                    &dead_letter_queue_url,
+                )
+                .await?;
+
+                validate_redrive_policy(
+                    source_queue_name,
+                    dead_letter_queue_name,
+                    &dead_letter_queue_arn,
+                    max_receive_count,
+                    &redrive_policy,
+                )?;
+            }
         }
 
         let terminal_error: TerminalError = Arc::new(OnceLock::new());
@@ -1013,11 +1251,20 @@ mod tests {
 
     use super::*;
 
+    fn expect_build_error(result: Result<SqsSource>, context: &str) -> SqsSourceError {
+        match result {
+            Ok(_) => panic!("{context}"),
+            Err(err) => err,
+        }
+    }
+
     #[tokio::test]
     async fn test_client_creation_with_defaults() {
         let config = SqsSourceConfig {
             region: "us-west-2",
             queue_names: vec!["test-queue"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1037,6 +1284,8 @@ mod tests {
         let mut config = SqsSourceConfig {
             region: "us-west-2",
             queue_names: vec!["test-queue"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(30),
             max_number_of_messages: Some(5),
@@ -1073,6 +1322,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
@@ -1121,6 +1372,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
@@ -1163,6 +1416,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
@@ -1203,6 +1458,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
@@ -1251,6 +1508,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1291,6 +1550,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1344,6 +1605,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1381,6 +1644,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1417,6 +1682,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1450,6 +1717,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1601,6 +1870,8 @@ mod tests {
         let config = SqsSourceConfig {
             region: "us-east-2",
             queue_names: vec!["test-queue-custom"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: Some(2000),
@@ -1621,11 +1892,22 @@ mod tests {
 
     const ORDERS_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/orders-queue/";
     const REFUNDS_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/refunds-queue/";
+    const REPLAY_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/replay-queue/";
+    const ORDERS_DLQ_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/orders-dlq/";
+    const REFUNDS_DLQ_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/refunds-dlq/";
+    const REPLAY_DLQ_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/replay-dlq/";
+    const SHARED_DLQ_URL: &str = "https://sqs.us-west-2.amazonaws.com/111111111111/shared-dlq/";
+    const ORDERS_DLQ_ARN: &str = "arn:aws:sqs:us-west-2:111111111111:orders-dlq";
+    const REFUNDS_DLQ_ARN: &str = "arn:aws:sqs:us-west-2:111111111111:refunds-dlq";
+    const REPLAY_DLQ_ARN: &str = "arn:aws:sqs:us-west-2:111111111111:replay-dlq";
+    const SHARED_DLQ_ARN: &str = "arn:aws:sqs:us-west-2:111111111111:shared-dlq";
 
     fn multi_queue_config() -> SqsSourceConfig {
         SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["orders-queue", "refunds-queue"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "111111111111",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -1665,6 +1947,65 @@ mod tests {
                     )
                     .build()
             })
+    }
+
+    fn get_queue_arn_output_for(queue_url: &'static str, queue_arn: &'static str) -> Rule {
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(move |input| {
+                input.queue_url() == Some(queue_url)
+                    && input.attribute_names() == [QueueAttributeName::QueueArn]
+            })
+            .then_output(move || {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .attributes(QueueAttributeName::QueueArn, queue_arn)
+                    .build()
+            })
+    }
+
+    fn get_redrive_policy_output_for(
+        source_queue_url: &'static str,
+        dead_letter_queue_arn: &'static str,
+        max_receive_count: &'static str,
+    ) -> Rule {
+        let policy = serde_json::json!({
+            "deadLetterTargetArn": dead_letter_queue_arn,
+            "maxReceiveCount": max_receive_count,
+        })
+        .to_string();
+
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(move |input| {
+                input.queue_url() == Some(source_queue_url)
+                    && input.attribute_names() == [QueueAttributeName::RedrivePolicy]
+            })
+            .then_output(move || {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .attributes(QueueAttributeName::RedrivePolicy, policy.clone())
+                    .build()
+            })
+    }
+
+    fn get_redrive_policy_raw_output_for(
+        source_queue_url: &'static str,
+        policy: &'static str,
+    ) -> Rule {
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(move |input| {
+                input.queue_url() == Some(source_queue_url)
+                    && input.attribute_names() == [QueueAttributeName::RedrivePolicy]
+            })
+            .then_output(move || {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .attributes(QueueAttributeName::RedrivePolicy, policy)
+                    .build()
+            })
+    }
+
+    fn set_queue_attributes_output() -> Rule {
+        mock!(aws_sdk_sqs::Client::set_queue_attributes).then_output(|| {
+            aws_sdk_sqs::operation::set_queue_attributes::SetQueueAttributesOutput::builder()
+                .build()
+        })
     }
 
     fn get_delete_message_output_for(queue_url: &'static str) -> Rule {
@@ -1711,6 +2052,507 @@ mod tests {
                     )
                     .build()
             })
+    }
+
+    #[test(tokio::test)]
+    async fn test_matching_redrive_policy_allows_startup_without_mutation() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        // Field order, whitespace, and the receive-count string representation
+        // deliberately differ from our expected values. Validation must compare
+        // parsed semantics rather than raw JSON text.
+        let source_policy = get_redrive_policy_raw_output_for(
+            ORDERS_URL,
+            r#"{ "maxReceiveCount": "04", "deadLetterTargetArn": "arn:aws:sqs:us-west-2:111111111111:orders-dlq" }"#,
+        );
+        let dlq_arn = get_queue_arn_output_for(ORDERS_DLQ_URL, ORDERS_DLQ_ARN);
+        let set_attributes = set_queue_attributes_output();
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+        config.max_receive_count = Some(4);
+
+        SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&source_policy)
+                    .with_rule(&dlq_arn)
+                    .with_rule(&set_attributes),
+            )))
+            .build(CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert_eq!(source_url.num_calls(), 1);
+        assert_eq!(dlq_url.num_calls(), 1);
+        assert_eq!(source_policy.num_calls(), 1);
+        assert_eq!(dlq_arn.num_calls(), 1);
+        assert_eq!(set_attributes.num_calls(), 0);
+    }
+
+    #[test(tokio::test)]
+    async fn test_multi_queue_redrive_policy_mapping_is_validated_independently() {
+        let orders_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let refunds_url = get_queue_url_output_for("refunds-queue", REFUNDS_URL);
+        let replay_url = get_queue_url_output_for("replay-queue", REPLAY_URL);
+        let orders_dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let refunds_dlq_url = get_queue_url_output_for("refunds-dlq", REFUNDS_DLQ_URL);
+        let replay_dlq_url = get_queue_url_output_for("replay-dlq", REPLAY_DLQ_URL);
+        let orders_dlq_arn = get_queue_arn_output_for(ORDERS_DLQ_URL, ORDERS_DLQ_ARN);
+        let refunds_dlq_arn = get_queue_arn_output_for(REFUNDS_DLQ_URL, REFUNDS_DLQ_ARN);
+        let replay_dlq_arn = get_queue_arn_output_for(REPLAY_DLQ_URL, REPLAY_DLQ_ARN);
+        let orders_policy = get_redrive_policy_output_for(ORDERS_URL, ORDERS_DLQ_ARN, "10");
+        let refunds_policy = get_redrive_policy_output_for(REFUNDS_URL, REFUNDS_DLQ_ARN, "10");
+        let replay_policy = get_redrive_policy_output_for(REPLAY_URL, REPLAY_DLQ_ARN, "10");
+        let set_attributes = set_queue_attributes_output();
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue", "refunds-queue", "replay-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq", "refunds-dlq", "replay-dlq"];
+
+        SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&orders_url)
+                    .with_rule(&refunds_url)
+                    .with_rule(&replay_url)
+                    .with_rule(&orders_dlq_url)
+                    .with_rule(&refunds_dlq_url)
+                    .with_rule(&replay_dlq_url)
+                    .with_rule(&orders_dlq_arn)
+                    .with_rule(&refunds_dlq_arn)
+                    .with_rule(&replay_dlq_arn)
+                    .with_rule(&orders_policy)
+                    .with_rule(&refunds_policy)
+                    .with_rule(&replay_policy)
+                    .with_rule(&set_attributes),
+            )))
+            .build(CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert_eq!(orders_policy.num_calls(), 1);
+        assert_eq!(refunds_policy.num_calls(), 1);
+        assert_eq!(replay_policy.num_calls(), 1);
+        assert_eq!(set_attributes.num_calls(), 0);
+    }
+
+    #[test(tokio::test)]
+    async fn test_multiple_sources_can_share_a_dead_letter_queue() {
+        let orders_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let refunds_url = get_queue_url_output_for("refunds-queue", REFUNDS_URL);
+        let shared_url = get_queue_url_output_for("shared-dlq", SHARED_DLQ_URL);
+        let shared_arn = get_queue_arn_output_for(SHARED_DLQ_URL, SHARED_DLQ_ARN);
+        let orders_policy = get_redrive_policy_output_for(ORDERS_URL, SHARED_DLQ_ARN, "10");
+        let refunds_policy = get_redrive_policy_output_for(REFUNDS_URL, SHARED_DLQ_ARN, "10");
+
+        let mut config = multi_queue_config();
+        config.dead_letter_queue_names = vec!["shared-dlq", "shared-dlq"];
+
+        SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&orders_url)
+                    .with_rule(&refunds_url)
+                    .with_rule(&shared_url)
+                    .with_rule(&shared_arn)
+                    .with_rule(&orders_policy)
+                    .with_rule(&refunds_policy),
+            )))
+            .build(CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert_eq!(shared_url.num_calls(), 2);
+        assert_eq!(shared_arn.num_calls(), 2);
+        assert_eq!(orders_policy.num_calls(), 1);
+        assert_eq!(refunds_policy.num_calls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn test_multi_queue_redrive_policy_mismatch_identifies_affected_pair() {
+        let orders_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let refunds_url = get_queue_url_output_for("refunds-queue", REFUNDS_URL);
+        let orders_dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let refunds_dlq_url = get_queue_url_output_for("refunds-dlq", REFUNDS_DLQ_URL);
+        let orders_policy = get_redrive_policy_output_for(ORDERS_URL, ORDERS_DLQ_ARN, "10");
+        let refunds_policy = get_redrive_policy_output_for(
+            REFUNDS_URL,
+            "arn:aws:sqs:us-west-2:111111111111:wrong-dlq",
+            "10",
+        );
+        let orders_dlq_arn = get_queue_arn_output_for(ORDERS_DLQ_URL, ORDERS_DLQ_ARN);
+        let refunds_dlq_arn = get_queue_arn_output_for(REFUNDS_DLQ_URL, REFUNDS_DLQ_ARN);
+
+        let mut config = multi_queue_config();
+        config.dead_letter_queue_names = vec!["orders-dlq", "refunds-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&orders_url)
+                    .with_rule(&refunds_url)
+                    .with_rule(&orders_dlq_url)
+                    .with_rule(&refunds_dlq_url)
+                    .with_rule(&orders_policy)
+                    .with_rule(&refunds_policy)
+                    .with_rule(&orders_dlq_arn)
+                    .with_rule(&refunds_dlq_arn),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "second queue policy mismatch should fail startup");
+        assert!(err.to_string().contains("refunds-queue"));
+        assert!(err.to_string().contains("refunds-dlq"));
+        assert!(err.to_string().contains("wrong-dlq"));
+        assert_eq!(orders_policy.num_calls(), 1);
+        assert_eq!(orders_dlq_arn.num_calls(), 1);
+        assert_eq!(refunds_policy.num_calls(), 1);
+        assert_eq!(refunds_dlq_arn.num_calls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn test_missing_redrive_policy_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let missing_policy = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|input| {
+                input.queue_url() == Some(ORDERS_URL)
+                    && input.attribute_names() == [QueueAttributeName::RedrivePolicy]
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .build()
+            });
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&missing_policy),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "missing RedrivePolicy should fail startup");
+        assert!(err.to_string().contains("orders-queue"));
+        assert!(err.to_string().contains("missing RedrivePolicy"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_malformed_redrive_policy_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let malformed_policy = get_redrive_policy_raw_output_for(ORDERS_URL, "not-json");
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&malformed_policy),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "malformed RedrivePolicy should fail startup");
+        assert!(err.to_string().contains("orders-queue"));
+        assert!(err.to_string().contains("malformed RedrivePolicy"));
+        assert!(err.to_string().contains("invalid JSON"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_incorrect_redrive_policy_dlq_arn_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let source_policy = get_redrive_policy_output_for(
+            ORDERS_URL,
+            "arn:aws:sqs:us-west-2:111111111111:wrong-dlq",
+            "10",
+        );
+        let dlq_arn = get_queue_arn_output_for(ORDERS_DLQ_URL, ORDERS_DLQ_ARN);
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&source_policy)
+                    .with_rule(&dlq_arn),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "incorrect DLQ ARN should fail startup");
+        assert!(err.to_string().contains("orders-queue"));
+        assert!(err.to_string().contains("orders-dlq"));
+        assert!(err.to_string().contains("wrong-dlq"));
+        assert!(err.to_string().contains(ORDERS_DLQ_ARN));
+    }
+
+    #[test(tokio::test)]
+    async fn test_incorrect_redrive_policy_max_receive_count_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let source_policy = get_redrive_policy_output_for(ORDERS_URL, ORDERS_DLQ_ARN, "5");
+        let dlq_arn = get_queue_arn_output_for(ORDERS_DLQ_URL, ORDERS_DLQ_ARN);
+
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+        config.max_receive_count = Some(4);
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&source_policy)
+                    .with_rule(&dlq_arn),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "incorrect maxReceiveCount should fail startup");
+        assert!(err.to_string().contains("orders-queue"));
+        assert!(err.to_string().contains("orders-dlq"));
+        assert!(err.to_string().contains("maxReceiveCount 5"));
+        assert!(err.to_string().contains("expected 4"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_missing_dead_letter_queue_arn_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let source_policy = get_redrive_policy_output_for(ORDERS_URL, ORDERS_DLQ_ARN, "10");
+        let missing_arn = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|input| {
+                input.queue_url() == Some(ORDERS_DLQ_URL)
+                    && input.attribute_names() == [QueueAttributeName::QueueArn]
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .build()
+            });
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&source_policy)
+                    .with_rule(&missing_arn),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "missing QueueArn should fail startup");
+        assert!(err.to_string().contains("orders-dlq"));
+        assert!(err.to_string().contains("QueueArn"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_dead_letter_queue_attribute_error_fails_startup() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let source_policy = get_redrive_policy_output_for(ORDERS_URL, ORDERS_DLQ_ARN, "10");
+        let arn_error = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|input| {
+                input.queue_url() == Some(ORDERS_DLQ_URL)
+                    && input.attribute_names() == [QueueAttributeName::QueueArn]
+            })
+            .then_error(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesError::generic(
+                    ErrorMetadata::builder().code("AccessDenied").build(),
+                )
+            });
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&source_policy)
+                    .with_rule(&arn_error),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "attribute error should fail startup");
+        assert!(err.to_string().contains("orders-dlq"));
+        assert!(err.to_string().contains("AccessDenied"));
+        assert!(err.to_string().contains("sqs:GetQueueAttributes"));
+        assert!(err.to_string().contains("IAM role"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_source_redrive_policy_read_permission_error_is_actionable() {
+        let source_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let dlq_url = get_queue_url_output_for("orders-dlq", ORDERS_DLQ_URL);
+        let policy_error = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|input| {
+                input.queue_url() == Some(ORDERS_URL)
+                    && input.attribute_names() == [QueueAttributeName::RedrivePolicy]
+            })
+            .then_error(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesError::generic(
+                    ErrorMetadata::builder().code("AccessDenied").build(),
+                )
+            });
+        let mut config = multi_queue_config();
+        config.queue_names = vec!["orders-queue"];
+        config.dead_letter_queue_names = vec!["orders-dlq"];
+
+        let result = SqsSourceBuilder::new(config)
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&source_url)
+                    .with_rule(&dlq_url)
+                    .with_rule(&policy_error),
+            )))
+            .build(CancellationToken::new())
+            .await;
+
+        let err = expect_build_error(result, "policy read error should fail startup");
+        assert!(err.to_string().contains("orders-queue"));
+        assert!(err.to_string().contains("AccessDenied"));
+        assert!(err.to_string().contains("sqs:GetQueueAttributes"));
+        assert!(err.to_string().contains("IAM role"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_no_dead_letter_queues_only_resolves_source_queues() {
+        let orders_url = get_queue_url_output_for("orders-queue", ORDERS_URL);
+        let refunds_url = get_queue_url_output_for("refunds-queue", REFUNDS_URL);
+        let get_attributes = mock!(aws_sdk_sqs::Client::get_queue_attributes).then_output(|| {
+            aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                .build()
+        });
+        let set_attributes = set_queue_attributes_output();
+
+        SqsSourceBuilder::new(multi_queue_config())
+            .client(Client::from_conf(get_test_config_with_interceptor(
+                MockResponseInterceptor::new()
+                    .rule_mode(RuleMode::MatchAny)
+                    .with_rule(&orders_url)
+                    .with_rule(&refunds_url)
+                    .with_rule(&get_attributes)
+                    .with_rule(&set_attributes),
+            )))
+            .build(CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert_eq!(orders_url.num_calls(), 1);
+        assert_eq!(refunds_url.num_calls(), 1);
+        assert_eq!(get_attributes.num_calls(), 0);
+        assert_eq!(set_attributes.num_calls(), 0);
+    }
+
+    #[test(tokio::test)]
+    async fn test_builder_rejects_invalid_dead_letter_queue_configuration() {
+        let mut max_without_dlq = multi_queue_config();
+        max_without_dlq.max_receive_count = Some(4);
+        let err = expect_build_error(
+            SqsSourceBuilder::new(max_without_dlq)
+                .build(CancellationToken::new())
+                .await,
+            "max count without DLQ should fail",
+        );
+        assert!(
+            err.to_string()
+                .contains("requires at least one dead-letter queue")
+        );
+
+        let mut wrong_count = multi_queue_config();
+        wrong_count.dead_letter_queue_names = vec!["orders-dlq"];
+        let err = expect_build_error(
+            SqsSourceBuilder::new(wrong_count)
+                .build(CancellationToken::new())
+                .await,
+            "mismatched queue counts should fail",
+        );
+        assert!(err.to_string().contains("expected one dead-letter queue"));
+
+        let mut empty_name = multi_queue_config();
+        empty_name.dead_letter_queue_names = vec!["orders-dlq", ""];
+        let err = expect_build_error(
+            SqsSourceBuilder::new(empty_name)
+                .build(CancellationToken::new())
+                .await,
+            "empty DLQ name should fail",
+        );
+        assert!(err.to_string().contains("must not be empty"));
+
+        let mut self_reference = multi_queue_config();
+        self_reference.dead_letter_queue_names = vec!["orders-queue", "refunds-dlq"];
+        let err = expect_build_error(
+            SqsSourceBuilder::new(self_reference)
+                .build(CancellationToken::new())
+                .await,
+            "self reference should fail",
+        );
+        assert!(
+            err.to_string()
+                .contains("cannot be its own dead-letter queue")
+        );
+
+        let mut fifo_mismatch = multi_queue_config();
+        fifo_mismatch.dead_letter_queue_names = vec!["orders-dlq.fifo", "refunds-dlq"];
+        let err = expect_build_error(
+            SqsSourceBuilder::new(fifo_mismatch)
+                .build(CancellationToken::new())
+                .await,
+            "FIFO mismatch should fail",
+        );
+        assert!(err.to_string().contains("must both be FIFO queues"));
+
+        for invalid in [0, 1001] {
+            let mut out_of_range = multi_queue_config();
+            out_of_range.dead_letter_queue_names = vec!["orders-dlq", "refunds-dlq"];
+            out_of_range.max_receive_count = Some(invalid);
+            let err = expect_build_error(
+                SqsSourceBuilder::new(out_of_range)
+                    .build(CancellationToken::new())
+                    .await,
+                "out-of-range max count should fail",
+            );
+            assert!(err.to_string().contains("between 1 and 1000"));
+        }
     }
 
     #[test(tokio::test)]
@@ -2139,6 +2981,8 @@ mod tests {
         let source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION,
             queue_names: vec!["test-q"],
+            dead_letter_queue_names: vec![],
+            max_receive_count: None,
             queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
@@ -2478,11 +3322,13 @@ mod tests {
     }
 
     fn get_queue_url_output_err() -> Rule {
-        mock!(aws_sdk_sqs::Client::get_queue_url).then_error(|| {
-            aws_sdk_sqs::operation::get_queue_url::GetQueueUrlError::generic(
-                ErrorMetadata::builder().code("InvalidAddress").build(),
-            )
-        })
+        mock!(aws_sdk_sqs::Client::get_queue_url)
+            .match_requests(|inp| inp.queue_name() == Some("test-q"))
+            .then_error(|| {
+                aws_sdk_sqs::operation::get_queue_url::GetQueueUrlError::generic(
+                    ErrorMetadata::builder().code("InvalidAddress").build(),
+                )
+            })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {

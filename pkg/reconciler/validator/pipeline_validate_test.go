@@ -1833,6 +1833,45 @@ func Test_validateSQSSource(t *testing.T) {
 			},
 		},
 		{
+			name: "valid legacy queueName with DLQ and explicit max receive count",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](5),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames with positional DLQs and default max receive count",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue,replay-queue",
+				DeadLetterQueues:       "orders-dlq,refunds-dlq,replay-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid shared DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "shared-dlq,shared-dlq",
+				MaxReceiveCount:        ptr.To[int32](1000),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid FIFO queue and FIFO DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders.fifo",
+				DeadLetterQueues:       "orders-dlq.fifo",
+				MaxReceiveCount:        ptr.To[int32](1),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
 			name: "queueName and queueNames are mutually exclusive",
 			sqs: dfv1.SqsSource{
 				AWSRegion:              "us-east-1",
@@ -1911,6 +1950,98 @@ func Test_validateSQSSource(t *testing.T) {
 				AssumeRole:             &dfv1.AWSAssumeRole{},
 			},
 			wantErr: "invalid assume role configuration",
+		},
+		{
+			name: "deadLetterQueues rejects empty entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq,,refunds-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "deadLetterQueues contains empty queue name",
+		},
+		{
+			name: "deadLetterQueues rejects whitespace-only entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq,   ",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "deadLetterQueues contains empty queue name",
+		},
+		{
+			name: "deadLetterQueues cardinality must match source queues",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "exactly one entry for each source queue",
+		},
+		{
+			name: "source queue cannot be its own DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "cannot be its own dead-letter queue",
+		},
+		{
+			name: "standard source rejects FIFO DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq.fifo",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "both be FIFO queues or both be standard queues",
+		},
+		{
+			name: "FIFO source rejects standard DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders.fifo",
+				DeadLetterQueues:       "orders-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "both be FIFO queues or both be standard queues",
+		},
+		{
+			name: "maxReceiveCount requires deadLetterQueues",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				MaxReceiveCount:        ptr.To[int32](5),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "requires 'deadLetterQueues'",
+		},
+		{
+			name: "maxReceiveCount below AWS minimum is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](0),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "between 1 and 1000",
+		},
+		{
+			name: "maxReceiveCount above AWS maximum is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](1001),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "between 1 and 1000",
 		},
 	}
 

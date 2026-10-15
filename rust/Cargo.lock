@@ -2745,6 +2745,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "chrono",
+ "serde_json",
  "test-log",
  "thiserror 2.0.17",
  "tokio",

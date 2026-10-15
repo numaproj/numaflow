@@ -77,4 +77,15 @@ type SqsSource struct {
 	// Mutually exclusive with queueName.
 	// +optional
 	QueueNames string `json:"queueNames,omitempty" protobuf:"bytes,11,opt,name=queueNames"`
+
+	// DeadLetterQueues is a comma-separated list of SQS dead-letter queue names.
+	// Entries correspond positionally to the configured source queues.
+	// +optional
+	DeadLetterQueues string `json:"deadLetterQueues,omitempty" protobuf:"bytes,12,opt,name=deadLetterQueues"`
+
+	// MaxReceiveCount is the maximum number of receives before SQS moves a
+	// message to its configured dead-letter queue. Valid values: 1-1000.
+	// Defaults to 10 when deadLetterQueues is configured.
+	// +optional
+	MaxReceiveCount *int32 `json:"maxReceiveCount,omitempty" protobuf:"varint,13,opt,name=maxReceiveCount"`
 }
