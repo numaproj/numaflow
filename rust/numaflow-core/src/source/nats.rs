@@ -91,6 +91,7 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use numaflow_nats::nats::NatsMessage;
+    use numaflow_shared::redacted_url::RedactedUrl;
     use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
@@ -119,7 +120,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_nats_source_returns_source() {
         let config = NatsSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             subject: "dummy".to_string(),
             queue: "dummy".to_string(),
             auth: None,
@@ -142,7 +143,7 @@ mod tests {
         // It simply checks that read() returns an empty Vec when there are no messages.
         // We already have checked read_messages functionality in the test_nats_source test.
         let config = NatsSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             subject: "test_nats_source_read_empty".to_string(),
             queue: "test_nats_source_read_empty".to_string(),
             auth: None,
@@ -168,7 +169,7 @@ mod tests {
     async fn test_nats_source_pending_returns_none() {
         // A dummy NatsSource
         let config = NatsSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             subject: "dummy".to_string(),
             queue: "dummy".to_string(),
             auth: None,
@@ -192,7 +193,7 @@ mod tests {
     async fn test_nats_source_ack_is_noop() {
         // A dummy NatsSource
         let config = NatsSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             subject: "dummy".to_string(),
             queue: "dummy".to_string(),
             auth: None,
