@@ -884,7 +884,19 @@ mod tests {
             actual.graceful_shutdown_time,
             expected.graceful_shutdown_time
         );
-        assert_eq!(actual.isb_client_config, expected.isb_client_config);
+        match (actual.isb_client_config, expected.isb_client_config) {
+            (
+                isb::ISBClientConfig::Jetstream(actual),
+                isb::ISBClientConfig::Jetstream(expected),
+            ) => {
+                assert_eq!(actual.url, expected.url);
+                assert_eq!(actual.user, expected.user);
+                assert!(actual.password.is_none() && expected.password.is_none());
+                assert_eq!(actual.tls_enabled, expected.tls_enabled);
+            }
+            (isb::ISBClientConfig::InMemory, isb::ISBClientConfig::InMemory) => {}
+            (actual, expected) => panic!("Unexpected ISB configs: {actual:?}, {expected:?}"),
+        }
         assert_eq!(actual.from_vertex_config, expected.from_vertex_config);
         assert_eq!(actual.to_vertex_config, expected.to_vertex_config);
         assert_vertex_config(actual.vertex_config, expected.vertex_config);
@@ -999,7 +1011,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1172,7 +1184,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1232,7 +1244,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1344,7 +1356,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1769,15 +1781,13 @@ mod tests {
         // No NUMAFLOW_ISBSVC_TYPE — defaults to jetstream
         let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "nats://localhost:4222")];
         let config = PipelineConfig::load(pipeline_cfg_base64.clone(), env_vars).unwrap();
-        assert_eq!(
-            config.isb_client_config,
-            isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "nats://localhost:4222".to_string(),
-                user: None,
-                password: None,
-                tls_enabled: false,
-            })
-        );
+        let isb::ISBClientConfig::Jetstream(config) = config.isb_client_config else {
+            panic!("Expected JetStream")
+        };
+        assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
+        assert!(config.user.is_none());
+        assert!(config.password.is_none());
+        assert!(!config.tls_enabled);
 
         // Explicit jetstream
         let env_vars = [
