@@ -2765,12 +2765,15 @@ name = "numaflow-throttling"
 version = "0.1.0"
 dependencies = [
  "numaflow-models",
+ "numaflow-shared",
  "redis",
+ "secrecy",
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tracing",
  "trait-variant",
+ "zeroize",
 ]
 
 [[package]]
