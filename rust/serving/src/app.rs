@@ -268,7 +268,7 @@ pub(crate) async fn validate_request(request: axum::extract::Request, next: Next
 
 /// auth middleware to do token based authentication for all user facing routes if auth is enabled.
 async fn auth_middleware(
-    State(api_auth_token): State<Option<String>>,
+    State(api_auth_token): State<Option<secrecy::SecretString>>,
     request: axum::extract::Request,
     next: Next,
 ) -> Response {
@@ -292,7 +292,7 @@ async fn auth_middleware(
                 }
             };
             if auth_token.to_str().expect("auth token should be a string")
-                != format!("Bearer {token}")
+                != format!("Bearer {}", secrecy::ExposeSecret::expose_secret(&token))
             {
                 Response::builder()
                     .status(401)
