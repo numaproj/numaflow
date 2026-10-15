@@ -2616,7 +2616,9 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "futures",
+ "numaflow-shared",
  "rdkafka",
+ "secrecy",
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",

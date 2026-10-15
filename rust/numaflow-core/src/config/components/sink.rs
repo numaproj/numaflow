@@ -26,13 +26,13 @@ use crate::error::Error;
 
 use super::parse_kafka_auth_config;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SinkConfig {
     pub(crate) sink_type: SinkType,
     pub(crate) retry_config: Option<RetryConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) enum SinkType {
     Log(LogConfig),
     Blackhole(BlackholeConfig),
