@@ -183,7 +183,7 @@ pub(crate) mod map {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
@@ -775,6 +775,12 @@ mod tests {
         BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
 
+    // Test-only equivalence comparison of `VertexConfig`, which may contains secrets
+    // that don't implement `PartialEq`. Not a complete equality implementation;
+    // if tests are added with source/sink types that were not previously used
+    // in calls to this function, the function may panic due to unimplemented
+    // comparisons between secret-carrying types. You may then need to
+    // extend the implementation.
     fn assert_vertex_config(actual: VertexConfig, expected: VertexConfig) {
         match (actual, expected) {
             (VertexConfig::Source(actual), VertexConfig::Source(expected)) => {
@@ -799,6 +805,7 @@ mod tests {
                         assert_eq!(actual.consumer, expected.consumer);
                         assert_eq!(actual.filter_subjects, expected.filter_subjects);
                         assert_eq!(actual.deliver_policy, expected.deliver_policy);
+                        // Not comparing secrets
                         assert!(actual.auth.is_none() && expected.auth.is_none());
                         assert!(actual.tls.is_none() && expected.tls.is_none());
                     }
@@ -808,7 +815,52 @@ mod tests {
                 }
             }
             (VertexConfig::Sink(actual), VertexConfig::Sink(expected)) => {
-                assert_eq!(actual, expected)
+                fn assert_sink(actual: SinkConfig, expected: SinkConfig) {
+                    assert_eq!(actual.retry_config, expected.retry_config);
+                    match (actual.sink_type, expected.sink_type) {
+                        (SinkType::Log(actual), SinkType::Log(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Blackhole(actual), SinkType::Blackhole(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Serve, SinkType::Serve) => {}
+                        (SinkType::UserDefined(actual), SinkType::UserDefined(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Sqs(actual), SinkType::Sqs(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Kafka(actual), SinkType::Kafka(expected)) => {
+                            unimplemented!(
+                                "comparison between secret-carrying sink types: {actual:?}, {expected:?}"
+                            )
+                        }
+                        (SinkType::Pulsar(actual), SinkType::Pulsar(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (actual, expected) => {
+                            panic!("Unexpected sink configs: {actual:?}, {expected:?}")
+                        }
+                    }
+                }
+                assert_sink(actual.sink_config, expected.sink_config);
+                for (actual, expected) in [
+                    (actual.fb_sink_config, expected.fb_sink_config),
+                    (
+                        actual.on_success_sink_config,
+                        expected.on_success_sink_config,
+                    ),
+                ] {
+                    match (actual, expected) {
+                        (Some(actual), Some(expected)) => assert_sink(actual, expected),
+                        (None, None) => {}
+                        (actual, expected) => {
+                            panic!("Unexpected optional sink configs: {actual:?}, {expected:?}")
+                        }
+                    }
+                }
+                assert_eq!(actual.serving_store_config, expected.serving_store_config);
             }
             (VertexConfig::Map(actual), VertexConfig::Map(expected)) => {
                 assert_eq!(actual, expected)
