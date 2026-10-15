@@ -16,6 +16,7 @@ import {
 import { AppContextProps } from "../../../../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../../../../App";
 import { getBaseHref } from "../../../../../../../../../../../../../../../../utils";
+import { parseMetricFilters } from "../../../../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -30,6 +31,7 @@ export interface FiltersDropdownProps {
   isFilterFocused: boolean;
   setFilterFocused: any;
   metric: any;
+  initialFilters?: string | null;
 }
 
 const periodData = [
@@ -50,21 +52,25 @@ const FiltersDropdown = ({
   isFilterFocused,
   setFilterFocused,
   metric,
+  initialFilters,
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedFilters, setSelectedFilters] = useState<any[]>([]);
+  const [selectedFilters, setSelectedFilters] = useState<any[]>(() =>
+    (initialFilters || "").split(",").filter(Boolean)
+  );
   const [activeFilters, setActiveFilters] = useState<any[]>([]);
   const [podsData, setPodsData] = useState<any[]>([]);
 
   useEffect(() => {
-    const filtersMap = selectedFilters.reduce((acc, filter) => {
-      const [key, value] = filter.split(":");
-      if (key && value) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {});
+    const next = (initialFilters || "").split(",").filter(Boolean);
+    setSelectedFilters((prev) =>
+      prev.join(",") === next.join(",") ? prev : next
+    );
+  }, [initialFilters]);
+
+  useEffect(() => {
+    const filtersMap = parseMetricFilters(selectedFilters.join(","));
 
     setFilters((prevState: any) => ({
       ...prevState,

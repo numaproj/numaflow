@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -29,6 +30,7 @@ import {
   PodSpecificInfoProps,
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
+import { replaceObservabilityState } from "../../../../../../../../../utils/observabilityURLState";
 
 /** API order puts Always-restart init (user/UD) containers first, then main. */
 function getDefaultContainerName(pod: Pod | undefined): string | undefined {
@@ -54,6 +56,8 @@ function resolveContainerForPod(
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
+  const history = useHistory();
+  const location = useLocation();
 
   if (!namespaceId || !pipelineId || !vertexId) {
     return (
@@ -182,15 +186,40 @@ export function Pods(props: PodsProps) {
     if (podsDetailsErr) notifyError(podsDetailsErr);
   }, [podsDetailsErr]);
 
+  useEffect(() => {
+    if (!pods?.length) return;
+    const params = new URLSearchParams(location.search);
+    const requestedPodName = params.get("pod");
+    const requestedContainer = params.get("container");
+    if (!requestedPodName && !requestedContainer) return;
+    const requestedPod = requestedPodName
+      ? pods.find((pod) => pod.name === requestedPodName)
+      : undefined;
+    const pod = requestedPod || selectedPod || pods[0];
+    const container = resolveContainerForPod(pod, requestedContainer || selectedContainer);
+    if (pod?.name !== selectedPod?.name) setSelectedPod(pod);
+    if (container !== selectedContainer) setSelectedContainer(container);
+    replaceObservabilityState(history, location, {
+      pod: pod?.name,
+      container,
+    });
+  }, [pods, location.search, selectedPod, selectedContainer, history, location]);
+
   const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
     const nextPod = p?.data?.pod;
     setSelectedPod(nextPod);
-    setSelectedContainer(getDefaultContainerName(nextPod));
-  }, []);
+    const container = getDefaultContainerName(nextPod);
+    setSelectedContainer(container);
+    replaceObservabilityState(history, location, {
+      pod: nextPod?.name,
+      container,
+    });
+  }, [history, location]);
 
   const handleContainerClick = useCallback((containerName: string) => {
     setSelectedContainer(containerName);
-  }, []);
+    replaceObservabilityState(history, location, { container: containerName });
+  }, [history, location]);
 
   const handleFocusPodChange = useCallback(
     (_event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
@@ -202,9 +231,14 @@ export function Pods(props: PodsProps) {
         return;
       }
       setSelectedPod(nextPod);
-      setSelectedContainer((prev) => resolveContainerForPod(nextPod, prev));
+      const container = resolveContainerForPod(nextPod, selectedContainer);
+      setSelectedContainer(container);
+      replaceObservabilityState(history, location, {
+        pod: nextPod.name,
+        container,
+      });
     },
-    [pods]
+    [pods, selectedContainer, history, location]
   );
 
   const containerSelector = useMemo(() => {
@@ -341,11 +375,18 @@ export function Pods(props: PodsProps) {
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
       if (newValue) {
         if (pods) {
-          setSelectedPod(pods?.find((pod) => pod.name === newValue));
+          const pod = pods?.find((pod) => pod.name === newValue);
+          const container = resolveContainerForPod(pod, selectedContainer);
+          setSelectedPod(pod);
+          setSelectedContainer(container);
+          replaceObservabilityState(history, location, {
+            pod: pod?.name,
+            container,
+          });
         }
       }
     },
-    [pods]
+    [pods, selectedContainer, history, location]
   );
 
   const podSearchDetails = (

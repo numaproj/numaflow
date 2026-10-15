@@ -10,6 +10,8 @@ This functionality offers two primary advantages to users:
 Source Data Transformer runs as a sidecar container in a Source Vertex Pod. Data processing in the transformer is supposed to be idempotent.
 The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 
+From v1.9, a message your transformer marks as failed can be retried with [`retryStrategy`](../../user-defined-functions/map/retry-strategy.md).
+
 ## Build Your Own Transformer
 
 You can build your own transformer in multiple languages.

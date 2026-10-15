@@ -41,6 +41,36 @@ func TestJetstreamSvc_CreationDeletionValidation(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestJetstreamSvc_CreateBuffersMaxMsgSize(t *testing.T) {
+	ctx := context.Background()
+	s := test.RunJetStreamServer(t)
+	defer test.ShutdownJetStreamServer(t, s)
+
+	client := nats2.NewTestClient(t, s.ClientURL())
+	defer client.Close()
+
+	isbSvc, err := NewISBJetStreamSvc(client)
+	assert.NoError(t, err)
+
+	t.Run("default max msg size", func(t *testing.T) {
+		buffers := []string{"test-default-max-msg-size"}
+		err := isbSvc.CreateBuffersAndBuckets(ctx, buffers, nil, "", "", WithConfig("stream:\n  maxMsgs: 100"))
+		assert.NoError(t, err)
+		js, err := client.JetStreamContext()
+		assert.NoError(t, err)
+		info, err := js.StreamInfo(JetStreamName(buffers[0]))
+		assert.NoError(t, err)
+		assert.Equal(t, int32(maxStreamMaxMsgSize), info.Config.MaxMsgSize)
+		assert.NoError(t, isbSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, "", ""))
+	})
+
+	t.Run("max msg size greater than 32MB", func(t *testing.T) {
+		buffers := []string{"test-invalid-max-msg-size"}
+		err := isbSvc.CreateBuffersAndBuckets(ctx, buffers, nil, "", "", WithConfig("stream:\n  maxMsgSize: 33554433"))
+		assert.ErrorContains(t, err, "invalid stream.maxMsgSize")
+	})
+}
+
 func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	ctx := context.Background()
 	s := test.RunJetStreamServer(t)

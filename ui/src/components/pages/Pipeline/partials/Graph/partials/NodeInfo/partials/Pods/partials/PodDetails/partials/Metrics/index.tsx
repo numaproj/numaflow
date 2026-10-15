@@ -1,4 +1,5 @@
-import React, { Dispatch, SetStateAction, useContext } from "react";
+import React, { Dispatch, SetStateAction, useContext, useEffect } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -31,6 +32,11 @@ import {
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
+import { CopyViewLinkButton } from "../../../../../../../../../../../../common/CopyViewLinkButton";
+import {
+  buildObservabilityViewUrl,
+  replaceObservabilityState,
+} from "../../../../../../../../../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -59,6 +65,7 @@ export interface MetricsProps {
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
   pod?: Pod;
+  podName?: string;
 }
 
 export function Metrics({
@@ -68,9 +75,13 @@ export function Metrics({
   vertexId,
   metricDisplayName,
   pod,
+  podName,
   setMetricsFound,
   presets,
 }: MetricsProps) {
+  const resolvedPodName = pod?.name || podName;
+  const location = useLocation();
+  const history = useHistory();
   const {
     metricsDiscoveryData: discoveredMetrics,
     error: discoveredMetricsError,
@@ -86,15 +97,46 @@ export function Metrics({
     setPresets,
   } = useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
+  useEffect(() => {
+    if (!discoveredMetrics?.data) return;
+    const params = new URLSearchParams(location.search);
+    const panels = new Set(
+      (params.get("metricPanels") || "")
+        .split(",")
+        .filter(Boolean)
+        .filter((panelId) =>
+          discoveredMetrics.data.some(
+            (metric: any) => `${metric.metric_name}-panel` === panelId
+          )
+        )
+    );
+    const metricName = params.get("metric");
+    if (metricName) panels.add(`${metricName}-panel`);
+    if (panels.size) setExpanded(panels);
+  }, [discoveredMetrics, location.search, setExpanded]);
+
   const handleAccordionChange =
     (panel: string) => (_: any, isExpanded: boolean) => {
       setPresets(undefined);
-      setExpanded((prevExpanded) => {
-        const newExpanded = new Set(prevExpanded);
-        isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
-        return newExpanded;
+      const newExpanded = new Set(expanded);
+      isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
+      setExpanded(newExpanded);
+      const remaining = Array.from(newExpanded);
+      replaceObservabilityState(history, location, {
+        metric: isExpanded
+          ? panel.replace(/-panel$/, "")
+          : remaining[0]?.replace(/-panel$/, "") || null,
+        metricPanels: remaining.join(",") || null,
       });
     };
+
+  const buildMetricViewUrl = (metricName: string, panelId: string) =>
+    // Shared controls stay on the URL; they belong to metric=, not each panel.
+    buildObservabilityViewUrl(location, {
+      vertexTab: "metrics",
+      metric: metricName,
+      metricPanels: panelId,
+    });
 
   if (discoveredMetricsLoading) {
     return (
@@ -147,6 +189,7 @@ export function Metrics({
           presets={presets}
           fromModal
           pod={pod}
+          podName={resolvedPodName}
         />
       );
     } else {
@@ -195,22 +238,35 @@ export function Metrics({
               id={`${metric?.metric_name}-header`}
             >
               <Box className={"metrics-accordion-summary"}>
-                {metric?.display_name || metric?.metric_name}
-                <Tooltip
-                  title={
-                    <Typography className={"metrics-accordion-summary-tooltip"}>
-                      {metric?.metric_description ||
-                        metric?.display_name ||
-                        metric?.metric_name}
-                    </Typography>
-                  }
-                  arrow
-                  placement={"top-start"}
-                >
-                  <Box>
-                    <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
-                  </Box>
-                </Tooltip>
+                <Box className={"metrics-accordion-summary-title"}>
+                  {metric?.display_name || metric?.metric_name}
+                  <Tooltip
+                    title={
+                      <Typography className={"metrics-accordion-summary-tooltip"}>
+                        {metric?.metric_description ||
+                          metric?.display_name ||
+                          metric?.metric_name}
+                      </Typography>
+                    }
+                    arrow
+                    placement={"top-start"}
+                  >
+                    <Box>
+                      <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
+                    </Box>
+                  </Tooltip>
+                </Box>
+                <CopyViewLinkButton
+                  iconOnly
+                  url={buildMetricViewUrl(metric?.metric_name, panelId)}
+                  ariaLabel={`Copy ${
+                    metric?.display_name || metric?.metric_name
+                  } view`}
+                  idleTooltip={`Copy ${
+                    metric?.display_name || metric?.metric_name
+                  } view`}
+                  testId={`copy-metric-view-${metric?.metric_name}`}
+                />
               </Box>
             </AccordionSummary>
             <AccordionDetails>
@@ -223,6 +279,7 @@ export function Metrics({
                   vertexId={vertexId}
                   presets={presetsFromContext}
                   pod={pod}
+                  podName={resolvedPodName}
                 />
               )}
             </AccordionDetails>

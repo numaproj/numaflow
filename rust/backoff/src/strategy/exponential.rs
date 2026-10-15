@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rand::Rng;
+use rand::RngExt;
 
 /// An Exponential Backoff strategy that increases the delay exponentially with each retry.
 ///

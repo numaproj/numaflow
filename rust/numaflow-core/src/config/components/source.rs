@@ -135,6 +135,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
     type Error = Error;
     fn try_from(value: Box<PulsarSource>) -> Result<Self> {
         let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
+        let tls = super::parse_pulsar_tls_config(value.tls)?;
         let pulsar_config = PulsarSourceConfig {
             dead_letter_policy: value.dead_letter_policy.map(|p| {
                 numaflow_pulsar::source::PulsarDeadLetterPolicy {
@@ -149,6 +150,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
             subscription: value.subscription_name,
             max_unack: value.max_unack.unwrap_or(1000) as usize,
             auth,
+            tls,
         };
         Ok(SourceType::Pulsar(pulsar_config))
     }
@@ -808,6 +810,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source);
@@ -846,6 +849,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
@@ -899,6 +903,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
@@ -947,6 +952,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -984,6 +990,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1014,6 +1021,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1050,6 +1058,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);

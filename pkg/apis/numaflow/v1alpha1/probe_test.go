@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -196,4 +198,60 @@ func TestGetProbeFailureThreshold(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func Test_startupProbeFrom(t *testing.T) {
+	liveness := &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/livez",
+				Port:   intstr.FromInt32(2469),
+				Scheme: corev1.URISchemeHTTPS,
+			},
+		},
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+		FailureThreshold:    5,
+	}
+
+	t.Run("no startup probe specified", func(t *testing.T) {
+		assert.Nil(t, startupProbeFrom(nil, liveness))
+	})
+
+	t.Run("no liveness probe to derive the check from", func(t *testing.T) {
+		assert.Nil(t, startupProbeFrom(&Probe{}, nil))
+	})
+
+	t.Run("unset fields fall back to the liveness probe", func(t *testing.T) {
+		got := startupProbeFrom(&Probe{}, liveness)
+		assert.NotNil(t, got)
+		assert.Equal(t, liveness.ProbeHandler, got.ProbeHandler)
+		assert.Equal(t, int32(20), got.InitialDelaySeconds)
+		assert.Equal(t, int32(60), got.PeriodSeconds)
+		assert.Equal(t, int32(30), got.TimeoutSeconds)
+		assert.Equal(t, int32(5), got.FailureThreshold)
+		// A startup probe must have a success threshold of 1, which Kubernetes defaults for us.
+		assert.Equal(t, int32(0), got.SuccessThreshold)
+	})
+
+	t.Run("specified fields win", func(t *testing.T) {
+		got := startupProbeFrom(&Probe{
+			InitialDelaySeconds: ptr.To[int32](0),
+			PeriodSeconds:       ptr.To[int32](10),
+			TimeoutSeconds:      ptr.To[int32](5),
+			FailureThreshold:    ptr.To[int32](60),
+		}, liveness)
+		assert.NotNil(t, got)
+		assert.Equal(t, liveness.ProbeHandler, got.ProbeHandler)
+		assert.Equal(t, int32(0), got.InitialDelaySeconds)
+		assert.Equal(t, int32(10), got.PeriodSeconds)
+		assert.Equal(t, int32(5), got.TimeoutSeconds)
+		assert.Equal(t, int32(60), got.FailureThreshold)
+	})
+
+	t.Run("the liveness probe is left untouched", func(t *testing.T) {
+		_ = startupProbeFrom(&Probe{FailureThreshold: ptr.To[int32](60)}, liveness)
+		assert.Equal(t, int32(5), liveness.FailureThreshold)
+	})
 }

@@ -1,3 +1,18 @@
+.vertex-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  min-height: 3.6rem;
+  padding-right: 4.8rem;
+}
+
+.vertex-details-header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .vertex-details-header-text {
   font-size: 2rem;
   font-style: normal;

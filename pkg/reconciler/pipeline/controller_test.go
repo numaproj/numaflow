@@ -948,6 +948,46 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 		assert.Len(t, deployList.Items, 1)
 		assert.Equal(t, "test-pl-daemon", deployList.Items[0].Name)
 	})
+
+	t.Run("vertex scale change does not recreate daemon deployment", func(t *testing.T) {
+		scaleCl := fake.NewClientBuilder().Build()
+		scaleR := fakeReconciler(t, scaleCl)
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale = dfv1.Scale{
+			Min: ptr.To[int32](1),
+			Max: ptr.To[int32](100),
+		}
+		err := scaleR.createOrUpdateDaemonDeployment(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+
+		var daemonDeployment appv1.Deployment
+		err = scaleCl.Get(ctx, client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&daemonDeployment)
+		assert.NoError(t, err)
+		hashBefore := daemonDeployment.Annotations[dfv1.KeyHash]
+		embeddedBefore := daemonDeploymentEnvValue(&daemonDeployment, dfv1.EnvPipelineObject)
+
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](0)
+		testObj.Spec.Vertices[0].Scale.Max = ptr.To[int32](0)
+		err = scaleR.createOrUpdateDaemonDeployment(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+
+		var updatedDaemonDeployment appv1.Deployment
+		err = scaleCl.Get(ctx, client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&updatedDaemonDeployment)
+		assert.NoError(t, err)
+		assert.Equal(t, hashBefore, updatedDaemonDeployment.Annotations[dfv1.KeyHash])
+		assert.Equal(t, embeddedBefore, daemonDeploymentEnvValue(&updatedDaemonDeployment, dfv1.EnvPipelineObject))
+	})
+}
+
+func daemonDeploymentEnvValue(deployment *appv1.Deployment, name string) string {
+	for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == name {
+			return env.Value
+		}
+	}
+	return ""
 }
 
 func Test_createOrUpdateSIMDeployments(t *testing.T) {
@@ -1350,4 +1390,91 @@ func TestIsLifecycleChange(t *testing.T) {
 			assert.Equal(t, test.expectedResult, result)
 		})
 	}
+}
+
+func Test_isStrandedPause(t *testing.T) {
+	tests := []struct {
+		name           string
+		annotations    map[string]string
+		desiredPhase   dfv1.PipelinePhase
+		expectedResult bool
+	}{
+		{
+			name:           "nil annotations",
+			annotations:    nil,
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: false,
+		},
+		{
+			name:           "empty annotations",
+			annotations:    map[string]string{},
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: false,
+		},
+		{
+			name:           "annotations without pause timestamp",
+			annotations:    map[string]string{"foo": "bar"},
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: false,
+		},
+		{
+			name:           "pause timestamp with desired running",
+			annotations:    map[string]string{dfv1.KeyPauseTimestamp: "2026-10-09T11:37:02Z"},
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: true,
+		},
+		{
+			name:           "pause timestamp with desired paused",
+			annotations:    map[string]string{dfv1.KeyPauseTimestamp: "2026-10-09T11:37:02Z"},
+			desiredPhase:   dfv1.PipelinePhasePaused,
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pl := &dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: test.annotations,
+				},
+				Spec: dfv1.PipelineSpec{
+					Lifecycle: dfv1.Lifecycle{
+						DesiredPhase: test.desiredPhase,
+					},
+				},
+			}
+			var result bool
+			assert.NotPanics(t, func() { result = isStrandedPause(pl) })
+			assert.Equal(t, test.expectedResult, result)
+		})
+	}
+}
+
+func Test_resumeBeforePausingPhaseRecorded(t *testing.T) {
+	ctx := context.TODO()
+	cl := fake.NewClientBuilder().WithStatusSubresource(&dfv1.Pipeline{}).Build()
+	testIsbSvc := testJetStreamIsbSvc.DeepCopy()
+	testIsbSvc.Status.MarkConfigured()
+	testIsbSvc.Status.MarkDeployed()
+	assert.NoError(t, cl.Create(ctx, testIsbSvc))
+	pl := testPipeline.DeepCopy()
+	assert.NoError(t, cl.Create(ctx, pl))
+	assert.NoError(t, cl.Status().Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(`{"status":{"phase":"Running"}}`))))
+	r := fakeReconciler(t, cl)
+	_, err := r.reconcile(ctx, pl.DeepCopy())
+	assert.NoError(t, err)
+
+	assert.NoError(t, cl.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(`{"spec":{"lifecycle":{"desiredPhase":"Paused"}}}`))))
+	_, err = r.pausePipeline(ctx, pl.DeepCopy())
+	assert.NoError(t, err)
+	assert.NoError(t, cl.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(`{"spec":{"lifecycle":{"desiredPhase":"Running"}}}`))))
+	_, err = r.reconcile(ctx, pl.DeepCopy())
+	assert.NoError(t, err)
+
+	assert.NoError(t, cl.Get(ctx, client.ObjectKeyFromObject(pl), pl))
+	assert.Empty(t, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
+	vertices, err := r.findExistingVertices(ctx, pl)
+	assert.NoError(t, err)
+	source := vertices[pl.Name+"-"+pl.Spec.Vertices[0].Name]
+	assert.Equal(t, dfv1.VertexPhaseRunning, source.Spec.Lifecycle.GetDesiredPhase())
 }

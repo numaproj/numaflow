@@ -10,7 +10,6 @@ use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::ISBFactory;
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
-use crate::shared::metrics::start_metrics_server;
 use crate::source::Source;
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
@@ -74,6 +73,7 @@ pub(crate) async fn start_source_forwarder(
     isb_factory: Arc<dyn ISBFactory>,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
+    metrics_state: MetricsState,
 ) -> error::Result<()> {
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         let store = isb_factory
@@ -94,7 +94,6 @@ pub(crate) async fn start_source_forwarder(
         .create_writers(
             &config.to_vertex_config,
             config.isb_config.as_ref(),
-            config.vertex_type,
             cln_token.clone(),
         )
         .await?;
@@ -153,6 +152,7 @@ pub(crate) async fn start_source_forwarder(
                 source_watermark_handle,
                 buffer_writer,
                 Some(redis_config.throttling_config),
+                metrics_state,
             )
             .await?
         } else {
@@ -173,6 +173,7 @@ pub(crate) async fn start_source_forwarder(
                 source_watermark_handle,
                 buffer_writer,
                 Some(in_mem_config.throttling_config),
+                metrics_state,
             )
             .await?
         }
@@ -191,6 +192,7 @@ pub(crate) async fn start_source_forwarder(
             source_watermark_handle,
             buffer_writer,
             None,
+            metrics_state,
         )
         .await?
     };
@@ -206,6 +208,7 @@ async fn run_source_forwarder<C>(
     source_watermark_handle: Option<SourceWatermarkHandle>,
     buffer_writer: ISBWriterOrchestrator,
     rate_limiter: Option<C::RateLimiter>,
+    metrics_state: MetricsState,
 ) -> error::Result<()>
 where
     C: crate::typ::NumaflowTypeConfig,
@@ -238,19 +241,15 @@ where
         None
     };
 
-    start_metrics_server::<C>(
-        context.config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(
-                Box::new(source.clone()),
-            ))),
-            watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::Source(handle),
-                partitions: vec![0], // Source vertices always have single partition
-            }),
-        },
-    )
-    .await;
+    metrics_state.set(
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(Box::new(
+            source.clone(),
+        )))),
+        source_watermark_handle.map(|handle| WatermarkFetcherState {
+            watermark_handle: WatermarkHandle::Source(handle),
+            partitions: vec![0], // Source vertices always have single partition
+        }),
+    );
 
     let forwarder = SourceForwarder::<C>::new(source, buffer_writer);
 
@@ -994,7 +993,6 @@ mod tests {
                     context.clone(),
                     writer_config.clone(),
                     None,
-                    None,
                     cln_token.clone(),
                 )
                 .await
@@ -1175,6 +1173,7 @@ mod tests {
                     Arc::new(JetStreamFactory::new(context.clone())),
                     pipeline_config,
                     source_vtx_config,
+                    MetricsState::new(),
                 )
                 .await
                 .unwrap();

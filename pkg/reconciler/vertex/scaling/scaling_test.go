@@ -59,6 +59,30 @@ func Test_BasicOperations(t *testing.T) {
 	s.StopWatching("key1")
 	assert.False(t, s.Contains("key1"))
 }
+
+func Test_StartWatchingWithBusyWorkers(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	s := NewScaler(cl, WithWorkers(0), WithTaskInterval(1))
+	s.StartWatching("key1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = s.Start(ctx) }()
+	// No worker ever receives key1, so the assigner stays blocked on it.
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		s.StartWatching("key2")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("StartWatching blocked while no worker was free")
+	}
+	assert.True(t, s.Contains("key2"))
+}
+
 func Test_desiredReplicasSinglePartition(t *testing.T) {
 	t.Run("test src", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()

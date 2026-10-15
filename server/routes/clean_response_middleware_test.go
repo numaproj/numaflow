@@ -320,6 +320,32 @@ func TestCleanResponseMiddleware_HandlerChain(t *testing.T) {
 	})
 }
 
+func TestCleanResponseMiddlewareAppliesToV2Group(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	v2Group := router.Group("/api/v2")
+	v2Group.Use(cleanResponseMiddleware())
+	v2Group.GET("/summary", func(c *gin.Context) {
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name":          "vertex",
+				"managedFields": "remove",
+			},
+		})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/summary", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	var response map[string]interface{}
+	assert.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	metadata := response["metadata"].(map[string]interface{})
+	assert.Equal(t, "vertex", metadata["name"])
+	assert.NotContains(t, metadata, "managedFields")
+}
+
 func TestCleanResponseMiddleware_CustomResponseWriter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -491,14 +517,14 @@ func TestCleanResponseMiddleware_StreamingViaFlush(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		var bytesReceivedDuringHandler int
-		api.GET("/namespaces/:namespace/pods/:pod/logs", func(c *gin.Context) {
+		api.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs", func(c *gin.Context) {
 			_, _ = c.Writer.WriteString("log line 1\n")
 			c.Writer.Flush()
 			bytesReceivedDuringHandler = w.Body.Len()
 			_, _ = c.Writer.WriteString("log line 2\n")
 		})
 
-		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pods/my-pod/logs?container=numa&follow=true", nil)
+		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pipelines/my-pipeline/vertices/my-vertex/pods/my-pod/logs?container=numa&follow=true", nil)
 		router.ServeHTTP(w, req)
 
 		assert.Greater(t, bytesReceivedDuringHandler, 0, "pod logs handler should stream as soon as it flushes")

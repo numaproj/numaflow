@@ -1158,6 +1158,7 @@ mod tests {
                         max_unack: 1000,
                         dead_letter_policy: None,
                         auth: None,
+                        tls: None,
                     }),
                 },
                 transformer_config: None,

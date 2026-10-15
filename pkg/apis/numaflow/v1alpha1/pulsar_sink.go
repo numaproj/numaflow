@@ -23,4 +23,12 @@ type PulsarSink struct {
 	// Auth information
 	// +optional
 	Auth *PulsarAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
+
+	// TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+	// broker CA. Only server-authentication (one-way TLS) is supported today:
+	// CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+	// since the underlying pulsar-rs client does not currently support presenting
+	// a client certificate.
+	// +optional
+	TLS *TLS `json:"tls,omitempty" protobuf:"bytes,7,opt,name=tls"`
 }

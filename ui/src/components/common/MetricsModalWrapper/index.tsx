@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import Tooltip from "@mui/material/Tooltip";
 import Box from "@mui/material/Box";
 import { MetricsModal } from "./partials/MetricsModal";
 import { useMetricsDiscoveryDataFetch } from "../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import { dimensionReverseMap } from "../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 import { Pod } from "../../../types/declarations/pods";
+import { buildObservabilityViewUrl } from "../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -32,13 +34,7 @@ export function MetricsModalWrapper({
   pod,
 }: MetricsModalWrapperProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleOpenModal = useCallback(() => {
-    setIsModalOpen(true);
-  }, []);
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-  }, []);
+  const location = useLocation();
 
   const {
     metricsDiscoveryData: discoveredMetrics,
@@ -47,6 +43,28 @@ export function MetricsModalWrapper({
   } = useMetricsDiscoveryDataFetch({
     objectType: dimensionReverseMap[type],
   });
+
+  const shareUrl = useMemo(() => {
+    const metric = discoveredMetrics?.data?.find(
+      (item: any) => item?.display_name === metricDisplayName
+    );
+    if (!metric) return undefined;
+    return buildObservabilityViewUrl(location, {
+      vertexTab: "metrics",
+      metric: metric.metric_name,
+      metricPanels: `${metric.metric_name}-panel`,
+      metricDuration: presets?.duration,
+      metricQuantile: presets?.quantile,
+      pod: pod?.name,
+    });
+  }, [discoveredMetrics, location, metricDisplayName, presets, pod]);
+
+  const handleOpenModal = useCallback(() => {
+    setIsModalOpen(true);
+  }, []);
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
 
   const isClickable = useMemo(() => {
     if (
@@ -99,6 +117,7 @@ export function MetricsModalWrapper({
         type={type}
         presets={presets}
         pod={pod}
+        shareUrl={shareUrl}
       />
     </Box>
   );

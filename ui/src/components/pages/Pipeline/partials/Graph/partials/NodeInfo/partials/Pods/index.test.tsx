@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen, waitFor, within } from "@testing-library/react";
 import { useEffect } from "react";
+import { BrowserRouter } from "react-router-dom";
 import { Pods } from "./index";
 import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/podsViewFetch";
 import {
@@ -10,6 +11,8 @@ import {
 import { TextEncoder, TextDecoder } from "util";
 import "@testing-library/jest-dom";
 import { act } from "react-test-renderer";
+
+const render = (ui: any) => renderBase(ui, { wrapper: BrowserRouter });
 
 Object.assign(global, { TextDecoder, TextEncoder });
 

@@ -226,6 +226,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-multi".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -276,6 +277,7 @@ mod tests {
             topic: topic_name,
             producer_name: "test-producer-empty".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -296,6 +298,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-keys".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -355,6 +358,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-large".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -412,6 +416,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-time".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 

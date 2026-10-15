@@ -66,6 +66,9 @@ type jetStreamInstaller struct {
 	recorder   record.EventRecorder
 }
 
+// defaultNatsMaxPending is the default max_pending (64MB) of nats-server.
+const defaultNatsMaxPending = 64 * 1024 * 1024
+
 func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger, recorder record.EventRecorder) Installer {
 	return &jetStreamInstaller{
 		client:     client,
@@ -439,6 +442,12 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to merge customized jetstream settings, %w", err)
 		}
 	}
+	// nats-server fails to start if max_payload is higher than max_pending (defaults to 64MB),
+	// so max_pending is raised to max_payload when needed.
+	maxPending := uint(defaultNatsMaxPending)
+	if maxPayload := v.GetSizeInBytes("max_payload"); maxPayload <= 0 || maxPayload > maxPending {
+		maxPending = maxPayload
+	}
 	var confTpl *template.Template
 	if replicas > 2 {
 		confTpl = template.Must(template.ParseFS(jetStremAssets, "assets/jetstream/nats-cluster.conf"))
@@ -454,6 +463,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 		ClientPort         string
 		Routes             string
 		MaxPayload         string
+		MaxPending         string
 		MaxMemoryStore     string
 		MaxFileStore       string
 		EncryptionSettings string
@@ -465,6 +475,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 		ClientPort:         strconv.Itoa(int(clientPort)),
 		Routes:             strings.Join(routes, ","),
 		MaxPayload:         v.GetString("max_payload"),
+		MaxPending:         strconv.FormatUint(uint64(maxPending), 10),
 		MaxFileStore:       v.GetString("max_file_store"),
 		MaxMemoryStore:     v.GetString("max_memory_store"),
 		EncryptionSettings: encryptionSettings,

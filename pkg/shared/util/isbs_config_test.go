@@ -60,3 +60,29 @@ func TestGetJSIsbSvcEnvVars(t *testing.T) {
 	assert.Contains(t, eNames, dfv1.EnvISBSvcJetStreamPassword)
 	assert.Contains(t, eNames, dfv1.EnvISBSvcConfig)
 }
+
+// The dataplane selects its ISB backend from NUMAFLOW_ISBSVC_TYPE.
+// The type must therefore be emitted as a pod env var, not only as the
+// --isbsvc-type container arg.
+func TestGetIsbSvcEnvVarsEmitsISBSvcType(t *testing.T) {
+	t.Run("jetstream config emits the type", func(t *testing.T) {
+		cfg := dfv1.BufferServiceConfig{JetStream: &dfv1.JetStreamConfig{URL: "nats://x:4222"}}
+		tp, env := GetIsbSvcEnvVars(cfg)
+		assert.Equal(t, dfv1.ISBSvcTypeJetStream, tp)
+		envMap := map[string]string{}
+		for _, e := range env {
+			envMap[e.Name] = e.Value
+		}
+		v, ok := envMap["NUMAFLOW_ISBSVC_TYPE"]
+		assert.True(t, ok, "NUMAFLOW_ISBSVC_TYPE must be emitted")
+		assert.Equal(t, "jetstream", v)
+	})
+
+	t.Run("empty config emits no type", func(t *testing.T) {
+		tp, env := GetIsbSvcEnvVars(dfv1.BufferServiceConfig{})
+		assert.Equal(t, dfv1.ISBSvcTypeUnknown, tp)
+		for _, e := range env {
+			assert.NotEqual(t, "NUMAFLOW_ISBSVC_TYPE", e.Name)
+		}
+	})
+}

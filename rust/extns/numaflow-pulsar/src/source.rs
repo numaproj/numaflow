@@ -16,7 +16,7 @@ use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-use crate::{Error, PulsarAuth, Result};
+use crate::{Error, PulsarAuth, Result, TlsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulsarDeadLetterPolicy {
@@ -31,10 +31,10 @@ pub struct PulsarSourceConfig {
     pub consumer_name: String,
     pub subscription: String,
     pub max_unack: usize,
-
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
-
     pub auth: Option<PulsarAuth>,
+    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    pub tls: Option<TlsConfig>,
 }
 
 enum ConsumerActorMessage {
@@ -44,11 +44,11 @@ enum ConsumerActorMessage {
         respond_to: oneshot::Sender<Option<Result<Vec<PulsarMessage>>>>,
     },
     Ack {
-        offsets: Vec<u64>,
+        offsets: Vec<PulsarOffset>,
         respond_to: oneshot::Sender<Result<()>>,
     },
     Nack {
-        offsets: Vec<u64>,
+        offsets: Vec<PulsarOffset>,
         respond_to: oneshot::Sender<Result<()>>,
     },
 }
@@ -56,17 +56,75 @@ enum ConsumerActorMessage {
 pub struct PulsarMessage {
     pub key: String,
     pub payload: Bytes,
-    pub offset: u64,
+    pub offset: PulsarOffset,
     pub event_time: DateTime<Utc>,
     pub headers: HashMap<String, String>,
+}
+
+/// Pulsar's canonical message identity; mirrors the Java client's
+/// `BatchMessageIdImpl` (`ledgerId:entryId:partitionIndex:batchIndex`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PulsarOffset {
+    pub ledger_id: u64,
+    pub entry_id: u64,
+    pub partition: i32,
+    pub batch_index: i32,
+}
+
+impl From<&MessageIdData> for PulsarOffset {
+    fn from(id: &MessageIdData) -> Self {
+        Self {
+            ledger_id: id.ledger_id,
+            entry_id: id.entry_id,
+            partition: id.partition.unwrap_or(-1),
+            batch_index: id.batch_index.unwrap_or(-1),
+        }
+    }
+}
+
+impl std::fmt::Display for PulsarOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}:{}",
+            self.ledger_id, self.entry_id, self.partition, self.batch_index
+        )
+    }
+}
+
+impl std::str::FromStr for PulsarOffset {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let invalid = || {
+            Error::Other(format!(
+                "invalid Pulsar offset {s:?}, expected <ledger_id>:<entry_id>:<partition>:<batch_index>"
+            ))
+        };
+        let parts: Vec<&str> = s.split(':').collect();
+        let [ledger_id, entry_id, partition, batch_index] = parts.as_slice() else {
+            return Err(invalid());
+        };
+        Ok(Self {
+            ledger_id: ledger_id.parse().map_err(|_| invalid())?,
+            entry_id: entry_id.parse().map_err(|_| invalid())?,
+            partition: partition.parse().map_err(|_| invalid())?,
+            batch_index: batch_index.parse().map_err(|_| invalid())?,
+        })
+    }
+}
+
+/// A message pending ack/nack: its physical topic and Pulsar's own id for it.
+struct PendingMessage {
+    topic: String,
+    message_id: MessageIdData,
 }
 
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
-    message_ids: BTreeMap<u64, MessageIdData>,
+    message_ids: BTreeMap<PulsarOffset, PendingMessage>,
     max_unack: usize,
-    topic: String,
     cancel_token: CancellationToken,
 }
 
@@ -81,9 +139,21 @@ impl ConsumerReaderActor {
             "Pulsar connection details"
         );
 
-        // Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
-        // The `with_allow_insecure_connection()` option has no effect
+        // NOTE: `with_allow_insecure_connection()` has historically had no effect against
+        // rustls (see https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912),
+        // so `tls.insecure_skip_verify` below is best-effort. To trust a self-signed/custom
+        // CA, prefer `tls.ca_cert`, which uses `with_certificate_chain()` - this adds the
+        // provided CA to the client's trust root rather than disabling verification, and is
+        // confirmed to work as of the `pulsar` crate version pinned in Cargo.toml.
         let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
+        if let Some(tls) = &config.tls {
+            if let Some(ca_cert) = &tls.ca_cert {
+                pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+            }
+            if tls.insecure_skip_verify {
+                pulsar = pulsar.with_allow_insecure_connection(true);
+            }
+        }
         match config.auth {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {
@@ -133,7 +203,6 @@ impl ConsumerReaderActor {
                 handler_rx,
                 message_ids: BTreeMap::new(),
                 max_unack: config.max_unack,
-                topic: config.topic,
                 cancel_token,
             };
             consumer_actor.run().await;
@@ -205,7 +274,7 @@ impl ConsumerReaderActor {
                     return Some(Err(Error::Pulsar(e)));
                 }
             };
-            let offset = msg.message_id().entry_id;
+            let offset = PulsarOffset::from(msg.message_id());
             let event_time = msg
                 .metadata()
                 .event_time
@@ -223,16 +292,26 @@ impl ConsumerReaderActor {
                 //FIXME: NACK the message
             };
 
-            self.message_ids.insert(offset, msg.message_id().clone());
             let headers = msg
                 .metadata()
                 .properties
                 .iter()
                 .map(|prop| (prop.key.clone(), prop.value.clone()))
                 .collect();
+            let key = msg.key().unwrap_or_else(|| "".to_string()); // FIXME: This is partition key. Identify the correct option. Also, there is a partition_key_b64_encoded boolean option in Pulsar metadata
+            let message_id = msg.message_id().clone();
+
+            // Physical topic (e.g. <topic>-partition-N) that ack/nack must route to.
+            self.message_ids.insert(
+                offset,
+                PendingMessage {
+                    topic: msg.topic,
+                    message_id,
+                },
+            );
 
             messages.push(PulsarMessage {
-                key: msg.key().unwrap_or_else(|| "".to_string()), // FIXME: This is partition key. Identify the correct option. Also, there is a partition_key_b64_encoded boolean option in Pulsar metadata
+                key,
                 payload: msg.payload.data.into(),
                 offset,
                 event_time,
@@ -248,41 +327,45 @@ impl ConsumerReaderActor {
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
-    async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+    async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
         for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
+            let pending = self.message_ids.remove(&offset);
 
-            let Some(msg_id) = msg_id else {
-                return Err(Error::UnknownOffset(offset));
-            };
-
-            let Err(e) = self.consumer.ack_with_id(&self.topic, msg_id.clone()).await else {
-                continue;
-            };
-            // Insert offset back
-            self.message_ids.insert(offset, msg_id);
-            return Err(Error::Pulsar(e.into()));
-        }
-        Ok(())
-    }
-
-    async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
-        for offset in offsets {
-            let msg_id = self.message_ids.remove(&offset);
-
-            let Some(msg_id) = msg_id else {
+            let Some(pending) = pending else {
                 return Err(Error::UnknownOffset(offset));
             };
 
             let Err(e) = self
                 .consumer
-                .nack_with_id(&self.topic, msg_id.clone())
+                .ack_with_id(&pending.topic, pending.message_id.clone())
                 .await
             else {
                 continue;
             };
             // Insert offset back
-            self.message_ids.insert(offset, msg_id);
+            self.message_ids.insert(offset, pending);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
+    }
+
+    async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        for offset in offsets {
+            let pending = self.message_ids.remove(&offset);
+
+            let Some(pending) = pending else {
+                return Err(Error::UnknownOffset(offset));
+            };
+
+            let Err(e) = self
+                .consumer
+                .nack_with_id(&pending.topic, pending.message_id.clone())
+                .await
+            else {
+                continue;
+            };
+            // Insert offset back
+            self.message_ids.insert(offset, pending);
             return Err(Error::Pulsar(e.into()));
         }
         Ok(())
@@ -331,7 +414,7 @@ impl PulsarSource {
             .unwrap_or_else(|e| Some(Err(e)))
     }
 
-    pub async fn ack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn ack_offsets(&self, offsets: Vec<PulsarOffset>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx
@@ -343,7 +426,7 @@ impl PulsarSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
-    pub async fn nack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn nack_offsets(&self, offsets: Vec<PulsarOffset>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx

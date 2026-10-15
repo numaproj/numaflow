@@ -283,11 +283,16 @@ api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main
 rustgen:
 	$(MAKE) --directory rust generate
 
+.PHONY: api-v2-codegen
+api-v2-codegen:
+	./hack/generate-api-v2.sh
+
 .PHONY: codegen
 codegen:
 	./hack/generate-proto.sh
 	./hack/update-codegen.sh
 	./hack/openapi-gen.sh
+	$(MAKE) api-v2-codegen
 	$(MAKE) swagger
 	./hack/update-api-docs.sh
 	$(MAKE) manifests

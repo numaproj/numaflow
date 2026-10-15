@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
-import { NO_LOGS_MATCHING_SEARCH } from "./constants";
+import { NO_LOGS, NO_LOGS_MATCHING_SEARCH } from "./constants";
 
 const VIEWPORT_HEIGHT = 160;
 
@@ -183,6 +183,24 @@ describe("LogVirtualList", () => {
     expect(screen.getByTestId("log-empty-state")).toHaveTextContent(
       NO_LOGS_MATCHING_SEARCH
     );
+    expect(screen.queryByTestId("log-virtual-row")).not.toBeInTheDocument();
+  });
+
+  it("shows empty-state copy when there are no log lines", () => {
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          logs={[]}
+          search=""
+          wrapLines={false}
+          colorMode="light"
+          podName="pod-a"
+          activeIndex={null}
+        />
+      </div>
+    );
+
+    expect(screen.getByTestId("log-empty-state")).toHaveTextContent(NO_LOGS);
     expect(screen.queryByTestId("log-virtual-row")).not.toBeInTheDocument();
   });
 });
