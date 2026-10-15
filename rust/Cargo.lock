@@ -2632,6 +2632,7 @@ version = "0.0.0-pre"
 dependencies = [
  "k8s-openapi",
  "kube",
+ "numaflow-shared",
  "reqwest 0.13.2",
  "serde",
  "serde_derive",

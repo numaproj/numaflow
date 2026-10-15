@@ -102,7 +102,7 @@ impl RedisMode {
                     })?
                     .clone();
 
-                let mut builder = RedisMode::single_url(url);
+                let mut builder = RedisMode::single_url(url.expose_url().as_str().to_owned());
 
                 if let Some(db) = redis_store_config.db {
                     builder = builder.db(db);
@@ -713,7 +713,7 @@ mod tests {
         // Test 1: Single mode with minimal configuration
         let single_config = RateLimiterRedisStore {
             mode: "single".to_string(),
-            url: Some("redis://localhost:6379".to_string()),
+            url: Some("redis://localhost:6379".parse().unwrap()),
             db: None,
             sentinel: None,
         };
@@ -730,7 +730,7 @@ mod tests {
         // Test 2: Single mode with database specified
         let single_config_with_db = RateLimiterRedisStore {
             mode: "single".to_string(),
-            url: Some("redis://localhost:6379".to_string()),
+            url: Some("redis://localhost:6379".parse().unwrap()),
             db: Some(5),
             sentinel: None,
         };
