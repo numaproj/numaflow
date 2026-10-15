@@ -10,6 +10,7 @@ use async_nats::rustls::{DigitallySignedStruct, Error as TLSError, SignatureSche
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pki_types::{ServerName, UnixTime};
+use secrecy::{ExposeSecret, SecretString};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -87,7 +88,7 @@ pub(crate) fn configure_tls(
     Ok(conn_opts)
 }
 
-fn load_root_store(ca_cert: Option<String>) -> NatsResult<rustls::RootCertStore> {
+fn load_root_store(ca_cert: Option<SecretString>) -> NatsResult<rustls::RootCertStore> {
     let mut root_store = rustls::RootCertStore::empty();
     let native_certs = rustls_native_certs::load_native_certs();
     if !native_certs.errors.is_empty() {
@@ -98,7 +99,7 @@ fn load_root_store(ca_cert: Option<String>) -> NatsResult<rustls::RootCertStore>
     }
     root_store.add_parsable_certificates(native_certs.unwrap());
     if let Some(ca_cert) = ca_cert {
-        let cert = CertificateDer::from_pem_slice(ca_cert.as_bytes())
+        let cert = CertificateDer::from_pem_slice(ca_cert.expose_secret().as_bytes())
             .map_err(|err| Error::Other(format!("Parsing CA cert: {err:?}")))?;
         root_store.add(cert).map_err(|err| {
             Error::Other(format!("Adding CA cert to in-memory cert store: {err:?}"))
@@ -113,13 +114,18 @@ fn configure_client_auth(
 ) -> NatsResult<rustls::ClientConfig> {
     match client_auth {
         Some(client_auth) => {
-            let client_cert = CertificateDer::from_pem_slice(client_auth.client_cert.as_bytes())
-                .map_err(|err| Error::Other(format!("Parsing client tls certificate: {err:?}")))?;
-            let client_key =
-                PrivateKeyDer::from_pem_slice(client_auth.client_cert_private_key.as_bytes())
+            let client_cert =
+                CertificateDer::from_pem_slice(client_auth.client_cert.expose_secret().as_bytes())
                     .map_err(|err| {
-                        Error::Other(format!("Parsing client tls private key: {err:?}"))
+                        Error::Other(format!("Parsing client tls certificate: {err:?}"))
                     })?;
+            let client_key = PrivateKeyDer::from_pem_slice(
+                client_auth
+                    .client_cert_private_key
+                    .expose_secret()
+                    .as_bytes(),
+            )
+            .map_err(|err| Error::Other(format!("Parsing client tls private key: {err:?}")))?;
             rustls::ClientConfig::builder()
                 .with_root_certificates(root_store)
                 .with_client_auth_cert(vec![client_cert], client_key)
@@ -181,7 +187,7 @@ mod tests {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = TlsConfig {
             insecure_skip_verify: false,
-            ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".to_string()),
+            ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".into()),
             client_auth: None,
         };
 
@@ -258,7 +264,7 @@ pD7OKMmhWWFyHIOJlP55bT23I8+KzMpfEb8TkXeSLPj1Kp//vapuWO5++dat5vLc
 dl84hz7cZ26/EMHN4OaQmFvr5Haqm8SNn9YiUPDQWKfcqAQtts/+F0TFbndwX/H/
 qaw=
 -----END CERTIFICATE-----"
-                    .to_string(),
+                    .into(),
                 client_cert_private_key: "-----BEGIN PRIVATE KEY-----
 MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCbqmq4bfGlN6GN
 K1Ciz8bAF4EVJG8tiPZ8aS4lbzF98/Ljke5PKXoidDYDll7EW3w+vNQAf1v+mlHJ
@@ -287,7 +293,7 @@ fn0n2cmujcxhFYzHvE9ahNTBpJErEsLG0RSp77ZK5gETYUvmuI0BrfAYgU/xaGCz
 t0Rqav1kVzZH9j/hd0tavIIS1kfDL/whj/UdVeZjTiIEY9AZLcuwUHOcQesWursk
 XdvExDsAdjbkBG7ynn9pmMgIJg==
 -----END PRIVATE KEY-----"
-                    .to_string(),
+                    .into(),
             }),
         };
 

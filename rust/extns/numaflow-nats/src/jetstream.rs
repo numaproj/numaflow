@@ -12,6 +12,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
+use secrecy::ExposeSecret;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant, sleep};
@@ -95,9 +96,9 @@ impl TryFrom<&str> for ConsumerDeliverPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct JetstreamSourceConfig {
-    pub addr: String,
+    pub addr: numaflow_shared::redacted_url::RedactedUrl,
     pub stream: String,
     pub consumer: String,
     pub deliver_policy: ConsumerDeliverPolicy,
@@ -205,19 +206,19 @@ impl JetstreamActor {
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {
-                    conn_opts.user_and_password(username, password)
+                    conn_opts.user_and_password(username, password.expose_secret().to_owned())
                 }
-                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
-                NatsAuth::Token(token) => conn_opts.token(token),
+                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey.expose_secret().to_owned()),
+                NatsAuth::Token(token) => conn_opts.token(token.expose_secret().to_owned()),
             };
         }
         if let Some(tls_config) = config.tls {
             conn_opts = tls::configure_tls(conn_opts, tls_config)?;
         }
-        let client = async_nats::connect_with_options(&config.addr, conn_opts)
+        let client = async_nats::connect_with_options(config.addr.expose_url().as_str(), conn_opts)
             .await
             .map_err(|err| Error::Connection {
-                server: config.addr.to_string(),
+                server: config.addr.clone(),
                 error: err.to_string(),
             })?;
 
@@ -654,6 +655,7 @@ mod tests {
 
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
+    use numaflow_shared::redacted_url::RedactedUrl;
     use std::time::Duration;
 
     async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
@@ -816,7 +818,7 @@ mod tests {
         let stream_name = "test_jetstream_source_consumer_exists_on_stream";
         let js = setup_jetstream(stream_name, true).await;
         let config = JetstreamSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
             deliver_policy: ConsumerDeliverPolicy::ALL,
@@ -835,12 +837,14 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_consumer_not_exists_on_stream() {
+        use numaflow_shared::redacted_url::RedactedUrl;
+
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let stream_name = "test_jetstream_source_consumer_not_exists_on_stream";
         let js = setup_jetstream(stream_name, false).await;
         let config = JetstreamSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
             deliver_policy: ConsumerDeliverPolicy::ALL,
