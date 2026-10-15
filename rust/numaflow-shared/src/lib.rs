@@ -9,3 +9,6 @@ pub mod isb;
 
 /// Generic Key-Value store traits and implementations.
 pub mod kv;
+
+/// Struct to provide redacted Debug output for URLs
+pub mod redacted_url;
