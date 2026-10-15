@@ -332,7 +332,7 @@ mod tests {
         );
 
         let js_context = create_js_context(ClientConfig {
-            url: "localhost:4222".to_string(),
+            url: "nats://localhost:4222".parse().unwrap(),
             ..Default::default()
         })
         .await

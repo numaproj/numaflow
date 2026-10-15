@@ -5,7 +5,9 @@ use crate::{
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bytes::Bytes;
+use numaflow_shared::redacted_url::RedactedUrl;
 use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::from_slice;
 use std::collections::HashMap;
@@ -74,7 +76,7 @@ impl Default for UserDefinedStoreConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
     /// The client may also set the value of this header when sending the payload.
@@ -89,11 +91,11 @@ pub struct Settings {
     pub js_callback_store: &'static str,
     pub js_response_store: &'static str,
     pub js_status_store: &'static str,
-    pub api_auth_token: Option<String>,
+    pub api_auth_token: Option<SecretString>,
     pub pipeline_spec: PipelineDCG,
-    pub nats_basic_auth: Option<(String, String)>,
+    pub nats_basic_auth: Option<(String, SecretString)>,
     pub js_message_stream: &'static str,
-    pub jetstream_url: &'static str,
+    pub jetstream_url: RedactedUrl,
 }
 
 #[derive(Default, Debug, Deserialize, Clone, PartialEq)]
@@ -121,7 +123,9 @@ impl Default for Settings {
             pipeline_spec: Default::default(),
             nats_basic_auth: None,
             js_message_stream: "test-stream",
-            jetstream_url: "localhost:4222",
+            jetstream_url: "nats://localhost:4222"
+                .parse()
+                .expect("valid default NATS URL"),
         }
     }
 }
@@ -190,7 +194,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
                         ParseConfig(format!(
                     "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_USER}' is set, but '{ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD}' is not set"
                 ))})?;
-                Some((username.into(), nats_passwd.into()))
+                Some((username.into(), nats_passwd.as_str().into()))
             }
             None => None,
         };
@@ -218,7 +222,8 @@ impl TryFrom<HashMap<String, String>> for Settings {
             js_callback_store: Box::leak(js_cb_store.clone().into_boxed_str()),
             nats_basic_auth,
             js_message_stream: Box::leak(js_source_spec.stream.into_boxed_str()),
-            jetstream_url: Box::leak(js_source_spec.url.into_boxed_str()),
+            jetstream_url: RedactedUrl::with_default_scheme(&js_source_spec.url, "nats")
+                .map_err(|e| ParseConfig(format!("Invalid JetStream URL: {e}")))?,
             js_response_store: Box::leak(js_response_store.to_string().into_boxed_str()),
             js_status_store: Box::leak(js_status_store.to_string().into_boxed_str()),
             ..Default::default()
@@ -279,7 +284,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
             let token = auth.token.unwrap();
             let auth_token = get_secret_from_volume(&token.name, &token.key)
                 .map_err(|e| ParseConfig(e.to_string()))?;
-            settings.api_auth_token = Some(auth_token);
+            settings.api_auth_token = Some(auth_token.into());
         }
 
         info!("Settings {:?}", settings);
@@ -364,7 +369,9 @@ mod tests {
             js_response_store: "test-kv-store",
             nats_basic_auth: Some(("testuser".into(), "testpasswd".into())),
             js_message_stream: "serving-source-simple-pipeline",
-            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222",
+            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222"
+                .parse()
+                .unwrap(),
             pipeline_spec: PipelineDCG {
                 vertices: vec![
                     Vertex { name: "in".into() },
@@ -385,6 +392,66 @@ mod tests {
                 ],
             },
         };
-        assert_eq!(settings, expected_config);
+        assert_eq!(settings.tid_header, expected_config.tid_header);
+        assert_eq!(settings.pod_hash, expected_config.pod_hash);
+        assert_eq!(
+            settings.app_listen_https_port,
+            expected_config.app_listen_https_port
+        );
+        assert_eq!(
+            settings.app_listen_http_port,
+            expected_config.app_listen_http_port
+        );
+        assert_eq!(
+            settings.metrics_server_listen_port,
+            expected_config.metrics_server_listen_port
+        );
+        assert_eq!(settings.upstream_addr, expected_config.upstream_addr);
+        assert_eq!(
+            settings.drain_timeout_secs,
+            expected_config.drain_timeout_secs
+        );
+        assert_eq!(settings.store_type, expected_config.store_type);
+        assert!(settings.api_auth_token.is_none());
+        assert_eq!(
+            settings.js_callback_store,
+            expected_config.js_callback_store
+        );
+        assert_eq!(settings.js_status_store, expected_config.js_status_store);
+        assert_eq!(
+            settings.js_response_store,
+            expected_config.js_response_store
+        );
+        let (user, password) = settings.nats_basic_auth.unwrap();
+        let (expected_user, expected_password) = expected_config.nats_basic_auth.unwrap();
+        assert_eq!(user, expected_user);
+        assert_eq!(
+            secrecy::ExposeSecret::expose_secret(&password),
+            secrecy::ExposeSecret::expose_secret(&expected_password)
+        );
+        assert_eq!(
+            settings.js_message_stream,
+            expected_config.js_message_stream
+        );
+        assert_eq!(settings.jetstream_url, expected_config.jetstream_url);
+        assert_eq!(settings.pipeline_spec, expected_config.pipeline_spec);
+    }
+
+    #[test]
+    fn test_settings_debug_redacts_secrets() {
+        let settings = Settings {
+            api_auth_token: Some("secret-api-auth-token".into()),
+            nats_basic_auth: Some(("nats-user".to_string(), "secret-nats-password".into())),
+            jetstream_url: "nats://nats-user:secret-url-password@nats-host:4222"
+                .parse()
+                .unwrap(),
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("secret-api-auth-token"));
+        assert!(!debug_output.contains("secret-nats-password"));
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(debug_output.contains("nats-user"));
+        assert!(debug_output.contains("REDACTED"));
     }
 }

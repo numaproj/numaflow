@@ -508,7 +508,7 @@ mod tests {
             writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
