@@ -2,12 +2,15 @@ use crate::error::Error;
 use crate::state::Consensus;
 use crate::state::store::Store;
 use numaflow_models::models::RateLimiterRedisStore;
+use numaflow_shared::redacted_url::RedactedUrl;
 use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
 use redis::{
     Client, ClientTlsConfig, ConnectionAddr, IntoConnectionInfo, RedisError, Script,
     TlsCertificates, TlsMode,
 };
+use secrecy::{CloneableSecret, ExposeSecret, SecretBox, SecretString};
 use tokio_util::sync::CancellationToken;
+use zeroize::Zeroize;
 
 // Embed Lua scripts at compile time
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
@@ -29,14 +32,15 @@ pub struct RedisStore {
 /// Different ways to connect to Redis based on different Redis deployments.
 // We will not be supporting Redis Cluster mode because our key space is too small, and we cannot
 // do key ops across multiple nodes. This means mostly all keys are in the same node.
+#[derive(Debug)]
 pub enum RedisMode {
     SingleUrl {
-        url: String,
+        url: RedactedUrl,
         db: Option<i32>,
     },
     Sentinel {
         master_name: String,
-        endpoints: Vec<String>,
+        endpoints: Vec<RedactedUrl>,
         sentinel_auth: Option<RedisAuth>,
         redis_auth: Option<RedisAuth>,
         sentinel_tls: Box<Option<RedisTlsInfo>>,
@@ -45,44 +49,35 @@ pub enum RedisMode {
     },
 }
 
-impl std::fmt::Debug for RedisMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RedisMode::SingleUrl { url, db } => f
-                .debug_struct("SingleUrl")
-                .field("url", url)
-                .field("db", db)
-                .finish(),
-            RedisMode::Sentinel {
-                master_name,
-                endpoints,
-                sentinel_auth,
-                redis_auth,
-                db,
-                ..
-            } => f
-                .debug_struct("Sentinel")
-                .field("master_name", master_name)
-                .field("endpoints", endpoints)
-                .field("sentinel_auth", sentinel_auth)
-                .field("redis_auth", redis_auth)
-                .field("db", db)
-                .finish(),
+#[derive(Debug, Clone)]
+pub struct RedisAuth {
+    pub username: Option<String>,
+    pub password: Option<SecretString>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RedisTlsInfo {
+    pub is_secure: bool,
+    pub certificates: Option<SecretBox<RedisTlsCertificates>>,
+}
+
+/// Allows secrecy to wipe the PEM buffers owned by the Redis client types.
+#[derive(Clone)]
+pub struct RedisTlsCertificates(pub TlsCertificates);
+
+impl Zeroize for RedisTlsCertificates {
+    fn zeroize(&mut self) {
+        if let Some(client) = &mut self.0.client_tls {
+            client.client_cert.zeroize();
+            client.client_key.zeroize();
+        }
+        if let Some(root) = &mut self.0.root_cert {
+            root.zeroize();
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RedisAuth {
-    pub username: Option<String>,
-    pub password: Option<String>,
-}
-
-#[derive(Clone)]
-pub struct RedisTlsInfo {
-    pub is_secure: bool,
-    pub certificates: Option<TlsCertificates>,
-}
+impl CloneableSecret for RedisTlsCertificates {}
 
 impl RedisMode {
     /// Create a builder for Single URL mode with mandatory URL
@@ -181,7 +176,10 @@ impl SingleUrlBuilder {
 
     pub fn build(self) -> Result<RedisMode, String> {
         Ok(RedisMode::SingleUrl {
-            url: self.url,
+            url: self
+                .url
+                .parse()
+                .map_err(|e| format!("Invalid Redis URL: {e}"))?,
             db: self.db,
         })
     }
@@ -243,7 +241,14 @@ impl SentinelBuilder {
 
         Ok(RedisMode::Sentinel {
             master_name: self.master_name,
-            endpoints: self.endpoints,
+            endpoints: self
+                .endpoints
+                .iter()
+                .map(|endpoint| {
+                    RedactedUrl::with_default_scheme(endpoint, "redis")
+                        .map_err(|e| format!("Invalid Redis Sentinel endpoint: {e}"))
+                })
+                .collect::<Result<_, _>>()?,
             sentinel_auth: self.sentinel_auth,
             redis_auth: self.redis_auth,
             sentinel_tls: Box::new(self.sentinel_tls),
@@ -292,7 +297,7 @@ impl RedisStore {
         match mode {
             RedisMode::SingleUrl { url, db } => {
                 // Parse the URL and modify the DB if specified
-                let mut connection_info = url.into_connection_info()?;
+                let mut connection_info = url.expose_url().as_str().into_connection_info()?;
                 if let Some(db_index) = db {
                     connection_info.redis.db = db_index as i64;
                 }
@@ -315,6 +320,7 @@ impl RedisStore {
                     .iter()
                     .map(|endpoint| {
                         endpoint
+                            .expose_url()
                             .as_str()
                             .into_connection_info()
                             .map(|info| info.addr)
@@ -335,7 +341,8 @@ impl RedisStore {
                         builder = builder.set_client_to_sentinel_username(username);
                     }
                     if let Some(password) = auth.password {
-                        builder = builder.set_client_to_sentinel_password(password);
+                        builder = builder
+                            .set_client_to_sentinel_password(password.expose_secret().to_owned());
                     }
                 }
 
@@ -349,8 +356,9 @@ impl RedisStore {
                     builder = builder.set_client_to_sentinel_tls_mode(tls_mode);
 
                     if let Some(tls_certificates) = &tls_info.certificates {
-                        builder =
-                            builder.set_client_to_sentinel_certificates(tls_certificates.clone());
+                        builder = builder.set_client_to_sentinel_certificates(
+                            tls_certificates.expose_secret().0.clone(),
+                        );
                     }
                 }
 
@@ -360,7 +368,8 @@ impl RedisStore {
                         builder = builder.set_client_to_redis_username(username);
                     }
                     if let Some(password) = auth.password {
-                        builder = builder.set_client_to_redis_password(password);
+                        builder = builder
+                            .set_client_to_redis_password(password.expose_secret().to_owned());
                     }
                 }
 
@@ -374,8 +383,9 @@ impl RedisStore {
                     builder = builder.set_client_to_redis_tls_mode(tls_mode);
 
                     if let Some(tls_certificates) = &tls_info.certificates {
-                        builder =
-                            builder.set_client_to_redis_certificates(tls_certificates.clone());
+                        builder = builder.set_client_to_redis_certificates(
+                            tls_certificates.expose_secret().0.clone(),
+                        );
                     }
                 }
 
@@ -458,7 +468,10 @@ fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> crate::Result<
         .transpose()
         .map_err(|e| Error::RedisStore(format!("Failed to get password secret: {}", e)))?;
 
-    Ok(RedisAuth { username, password })
+    Ok(RedisAuth {
+        username,
+        password: password.map(Into::into),
+    })
 }
 
 /// Create RedisTlsInfo from TLS configuration
@@ -472,7 +485,8 @@ fn create_redis_tls_info(tls: &numaflow_models::models::Tls) -> crate::Result<Re
 
     Ok(RedisTlsInfo {
         is_secure,
-        certificates,
+        certificates: certificates
+            .map(|certs| SecretBox::new(Box::new(RedisTlsCertificates(certs)))),
     })
 }
 
@@ -707,7 +721,7 @@ mod tests {
         let result = RedisMode::new(&single_config).unwrap();
         match result {
             RedisMode::SingleUrl { url, db } => {
-                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(url.expose_url().as_str(), "redis://localhost:6379");
                 assert_eq!(db, None);
             }
             RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
@@ -724,7 +738,7 @@ mod tests {
         let result = RedisMode::new(&single_config_with_db).unwrap();
         match result {
             RedisMode::SingleUrl { url, db } => {
-                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(url.expose_url().as_str(), "redis://localhost:6379");
                 assert_eq!(db, Some(5));
             }
             RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
@@ -775,7 +789,13 @@ mod tests {
                 ..
             } => {
                 assert_eq!(master_name, "mymaster");
-                assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
+                assert_eq!(
+                    endpoints
+                        .iter()
+                        .map(|url| url.expose_url().as_str())
+                        .collect::<Vec<_>>(),
+                    vec!["redis://sentinel1:26379", "redis://sentinel2:26379"]
+                );
                 assert!(sentinel_auth.is_none());
                 assert!(redis_auth.is_none());
                 assert!(sentinel_tls.is_none());
@@ -890,7 +910,7 @@ mod tests {
 
         match redis_mode {
             RedisMode::SingleUrl { url, db } => {
-                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(url.expose_url().as_str(), "redis://localhost:6379");
                 assert_eq!(db, Some(1));
             }
             RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
@@ -915,7 +935,13 @@ mod tests {
                 ..
             } => {
                 assert_eq!(master_name, "mymaster");
-                assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
+                assert_eq!(
+                    endpoints
+                        .iter()
+                        .map(|url| url.expose_url().as_str())
+                        .collect::<Vec<_>>(),
+                    vec!["redis://sentinel1:26379", "redis://sentinel2:26379"]
+                );
                 assert_eq!(db, Some(2));
             }
             RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
@@ -926,20 +952,22 @@ mod tests {
     fn test_redis_mode_sentinel_builder_with_auth() {
         let sentinel_auth = RedisAuth {
             username: Some("sentinel_user".to_string()),
-            password: Some("sentinel_pass".to_string()),
+            password: Some("sentinel_pass".into()),
         };
 
         let redis_auth = RedisAuth {
             username: Some("redis_user".to_string()),
-            password: Some("redis_pass".to_string()),
+            password: Some("redis_pass".into()),
         };
 
         let tls_info = RedisTlsInfo {
             is_secure: true,
-            certificates: Some(TlsCertificates {
-                client_tls: None,
-                root_cert: None,
-            }),
+            certificates: Some(SecretBox::new(Box::new(RedisTlsCertificates(
+                TlsCertificates {
+                    client_tls: None,
+                    root_cert: None,
+                },
+            )))),
         };
 
         let redis_mode =
@@ -1152,5 +1180,94 @@ mod tests {
 
         assert_eq!(prev_max_filled, 0.0);
         test_utils::cleanup_redis_keys(test_name);
+    }
+
+    #[test]
+    fn test_redis_auth_debug_redacts_password() {
+        let auth = RedisAuth {
+            username: Some("redis-user".to_string()),
+            password: Some("secret-redis-password".into()),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("secret-redis-password"));
+        assert!(debug_output.contains("redis-user"));
+        assert!(debug_output.contains("REDACTED"));
+    }
+
+    #[test]
+    fn test_redis_mode_debug_redacts_url_credentials() {
+        let mode = RedisMode::SingleUrl {
+            url: "redis://redis-user:secret-url-password@redis-host:6379/0"
+                .parse()
+                .unwrap(),
+            db: Some(1),
+        };
+        let debug_output = format!("{:?}", mode);
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(!debug_output.contains("redis-user"));
+        assert!(debug_output.contains("redis-host:6379"));
+        assert!(debug_output.contains("REDACTED"));
+    }
+
+    #[test]
+    fn test_redis_mode_debug_redacts_sentinel_auth() {
+        let mode = RedisMode::Sentinel {
+            master_name: "mymaster".to_string(),
+            endpoints: vec![
+                "redis://secret-endpoint@sentinel-host:26379"
+                    .parse()
+                    .unwrap(),
+            ],
+            sentinel_auth: Some(RedisAuth {
+                username: Some("sentinel-user".to_string()),
+                password: Some("secret-sentinel-password".into()),
+            }),
+            redis_auth: Some(RedisAuth {
+                username: None,
+                password: Some("secret-node-password".into()),
+            }),
+            sentinel_tls: Box::new(None),
+            redis_tls: Box::new(None),
+            db: None,
+        };
+        let debug_output = format!("{:?}", mode);
+        assert!(!debug_output.contains("secret-sentinel-password"));
+        assert!(!debug_output.contains("secret-node-password"));
+        assert!(!debug_output.contains("secret-endpoint"));
+        assert!(debug_output.contains("mymaster"));
+    }
+
+    #[test]
+    fn tls_wrapper_redacts_clones_and_zeroizes_every_buffer() {
+        let certificates = SecretBox::new(Box::new(RedisTlsCertificates(TlsCertificates {
+            client_tls: Some(ClientTlsConfig {
+                client_cert: b"secret-cert".to_vec(),
+                client_key: b"secret-key".to_vec(),
+            }),
+            root_cert: Some(b"secret-ca".to_vec()),
+        })));
+        let info = RedisTlsInfo {
+            is_secure: true,
+            certificates: Some(certificates.clone()),
+        };
+        assert!(!format!("{info:#?}").contains("secret-"));
+        let mut wrapper = certificates.expose_secret().clone();
+        wrapper.zeroize();
+        let client = wrapper.0.client_tls.as_ref().unwrap();
+        assert!(client.client_cert.iter().all(|byte| *byte == 0));
+        assert!(client.client_key.iter().all(|byte| *byte == 0));
+        assert!(
+            wrapper
+                .0
+                .root_cert
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|byte| *byte == 0)
+        );
+        assert_eq!(
+            certificates.expose_secret().0.root_cert.as_deref(),
+            Some(b"secret-ca".as_slice())
+        );
     }
 }
