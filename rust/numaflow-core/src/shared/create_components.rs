@@ -21,7 +21,6 @@ use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAcc
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::shared::grpc;
 use crate::sinker::sink::serve::ServingStore;
-use crate::sinker::sink::user_defined::ReconnectConfig as SinkReconnectConfig;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;
@@ -31,10 +30,9 @@ use crate::source::kafka::new_kafka_source;
 use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
-use crate::source::user_defined::{ReconnectConfig as SourceReconnectConfig, new_source};
+use crate::source::user_defined::new_source;
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
-use crate::transformer::user_defined::ReconnectConfig as TransformerReconnectConfig;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -105,7 +103,7 @@ async fn append_primary_sink_client(
                 PathBuf::from(ud_config.server_info_path.clone()),
                 cln_token.clone(),
                 ud_config.grpc_max_message_size,
-                grpc::DEFAULT_RECONNECT_INTERVAL,
+                grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
             )
             .await?;
 
@@ -125,14 +123,7 @@ async fn append_primary_sink_client(
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
-                SinkClientType::UserDefined(
-                    Box::new(sink_grpc_client.clone()),
-                    Some(SinkReconnectConfig::new(
-                        ud_config.grpc_client_config(),
-                        cln_token.clone(),
-                        grpc::DEFAULT_RECONNECT_INTERVAL,
-                    )),
-                ),
+                SinkClientType::UserDefined(Box::new(sink_grpc_client.clone())),
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
@@ -175,7 +166,7 @@ async fn append_fallback_sink_client(
                 PathBuf::from(ud_config.server_info_path.clone()),
                 cln_token.clone(),
                 ud_config.grpc_max_message_size,
-                grpc::DEFAULT_RECONNECT_INTERVAL,
+                grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
             )
             .await?;
 
@@ -192,14 +183,9 @@ async fn append_fallback_sink_client(
                 .get_or_create(&metric_labels)
                 .set(1);
 
-            sink_writer_builder.fb_sink_client(SinkClientType::UserDefined(
-                Box::new(sink_grpc_client.clone()),
-                Some(SinkReconnectConfig::new(
-                    ud_config.grpc_client_config(),
-                    cln_token.clone(),
-                    grpc::DEFAULT_RECONNECT_INTERVAL,
-                )),
-            ))
+            sink_writer_builder.fb_sink_client(SinkClientType::UserDefined(Box::new(
+                sink_grpc_client.clone(),
+            )))
         }
         SinkType::Sqs(sqs_sink_config) => {
             let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
@@ -234,7 +220,7 @@ async fn append_ons_sink_client(
                 PathBuf::from(ud_config.server_info_path.clone()),
                 cln_token.clone(),
                 ud_config.grpc_max_message_size,
-                grpc::DEFAULT_RECONNECT_INTERVAL,
+                grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
             )
             .await?;
 
@@ -251,14 +237,9 @@ async fn append_ons_sink_client(
                 .get_or_create(&metric_labels)
                 .set(1);
 
-            sink_writer_builder.on_success_sink_client(SinkClientType::UserDefined(
-                Box::new(sink_grpc_client.clone()),
-                Some(SinkReconnectConfig::new(
-                    ud_config.grpc_client_config(),
-                    cln_token.clone(),
-                    grpc::DEFAULT_RECONNECT_INTERVAL,
-                )),
-            ))
+            sink_writer_builder.on_success_sink_client(SinkClientType::UserDefined(Box::new(
+                sink_grpc_client.clone(),
+            )))
         }
         SinkType::Sqs(sqs_sink_config) => {
             let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
@@ -294,7 +275,7 @@ pub(crate) async fn create_transformer(
             PathBuf::from(ud_transformer.server_info_path.clone()),
             cln_token.clone(),
             ud_transformer.grpc_max_message_size,
-            grpc::DEFAULT_RECONNECT_INTERVAL,
+            grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
         )
         .await?;
         let metric_labels = metrics::sdk_info_labels(
@@ -309,11 +290,6 @@ pub(crate) async fn create_transformer(
             .get_or_create(&metric_labels)
             .set(1);
 
-        let reconnect_config = TransformerReconnectConfig::new(
-            ud_transformer.grpc_client_config(),
-            cln_token.clone(),
-            grpc::DEFAULT_RECONNECT_INTERVAL,
-        );
         return Ok(Some(
             Transformer::new(
                 batch_size,
@@ -321,7 +297,6 @@ pub(crate) async fn create_transformer(
                 graceful_timeout,
                 transformer_grpc_client.clone(),
                 tracker,
-                reconnect_config,
                 transformer_config.retry_config.map(|c| *c),
             )
             .await?,
@@ -406,15 +381,10 @@ pub(crate) async fn create_mapper(
                         PathBuf::from(config.server_info_path.clone()),
                         cln_token.clone(),
                         config.grpc_max_message_size,
-                        grpc::DEFAULT_RECONNECT_INTERVAL,
+                        grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
                     )
                     .await?;
-                    let reconnect_config = grpc::UdfReconnectConfig::new(
-                        config.grpc_client_config(),
-                        cln_token.clone(),
-                        grpc::DEFAULT_RECONNECT_INTERVAL,
-                    );
-                    Ok(MapHandle::new_with_reconnect_config(
+                    Ok(MapHandle::new(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
@@ -422,7 +392,6 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
-                        Some(reconnect_config),
                         config.retry_config,
                     )
                     .await?)
@@ -600,7 +569,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 PathBuf::from(user_defined_config.server_info_path.clone()),
                 cln_token.clone(),
                 user_defined_config.grpc_max_message_size,
-                grpc::DEFAULT_RECONNECT_INTERVAL,
+                grpc::DEFAULT_STARTUP_RETRY_INTERVAL,
             )
             .await?;
             let metric_labels = metrics::sdk_info_labels(
@@ -617,18 +586,12 @@ pub async fn create_source<C: NumaflowTypeConfig>(
 
             // Check if the SDK version supports nack functionality
             let supports_nack = supports_nack(&server_info.version, server_info.language);
-            let reconnect_config = SourceReconnectConfig::new(
-                user_defined_config.grpc_client_config(),
-                cln_token.clone(),
-                grpc::DEFAULT_RECONNECT_INTERVAL,
-            );
             let (ud_read, ud_ack, ud_lag) = new_source(
                 source_client,
                 batch_size,
                 read_timeout,
                 cln_token.clone(),
                 supports_nack,
-                reconnect_config,
             )
             .await?;
             Ok(Source::new(

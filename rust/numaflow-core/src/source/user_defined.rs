@@ -1,7 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use crate::runtime_server::runtime;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use numaflow_pb::clients::source;
@@ -15,21 +14,13 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
 
-use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::message::{Message, MessageID, NackOffset, Offset, StringOffset};
 use crate::metadata::Metadata;
-use crate::metrics::critical_error_reasons;
 use crate::reader::LagReader;
-use crate::shared::grpc::{UdfReconnectConfig, create_source_client, utc_from_timestamp};
+use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 use crate::{Error, Result, config};
 use tracing::warn;
-
-pub(crate) type ReconnectConfig = UdfReconnectConfig;
-
-// Read, ack, partitions, and lag/pending calls all use SourceClient clones. Keep a shared
-// handle so reconnecting either stream refreshes the unary client used by lag/partition probes.
-type SharedSourceClient = Arc<Mutex<SourceClient<Channel>>>;
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -38,9 +29,8 @@ pub(crate) struct UserDefinedSourceRead {
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
     timeout: Duration,
-    source_client: SharedSourceClient,
+    source_client: SourceClient<Channel>,
     cln_token: CancellationToken,
-    reconnect_config: ReconnectConfig,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -49,10 +39,7 @@ pub(crate) struct UserDefinedSourceAck {
     ack_tx: mpsc::Sender<AckRequest>,
     ack_resp_stream: Streaming<AckResponse>,
     client: SourceClient<Channel>,
-    shared_client: SharedSourceClient,
     supports_nack: bool,
-    reconnect_config: ReconnectConfig,
-    batch_size: usize,
 }
 
 /// Creates a new User-Defined Source and its corresponding Lag Reader.
@@ -62,32 +49,16 @@ pub(crate) async fn new_source(
     read_timeout: Duration,
     cln_token: CancellationToken,
     supports_nack: bool,
-    reconnect_config: ReconnectConfig,
 ) -> Result<(
     UserDefinedSourceRead,
     UserDefinedSourceAck,
     UserDefinedSourceLagReader,
 )> {
-    let shared_client = Arc::new(Mutex::new(client.clone()));
-    let src_read = UserDefinedSourceRead::new(
-        client.clone(),
-        num_records,
-        read_timeout,
-        cln_token,
-        reconnect_config.clone(),
-        Arc::clone(&shared_client),
-    )
-    .await?;
+    let src_read =
+        UserDefinedSourceRead::new(client.clone(), num_records, read_timeout, cln_token).await?;
 
-    let src_ack = UserDefinedSourceAck::new(
-        client,
-        num_records,
-        supports_nack,
-        reconnect_config,
-        Arc::clone(&shared_client),
-    )
-    .await?;
-    let lag_reader = UserDefinedSourceLagReader::new(shared_client);
+    let src_ack = UserDefinedSourceAck::new(client.clone(), num_records, supports_nack).await?;
+    let lag_reader = UserDefinedSourceLagReader::new(client);
 
     Ok((src_read, src_ack, lag_reader))
 }
@@ -98,8 +69,6 @@ impl UserDefinedSourceRead {
         batch_size: usize,
         timeout: Duration,
         cln_token: CancellationToken,
-        reconnect_config: ReconnectConfig,
-        shared_client: SharedSourceClient,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
@@ -108,9 +77,8 @@ impl UserDefinedSourceRead {
             resp_stream,
             num_records: batch_size,
             timeout,
-            source_client: shared_client,
+            source_client: client,
             cln_token,
-            reconnect_config,
         })
     }
 
@@ -155,45 +123,7 @@ impl UserDefinedSourceRead {
     }
 
     pub(crate) fn get_source_client(&self) -> SourceClient<Channel> {
-        self.source_client
-            .lock()
-            .expect("source client lock poisoned")
-            .clone()
-    }
-
-    async fn reconnect_reader(&mut self) -> Result<()> {
-        let (mut client, _) = create_source_client(
-            self.reconnect_config.socket_path(),
-            self.reconnect_config.server_info_path(),
-            self.reconnect_config.cln_token(),
-            self.reconnect_config.grpc_max_message_size(),
-            self.reconnect_config.retry_interval(),
-        )
-        .await?;
-        let (read_tx, resp_stream) = Self::create_reader(self.num_records, &mut client).await?;
-        self.read_tx = read_tx;
-        self.resp_stream = resp_stream;
-        *self
-            .source_client
-            .lock()
-            .expect("source client lock poisoned") = client;
-        Ok(())
-    }
-
-    fn preserve_messages_after_reconnect(
-        messages: Vec<Message>,
-        reconnect_result: Result<()>,
-    ) -> Result<Vec<Message>> {
-        reconnect_result.map(|_| messages)
-    }
-
-    fn record_udf_error(status: &Status) {
-        warn!(?status, "source UDF error, reconnecting");
-        critical_error!(
-            VERTEX_TYPE_SOURCE,
-            critical_error_reasons::SOURCE_RUNTIME_ERROR
-        );
-        runtime::persist_application_error_with_container(status.clone(), "udsource");
+        self.source_client.clone()
     }
 }
 
@@ -292,9 +222,9 @@ impl SourceReader for UserDefinedSourceRead {
         };
 
         if let Err(e) = self.read_tx.send(request).await {
-            let status = Status::unavailable(format!("source read stream closed: {e}"));
-            Self::record_udf_error(&status);
-            return Some(self.reconnect_reader().await.map(|_| Vec::new()));
+            return Some(Err(Error::Grpc(Box::new(Status::unavailable(format!(
+                "source read stream closed: {e}"
+            ))))));
         }
 
         let mut messages = Vec::with_capacity(self.num_records);
@@ -302,12 +232,7 @@ impl SourceReader for UserDefinedSourceRead {
         while let Some(response) = match self.resp_stream.message().await {
             Ok(response) => response,
             Err(e) => {
-                Self::record_udf_error(&e);
-                let reconnect_result = self.reconnect_reader().await;
-                return Some(Self::preserve_messages_after_reconnect(
-                    messages,
-                    reconnect_result,
-                ));
+                return Some(Err(Error::Grpc(Box::new(e))));
             }
         } {
             if response.status.is_some_and(|status| status.eot) {
@@ -328,12 +253,8 @@ impl SourceReader for UserDefinedSourceRead {
     }
 
     async fn partitions(&mut self) -> Result<SourcePartitions> {
-        let mut source_client = self
+        let result = self
             .source_client
-            .lock()
-            .expect("source client lock poisoned")
-            .clone();
-        let result = source_client
             .partitions_fn(Request::new(()))
             .await
             .map_err(|e| Error::Source(e.to_string()))?
@@ -353,8 +274,6 @@ impl UserDefinedSourceAck {
         mut client: SourceClient<Channel>,
         batch_size: usize,
         supports_nack: bool,
-        reconnect_config: ReconnectConfig,
-        shared_client: SharedSourceClient,
     ) -> Result<Self> {
         let (ack_tx, ack_resp_stream) = Self::create_acker(batch_size, &mut client).await?;
 
@@ -362,10 +281,7 @@ impl UserDefinedSourceAck {
             ack_tx,
             ack_resp_stream,
             client,
-            shared_client,
             supports_nack,
-            reconnect_config,
-            batch_size,
         })
     }
 
@@ -408,32 +324,6 @@ impl UserDefinedSourceAck {
 
         Ok((ack_tx, ack_resp_stream))
     }
-
-    async fn reconnect_acker(&mut self) -> Result<()> {
-        let (mut client, _) = create_source_client(
-            self.reconnect_config.socket_path(),
-            self.reconnect_config.server_info_path(),
-            self.reconnect_config.cln_token(),
-            self.reconnect_config.grpc_max_message_size(),
-            self.reconnect_config.retry_interval(),
-        )
-        .await?;
-        let (ack_tx, ack_resp_stream) = Self::create_acker(self.batch_size, &mut client).await?;
-        self.ack_tx = ack_tx;
-        self.ack_resp_stream = ack_resp_stream;
-        *self
-            .shared_client
-            .lock()
-            .expect("source client lock poisoned") = client.clone();
-        self.client = client;
-        Ok(())
-    }
-
-    async fn reconnect_redrive(&mut self, status: Status) -> Result<()> {
-        UserDefinedSourceRead::record_udf_error(&status);
-        self.reconnect_acker().await?;
-        Err(Error::UdfRedrive(Box::new(status)))
-    }
 }
 
 impl SourceAcker for UserDefinedSourceAck {
@@ -452,22 +342,20 @@ impl SourceAcker for UserDefinedSourceAck {
             })
             .await
         {
-            return self
-                .reconnect_redrive(Status::unavailable(format!(
-                    "source ack stream closed: {e}"
-                )))
-                .await;
+            return Err(Error::Grpc(Box::new(Status::unavailable(format!(
+                "source ack stream closed: {e}"
+            )))));
         }
 
         match self.ack_resp_stream.message().await {
             Ok(Some(_)) => {}
             Ok(None) => {
-                return self
-                    .reconnect_redrive(Status::unavailable("source ack stream closed"))
-                    .await;
+                return Err(Error::Grpc(Box::new(Status::unavailable(
+                    "source ack stream closed",
+                ))));
             }
             Err(e) => {
-                return self.reconnect_redrive(e).await;
+                return Err(Error::Grpc(Box::new(e)));
             }
         }
 
@@ -507,7 +395,7 @@ impl SourceAcker for UserDefinedSourceAck {
         {
             Ok(response) => response,
             Err(e) => {
-                return self.reconnect_redrive(e).await;
+                return Err(Error::Grpc(Box::new(e)));
             }
         };
 
@@ -522,23 +410,19 @@ impl SourceAcker for UserDefinedSourceAck {
 
 #[derive(Clone)]
 pub(crate) struct UserDefinedSourceLagReader {
-    source_client: SharedSourceClient,
+    source_client: SourceClient<Channel>,
 }
 
 impl UserDefinedSourceLagReader {
-    fn new(source_client: SharedSourceClient) -> Self {
+    fn new(source_client: SourceClient<Channel>) -> Self {
         Self { source_client }
     }
 }
 
 impl LagReader for UserDefinedSourceLagReader {
     async fn pending(&mut self) -> Result<Option<usize>> {
-        let mut source_client = self
+        Ok(self
             .source_client
-            .lock()
-            .expect("source client lock poisoned")
-            .clone();
-        Ok(source_client
             .pending_fn(Request::new(()))
             .await
             .map_err(|e| Error::Grpc(Box::new(e)))?
@@ -556,7 +440,6 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
-    use std::sync::Arc;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
@@ -694,15 +577,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token,
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
@@ -823,24 +697,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
-        let (mut src_read, mut src_ack, _lag) = new_source(
-            client,
-            5,
-            Duration::from_millis(1000),
-            cln_token,
-            true,
-            crate::transformer::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file.clone(),
-                    server_info_file.clone(),
-                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                CancellationToken::new(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
-        )
-        .await
-        .unwrap();
+        let (mut src_read, mut src_ack, _lag) =
+            new_source(client, 5, Duration::from_millis(1000), cln_token, true)
+                .await
+                .unwrap();
 
         let messages = src_read.read().await.unwrap().unwrap();
         let opts = NackOptions {
@@ -880,68 +740,6 @@ mod tests {
         drop(src_ack);
         shutdown_tx.send(()).expect("send shutdown");
         server_handle.await.expect("join server");
-    }
-
-    #[test]
-    fn source_read_reconnect_preserves_partial_messages() {
-        let messages = vec![
-            crate::message::Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["first".into()]),
-                tags: None,
-                value: b"partial-0".to_vec().into(),
-                offset: crate::message::Offset::String(StringOffset::new("partial-0".into(), 0)),
-                event_time: Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "partial-0".to_string().into(),
-                    index: 0,
-                },
-                ..Default::default()
-            },
-            crate::message::Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["second".into()]),
-                tags: None,
-                value: b"partial-1".to_vec().into(),
-                offset: crate::message::Offset::String(StringOffset::new("partial-1".into(), 0)),
-                event_time: Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "partial-1".to_string().into(),
-                    index: 1,
-                },
-                ..Default::default()
-            },
-        ];
-
-        let reconnected_messages =
-            UserDefinedSourceRead::preserve_messages_after_reconnect(messages.clone(), Ok(()))
-                .unwrap();
-
-        let reconnected_offsets: Vec<_> = reconnected_messages
-            .iter()
-            .map(|message| message.offset.clone())
-            .collect();
-        let expected_offsets: Vec<_> = messages
-            .iter()
-            .map(|message| message.offset.clone())
-            .collect();
-        assert_eq!(reconnected_offsets, expected_offsets);
-    }
-
-    #[test]
-    fn source_read_reconnect_returns_reconnect_error() {
-        let reconnect_error =
-            Error::UdfRedrive(Box::new(Status::unavailable("source reconnect failed")));
-        let result = UserDefinedSourceRead::preserve_messages_after_reconnect(
-            Vec::new(),
-            Err(reconnect_error),
-        );
-
-        assert!(matches!(result, Err(Error::UdfRedrive(_))));
     }
 
     #[test]

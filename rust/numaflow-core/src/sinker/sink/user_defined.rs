@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::runtime_server::runtime;
 use bytes::Bytes;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
@@ -8,14 +7,13 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Code, Request, Status, Streaming};
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::Error;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::message::Message;
-use crate::metrics::critical_error_reasons;
-use crate::shared::grpc::{UdfReconnectConfig, create_sink_client, prost_timestamp_from_utc};
+use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sinker::sink::{ResponseFromSink, Sink};
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
@@ -24,10 +22,7 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
-    reconnect_config: Option<ReconnectConfig>,
 }
-
-pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// Convert [`Message`] to [`proto::SinkRequest`]
 impl From<Message> for SinkRequest {
@@ -49,15 +44,11 @@ impl From<Message> for SinkRequest {
 }
 
 impl UserDefinedSink {
-    pub(crate) async fn new(
-        mut client: SinkClient<Channel>,
-        reconnect_config: Option<ReconnectConfig>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(mut client: SinkClient<Channel>) -> Result<Self> {
         let (sink_tx, resp_stream) = Self::create_sink_stream(&mut client).await?;
         Ok(Self {
             sink_tx,
             resp_stream,
-            reconnect_config,
         })
     }
 
@@ -102,37 +93,6 @@ impl UserDefinedSink {
         Ok((sink_tx, resp_stream))
     }
 
-    async fn reconnect(&mut self) -> Result<()> {
-        let Some(reconnect_config) = &self.reconnect_config else {
-            return Err(Error::UdfRedrive(Box::new(Status::unavailable(
-                "sink stream closed",
-            ))));
-        };
-        let (mut client, _) = create_sink_client(
-            reconnect_config.socket_path(),
-            reconnect_config.server_info_path(),
-            reconnect_config.cln_token(),
-            reconnect_config.grpc_max_message_size(),
-            reconnect_config.retry_interval(),
-        )
-        .await?;
-        let (sink_tx, resp_stream) = match Self::create_sink_stream(&mut client).await {
-            Ok(stream) => stream,
-            Err(Error::Grpc(status)) => return Err(Self::redrive_error(*status)),
-            Err(e) => return Err(e),
-        };
-        self.sink_tx = sink_tx;
-        self.resp_stream = resp_stream;
-        Ok(())
-    }
-
-    fn redrive_error(status: Status) -> Error {
-        warn!(?status, "sink UDF error, redriving after reconnect");
-        critical_error!(VERTEX_TYPE_SINK, critical_error_reasons::SINK_RUNTIME_ERROR);
-        runtime::persist_application_error_with_container(status.clone(), "udsink");
-        Error::UdfRedrive(Box::new(status))
-    }
-
     async fn sink_once(&mut self, requests: &[SinkRequest]) -> Result<Vec<ResponseFromSink>> {
         let num_requests = requests.len();
 
@@ -140,7 +100,7 @@ impl UserDefinedSink {
             self.sink_tx
                 .send(request)
                 .await
-                .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
+                .map_err(|e| Error::Grpc(Box::new(Status::unavailable(e.to_string()))))?;
         }
 
         let eot_request = SinkRequest {
@@ -151,19 +111,19 @@ impl UserDefinedSink {
         self.sink_tx
             .send(eot_request)
             .await
-            .map_err(|e| Self::redrive_error(Status::unavailable(e.to_string())))?;
+            .map_err(|e| Error::Grpc(Box::new(Status::unavailable(e.to_string()))))?;
 
         let mut responses = Vec::new();
         loop {
             let response = match self.resp_stream.message().await {
                 Ok(Some(response)) => response,
                 Ok(None) => {
-                    return Err(Self::redrive_error(Status::unavailable(
+                    return Err(Error::Grpc(Box::new(Status::unavailable(
                         "sink response stream closed",
-                    )));
+                    ))));
                 }
                 Err(e) => {
-                    return Err(Self::redrive_error(e));
+                    return Err(Error::Grpc(Box::new(e)));
                 }
             };
 
@@ -203,16 +163,7 @@ impl Sink for UserDefinedSink {
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
-        loop {
-            match self.sink_once(&requests).await {
-                Ok(responses) => return Ok(responses),
-                Err(Error::UdfRedrive(e)) => {
-                    error!(?e, "redriving sink batch after reconnect");
-                    self.reconnect().await?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
+        self.sink_once(&requests).await
     }
 }
 
@@ -278,7 +229,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let mut sink_client =
-            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?), None)
+            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?))
                 .await
                 .expect("failed to connect to sink server");
 
@@ -320,9 +271,6 @@ mod tests {
 
         let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
-
-        let reconnect = sink_client.reconnect().await;
-        assert!(matches!(reconnect, Err(Error::UdfRedrive(_))));
 
         drop(sink_client);
         shutdown_tx
