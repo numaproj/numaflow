@@ -72,8 +72,8 @@
 .PodLogs-tail-size-menu-btn {
   min-width: 2.8rem !important;
   padding: 0 !important;
-  border-color: #cbd5e1 !important;
-  color: #036b8f !important;
+  border-color: var(--border-primary) !important;
+  color: var(--accent-primary) !important;
 }
 
 .PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-main,

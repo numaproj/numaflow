@@ -748,14 +748,6 @@ const LineChartComponent = ({
               display: fromModal ? "none" : "flex",
             }}
           >
-            <Box
-              className={"line-chart-filters-label"}
-              sx={{
-                color: isFilterFocused ? "var(--accent-primary)" : "var(--text-tertiary)",
-              }}
-            >
-              Filters
-            </Box>
             <FiltersDropdown
               items={filtersList?.filter(
                 (filterEle: any) => !filterEle?.required
@@ -782,7 +774,7 @@ const LineChartComponent = ({
           <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc}</Box>
         )}
         {hasTimeParams && (
-          <Box key="line-chart-preset">
+          <Box key="line-chart-preset" className="line-chart-time-range">
             <TimeSelector
               setMetricReq={setMetricsReq}
               initialStart={metricParams.get("metricStart")}

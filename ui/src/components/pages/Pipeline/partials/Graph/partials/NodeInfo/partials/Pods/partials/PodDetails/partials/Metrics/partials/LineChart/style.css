@@ -65,21 +65,11 @@
   font-family: Avenir Next, sans-serif;
 }
 
-.line-chart-filters {
-  flex-direction: column;
-  position: relative;
-}
-
-.line-chart-filters-label {
-  font-size: 1.1rem;
-  font-family: Avenir Next, sans-serif;
-  position: absolute;
-  top: -1rem;
-  left: 1rem;
-  transition: 0.2s ease all;
-  background-color: var(--bg-secondary);
-  padding: 0 0.5rem;
-  z-index: 1;
+.line-chart-filters,
+.line-chart-time-range {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .line-chart-loading {
