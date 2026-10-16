@@ -23,7 +23,7 @@
     display: flex;
     flex-direction: row-reverse;
     text-decoration: underline;
-    color: #0077C5;
+    color: var(--accent-primary);
     cursor: pointer;
     padding: 0.5rem;
     font-family: Avenir Next, sans-serif;

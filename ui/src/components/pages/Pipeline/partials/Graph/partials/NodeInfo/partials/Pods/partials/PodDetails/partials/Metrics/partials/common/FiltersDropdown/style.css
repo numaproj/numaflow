@@ -69,5 +69,5 @@
 .filters-dropdown-active-filters-options {
     height: fit-content;
     max-height: 25rem;
-    overflow: scroll;
+    overflow-y: auto;
 }
