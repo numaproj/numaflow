@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use tracing::{error, info, warn};
 
-use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
+use crate::{Error, KafkaSaslAuth, Result, TlsConfigWithClientAuth};
 
 #[derive(Debug, Clone)]
 pub struct KafkaSourceConfig {
@@ -28,7 +28,7 @@ pub struct KafkaSourceConfig {
     /// The authentication mechanism to use for the Kafka consumer.
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
     /// Any supported kafka client configuration options from
     /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
     pub kafka_raw_config: HashMap<String, String>,
@@ -178,7 +178,16 @@ impl KafkaActor {
         let consumer: Arc<NumaflowConsumer> =
             Arc::new(client_config.create_with_context(context).map_err(|err| {
                 Error::Connection {
-                    server: config.brokers.join(","),
+                    server: config
+                        .brokers
+                        .iter()
+                        .filter_map(|broker| {
+                            numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                                broker, "kafka",
+                            )
+                            .ok()
+                        })
+                        .collect(),
                     error: err.to_string(),
                 }
             })?);
