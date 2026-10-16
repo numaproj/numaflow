@@ -250,7 +250,11 @@ impl TryFrom<Box<PulsarSink>> for SinkType {
         let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(sink_config.auth)?;
         let tls = super::parse_pulsar_tls_config(sink_config.tls)?;
         let pulsar_sink_config = numaflow_pulsar::sink::Config {
-            addr: sink_config.server_addr,
+            addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                &sink_config.server_addr,
+                "pulsar",
+            )
+            .map_err(|e| Error::Config(format!("Invalid Pulsar server address: {e}")))?,
             topic: sink_config.topic,
             producer_name: sink_config.producer_name,
             auth,
@@ -399,6 +403,7 @@ impl UserDefinedConfig {
 mod tests {
     use super::*;
     use numaflow_sqs::sink::SqsSinkConfig;
+    use secrecy::ExposeSecret;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 
@@ -699,7 +704,7 @@ mod tests {
         let result = SinkType::try_from(valid_pulsar_sink);
         assert!(result.is_ok());
         if let Ok(SinkType::Pulsar(config)) = result {
-            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.producer_name, "test-producer");
             assert!(config.auth.is_none());
@@ -730,14 +735,14 @@ mod tests {
         let result = SinkType::try_from(valid_pulsar_sink_with_auth);
         assert!(result.is_ok());
         if let Ok(SinkType::Pulsar(config)) = result {
-            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.producer_name, "test-producer");
             let auth = config.auth.unwrap();
             let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
                 panic!("Expected PulsarAuth::JWT");
             };
-            assert_eq!(token, "test-jwt-token");
+            assert_eq!(token.expose_secret(), "test-jwt-token");
         } else {
             panic!("Expected SinkType::Pulsar");
         }
@@ -850,7 +855,7 @@ mod tests {
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
-                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
                 assert_eq!(config.topic, "fallback-topic");
                 assert_eq!(config.producer_name, "fallback-producer");
                 assert!(config.auth.is_none());
@@ -862,7 +867,7 @@ mod tests {
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
-                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
                 assert_eq!(config.topic, "fallback-topic");
                 assert_eq!(config.producer_name, "fallback-producer");
                 assert!(config.auth.is_none());
@@ -934,14 +939,14 @@ mod tests {
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
-                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
                 assert_eq!(config.topic, "fallback-topic");
                 assert_eq!(config.producer_name, "fallback-producer");
                 let auth = config.auth.unwrap();
                 let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
                     panic!("Expected PulsarAuth::JWT");
                 };
-                assert_eq!(token, "fallback-jwt-token");
+                assert_eq!(token.expose_secret(), "fallback-jwt-token");
             }
             _ => panic!("Expected SinkType::Pulsar for fallback sink"),
         }
@@ -950,14 +955,14 @@ mod tests {
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
-                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.addr.expose_url().as_str(), "pulsar://localhost:6650");
                 assert_eq!(config.topic, "fallback-topic");
                 assert_eq!(config.producer_name, "fallback-producer");
                 let auth = config.auth.unwrap();
                 let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
                     panic!("Expected PulsarAuth::JWT");
                 };
-                assert_eq!(token, "fallback-jwt-token");
+                assert_eq!(token.expose_secret(), "fallback-jwt-token");
             }
             _ => panic!("Expected SinkType::Pulsar for fallback sink"),
         }

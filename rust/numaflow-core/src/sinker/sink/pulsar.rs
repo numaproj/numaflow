@@ -222,7 +222,7 @@ mod tests {
         let (topic_name, subscription_name) =
             numaflow_pulsar::sink::test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-multi".to_string(),
             auth: None,
@@ -273,7 +273,7 @@ mod tests {
     async fn test_pulsar_sink_empty_messages() {
         let (topic_name, _) = numaflow_pulsar::sink::test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name,
             producer_name: "test-producer-empty".to_string(),
             auth: None,
@@ -294,7 +294,7 @@ mod tests {
         let (topic_name, subscription_name) =
             numaflow_pulsar::sink::test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-keys".to_string(),
             auth: None,
@@ -354,7 +354,7 @@ mod tests {
         let (topic_name, subscription_name) =
             numaflow_pulsar::sink::test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-large".to_string(),
             auth: None,
@@ -412,7 +412,7 @@ mod tests {
         let (topic_name, subscription_name) =
             numaflow_pulsar::sink::test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-time".to_string(),
             auth: None,

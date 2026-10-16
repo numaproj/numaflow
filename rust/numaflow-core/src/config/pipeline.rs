@@ -797,7 +797,15 @@ mod tests {
                         assert_eq!(actual, expected)
                     }
                     (SourceType::Pulsar(actual), SourceType::Pulsar(expected)) => {
-                        assert_eq!(actual, expected)
+                        assert_eq!(actual.pulsar_server_addr, expected.pulsar_server_addr);
+                        assert_eq!(actual.topic, expected.topic);
+                        assert_eq!(actual.consumer_name, expected.consumer_name);
+                        assert_eq!(actual.subscription, expected.subscription);
+                        assert_eq!(actual.max_unack, expected.max_unack);
+                        assert_eq!(actual.dead_letter_policy, expected.dead_letter_policy);
+                        // Not comparing secrets
+                        assert!(actual.auth.is_none() && expected.auth.is_none());
+                        assert!(actual.tls.is_none() && expected.tls.is_none());
                     }
                     (SourceType::Jetstream(actual), SourceType::Jetstream(expected)) => {
                         assert_eq!(actual.addr, expected.addr);
@@ -837,7 +845,12 @@ mod tests {
                             )
                         }
                         (SinkType::Pulsar(actual), SinkType::Pulsar(expected)) => {
-                            assert_eq!(actual, expected)
+                            assert_eq!(actual.addr, expected.addr);
+                            assert_eq!(actual.topic, expected.topic);
+                            assert_eq!(actual.producer_name, expected.producer_name);
+                            // Not comparing secrets
+                            assert!(actual.auth.is_none() && expected.auth.is_none());
+                            assert!(actual.tls.is_none() && expected.tls.is_none());
                         }
                         (actual, expected) => {
                             panic!("Unexpected sink configs: {actual:?}, {expected:?}")
@@ -1267,7 +1280,7 @@ mod tests {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
-                        pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
+                        pulsar_server_addr: "pulsar://pulsar-service:6650".parse().unwrap(),
                         topic: "test_persistent".to_string(),
                         consumer_name: "my_persistent_consumer".to_string(),
                         subscription: "my_persistent_subscription".to_string(),

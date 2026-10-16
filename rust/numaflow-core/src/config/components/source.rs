@@ -144,7 +144,11 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
                 }
             }),
 
-            pulsar_server_addr: value.server_addr,
+            pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                &value.server_addr,
+                "pulsar",
+            )
+            .map_err(|e| Error::Config(format!("Invalid Pulsar server address: {e}")))?,
             topic: value.topic,
             consumer_name: value.consumer_name,
             subscription: value.subscription_name,
@@ -800,6 +804,7 @@ mod pulsar_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::{PulsarAuth, PulsarBasicAuth, PulsarSource};
     use numaflow_pulsar::PulsarAuth as PulsarAuthEnum;
+    use secrecy::ExposeSecret;
 
     use super::*;
 
@@ -835,7 +840,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -874,7 +882,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -883,7 +894,7 @@ mod pulsar_source_tests {
             let PulsarAuthEnum::JWT(token) = auth else {
                 panic!("Expected PulsarAuth::JWT");
             };
-            assert_eq!(token, "test-jwt-token");
+            assert_eq!(token.expose_secret(), "test-jwt-token");
         } else {
             panic!("Expected SourceType::Pulsar");
         }
@@ -928,7 +939,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -938,7 +952,7 @@ mod pulsar_source_tests {
                 panic!("Expected PulsarAuth::HTTPBasic");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
+            assert_eq!(password.expose_secret(), "test-pass");
         } else {
             panic!("Expected SourceType::Pulsar");
         }
