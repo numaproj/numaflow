@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use pulsar::consumer::DeadLetterPolicy;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result, TlsConfig};
 
@@ -328,75 +328,50 @@ impl ConsumerReaderActor {
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
-        settle_offsets(&mut self.message_ids, offsets, &mut Ack(&mut self.consumer)).await
+        for offset in offsets {
+            let pending = self.message_ids.remove(&offset);
+
+            let Some(pending) = pending else {
+                warn!(%offset, "Received ack request for unknown offset");
+                continue;
+            };
+
+            let Err(e) = self
+                .consumer
+                .ack_with_id(&pending.topic, pending.message_id.clone())
+                .await
+            else {
+                continue;
+            };
+            // Insert offset back
+            self.message_ids.insert(offset, pending);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
     }
 
     async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
-        settle_offsets(
-            &mut self.message_ids,
-            offsets,
-            &mut Nack(&mut self.consumer),
-        )
-        .await
+        for offset in offsets {
+            let pending = self.message_ids.remove(&offset);
+
+            let Some(pending) = pending else {
+                warn!(%offset, "Received nack request for unknown offset");
+                continue;
+            };
+
+            let Err(e) = self
+                .consumer
+                .nack_with_id(&pending.topic, pending.message_id.clone())
+                .await
+            else {
+                continue;
+            };
+            // Insert offset back
+            self.message_ids.insert(offset, pending);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
     }
-}
-
-trait Settle {
-    async fn settle(
-        &mut self,
-        topic: &str,
-        message_id: MessageIdData,
-    ) -> std::result::Result<(), pulsar::Error>;
-}
-
-struct Ack<'a>(&'a mut Consumer<Vec<u8>, TokioExecutor>);
-
-impl Settle for Ack<'_> {
-    async fn settle(
-        &mut self,
-        topic: &str,
-        message_id: MessageIdData,
-    ) -> std::result::Result<(), pulsar::Error> {
-        Ok(self.0.ack_with_id(topic, message_id).await?)
-    }
-}
-
-struct Nack<'a>(&'a mut Consumer<Vec<u8>, TokioExecutor>);
-
-impl Settle for Nack<'_> {
-    async fn settle(
-        &mut self,
-        topic: &str,
-        message_id: MessageIdData,
-    ) -> std::result::Result<(), pulsar::Error> {
-        Ok(self.0.nack_with_id(topic, message_id).await?)
-    }
-}
-
-async fn settle_offsets(
-    message_ids: &mut BTreeMap<PulsarOffset, PendingMessage>,
-    offsets: Vec<PulsarOffset>,
-    settler: &mut impl Settle,
-) -> Result<()> {
-    for offset in offsets {
-        let pending = message_ids.remove(&offset);
-
-        let Some(pending) = pending else {
-            tracing::warn!(%offset, "Received ack/nack request for unknown offset");
-            continue;
-        };
-
-        let Err(e) = settler
-            .settle(&pending.topic, pending.message_id.clone())
-            .await
-        else {
-            continue;
-        };
-        // Insert offset back
-        message_ids.insert(offset, pending);
-        return Err(Error::Pulsar(e));
-    }
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -474,81 +449,63 @@ impl PulsarSource {
     }
 }
 
+#[cfg(feature = "pulsar-tests")]
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn offset(entry_id: u64) -> PulsarOffset {
-        PulsarOffset {
-            ledger_id: 1,
-            entry_id,
-            partition: -1,
-            batch_index: -1,
-        }
-    }
-
-    fn pending_messages(offsets: &[PulsarOffset]) -> BTreeMap<PulsarOffset, PendingMessage> {
-        offsets
-            .iter()
-            .map(|o| {
-                let message_id = MessageIdData {
-                    ledger_id: o.ledger_id,
-                    entry_id: o.entry_id,
-                    ..Default::default()
-                };
-                (
-                    *o,
-                    PendingMessage {
-                        topic: "test-topic".to_string(),
-                        message_id,
-                    },
-                )
-            })
-            .collect()
-    }
-
-    struct FailSecondCall {
-        calls: usize,
-        settled: Vec<PulsarOffset>,
-    }
-
-    impl Settle for FailSecondCall {
-        async fn settle(
-            &mut self,
-            _topic: &str,
-            message_id: MessageIdData,
-        ) -> std::result::Result<(), pulsar::Error> {
-            self.calls += 1;
-            if self.calls == 2 {
-                return Err(pulsar::Error::Custom("ack failed".to_string()));
-            }
-            self.settled.push(PulsarOffset::from(&message_id));
-            Ok(())
-        }
-    }
-
     #[tokio::test]
-    async fn test_settle_offsets_retry_after_partial_failure() {
-        let offsets: Vec<PulsarOffset> = (1..=3).map(offset).collect();
-        let mut message_ids = pending_messages(&offsets);
-        let mut settler = FailSecondCall {
-            calls: 0,
-            settled: Vec::new(),
-        };
+    async fn test_retry_skips_already_settled_offsets() {
+        let id = uuid::Uuid::new_v4().simple();
+        let topic = format!("persistent://public/default/pulsar_source_{id}");
+        let source = PulsarSource::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: "pulsar://localhost:6650".into(),
+                topic: topic.clone(),
+                consumer_name: "test".into(),
+                subscription: format!("source_subscription_{id}"),
+                max_unack: 100,
+                dead_letter_policy: None,
+                auth: None,
+                tls: None,
+            },
+            10,
+            Duration::from_millis(500),
+            0,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
-        let first = settle_offsets(&mut message_ids, offsets.clone(), &mut settler).await;
-        assert!(matches!(first, Err(Error::Pulsar(_))));
+        let client = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+            .build()
+            .await
+            .unwrap();
+        let mut producer = client.producer().with_topic(&topic).build().await.unwrap();
+        for i in 0..4 {
+            producer
+                .send_non_blocking(format!("message {i}"))
+                .await
+                .unwrap()
+                .await
+                .unwrap();
+        }
 
-        let mut result = first;
-        for _ in 0..3 {
-            result = settle_offsets(&mut message_ids, offsets.clone(), &mut settler).await;
-            if result.is_ok() {
+        let mut offsets = Vec::new();
+        for _ in 0..20 {
+            if offsets.len() == 4 {
                 break;
             }
+            let batch = source.read_messages().await.unwrap().unwrap();
+            offsets.extend(batch.into_iter().map(|m| m.offset));
         }
+        let [a, b, c, d] = offsets.as_slice() else {
+            panic!("expected 4 offsets, got {}", offsets.len());
+        };
 
-        assert!(result.is_ok(), "retry did not complete: {result:?}");
-        assert_eq!(settler.settled, offsets);
-        assert!(message_ids.is_empty());
+        source.ack_offsets(vec![*a]).await.unwrap();
+        source.ack_offsets(vec![*a, *b]).await.unwrap();
+        source.nack_offsets(vec![*c]).await.unwrap();
+        source.nack_offsets(vec![*c, *d]).await.unwrap();
     }
 }
