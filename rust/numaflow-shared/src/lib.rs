@@ -12,3 +12,6 @@ pub mod kv;
 
 /// Struct to provide redacted Debug output for URLs
 pub mod redacted_url;
+
+/// Secret-safe TLS configuration types shared by the connector crates.
+pub mod tls;
