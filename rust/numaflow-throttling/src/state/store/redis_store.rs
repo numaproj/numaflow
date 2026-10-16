@@ -50,7 +50,7 @@ impl std::fmt::Debug for RedisMode {
         match self {
             RedisMode::SingleUrl { url, db } => f
                 .debug_struct("SingleUrl")
-                .field("url", url)
+                .field("url", &redact_url_userinfo(url))
                 .field("db", db)
                 .finish(),
             RedisMode::Sentinel {
@@ -72,10 +72,31 @@ impl std::fmt::Debug for RedisMode {
     }
 }
 
-#[derive(Clone, Debug)]
+/// Strips any `user:password@` userinfo from the authority of a URL, so
+/// credentials embedded in connection URLs never reach logs.
+fn redact_url_userinfo(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let rest = &url[scheme_end + 3..];
+        if let Some(at) = rest.find('@') {
+            return format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..]);
+        }
+    }
+    url.to_string()
+}
+
+#[derive(Clone)]
 pub struct RedisAuth {
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+impl std::fmt::Debug for RedisAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RedisAuth")
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 #[derive(Clone)]
@@ -1152,5 +1173,53 @@ mod tests {
 
         assert_eq!(prev_max_filled, 0.0);
         test_utils::cleanup_redis_keys(test_name);
+    }
+
+    #[test]
+    fn test_redis_auth_debug_redacts_password() {
+        let auth = RedisAuth {
+            username: Some("redis-user".to_string()),
+            password: Some("secret-redis-password".to_string()),
+        };
+        let debug_output = format!("{:?}", auth);
+        assert!(!debug_output.contains("secret-redis-password"));
+        assert!(debug_output.contains("redis-user"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_redis_mode_debug_redacts_url_credentials() {
+        let mode = RedisMode::SingleUrl {
+            url: "redis://redis-user:secret-url-password@redis-host:6379/0".to_string(),
+            db: Some(1),
+        };
+        let debug_output = format!("{:?}", mode);
+        assert!(!debug_output.contains("secret-url-password"));
+        assert!(!debug_output.contains("redis-user"));
+        assert!(debug_output.contains("redis-host:6379"));
+        assert!(debug_output.contains("***"));
+    }
+
+    #[test]
+    fn test_redis_mode_debug_redacts_sentinel_auth() {
+        let mode = RedisMode::Sentinel {
+            master_name: "mymaster".to_string(),
+            endpoints: vec!["sentinel-host:26379".to_string()],
+            sentinel_auth: Some(RedisAuth {
+                username: Some("sentinel-user".to_string()),
+                password: Some("secret-sentinel-password".to_string()),
+            }),
+            redis_auth: Some(RedisAuth {
+                username: None,
+                password: Some("secret-node-password".to_string()),
+            }),
+            sentinel_tls: Box::new(None),
+            redis_tls: Box::new(None),
+            db: None,
+        };
+        let debug_output = format!("{:?}", mode);
+        assert!(!debug_output.contains("secret-sentinel-password"));
+        assert!(!debug_output.contains("secret-node-password"));
+        assert!(debug_output.contains("mymaster"));
     }
 }

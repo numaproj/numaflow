@@ -1,5 +1,6 @@
 use crate::Error;
 use crate::Result as NatsResult;
+use crate::TlsCaCert;
 use crate::TlsClientAuthCerts;
 use crate::TlsConfig;
 use async_nats::ConnectOptions;
@@ -87,7 +88,7 @@ pub(crate) fn configure_tls(
     Ok(conn_opts)
 }
 
-fn load_root_store(ca_cert: Option<String>) -> NatsResult<rustls::RootCertStore> {
+fn load_root_store(ca_cert: Option<TlsCaCert>) -> NatsResult<rustls::RootCertStore> {
     let mut root_store = rustls::RootCertStore::empty();
     let native_certs = rustls_native_certs::load_native_certs();
     if !native_certs.errors.is_empty() {
@@ -181,7 +182,7 @@ mod tests {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = TlsConfig {
             insecure_skip_verify: false,
-            ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".to_string()),
+            ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".into()),
             client_auth: None,
         };
 
