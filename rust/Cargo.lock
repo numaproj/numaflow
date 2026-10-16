@@ -2679,7 +2679,9 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "chrono",
+ "numaflow-shared",
  "pulsar",
+ "secrecy",
  "serde",
  "thiserror 2.0.17",
  "tokio",

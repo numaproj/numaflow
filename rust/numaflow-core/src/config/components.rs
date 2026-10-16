@@ -267,7 +267,7 @@ fn parse_pulsar_auth_config(
     if let Some(token) = auth.token {
         let secret = get_secret_from_volume(&token.name, &token.key)
             .map_err(|e| Error::Config(format!("Failed to get token secret from volume: {e:?}")))?;
-        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
+        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret.into())));
     }
 
     if let Some(basic_auth) = auth.basic_auth {
@@ -288,7 +288,7 @@ fn parse_pulsar_auth_config(
         .map_err(|e| Error::Config(format!("Failed to get password secret from volume: {e:?}")))?;
         return Ok(Some(numaflow_pulsar::PulsarAuth::HTTPBasic {
             username,
-            password,
+            password: password.into(),
         }));
     }
     Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()))
@@ -319,7 +319,7 @@ fn parse_pulsar_tls_config(
         .ca_cert_secret
         .map(|ca_cert_secret| {
             get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key)
-                .map(|secret| secret.into_bytes())
+                .map(Into::into)
                 .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
         })
         .transpose()?;
