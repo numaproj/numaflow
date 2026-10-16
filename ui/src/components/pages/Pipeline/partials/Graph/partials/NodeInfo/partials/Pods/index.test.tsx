@@ -63,6 +63,9 @@ jest.mock("react-router-dom", () => ({
 }));
 
 jest.mock("../../../../../../../../../utils/fetcherHooks/podsViewFetch");
+jest.mock("../../../../../../../../../contexts/ThemeContext", () => ({
+  useThemeContext: () => ({ resolvedTheme: "light" }),
+}));
 const mockedUsePodsViewFetch = usePodsViewFetch as jest.MockedFunction<
   typeof usePodsViewFetch
 >;
