@@ -20,7 +20,7 @@ fn parse_kafka_auth_config(
     tls_config: Option<Box<numaflow_models::models::Tls>>,
 ) -> crate::Result<(
     Option<numaflow_kafka::KafkaSaslAuth>,
-    Option<numaflow_kafka::TlsConfig>,
+    Option<numaflow_kafka::TlsConfigWithClientAuth>,
 )> {
     let auth: Option<numaflow_kafka::KafkaSaslAuth> = match auth_config {
         Some(sasl) => {
@@ -245,7 +245,7 @@ fn parse_kafka_auth_config(
             None => None,
         };
 
-        Some(numaflow_kafka::TlsConfig {
+        Some(numaflow_kafka::TlsConfigWithClientAuth {
             insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
             ca_cert: ca_cert.map(Into::into),
             client_auth: tls_client_auth_certs,
