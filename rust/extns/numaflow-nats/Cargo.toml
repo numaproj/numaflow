@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+secrecy.workspace = true
 backoff.workspace = true
 async-nats.workspace = true
 numaflow-shared.workspace = true

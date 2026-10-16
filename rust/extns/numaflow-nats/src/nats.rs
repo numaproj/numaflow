@@ -3,6 +3,7 @@ use std::time::Duration;
 use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
+use numaflow_shared::redacted_url::RedactedUrl;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -10,15 +11,16 @@ use tokio_stream::StreamExt;
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use crate::{Error, NatsAuth, Result, TlsConfigWithClientAuth, tls};
+use secrecy::ExposeSecret;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct NatsSourceConfig {
-    pub addr: String,
+    pub addr: RedactedUrl,
     pub subject: String,
     pub queue: String,
     pub auth: Option<NatsAuth>,
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
 }
 
 /// NatsMessage represents a Numaflow Message which can be converted from a Nats message
@@ -75,19 +77,19 @@ impl NatsActor {
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {
-                    conn_opts.user_and_password(username, password)
+                    conn_opts.user_and_password(username, password.expose_secret().to_owned())
                 }
-                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
-                NatsAuth::Token(token) => conn_opts.token(token),
+                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey.expose_secret().to_owned()),
+                NatsAuth::Token(token) => conn_opts.token(token.expose_secret().to_owned()),
             };
         }
         if let Some(tls_config) = config.tls {
             conn_opts = tls::configure_tls(conn_opts, tls_config)?;
         }
-        let client = async_nats::connect_with_options(&config.addr, conn_opts)
+        let client = async_nats::connect_with_options(config.addr.expose_url().as_str(), conn_opts)
             .await
             .map_err(|err| Error::Connection {
-                server: config.addr.to_string(),
+                server: config.addr.clone(),
                 error: err.to_string(),
             })?;
 
@@ -210,7 +212,7 @@ mod tests {
         let msg_count = 5;
 
         let config = NatsSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
             subject: subject.to_string(),
             queue: queue.to_string(),
             auth: None,

@@ -20,7 +20,7 @@ fn parse_kafka_auth_config(
     tls_config: Option<Box<numaflow_models::models::Tls>>,
 ) -> crate::Result<(
     Option<numaflow_kafka::KafkaSaslAuth>,
-    Option<numaflow_kafka::TlsConfig>,
+    Option<numaflow_kafka::TlsConfigWithClientAuth>,
 )> {
     let auth: Option<numaflow_kafka::KafkaSaslAuth> = match auth_config {
         Some(sasl) => {
@@ -45,7 +45,10 @@ fn parse_kafka_auth_config(
                     } else {
                         return Err(Error::Config("PLAIN mechanism requires password".into()));
                     };
-                    Some(numaflow_kafka::KafkaSaslAuth::Plain { username, password })
+                    Some(numaflow_kafka::KafkaSaslAuth::Plain {
+                        username,
+                        password: password.into(),
+                    })
                 }
                 "SCRAM-SHA-256" => {
                     let Some(scram) = sasl.scramsha256 else {
@@ -69,7 +72,10 @@ fn parse_kafka_auth_config(
                             "SCRAM-SHA-256 mechanism requires password".into(),
                         ));
                     };
-                    Some(numaflow_kafka::KafkaSaslAuth::ScramSha256 { username, password })
+                    Some(numaflow_kafka::KafkaSaslAuth::ScramSha256 {
+                        username,
+                        password: password.into(),
+                    })
                 }
                 "SCRAM-SHA-512" => {
                     let Some(scram) = sasl.scramsha512 else {
@@ -93,7 +99,10 @@ fn parse_kafka_auth_config(
                             "SCRAM-SHA-512 mechanism requires password".into(),
                         ));
                     };
-                    Some(numaflow_kafka::KafkaSaslAuth::ScramSha512 { username, password })
+                    Some(numaflow_kafka::KafkaSaslAuth::ScramSha512 {
+                        username,
+                        password: password.into(),
+                    })
                 }
                 "GSSAPI" => {
                     let Some(gssapi) = sasl.gssapi else {
@@ -155,9 +164,9 @@ fn parse_kafka_auth_config(
                         service_name,
                         realm,
                         username,
-                        password,
-                        keytab,
-                        kerberos_config,
+                        password: password.map(Into::into),
+                        keytab: keytab.map(Into::into),
+                        kerberos_config: kerberos_config.map(Into::into),
                         auth_type,
                     })
                 }
@@ -177,10 +186,12 @@ fn parse_kafka_auth_config(
                             .map_err(|e| {
                                 Error::Config(format!("Failed to get client secret: {e:?}"))
                             })?;
-                    let token_endpoint = oauth.token_endpoint.clone();
+                    let token_endpoint = oauth.token_endpoint.parse().map_err(|e| {
+                        Error::Config(format!("Invalid OAuth token endpoint URL: {e}"))
+                    })?;
                     Some(numaflow_kafka::KafkaSaslAuth::Oauth {
                         client_id,
-                        client_secret,
+                        client_secret: client_secret.into(),
                         token_endpoint,
                     })
                 }
@@ -227,16 +238,16 @@ fn parse_kafka_auth_config(
                             ))
                         })?;
                 Some(numaflow_kafka::TlsClientAuthCerts {
-                    client_cert,
-                    client_cert_private_key,
+                    client_cert: client_cert.into(),
+                    client_cert_private_key: client_cert_private_key.into(),
                 })
             }
             None => None,
         };
 
-        Some(numaflow_kafka::TlsConfig {
+        Some(numaflow_kafka::TlsConfigWithClientAuth {
             insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-            ca_cert,
+            ca_cert: ca_cert.map(Into::into),
             client_auth: tls_client_auth_certs,
         })
     } else {
@@ -256,7 +267,7 @@ fn parse_pulsar_auth_config(
     if let Some(token) = auth.token {
         let secret = get_secret_from_volume(&token.name, &token.key)
             .map_err(|e| Error::Config(format!("Failed to get token secret from volume: {e:?}")))?;
-        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
+        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret.into())));
     }
 
     if let Some(basic_auth) = auth.basic_auth {
@@ -277,7 +288,7 @@ fn parse_pulsar_auth_config(
         .map_err(|e| Error::Config(format!("Failed to get password secret from volume: {e:?}")))?;
         return Ok(Some(numaflow_pulsar::PulsarAuth::HTTPBasic {
             username,
-            password,
+            password: password.into(),
         }));
     }
     Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()))
@@ -308,7 +319,7 @@ fn parse_pulsar_tls_config(
         .ca_cert_secret
         .map(|ca_cert_secret| {
             get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key)
-                .map(|secret| secret.into_bytes())
+                .map(Into::into)
                 .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
         })
         .transpose()?;
@@ -326,6 +337,7 @@ mod kafka_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::gssapi::AuthType;
     use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use secrecy::ExposeSecret;
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
@@ -449,7 +461,7 @@ mod kafka_tests {
             match auth {
                 numaflow_kafka::KafkaSaslAuth::Plain { username, password } => {
                     assert_eq!(username, "test-user");
-                    assert_eq!(password, "test-pass");
+                    assert_eq!(password.expose_secret(), "test-pass");
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
@@ -506,7 +518,7 @@ mod kafka_tests {
             match auth {
                 numaflow_kafka::KafkaSaslAuth::ScramSha256 { username, password } => {
                     assert_eq!(username, "test-user");
-                    assert_eq!(password, "test-pass");
+                    assert_eq!(password.expose_secret(), "test-pass");
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
@@ -564,8 +576,11 @@ mod kafka_tests {
                     token_endpoint,
                 } => {
                     assert_eq!(client_id, "test-client");
-                    assert_eq!(client_secret, "test-secret");
-                    assert_eq!(token_endpoint, "https://oauth.example.com/token");
+                    assert_eq!(client_secret.expose_secret(), "test-secret");
+                    assert_eq!(
+                        token_endpoint.expose_url().as_str(),
+                        "https://oauth.example.com/token"
+                    );
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
@@ -616,10 +631,13 @@ mod kafka_tests {
         let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
         if let SourceType::Kafka(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(tls_config.ca_cert.unwrap().expose_secret(), "test-ca-cert");
             let client_auth = tls_config.client_auth.as_ref().unwrap();
-            assert_eq!(client_auth.client_cert, "test-cert");
-            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert_eq!(client_auth.client_cert.expose_secret(), "test-cert");
+            assert_eq!(
+                client_auth.client_cert_private_key.expose_secret(),
+                "test-key"
+            );
             assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Kafka");
@@ -806,7 +824,7 @@ mod kafka_tests {
             match auth {
                 numaflow_kafka::KafkaSaslAuth::ScramSha512 { username, password } => {
                     assert_eq!(username, "test-user");
-                    assert_eq!(password, "test-pass");
+                    assert_eq!(password.expose_secret(), "test-pass");
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
@@ -876,7 +894,10 @@ mod kafka_tests {
                     assert_eq!(service_name, "kafka");
                     assert_eq!(realm, "EXAMPLE.COM");
                     assert_eq!(username, "test-user");
-                    assert_eq!(password, Some("test-pass".to_string()));
+                    assert_eq!(
+                        password.as_ref().map(ExposeSecret::expose_secret),
+                        Some("test-pass")
+                    );
                     assert!(keytab.is_none());
                     assert!(kerberos_config.is_none());
                     assert_eq!(auth_type, "UserAuth");
@@ -950,7 +971,10 @@ mod kafka_tests {
                     assert_eq!(realm, "EXAMPLE.COM");
                     assert_eq!(username, "test-user");
                     assert!(password.is_none());
-                    assert_eq!(keytab, Some("test-keytab".to_string()));
+                    assert_eq!(
+                        keytab.as_ref().map(ExposeSecret::expose_secret),
+                        Some("test-keytab")
+                    );
                     assert!(kerberos_config.is_none());
                     assert_eq!(auth_type, "KeytabAuth");
                 }

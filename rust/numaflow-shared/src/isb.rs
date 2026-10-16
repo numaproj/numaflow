@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub const ENV_NUMAFLOW_ISBSVC_TYPE: &str = "NUMAFLOW_ISBSVC_TYPE";
 
 /// ISB backend selected at startup. Single source of truth for core and sideinput.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ISBClientConfig {
     Jetstream(jetstream::config::ClientConfig),
     /// Local testing only. Deliberately NOT reachable from `from_env`.
@@ -69,9 +69,9 @@ mod tests {
         let config = ISBClientConfig::from_env(&env_vars).unwrap();
         match config {
             ISBClientConfig::Jetstream(cfg) => {
-                assert_eq!(cfg.url, "nats://localhost:4222");
+                assert_eq!(cfg.url.expose_url().as_str(), "nats://localhost:4222");
                 assert_eq!(cfg.user, None);
-                assert_eq!(cfg.password, None);
+                assert!(cfg.password.is_none());
                 assert!(!cfg.tls_enabled);
             }
             ISBClientConfig::InMemory => panic!("expected Jetstream variant"),

@@ -12,7 +12,9 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
+use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::consumer::DeadLetterPolicy;
+use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
 use tracing::info;
 
@@ -24,9 +26,9 @@ pub struct PulsarDeadLetterPolicy {
     pub max_redelivery: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct PulsarSourceConfig {
-    pub pulsar_server_addr: String,
+    pub pulsar_server_addr: RedactedUrl,
     pub topic: String,
     pub consumer_name: String,
     pub subscription: String,
@@ -34,6 +36,7 @@ pub struct PulsarSourceConfig {
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
     pub auth: Option<PulsarAuth>,
     /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    /// Only one-way TLS is supported by the `pulsar` crate's builder.
     pub tls: Option<TlsConfig>,
 }
 
@@ -135,7 +138,7 @@ impl ConsumerReaderActor {
         cancel_token: CancellationToken,
     ) -> Result<()> {
         info!(
-            addr = &config.pulsar_server_addr,
+            addr = ?config.pulsar_server_addr,
             "Pulsar connection details"
         );
 
@@ -145,10 +148,13 @@ impl ConsumerReaderActor {
         // CA, prefer `tls.ca_cert`, which uses `with_certificate_chain()` - this adds the
         // provided CA to the client's trust root rather than disabling verification, and is
         // confirmed to work as of the `pulsar` crate version pinned in Cargo.toml.
-        let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
+        let mut pulsar = Pulsar::builder(
+            config.pulsar_server_addr.expose_url().as_str(),
+            TokioExecutor,
+        );
         if let Some(tls) = &config.tls {
             if let Some(ca_cert) = &tls.ca_cert {
-                pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+                pulsar = pulsar.with_certificate_chain(ca_cert.expose_secret().as_bytes().to_vec());
             }
             if tls.insecure_skip_verify {
                 pulsar = pulsar.with_allow_insecure_connection(true);
@@ -158,14 +164,14 @@ impl ConsumerReaderActor {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {
                     name: "token".into(),
-                    data: token.into(),
+                    data: token.expose_secret().into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }
             Some(PulsarAuth::HTTPBasic { username, password }) => {
                 let auth_token = Authentication {
                     name: "basic".into(),
-                    data: format!("{username}:{password}").into(),
+                    data: format!("{username}:{}", password.expose_secret()).into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }
