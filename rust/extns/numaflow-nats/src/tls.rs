@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::Result as NatsResult;
 use crate::TlsClientAuthCerts;
-use crate::TlsConfig;
+use crate::TlsConfigWithClientAuth;
 use async_nats::ConnectOptions;
 use async_nats::rustls::client::danger::{
     HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
@@ -67,7 +67,7 @@ impl ServerCertVerifier for NoVerifier {
 
 pub(crate) fn configure_tls(
     mut conn_opts: ConnectOptions,
-    tls_config: TlsConfig,
+    tls_config: TlsConfigWithClientAuth,
 ) -> NatsResult<ConnectOptions> {
     if tls_config.insecure_skip_verify {
         tracing::warn!(
@@ -170,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_configure_tls_insecure_skip_verify() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let tls_config = TlsConfig {
+        let tls_config = TlsConfigWithClientAuth {
             insecure_skip_verify: true,
             ca_cert: None,
             client_auth: None,
@@ -185,7 +185,7 @@ mod tests {
     #[tokio::test]
     async fn test_configure_tls_invalid_ca_cert() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let tls_config = TlsConfig {
+        let tls_config = TlsConfigWithClientAuth {
             insecure_skip_verify: false,
             ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".into()),
             client_auth: None,
@@ -205,7 +205,7 @@ mod tests {
     #[tokio::test]
     async fn test_configure_tls_with_client_auth() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let tls_config = TlsConfig {
+        let tls_config = TlsConfigWithClientAuth {
             insecure_skip_verify: false,
             ca_cert: Some(
                 r#"-----BEGIN CERTIFICATE-----
