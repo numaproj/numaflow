@@ -3,6 +3,7 @@ use std::time::Duration;
 use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
+use numaflow_shared::redacted_url::RedactedUrl;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -10,8 +11,7 @@ use tokio_stream::StreamExt;
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
-use numaflow_shared::redacted_url::RedactedUrl;
+use crate::{Error, NatsAuth, Result, TlsConfigWithClientAuth, tls};
 use secrecy::ExposeSecret;
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ pub struct NatsSourceConfig {
     pub subject: String,
     pub queue: String,
     pub auth: Option<NatsAuth>,
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
 }
 
 /// NatsMessage represents a Numaflow Message which can be converted from a Nats message

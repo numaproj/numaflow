@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use crate::{Error, NatsAuth, Result, TlsConfigWithClientAuth, tls};
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
@@ -12,6 +12,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
+use numaflow_shared::redacted_url::RedactedUrl;
 use secrecy::ExposeSecret;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -98,13 +99,13 @@ impl TryFrom<&str> for ConsumerDeliverPolicy {
 
 #[derive(Debug, Clone)]
 pub struct JetstreamSourceConfig {
-    pub addr: numaflow_shared::redacted_url::RedactedUrl,
+    pub addr: RedactedUrl,
     pub stream: String,
     pub consumer: String,
     pub deliver_policy: ConsumerDeliverPolicy,
     pub filter_subjects: Vec<String>,
     pub auth: Option<NatsAuth>,
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
 }
 
 /// Message represents a message received from Jetstream which can be converted to Numaflow Message.
@@ -655,7 +656,6 @@ mod tests {
 
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
-    use numaflow_shared::redacted_url::RedactedUrl;
     use std::time::Duration;
 
     async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
@@ -837,8 +837,6 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_consumer_not_exists_on_stream() {
-        use numaflow_shared::redacted_url::RedactedUrl;
-
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let stream_name = "test_jetstream_source_consumer_not_exists_on_stream";
