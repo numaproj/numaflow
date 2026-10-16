@@ -2600,6 +2600,7 @@ dependencies = [
  "hyper-util",
  "rcgen",
  "rustls 0.23.45",
+ "secrecy",
  "serde",
  "serde_json",
  "thiserror 2.0.17",

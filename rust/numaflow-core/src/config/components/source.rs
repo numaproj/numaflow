@@ -470,7 +470,7 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {
                 Error::Config(format!("Failed to get token secret from volume: {e:?}"))
             })?;
-            http_config = http_config.token(Box::leak(token.into_boxed_str()));
+            http_config = http_config.token(token);
         }
 
         Ok(SourceType::Http(http_config.build()))
