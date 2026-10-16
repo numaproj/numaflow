@@ -21,6 +21,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
+import { useTheme } from "@mui/material/styles";
 import Dropdown from "../common/Dropdown";
 import EmptyChart from "../EmptyChart";
 import FiltersDropdown from "../common/FiltersDropdown";
@@ -282,6 +283,7 @@ const LineChartComponent = ({
   podName,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
+  const theme = useTheme();
   const history = useHistory();
   const location = useLocation();
   const resolvedPodName = pod?.name || podName;
@@ -746,14 +748,6 @@ const LineChartComponent = ({
               display: fromModal ? "none" : "flex",
             }}
           >
-            <Box
-              className={"line-chart-filters-label"}
-              sx={{
-                color: isFilterFocused ? "var(--accent-primary)" : "var(--text-tertiary)",
-              }}
-            >
-              Filters
-            </Box>
             <FiltersDropdown
               items={filtersList?.filter(
                 (filterEle: any) => !filterEle?.required
@@ -780,7 +774,7 @@ const LineChartComponent = ({
           <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc}</Box>
         )}
         {hasTimeParams && (
-          <Box key="line-chart-preset">
+          <Box key="line-chart-preset" className="line-chart-time-range">
             <TimeSelector
               setMetricReq={setMetricsReq}
               initialStart={metricParams.get("metricStart")}
@@ -816,27 +810,31 @@ const LineChartComponent = ({
               }
             }}
           >
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid
+              stroke={theme.palette.divider}
+              strokeDasharray="3 3"
+            />
             <XAxis
               dataKey="time"
               padding={{ left: 15, right: 15 }}
-              axisLine={{ stroke: "#8D9096" }}
+              axisLine={{ stroke: theme.palette.text.secondary }}
               tickFormatter={roundTimestampToNearestFiveMinutes}
               interval={calculateInterval}
               tick={{
+                fill: theme.palette.text.secondary,
                 fontSize: "1rem",
                 fontFamily: "Avenir Next, sans-serif",
               }}
             ></XAxis>
             <YAxis
-              axisLine={{ stroke: "#8D9096" }}
+              axisLine={{ stroke: theme.palette.text.secondary }}
               tickFormatter={getTickFormatter(metric?.display_name)}
               tick={{
+                fill: theme.palette.text.secondary,
                 fontSize: "1rem",
                 fontFamily: "Avenir Next, sans-serif",
               }}
             />
-            <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
 
             {chartLabels?.map((value, index) => (
               <Line
