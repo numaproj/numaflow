@@ -9,7 +9,7 @@ on:
 jobs:
   ui:
     name: UI
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     timeout-minutes: 6
     steps:
       - name: Checkout code
@@ -29,7 +29,7 @@ jobs:
         run: git diff --exit-code
   codegen:
     name: Codegen
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -58,7 +58,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     timeout-minutes: 20
     steps:
       - name: Start JetStream
@@ -136,7 +136,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
@@ -155,7 +155,7 @@ jobs:
       - run: git diff --exit-code
 
   build-rust-amd64:
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     steps:
       - uses: actions/checkout@v4
       # TODO: Use actions/cache@v4 to cache target/ directory
@@ -188,12 +188,11 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-24.04
+    runs-on: numaproj-runners
     needs: [build-rust-amd64]
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 13
       matrix:
         driver: [jetstream]
         case:
