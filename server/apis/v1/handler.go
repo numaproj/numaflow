@@ -1678,18 +1678,22 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
-// collectPodDetails reads pod details concurrently, preserving pod order. A failed
-// read falls back to name and phase so one bad pod cannot hide the rest of the fleet.
+// podDetailsConcurrency caps parallel metrics-server reads for one fleet view.
+// 32 keeps a 100-pod view to a few round trips without an unbounded stampede.
+const podDetailsConcurrency = 32
+
+// collectPodDetails reads pod details concurrently, preserving pod order.
+// A metrics-server failure keeps container status (restart count, waiting reason)
+// already collected from the Pod; only CPU and memory usage are missing.
 func (h *handler) collectPodDetails(ctx context.Context, pods []corev1.Pod) []PodDetails {
 	response := make([]PodDetails, len(pods))
 	var group errgroup.Group
-	group.SetLimit(8)
+	group.SetLimit(podDetailsConcurrency)
 	for i, pod := range pods {
 		group.Go(func() error {
 			details, err := h.getPodDetails(ctx, pod)
 			if err != nil {
-				logging.FromContext(ctx).Warnw("Failed to get pod details", "pod", pod.Name, zap.Error(err))
-				details = PodDetails{Name: pod.Name, Status: string(pod.Status.Phase)}
+				logging.FromContext(ctx).Warnw("Failed to get pod metrics", "pod", pod.Name, zap.Error(err))
 			}
 			response[i] = details
 			return nil

@@ -56,8 +56,8 @@ describe("classifyPod", () => {
   it.each([
     ["crash loop beats overload and idle", running({ udf: container({ state: "Waiting", waitingReason: "CrashLoopBackOff" }) }), 200, silent, "critical"],
     ["a non-running phase is critical", { name: "p", status: "Pending", containerDetailsMap: {} }, 0, busy, "critical"],
-    ["overload beats idle", running(), 101, silent, "warning"],
-    ["exactly 100% is not overloaded", running(), 100, busy, "healthy"],
+    ["overload beats idle", running(), 81, silent, "warning"],
+    ["exactly 80% is not overloaded", running(), 80, busy, "healthy"],
     ["no reads for 15 min is idle", running(), 50, silent, "idle"],
     ["reads in the window are healthy", running(), 50, busy, "healthy"],
     ["recent reads that stopped within 15 min stay healthy", running(), 50, { rate5m: 0, rate15m: 0.2 }, "healthy"],

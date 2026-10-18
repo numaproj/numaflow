@@ -78,7 +78,7 @@ export interface ClassifyPodInput {
 
 /**
  * classifyPod applies the fleet colour rules in precedence order Red > Yellow > Grey > Green:
- * critical (pod unhealthy), warning (a user-defined container above 100% of its CPU or memory
+ * critical (pod unhealthy), warning (a user-defined container above 80% of its CPU or memory
  * request), idle (no reads for 15 min on a pod at least 15 min old), healthy otherwise. Pods
  * without runtime status are unknown unless an earlier rule already matched.
  */
@@ -93,8 +93,8 @@ export function classifyPod({
   const unhealthy = unhealthyReason(runtime);
   if (unhealthy) return { severity: "critical", reason: unhealthy };
 
-  const overCPU = maxCPUPercent !== undefined && maxCPUPercent > 100;
-  const overMemory = maxMemoryPercent !== undefined && maxMemoryPercent > 100;
+  const overCPU = maxCPUPercent !== undefined && maxCPUPercent > 80;
+  const overMemory = maxMemoryPercent !== undefined && maxMemoryPercent > 80;
   if (overCPU || overMemory) {
     const parts = [
       overCPU ? `CPU ${Math.round(maxCPUPercent as number)}%` : undefined,
