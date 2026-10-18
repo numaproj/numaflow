@@ -803,18 +803,18 @@ impl SqsSourceBuilder {
     /// every queue URL, and spawns one actor per queue name. Startup fails if
     /// any queue cannot be resolved.
 
-  /// Builds an `SqsSource` instance with the provided configuration.
-  ///
-  /// This method consumes `self`, initializes one shared SQS client, resolves
-  /// every queue URL, and spawns one actor per queue name. Startup fails if
-  /// any queue cannot be resolved.
-  ///
-  /// If dead-letter queues are configured, each source/DLQ pair is also
-  /// validated before any actor starts: the source queue's `RedrivePolicy`
-  /// must target the DLQ's ARN with the configured `max_receive_count`.
-  /// This is read-only (queues and policies are never created or modified)
-  /// and requires `sqs:GetQueueAttributes` on the source and DLQ queues in
-  /// addition to `sqs:GetQueueUrl`.
+    /// Builds an `SqsSource` instance with the provided configuration.
+    ///
+    /// This method consumes `self`, initializes one shared SQS client, resolves
+    /// every queue URL, and spawns one actor per queue name. Startup fails if
+    /// any queue cannot be resolved.
+    ///
+    /// If dead-letter queues are configured, each source/DLQ pair is also
+    /// validated before any actor starts: the source queue's `RedrivePolicy`
+    /// must target the DLQ's ARN with the configured `max_receive_count`.
+    /// This is read-only (queues and policies are never created or modified)
+    /// and requires `sqs:GetQueueAttributes` on the source and DLQ queues in
+    /// addition to `sqs:GetQueueUrl`.
     /// # Returns
     /// - `Ok(SqsSource)` if the source is successfully built.
     /// - `Err(Error)` if there is an error during the initialization process.
