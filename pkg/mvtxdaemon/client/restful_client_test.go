@@ -15,3 +15,30 @@ limitations under the License.
 */
 
 package client
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestRestfulClient_GetMonoVertexPodReadRates(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/pods/read-rates", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"pods":[{"hostname":"simple-mv-0","replica":0,"readRates":{"15m":0}}]}`))
+	}))
+	defer server.Close()
+
+	daemonClient, err := NewRESTfulClient(server.URL)
+	assert.NoError(t, err)
+	pods, err := daemonClient.GetMonoVertexPodReadRates(context.Background())
+	assert.NoError(t, err)
+	if assert.Len(t, pods, 1) {
+		assert.Equal(t, "simple-mv-0", pods[0].Hostname)
+		assert.Equal(t, 0.0, pods[0].ReadRates["15m"].GetValue())
+	}
+}

@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/server/apis/v2/generated"
 	"github.com/numaproj/numaflow/server/application/capabilities"
 	"github.com/numaproj/numaflow/server/application/observability"
+	"github.com/numaproj/numaflow/server/application/podrates"
 )
 
 func TestGetCapabilities(t *testing.T) {
@@ -47,7 +48,7 @@ func TestGetCapabilities(t *testing.T) {
 			MaximumMetricPoints: 44,
 		},
 	}}
-	router := testRouter(t, service, &fakeObservabilityService{})
+	router := testRouter(t, service, &fakeObservabilityService{}, &fakePodReadRatesService{})
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/capabilities", nil))
@@ -68,10 +69,13 @@ func TestGetCapabilities(t *testing.T) {
 }
 
 func TestNewHandlerRejectsNilService(t *testing.T) {
-	_, err := NewHandler(nil, &fakeObservabilityService{})
+	_, err := NewHandler(nil, &fakeObservabilityService{}, &fakePodReadRatesService{})
 	require.Error(t, err)
 
-	_, err = NewHandler(&fakeCapabilitiesService{}, nil)
+	_, err = NewHandler(&fakeCapabilitiesService{}, nil, &fakePodReadRatesService{})
+	require.Error(t, err)
+
+	_, err = NewHandler(&fakeCapabilitiesService{}, &fakeObservabilityService{}, nil)
 	require.Error(t, err)
 }
 
@@ -99,7 +103,7 @@ func TestGetPipelineVertexSummaryAndETag(t *testing.T) {
 			},
 		},
 	}
-	router := testRouter(t, &fakeCapabilitiesService{}, summaryService)
+	router := testRouter(t, &fakeCapabilitiesService{}, summaryService, &fakePodReadRatesService{})
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/pipelines/orders/vertices/map/summary", nil))
@@ -156,7 +160,7 @@ func TestPipelineVertexSummaryProblems(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
+			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr}, &fakePodReadRatesService{})
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
 
@@ -197,7 +201,7 @@ func TestGetPipelineVertexStatusAndETag(t *testing.T) {
 			},
 		},
 	}
-	router := testRouter(t, &fakeCapabilitiesService{}, statusService)
+	router := testRouter(t, &fakeCapabilitiesService{}, statusService, &fakePodReadRatesService{})
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/pipelines/orders/vertices/map/status", nil))
@@ -252,7 +256,7 @@ func TestPipelineVertexStatusProblems(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
+			router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr}, &fakePodReadRatesService{})
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
 
@@ -289,7 +293,7 @@ func TestGetMonoVertexSummaryAndETag(t *testing.T) {
 			},
 		},
 	}
-	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService)
+	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService, &fakePodReadRatesService{})
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/summary", nil))
@@ -331,7 +335,7 @@ func TestGetMonoVertexStatusAndETag(t *testing.T) {
 			},
 		},
 	}
-	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService)
+	router := testRouter(t, &fakeCapabilitiesService{}, observabilityService, &fakePodReadRatesService{})
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/status", nil))
@@ -386,7 +390,7 @@ func TestMonoVertexProblems(t *testing.T) {
 	for _, endpoint := range endpoints {
 		for _, test := range tests {
 			t.Run(endpoint+"/"+test.name, func(t *testing.T) {
-				router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr})
+				router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{err: test.serviceErr}, &fakePodReadRatesService{})
 				recorder := httptest.NewRecorder()
 				router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path+"/"+endpoint, nil))
 
@@ -401,10 +405,10 @@ func TestMonoVertexProblems(t *testing.T) {
 	}
 }
 
-func testRouter(t *testing.T, capabilitiesService CapabilitiesService, observabilityService ObservabilityService) *gin.Engine {
+func testRouter(t *testing.T, capabilitiesService CapabilitiesService, observabilityService ObservabilityService, podReadRatesService PodReadRatesService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	handler, err := NewHandler(capabilitiesService, observabilityService)
+	handler, err := NewHandler(capabilitiesService, observabilityService, podReadRatesService)
 	require.NoError(t, err)
 	router := gin.New()
 	generated.RegisterHandlersWithOptions(router, handler, generated.GinServerOptions{
@@ -445,4 +449,71 @@ func (f *fakeObservabilityService) GetMonoVertexSummary(context.Context, string,
 
 func (f *fakeObservabilityService) GetMonoVertexStatus(context.Context, string, string) (observability.Result[observability.VertexStatus], error) {
 	return f.monoStatus, f.err
+}
+
+type fakePodReadRatesService struct {
+	rates podrates.PodReadRates
+	err   error
+}
+
+func (f *fakePodReadRatesService) GetMonoVertexPodReadRates(context.Context, string, string) (podrates.PodReadRates, error) {
+	return f.rates, f.err
+}
+
+func (f *fakePodReadRatesService) GetPipelineVertexPodReadRates(context.Context, string, string, string) (podrates.PodReadRates, error) {
+	return f.rates, f.err
+}
+
+func TestGetMonoVertexPodReadRates(t *testing.T) {
+	five := 1.25
+	observed := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
+	router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{}, &fakePodReadRatesService{
+		rates: podrates.PodReadRates{
+			ObservedAt: observed,
+			Pods:       []podrates.PodReadRate{{Replica: 0, Hostname: "orders-ingest-mv-0", Rate5m: &five}},
+		},
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/pods/read-rates", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+	assert.Empty(t, recorder.Header().Get("ETag"))
+	var response generated.PodReadRates
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, "orders-ingest-mv-0", response.Pods[0].Hostname)
+	require.NotNil(t, response.Pods[0].Rate5m)
+	assert.Equal(t, 1.25, *response.Pods[0].Rate5m)
+	assert.Nil(t, response.Pods[0].Rate15m)
+}
+
+func TestGetPipelineVertexPodReadRatesNotFound(t *testing.T) {
+	router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{}, &fakePodReadRatesService{
+		err: apierrors.NewNotFound(schema.GroupResource{Group: "numaflow.numaproj.io", Resource: "vertices"}, "orders-map"),
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/pipelines/orders/vertices/map/pods/read-rates", nil))
+
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	var problem generated.Problem
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &problem))
+	assert.Equal(t, "target_not_found", problem.Code)
+}
+
+func TestGetPodReadRatesValidationAndDaemonUnavailable(t *testing.T) {
+	router := testRouter(t, &fakeCapabilitiesService{}, &fakeObservabilityService{}, &fakePodReadRatesService{err: podrates.ErrDaemonUnavailable})
+
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/namespaces/Invalid_Name/mono-vertices/orders-ingest/pods/read-rates", nil))
+	require.Equal(t, http.StatusUnprocessableEntity, invalid.Code)
+
+	unavailable := httptest.NewRecorder()
+	router.ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, "/namespaces/team-a/mono-vertices/orders-ingest/pods/read-rates", nil))
+	require.Equal(t, http.StatusServiceUnavailable, unavailable.Code)
+	var problem generated.Problem
+	require.NoError(t, json.Unmarshal(unavailable.Body.Bytes(), &problem))
+	assert.Equal(t, "daemon_unavailable", problem.Code)
+	require.NotNil(t, problem.Retryable)
+	assert.True(t, *problem.Retryable)
+	assert.NotContains(t, problem.Detail, "connection")
 }

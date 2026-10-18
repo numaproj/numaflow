@@ -649,6 +649,165 @@ func (x *GetVertexMetricsResponse) GetVertexMetrics() []*VertexMetrics {
 	return nil
 }
 
+// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
+// hostname is the pod hostname (for example "pipeline-vertex-0"); the Kubernetes pod name is "{hostname}-{suffix}".
+// A window is omitted from readRates until the daemon has observed that full lookback.
+type PodReadRate struct {
+	state         protoimpl.MessageState             `protogen:"open.v1"`
+	Hostname      string                             `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Replica       int32                              `protobuf:"varint,2,opt,name=replica,proto3" json:"replica,omitempty"`
+	ReadRates     map[string]*wrapperspb.DoubleValue `protobuf:"bytes,3,rep,name=readRates,proto3" json:"readRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PodReadRate) Reset() {
+	*x = PodReadRate{}
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PodReadRate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PodReadRate) ProtoMessage() {}
+
+func (x *PodReadRate) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PodReadRate.ProtoReflect.Descriptor instead.
+func (*PodReadRate) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PodReadRate) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *PodReadRate) GetReplica() int32 {
+	if x != nil {
+		return x.Replica
+	}
+	return 0
+}
+
+func (x *PodReadRate) GetReadRates() map[string]*wrapperspb.DoubleValue {
+	if x != nil {
+		return x.ReadRates
+	}
+	return nil
+}
+
+type GetVertexPodReadRatesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pipeline      string                 `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	Vertex        string                 `protobuf:"bytes,2,opt,name=vertex,proto3" json:"vertex,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVertexPodReadRatesRequest) Reset() {
+	*x = GetVertexPodReadRatesRequest{}
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVertexPodReadRatesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVertexPodReadRatesRequest) ProtoMessage() {}
+
+func (x *GetVertexPodReadRatesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVertexPodReadRatesRequest.ProtoReflect.Descriptor instead.
+func (*GetVertexPodReadRatesRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetVertexPodReadRatesRequest) GetPipeline() string {
+	if x != nil {
+		return x.Pipeline
+	}
+	return ""
+}
+
+func (x *GetVertexPodReadRatesRequest) GetVertex() string {
+	if x != nil {
+		return x.Vertex
+	}
+	return ""
+}
+
+type GetVertexPodReadRatesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pods          []*PodReadRate         `protobuf:"bytes,1,rep,name=pods,proto3" json:"pods,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVertexPodReadRatesResponse) Reset() {
+	*x = GetVertexPodReadRatesResponse{}
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVertexPodReadRatesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVertexPodReadRatesResponse) ProtoMessage() {}
+
+func (x *GetVertexPodReadRatesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVertexPodReadRatesResponse.ProtoReflect.Descriptor instead.
+func (*GetVertexPodReadRatesResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetVertexPodReadRatesResponse) GetPods() []*PodReadRate {
+	if x != nil {
+		return x.Pods
+	}
+	return nil
+}
+
 // EdgeWatermark has edge to watermark mapping.
 type EdgeWatermark struct {
 	state              protoimpl.MessageState   `protogen:"open.v1"`
@@ -664,7 +823,7 @@ type EdgeWatermark struct {
 
 func (x *EdgeWatermark) Reset() {
 	*x = EdgeWatermark{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[11]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +835,7 @@ func (x *EdgeWatermark) String() string {
 func (*EdgeWatermark) ProtoMessage() {}
 
 func (x *EdgeWatermark) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[11]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +848,7 @@ func (x *EdgeWatermark) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeWatermark.ProtoReflect.Descriptor instead.
 func (*EdgeWatermark) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{11}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EdgeWatermark) GetPipeline() string {
@@ -743,7 +902,7 @@ type GetPipelineWatermarksResponse struct {
 
 func (x *GetPipelineWatermarksResponse) Reset() {
 	*x = GetPipelineWatermarksResponse{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[12]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +914,7 @@ func (x *GetPipelineWatermarksResponse) String() string {
 func (*GetPipelineWatermarksResponse) ProtoMessage() {}
 
 func (x *GetPipelineWatermarksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[12]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +927,7 @@ func (x *GetPipelineWatermarksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPipelineWatermarksResponse.ProtoReflect.Descriptor instead.
 func (*GetPipelineWatermarksResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{12}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetPipelineWatermarksResponse) GetPipelineWatermarks() []*EdgeWatermark {
@@ -788,7 +947,7 @@ type GetPipelineWatermarksRequest struct {
 
 func (x *GetPipelineWatermarksRequest) Reset() {
 	*x = GetPipelineWatermarksRequest{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[13]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -800,7 +959,7 @@ func (x *GetPipelineWatermarksRequest) String() string {
 func (*GetPipelineWatermarksRequest) ProtoMessage() {}
 
 func (x *GetPipelineWatermarksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[13]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -813,7 +972,7 @@ func (x *GetPipelineWatermarksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPipelineWatermarksRequest.ProtoReflect.Descriptor instead.
 func (*GetPipelineWatermarksRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{13}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetPipelineWatermarksRequest) GetPipeline() string {
@@ -834,7 +993,7 @@ type GetVertexErrorsRequest struct {
 
 func (x *GetVertexErrorsRequest) Reset() {
 	*x = GetVertexErrorsRequest{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[14]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -846,7 +1005,7 @@ func (x *GetVertexErrorsRequest) String() string {
 func (*GetVertexErrorsRequest) ProtoMessage() {}
 
 func (x *GetVertexErrorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[14]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -859,7 +1018,7 @@ func (x *GetVertexErrorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVertexErrorsRequest.ProtoReflect.Descriptor instead.
 func (*GetVertexErrorsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{14}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetVertexErrorsRequest) GetPipeline() string {
@@ -891,7 +1050,7 @@ type ContainerError struct {
 
 func (x *ContainerError) Reset() {
 	*x = ContainerError{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[15]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -903,7 +1062,7 @@ func (x *ContainerError) String() string {
 func (*ContainerError) ProtoMessage() {}
 
 func (x *ContainerError) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[15]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -916,7 +1075,7 @@ func (x *ContainerError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerError.ProtoReflect.Descriptor instead.
 func (*ContainerError) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{15}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ContainerError) GetContainer() string {
@@ -965,7 +1124,7 @@ type ReplicaErrors struct {
 
 func (x *ReplicaErrors) Reset() {
 	*x = ReplicaErrors{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[16]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -977,7 +1136,7 @@ func (x *ReplicaErrors) String() string {
 func (*ReplicaErrors) ProtoMessage() {}
 
 func (x *ReplicaErrors) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[16]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -990,7 +1149,7 @@ func (x *ReplicaErrors) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaErrors.ProtoReflect.Descriptor instead.
 func (*ReplicaErrors) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{16}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ReplicaErrors) GetReplica() string {
@@ -1016,7 +1175,7 @@ type GetVertexErrorsResponse struct {
 
 func (x *GetVertexErrorsResponse) Reset() {
 	*x = GetVertexErrorsResponse{}
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[17]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1028,7 +1187,7 @@ func (x *GetVertexErrorsResponse) String() string {
 func (*GetVertexErrorsResponse) ProtoMessage() {}
 
 func (x *GetVertexErrorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[17]
+	mi := &file_pkg_apis_proto_daemon_daemon_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1041,7 +1200,7 @@ func (x *GetVertexErrorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVertexErrorsResponse.ProtoReflect.Descriptor instead.
 func (*GetVertexErrorsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{17}
+	return file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetVertexErrorsResponse) GetErrors() []*ReplicaErrors {
@@ -1101,7 +1260,19 @@ const file_pkg_apis_proto_daemon_daemon_proto_rawDesc = "" +
 	"\bpipeline\x18\x02 \x01(\tR\bpipeline\x12\x16\n" +
 	"\x06vertex\x18\x03 \x01(\tR\x06vertex\"W\n" +
 	"\x18GetVertexMetricsResponse\x12;\n" +
-	"\rvertexMetrics\x18\x01 \x03(\v2\x15.daemon.VertexMetricsR\rvertexMetrics\"\xec\x01\n" +
+	"\rvertexMetrics\x18\x01 \x03(\v2\x15.daemon.VertexMetricsR\rvertexMetrics\"\xe1\x01\n" +
+	"\vPodReadRate\x12\x1a\n" +
+	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x18\n" +
+	"\areplica\x18\x02 \x01(\x05R\areplica\x12@\n" +
+	"\treadRates\x18\x03 \x03(\v2\".daemon.PodReadRate.ReadRatesEntryR\treadRates\x1aZ\n" +
+	"\x0eReadRatesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x122\n" +
+	"\x05value\x18\x02 \x01(\v2\x1c.google.protobuf.DoubleValueR\x05value:\x028\x01\"R\n" +
+	"\x1cGetVertexPodReadRatesRequest\x12\x1a\n" +
+	"\bpipeline\x18\x01 \x01(\tR\bpipeline\x12\x16\n" +
+	"\x06vertex\x18\x02 \x01(\tR\x06vertex\"H\n" +
+	"\x1dGetVertexPodReadRatesResponse\x12'\n" +
+	"\x04pods\x18\x01 \x03(\v2\x13.daemon.PodReadRateR\x04pods\"\xec\x01\n" +
 	"\rEdgeWatermark\x12\x1a\n" +
 	"\bpipeline\x18\x01 \x01(\tR\bpipeline\x12\x12\n" +
 	"\x04edge\x18\x02 \x01(\tR\x04edge\x12;\n" +
@@ -1128,11 +1299,12 @@ const file_pkg_apis_proto_daemon_daemon_proto_rawDesc = "" +
 	"\areplica\x18\x01 \x01(\tR\areplica\x12@\n" +
 	"\x0fcontainerErrors\x18\x02 \x03(\v2\x16.daemon.ContainerErrorR\x0fcontainerErrors\"H\n" +
 	"\x17GetVertexErrorsResponse\x12-\n" +
-	"\x06errors\x18\x01 \x03(\v2\x15.daemon.ReplicaErrorsR\x06errors2\xca\x06\n" +
+	"\x06errors\x18\x01 \x03(\v2\x15.daemon.ReplicaErrorsR\x06errors2\xf9\a\n" +
 	"\rDaemonService\x12t\n" +
 	"\vListBuffers\x12\x1a.daemon.ListBuffersRequest\x1a\x1b.daemon.ListBuffersResponse\",\x82\xd3\xe4\x93\x02&\x12$/api/v1/pipelines/{pipeline}/buffers\x12w\n" +
 	"\tGetBuffer\x12\x18.daemon.GetBufferRequest\x1a\x19.daemon.GetBufferResponse\"5\x82\xd3\xe4\x93\x02/\x12-/api/v1/pipelines/{pipeline}/buffers/{buffer}\x12\x95\x01\n" +
-	"\x10GetVertexMetrics\x12\x1f.daemon.GetVertexMetricsRequest\x1a .daemon.GetVertexMetricsResponse\">\x82\xd3\xe4\x93\x028\x126/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics\x12\x95\x01\n" +
+	"\x10GetVertexMetrics\x12\x1f.daemon.GetVertexMetricsRequest\x1a .daemon.GetVertexMetricsResponse\">\x82\xd3\xe4\x93\x028\x126/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics\x12\xac\x01\n" +
+	"\x15GetVertexPodReadRates\x12$.daemon.GetVertexPodReadRatesRequest\x1a%.daemon.GetVertexPodReadRatesResponse\"F\x82\xd3\xe4\x93\x02@\x12>/api/v1/pipelines/{pipeline}/vertices/{vertex}/pods/read-rates\x12\x95\x01\n" +
 	"\x15GetPipelineWatermarks\x12$.daemon.GetPipelineWatermarksRequest\x1a%.daemon.GetPipelineWatermarksResponse\"/\x82\xd3\xe4\x93\x02)\x12'/api/v1/pipelines/{pipeline}/watermarks\x12\x85\x01\n" +
 	"\x11GetPipelineStatus\x12 .daemon.GetPipelineStatusRequest\x1a!.daemon.GetPipelineStatusResponse\"+\x82\xd3\xe4\x93\x02%\x12#/api/v1/pipelines/{pipeline}/status\x12\x91\x01\n" +
 	"\x0fGetVertexErrors\x12\x1e.daemon.GetVertexErrorsRequest\x1a\x1f.daemon.GetVertexErrorsResponse\"=\x82\xd3\xe4\x93\x027\x125/api/v1/pipelines/{pipeline}/vertices/{vertex}/errorsB4Z2github.com/numaproj/numaflow/pkg/apis/proto/daemonb\x06proto3"
@@ -1149,7 +1321,7 @@ func file_pkg_apis_proto_daemon_daemon_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_proto_daemon_daemon_proto_rawDescData
 }
 
-var file_pkg_apis_proto_daemon_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_pkg_apis_proto_daemon_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_pkg_apis_proto_daemon_daemon_proto_goTypes = []any{
 	(*BufferInfo)(nil),                    // 0: daemon.BufferInfo
 	(*VertexMetrics)(nil),                 // 1: daemon.VertexMetrics
@@ -1162,59 +1334,68 @@ var file_pkg_apis_proto_daemon_daemon_proto_goTypes = []any{
 	(*GetPipelineStatusResponse)(nil),     // 8: daemon.GetPipelineStatusResponse
 	(*GetVertexMetricsRequest)(nil),       // 9: daemon.GetVertexMetricsRequest
 	(*GetVertexMetricsResponse)(nil),      // 10: daemon.GetVertexMetricsResponse
-	(*EdgeWatermark)(nil),                 // 11: daemon.EdgeWatermark
-	(*GetPipelineWatermarksResponse)(nil), // 12: daemon.GetPipelineWatermarksResponse
-	(*GetPipelineWatermarksRequest)(nil),  // 13: daemon.GetPipelineWatermarksRequest
-	(*GetVertexErrorsRequest)(nil),        // 14: daemon.GetVertexErrorsRequest
-	(*ContainerError)(nil),                // 15: daemon.ContainerError
-	(*ReplicaErrors)(nil),                 // 16: daemon.ReplicaErrors
-	(*GetVertexErrorsResponse)(nil),       // 17: daemon.GetVertexErrorsResponse
-	nil,                                   // 18: daemon.VertexMetrics.ProcessingRatesEntry
-	nil,                                   // 19: daemon.VertexMetrics.PendingsEntry
-	(*wrapperspb.Int64Value)(nil),         // 20: google.protobuf.Int64Value
-	(*wrapperspb.DoubleValue)(nil),        // 21: google.protobuf.DoubleValue
-	(*wrapperspb.BoolValue)(nil),          // 22: google.protobuf.BoolValue
-	(*timestamppb.Timestamp)(nil),         // 23: google.protobuf.Timestamp
+	(*PodReadRate)(nil),                   // 11: daemon.PodReadRate
+	(*GetVertexPodReadRatesRequest)(nil),  // 12: daemon.GetVertexPodReadRatesRequest
+	(*GetVertexPodReadRatesResponse)(nil), // 13: daemon.GetVertexPodReadRatesResponse
+	(*EdgeWatermark)(nil),                 // 14: daemon.EdgeWatermark
+	(*GetPipelineWatermarksResponse)(nil), // 15: daemon.GetPipelineWatermarksResponse
+	(*GetPipelineWatermarksRequest)(nil),  // 16: daemon.GetPipelineWatermarksRequest
+	(*GetVertexErrorsRequest)(nil),        // 17: daemon.GetVertexErrorsRequest
+	(*ContainerError)(nil),                // 18: daemon.ContainerError
+	(*ReplicaErrors)(nil),                 // 19: daemon.ReplicaErrors
+	(*GetVertexErrorsResponse)(nil),       // 20: daemon.GetVertexErrorsResponse
+	nil,                                   // 21: daemon.VertexMetrics.ProcessingRatesEntry
+	nil,                                   // 22: daemon.VertexMetrics.PendingsEntry
+	nil,                                   // 23: daemon.PodReadRate.ReadRatesEntry
+	(*wrapperspb.Int64Value)(nil),         // 24: google.protobuf.Int64Value
+	(*wrapperspb.DoubleValue)(nil),        // 25: google.protobuf.DoubleValue
+	(*wrapperspb.BoolValue)(nil),          // 26: google.protobuf.BoolValue
+	(*timestamppb.Timestamp)(nil),         // 27: google.protobuf.Timestamp
 }
 var file_pkg_apis_proto_daemon_daemon_proto_depIdxs = []int32{
-	20, // 0: daemon.BufferInfo.pendingCount:type_name -> google.protobuf.Int64Value
-	20, // 1: daemon.BufferInfo.ackPendingCount:type_name -> google.protobuf.Int64Value
-	20, // 2: daemon.BufferInfo.totalMessages:type_name -> google.protobuf.Int64Value
-	20, // 3: daemon.BufferInfo.bufferLength:type_name -> google.protobuf.Int64Value
-	21, // 4: daemon.BufferInfo.bufferUsageLimit:type_name -> google.protobuf.DoubleValue
-	21, // 5: daemon.BufferInfo.bufferUsage:type_name -> google.protobuf.DoubleValue
-	22, // 6: daemon.BufferInfo.isFull:type_name -> google.protobuf.BoolValue
-	18, // 7: daemon.VertexMetrics.processingRates:type_name -> daemon.VertexMetrics.ProcessingRatesEntry
-	19, // 8: daemon.VertexMetrics.pendings:type_name -> daemon.VertexMetrics.PendingsEntry
+	24, // 0: daemon.BufferInfo.pendingCount:type_name -> google.protobuf.Int64Value
+	24, // 1: daemon.BufferInfo.ackPendingCount:type_name -> google.protobuf.Int64Value
+	24, // 2: daemon.BufferInfo.totalMessages:type_name -> google.protobuf.Int64Value
+	24, // 3: daemon.BufferInfo.bufferLength:type_name -> google.protobuf.Int64Value
+	25, // 4: daemon.BufferInfo.bufferUsageLimit:type_name -> google.protobuf.DoubleValue
+	25, // 5: daemon.BufferInfo.bufferUsage:type_name -> google.protobuf.DoubleValue
+	26, // 6: daemon.BufferInfo.isFull:type_name -> google.protobuf.BoolValue
+	21, // 7: daemon.VertexMetrics.processingRates:type_name -> daemon.VertexMetrics.ProcessingRatesEntry
+	22, // 8: daemon.VertexMetrics.pendings:type_name -> daemon.VertexMetrics.PendingsEntry
 	0,  // 9: daemon.ListBuffersResponse.buffers:type_name -> daemon.BufferInfo
 	0,  // 10: daemon.GetBufferResponse.buffer:type_name -> daemon.BufferInfo
 	2,  // 11: daemon.GetPipelineStatusResponse.status:type_name -> daemon.PipelineStatus
 	1,  // 12: daemon.GetVertexMetricsResponse.vertexMetrics:type_name -> daemon.VertexMetrics
-	20, // 13: daemon.EdgeWatermark.watermarks:type_name -> google.protobuf.Int64Value
-	22, // 14: daemon.EdgeWatermark.isWatermarkEnabled:type_name -> google.protobuf.BoolValue
-	11, // 15: daemon.GetPipelineWatermarksResponse.pipelineWatermarks:type_name -> daemon.EdgeWatermark
-	23, // 16: daemon.ContainerError.timestamp:type_name -> google.protobuf.Timestamp
-	15, // 17: daemon.ReplicaErrors.containerErrors:type_name -> daemon.ContainerError
-	16, // 18: daemon.GetVertexErrorsResponse.errors:type_name -> daemon.ReplicaErrors
-	21, // 19: daemon.VertexMetrics.ProcessingRatesEntry.value:type_name -> google.protobuf.DoubleValue
-	20, // 20: daemon.VertexMetrics.PendingsEntry.value:type_name -> google.protobuf.Int64Value
-	3,  // 21: daemon.DaemonService.ListBuffers:input_type -> daemon.ListBuffersRequest
-	5,  // 22: daemon.DaemonService.GetBuffer:input_type -> daemon.GetBufferRequest
-	9,  // 23: daemon.DaemonService.GetVertexMetrics:input_type -> daemon.GetVertexMetricsRequest
-	13, // 24: daemon.DaemonService.GetPipelineWatermarks:input_type -> daemon.GetPipelineWatermarksRequest
-	7,  // 25: daemon.DaemonService.GetPipelineStatus:input_type -> daemon.GetPipelineStatusRequest
-	14, // 26: daemon.DaemonService.GetVertexErrors:input_type -> daemon.GetVertexErrorsRequest
-	4,  // 27: daemon.DaemonService.ListBuffers:output_type -> daemon.ListBuffersResponse
-	6,  // 28: daemon.DaemonService.GetBuffer:output_type -> daemon.GetBufferResponse
-	10, // 29: daemon.DaemonService.GetVertexMetrics:output_type -> daemon.GetVertexMetricsResponse
-	12, // 30: daemon.DaemonService.GetPipelineWatermarks:output_type -> daemon.GetPipelineWatermarksResponse
-	8,  // 31: daemon.DaemonService.GetPipelineStatus:output_type -> daemon.GetPipelineStatusResponse
-	17, // 32: daemon.DaemonService.GetVertexErrors:output_type -> daemon.GetVertexErrorsResponse
-	27, // [27:33] is the sub-list for method output_type
-	21, // [21:27] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	23, // 13: daemon.PodReadRate.readRates:type_name -> daemon.PodReadRate.ReadRatesEntry
+	11, // 14: daemon.GetVertexPodReadRatesResponse.pods:type_name -> daemon.PodReadRate
+	24, // 15: daemon.EdgeWatermark.watermarks:type_name -> google.protobuf.Int64Value
+	26, // 16: daemon.EdgeWatermark.isWatermarkEnabled:type_name -> google.protobuf.BoolValue
+	14, // 17: daemon.GetPipelineWatermarksResponse.pipelineWatermarks:type_name -> daemon.EdgeWatermark
+	27, // 18: daemon.ContainerError.timestamp:type_name -> google.protobuf.Timestamp
+	18, // 19: daemon.ReplicaErrors.containerErrors:type_name -> daemon.ContainerError
+	19, // 20: daemon.GetVertexErrorsResponse.errors:type_name -> daemon.ReplicaErrors
+	25, // 21: daemon.VertexMetrics.ProcessingRatesEntry.value:type_name -> google.protobuf.DoubleValue
+	24, // 22: daemon.VertexMetrics.PendingsEntry.value:type_name -> google.protobuf.Int64Value
+	25, // 23: daemon.PodReadRate.ReadRatesEntry.value:type_name -> google.protobuf.DoubleValue
+	3,  // 24: daemon.DaemonService.ListBuffers:input_type -> daemon.ListBuffersRequest
+	5,  // 25: daemon.DaemonService.GetBuffer:input_type -> daemon.GetBufferRequest
+	9,  // 26: daemon.DaemonService.GetVertexMetrics:input_type -> daemon.GetVertexMetricsRequest
+	12, // 27: daemon.DaemonService.GetVertexPodReadRates:input_type -> daemon.GetVertexPodReadRatesRequest
+	16, // 28: daemon.DaemonService.GetPipelineWatermarks:input_type -> daemon.GetPipelineWatermarksRequest
+	7,  // 29: daemon.DaemonService.GetPipelineStatus:input_type -> daemon.GetPipelineStatusRequest
+	17, // 30: daemon.DaemonService.GetVertexErrors:input_type -> daemon.GetVertexErrorsRequest
+	4,  // 31: daemon.DaemonService.ListBuffers:output_type -> daemon.ListBuffersResponse
+	6,  // 32: daemon.DaemonService.GetBuffer:output_type -> daemon.GetBufferResponse
+	10, // 33: daemon.DaemonService.GetVertexMetrics:output_type -> daemon.GetVertexMetricsResponse
+	13, // 34: daemon.DaemonService.GetVertexPodReadRates:output_type -> daemon.GetVertexPodReadRatesResponse
+	15, // 35: daemon.DaemonService.GetPipelineWatermarks:output_type -> daemon.GetPipelineWatermarksResponse
+	8,  // 36: daemon.DaemonService.GetPipelineStatus:output_type -> daemon.GetPipelineStatusResponse
+	20, // 37: daemon.DaemonService.GetVertexErrors:output_type -> daemon.GetVertexErrorsResponse
+	31, // [31:38] is the sub-list for method output_type
+	24, // [24:31] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_proto_daemon_daemon_proto_init() }
@@ -1228,7 +1409,7 @@ func file_pkg_apis_proto_daemon_daemon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_proto_daemon_daemon_proto_rawDesc), len(file_pkg_apis_proto_daemon_daemon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

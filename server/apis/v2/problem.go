@@ -30,13 +30,24 @@ const RequestIDHeader = "X-Request-ID"
 // WriteProblem writes an API v2 error using the OpenAPI Problem response shape
 // and stops later Gin handlers from writing another response.
 func WriteProblem(c *gin.Context, status int, code, title, detail string, violations []generated.Violation) {
+	writeProblem(c, status, code, title, detail, violations, nil)
+}
+
+// WriteRetryableProblem is WriteProblem for a failure the caller can retry, such as a daemon that is down.
+func WriteRetryableProblem(c *gin.Context, status int, code, title, detail string) {
+	retryable := true
+	writeProblem(c, status, code, title, detail, nil, &retryable)
+}
+
+func writeProblem(c *gin.Context, status int, code, title, detail string, violations []generated.Violation, retryable *bool) {
 	problem := generated.Problem{
-		Type:     fmt.Sprintf("/api/v2/problems/%s", code),
-		Title:    title,
-		Status:   status,
-		Code:     code,
-		Detail:   detail,
-		Instance: c.Request.URL.Path,
+		Type:      fmt.Sprintf("/api/v2/problems/%s", code),
+		Title:     title,
+		Status:    status,
+		Code:      code,
+		Detail:    detail,
+		Instance:  c.Request.URL.Path,
+		Retryable: retryable,
 	}
 	if traceID := c.GetHeader(RequestIDHeader); traceID != "" {
 		problem.TraceId = &traceID

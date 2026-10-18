@@ -29,6 +29,8 @@ type DaemonClient interface {
 	ListPipelineBuffers(ctx context.Context, pipeline string) ([]*daemon.BufferInfo, error)
 	GetPipelineBuffer(ctx context.Context, pipeline, buffer string) (*daemon.BufferInfo, error)
 	GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error)
+	// GetVertexPodReadRates returns per-pod 5m and 15m read rates for one vertex.
+	GetVertexPodReadRates(ctx context.Context, pipeline, vertex string) ([]*daemon.PodReadRate, error)
 	GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error)
 	GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error)
 	GetVertexErrors(ctx context.Context, pipeline, vertex string) ([]*daemon.ReplicaErrors, error)

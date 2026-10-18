@@ -43,6 +43,9 @@ type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
 	GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value
+	// GetPodReadRates returns per-pod 5m and 15m read rates for one vertex.
+	// It does not affect the partition totals used for autoscaling.
+	GetPodReadRates(vertexName string) []PodReadRate
 }
 
 var _ Ratable = (*Rater)(nil)
@@ -416,6 +419,12 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrappersp
 	}
 	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
+}
+
+// GetPodReadRates returns each active pod's 5m and 15m read rate for one vertex.
+// Partition counters on the same pod are summed. An unknown vertex returns nil.
+func (r *Rater) GetPodReadRates(vertexName string) []PodReadRate {
+	return podReadRates(r.timestampedPodCounts[vertexName])
 }
 
 // GetPending returns the pending count for the vertex partition in the format of lookback second to pending mappings

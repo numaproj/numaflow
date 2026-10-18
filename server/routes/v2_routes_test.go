@@ -29,7 +29,7 @@ import (
 func TestV2AuthRouteMapComesFromOpenAPI(t *testing.T) {
 	routeMap, err := V2AuthRouteMap("/numaflow/")
 	require.NoError(t, err)
-	require.Len(t, routeMap, 5)
+	require.Len(t, routeMap, 7)
 
 	capabilities := routeMap["GET:/numaflow/api/v2/capabilities"]
 	require.NotNil(t, capabilities)
@@ -54,6 +54,16 @@ func TestV2AuthRouteMapComesFromOpenAPI(t *testing.T) {
 	require.NotNil(t, monoVertexStatus)
 	assert.True(t, monoVertexStatus.RequiresAuthZ)
 	assert.Equal(t, "mono-vertex", monoVertexStatus.Object)
+
+	pipelineRates := routeMap["GET:/numaflow/api/v2/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/read-rates"]
+	require.NotNil(t, pipelineRates)
+	assert.True(t, pipelineRates.RequiresAuthZ)
+	assert.Equal(t, "pipeline", pipelineRates.Object)
+
+	monoRates := routeMap["GET:/numaflow/api/v2/namespaces/:namespace/mono-vertices/:monoVertex/pods/read-rates"]
+	require.NotNil(t, monoRates)
+	assert.True(t, monoRates.RequiresAuthZ)
+	assert.Equal(t, "mono-vertex", monoRates.Object)
 }
 
 func TestV2AuthRouteMapRejectsMissingRequiredExtension(t *testing.T) {

@@ -18,11 +18,23 @@ package rater
 
 import (
 	"math"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
+
+// PodReadRate is one pod's read rate (messages per second) over the fixed windows the fleet view shows.
+// A nil window means the daemon has not yet observed that full lookback, so the caller omits it.
+type PodReadRate struct {
+	Hostname string
+	Replica  int
+	Rate5m   *float64
+	Rate15m  *float64
+}
 
 const (
 	indexNotFound = -1
@@ -82,6 +94,61 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	return sum / num
 }
 
+// CalculatePodRates returns each active pod's read rate (messages per second) over lookbackSeconds,
+// summing that pod's partition counters. The map is nil when the queue does not yet cover the whole
+// window. Only pods present in the latest complete snapshot are included.
+func CalculatePodRates(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) map[string]float64 {
+	counts := q.Items()
+	if len(counts) <= 1 {
+		return nil
+	}
+	if counts[0].timestamp > time.Now().Unix()-lookbackSeconds {
+		return nil
+	}
+	startIndex := findStartIndex(lookbackSeconds, counts)
+	endIndex := len(counts) - 2
+	if startIndex == indexNotFound {
+		return nil
+	}
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
+	if timeDiff <= 0 {
+		return nil
+	}
+
+	deltas := make(map[string]float64)
+	for i := startIndex; i < endIndex; i++ {
+		accumulatePodPartitionDeltas(counts[i], counts[i+1], deltas)
+	}
+	active := counts[endIndex].PodPartitionCountSnapshot()
+	rates := make(map[string]float64, len(active))
+	for podName := range active {
+		rates[podName] = deltas[podName] / float64(timeDiff)
+	}
+	return rates
+}
+
+// accumulatePodPartitionDeltas adds each pod's count increase, summed across its partitions.
+// A partition whose counter decreased has restarted; its current value is the increase since restart.
+func accumulatePodPartitionDeltas(tc1, tc2 *TimestampedCounts, deltas map[string]float64) {
+	if tc1 == nil || tc2 == nil {
+		return
+	}
+	prevCounts := tc1.PodPartitionCountSnapshot()
+	for podName, partitions := range tc2.PodPartitionCountSnapshot() {
+		prevPartitions := prevCounts[podName]
+		var podDelta float64
+		for partitionName, currCount := range partitions {
+			prevCount := prevPartitions[partitionName]
+			partitionDelta := currCount
+			if currCount >= prevCount {
+				partitionDelta = currCount - prevCount
+			}
+			podDelta += partitionDelta
+		}
+		deltas[podName] += podDelta
+	}
+}
+
 // CalculateRate calculates the rate of the vertex partition in the last lookback seconds
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
 	counts := q.Items()
@@ -133,6 +200,75 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 		delta += podDelta
 	}
 	return delta
+}
+
+// podReadRates builds the fleet's 5m and 15m per-pod rates from one vertex timeline.
+func podReadRates(q *sharedqueue.OverflowQueue[*TimestampedCounts]) []PodReadRate {
+	if q == nil {
+		return nil
+	}
+	return assemblePodReadRates(
+		CalculatePodRates(q, fixedLookbackSeconds["5m"]),
+		CalculatePodRates(q, fixedLookbackSeconds["15m"]),
+	)
+}
+
+// assemblePodReadRates joins the two windows by pod hostname and orders the result by replica.
+func assemblePodReadRates(rates5m, rates15m map[string]float64) []PodReadRate {
+	names := make(map[string]struct{}, len(rates5m)+len(rates15m))
+	for name := range rates5m {
+		names[name] = struct{}{}
+	}
+	for name := range rates15m {
+		names[name] = struct{}{}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	ordered := make([]string, 0, len(names))
+	for name := range names {
+		ordered = append(ordered, name)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		left, leftOK := replicaFromHostname(ordered[i])
+		right, rightOK := replicaFromHostname(ordered[j])
+		if leftOK && rightOK && left != right {
+			return left < right
+		}
+		return ordered[i] < ordered[j]
+	})
+
+	result := make([]PodReadRate, 0, len(ordered))
+	for _, name := range ordered {
+		replica, ok := replicaFromHostname(name)
+		if !ok {
+			continue
+		}
+		item := PodReadRate{Hostname: name, Replica: replica}
+		if rate, found := rates5m[name]; rates5m != nil && found {
+			copied := rate
+			item.Rate5m = &copied
+		}
+		if rate, found := rates15m[name]; rates15m != nil && found {
+			copied := rate
+			item.Rate15m = &copied
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+// replicaFromHostname reads the replica index from a pod hostname such as "pipeline-vertex-0".
+func replicaFromHostname(hostname string) (int, bool) {
+	dash := strings.LastIndex(hostname, "-")
+	if dash < 0 || dash == len(hostname)-1 {
+		return 0, false
+	}
+	replica, err := strconv.Atoi(hostname[dash+1:])
+	if err != nil || replica < 0 {
+		return 0, false
+	}
+	return replica, true
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds

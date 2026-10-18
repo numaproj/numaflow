@@ -46,6 +46,7 @@ export function PodViewNext(props: PodsProps) {
     pipelineId: props.pipelineId,
     vertexId: props.vertexId,
     type: props.type,
+    pods,
   });
 
   if (podsErr) {

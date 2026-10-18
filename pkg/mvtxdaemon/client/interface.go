@@ -26,6 +26,8 @@ import (
 type MonoVertexDaemonClient interface {
 	io.Closer
 	GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.MonoVertexMetrics, error)
+	// GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates. A window key is absent until observed.
+	GetMonoVertexPodReadRates(ctx context.Context) ([]*mvtxdaemon.PodReadRate, error)
 	GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error)
 	GetMonoVertexErrors(ctx context.Context, monoVertex string) ([]*mvtxdaemon.ReplicaErrors, error)
 }

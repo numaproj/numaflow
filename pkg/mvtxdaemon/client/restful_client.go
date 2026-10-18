@@ -90,6 +90,19 @@ func (rc *restfulClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.
 	}
 }
 
+func (rc *restfulClient) GetMonoVertexPodReadRates(ctx context.Context) ([]*mvtxdaemon.PodReadRate, error) {
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pods/read-rates", rc.hostURL))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call get mono vertex pod read rates RESTful API, %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	res, err := unmarshalResponse[mvtxdaemon.GetMonoVertexPodReadRatesResponse](resp)
+	if err != nil {
+		return nil, err
+	}
+	return res.Pods, nil
+}
+
 func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
 	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/status", rc.hostURL))
 	if err != nil {

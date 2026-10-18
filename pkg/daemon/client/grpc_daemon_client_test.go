@@ -50,6 +50,11 @@ func (m *mockDaemonServiceClient) GetVertexMetrics(ctx context.Context, in *daem
 	return args.Get(0).(*daemon.GetVertexMetricsResponse), args.Error(1)
 }
 
+func (m *mockDaemonServiceClient) GetVertexPodReadRates(ctx context.Context, in *daemon.GetVertexPodReadRatesRequest, opts ...grpc.CallOption) (*daemon.GetVertexPodReadRatesResponse, error) {
+	args := m.Called(ctx, in, opts)
+	return args.Get(0).(*daemon.GetVertexPodReadRatesResponse), args.Error(1)
+}
+
 func (m *mockDaemonServiceClient) GetPipelineWatermarks(ctx context.Context, in *daemon.GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*daemon.GetPipelineWatermarksResponse, error) {
 	args := m.Called(ctx, in, opts)
 	return args.Get(0).(*daemon.GetPipelineWatermarksResponse), args.Error(1)
@@ -526,6 +531,20 @@ func TestGrpcDaemonClient_Close(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+}
+
+func TestGrpcDaemonClient_GetVertexPodReadRates(t *testing.T) {
+	mockClient := new(mockDaemonServiceClient)
+	dc := &grpcDaemonClient{client: mockClient}
+	expected := []*daemon.PodReadRate{{Hostname: "simple-pipeline-cat-0", Replica: 0}}
+	mockClient.On("GetVertexPodReadRates", mock.Anything, &daemon.GetVertexPodReadRatesRequest{
+		Pipeline: "simple-pipeline",
+		Vertex:   "cat",
+	}, mock.Anything).Return(&daemon.GetVertexPodReadRatesResponse{Pods: expected}, nil)
+
+	pods, err := dc.GetVertexPodReadRates(context.Background(), "simple-pipeline", "cat")
+	assert.NoError(t, err)
+	assert.Equal(t, expected, pods)
 }
 
 func TestNewGRPCDaemonServiceClient(t *testing.T) {

@@ -19,6 +19,23 @@ pub struct GetMonoVertexMetricsResponse {
     #[prost(message, optional, tag = "1")]
     pub metrics: ::core::option::Option<MonoVertexMetrics>,
 }
+/// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
+/// hostname is the pod hostname (for example "simple-mv-0"); the Kubernetes pod name is "{hostname}-{suffix}".
+/// A window is omitted from readRates until the daemon has observed that full lookback.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PodReadRate {
+    #[prost(string, tag = "1")]
+    pub hostname: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub replica: i32,
+    #[prost(map = "string, message", tag = "3")]
+    pub read_rates: ::std::collections::HashMap<::prost::alloc::string::String, f64>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetMonoVertexPodReadRatesResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub pods: ::prost::alloc::vec::Vec<PodReadRate>,
+}
 /// MonoVertexStatus is used to provide information about the mono vertex status.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct MonoVertexStatus {
@@ -86,6 +103,14 @@ pub mod mono_vertex_daemon_service_server {
             request: tonic::Request<()>,
         ) -> std::result::Result<
             tonic::Response<super::GetMonoVertexMetricsResponse>,
+            tonic::Status,
+        >;
+        /// GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
+        async fn get_mono_vertex_pod_read_rates(
+            &self,
+            request: tonic::Request<()>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetMonoVertexPodReadRatesResponse>,
             tonic::Status,
         >;
         async fn get_mono_vertex_status(
@@ -212,6 +237,52 @@ pub mod mono_vertex_daemon_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetMonoVertexMetricsSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexPodReadRates" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetMonoVertexPodReadRatesSvc<T: MonoVertexDaemonService>(
+                        pub Arc<T>,
+                    );
+                    impl<T: MonoVertexDaemonService> tonic::server::UnaryService<()>
+                    for GetMonoVertexPodReadRatesSvc<T> {
+                        type Response = super::GetMonoVertexPodReadRatesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MonoVertexDaemonService>::get_mono_vertex_pod_read_rates(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetMonoVertexPodReadRatesSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

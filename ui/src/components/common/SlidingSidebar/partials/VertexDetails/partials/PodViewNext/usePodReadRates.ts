@@ -1,12 +1,10 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../../../../../../../App";
 import { AppContextProps } from "../../../../../../../types/declarations/app";
-import { PodReadRates } from "../../../../../../../types/declarations/pods";
-import { useMetricsFetch } from "../../../../../../../utils/fetchWrappers/metricsFetch";
+import { Pod, PodReadRates } from "../../../../../../../types/declarations/pods";
+import { getBaseHref } from "../../../../../../../utils";
 
 export const POD_RATES_REFRESH_MS = 60_000;
-/** Only the latest point matters, so a short range keeps the proxy query cheap. */
-const RANGE_MS = 3 * 60_000;
 const MONO_VERTEX = "monoVertex";
 
 interface PodReadRateIds {
@@ -14,95 +12,102 @@ interface PodReadRateIds {
   pipelineId: string;
   vertexId: string;
   type: string;
+  pods: Pod[] | undefined;
 }
 
-/** podRateRequest builds a per-pod read-rate query; metric and pattern names must exist in the proxy ConfigMap. */
-export function podRateRequest(
-  { namespaceId, pipelineId, vertexId, type }: PodReadRateIds,
-  duration: "5m" | "15m",
-  now: number
-) {
-  const isMono = type === MONO_VERTEX;
-  return {
-    metricReq: {
-      metric_name: isMono ? "monovtx_read_total" : "forwarder_data_read_total",
-      pattern_name: isMono ? "mono_vertex_throughput" : "vertex_throughput",
-      dimension: "pod",
-      duration,
-      start_time: new Date(now - RANGE_MS).toISOString(),
-      end_time: new Date(now).toISOString(),
-    },
-    filters: isMono
-      ? { namespace: namespaceId, mvtx_name: vertexId }
-      : { namespace: namespaceId, pipeline: pipelineId, vertex: vertexId },
-  };
+interface DaemonPodRate {
+  hostname?: string;
+  rate5m?: number;
+  rate15m?: number;
 }
 
-/** latestByPod maps each series' `pod` label to its most recent value. */
-export function latestByPod(chartData: any[] | null | undefined): Map<string, number> {
-  const byPod = new Map<string, number>();
-  (chartData || []).forEach((series) => {
-    const pod = series?.metric?.pod;
-    const values: [number, string][] = series?.values || [];
-    if (!pod || !values.length) return;
-    const value = Number(values[values.length - 1][1]);
-    if (Number.isFinite(value)) byPod.set(pod, value);
-  });
-  return byPod;
+/** podReadRatesPath is the API v2 daemon rate endpoint for a MonoVertex or pipeline vertex. */
+export function podReadRatesPath({
+  namespaceId,
+  pipelineId,
+  vertexId,
+  type,
+}: Omit<PodReadRateIds, "pods">): string {
+  const namespace = encodeURIComponent(namespaceId);
+  if (type === MONO_VERTEX) {
+    return `/api/v2/namespaces/${namespace}/mono-vertices/${encodeURIComponent(vertexId)}/pods/read-rates`;
+  }
+  return `/api/v2/namespaces/${namespace}/pipelines/${encodeURIComponent(pipelineId)}/vertices/${encodeURIComponent(vertexId)}/pods/read-rates`;
 }
 
 /**
- * usePodReadRates returns per-pod read rates over 5m and 15m windows, refreshed every minute.
- * It returns undefined while metrics charts are disabled, and until both queries succeed with at
- * least one series, so a broken metrics path never makes every pod look idle.
+ * ratesByPodName joins daemon hostnames to Kubernetes pod names.
+ * The hostname is a prefix of the pod name, and the trailing hyphen keeps "mv-1" from matching "mv-10".
+ * Every pod is present: an unmatched pod gets an empty rate so it is not treated as idle.
+ */
+export function ratesByPodName(
+  pods: Pod[],
+  daemonPods: DaemonPodRate[] | null | undefined
+): Map<string, PodReadRates> {
+  const rates = new Map<string, PodReadRates>();
+  pods.forEach((pod) => {
+    const match = (daemonPods || []).find(
+      (item) => item.hostname && pod.name.startsWith(`${item.hostname}-`)
+    );
+    rates.set(
+      pod.name,
+      match ? { rate5m: match.rate5m, rate15m: match.rate15m } : {}
+    );
+  });
+  return rates;
+}
+
+/**
+ * usePodReadRates returns per-pod read rates over 5m and 15m windows from the vertex daemon,
+ * refreshed every minute. It returns undefined until the request succeeds, and again if the
+ * daemon cannot be reached, so a broken path never makes every pod look idle.
  */
 export function usePodReadRates({
   namespaceId,
   pipelineId,
   vertexId,
   type,
+  pods,
 }: PodReadRateIds): Map<string, PodReadRates> | undefined {
-  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
-  const enabled = !disableMetricsCharts;
-  const [now, setNow] = useState(() => Date.now());
+  const { host } = useContext<AppContextProps>(AppContext);
+  const [rates, setRates] = useState<Map<string, PodReadRates> | undefined>();
+  const podsRef = useRef(pods);
+  podsRef.current = pods;
+  const podNames = (pods || []).map((pod) => pod.name).join("\n");
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), POD_RATES_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, []);
+    const controller = new AbortController();
+    const url = `${host}${getBaseHref()}${podReadRatesPath({
+      namespaceId,
+      pipelineId,
+      vertexId,
+      type,
+    })}`;
 
-  const ids = { namespaceId, pipelineId, vertexId, type };
-  const fiveMin = useMemo(
-    () => (enabled ? podRateRequest(ids, "5m", now) : undefined),
-    [enabled, namespaceId, pipelineId, vertexId, type, now]
-  );
-  const fifteenMin = useMemo(
-    () => (enabled ? podRateRequest(ids, "15m", now) : undefined),
-    [enabled, namespaceId, pipelineId, vertexId, type, now]
-  );
-  const short = useMetricsFetch({
-    metricReq: fiveMin?.metricReq,
-    filters: fiveMin?.filters ?? NO_FILTERS,
-  });
-  const long = useMetricsFetch({
-    metricReq: fifteenMin?.metricReq,
-    filters: fifteenMin?.filters ?? NO_FILTERS,
-  });
+    const load = async () => {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!response.ok) {
+          setRates(undefined);
+          return;
+        }
+        const body = await response.json();
+        if (controller.signal.aborted) return;
+        setRates(ratesByPodName(podsRef.current || [], body?.pods));
+      } catch {
+        if (controller.signal.aborted) return;
+        setRates(undefined);
+      }
+    };
 
-  return useMemo(() => {
-    if (!enabled || short.error || long.error || !short.chartData || !long.chartData) {
-      return undefined;
-    }
-    const rate5m = latestByPod(short.chartData);
-    const rate15m = latestByPod(long.chartData);
-    if (!rate15m.size) return undefined;
-    const rates = new Map<string, PodReadRates>();
-    const record = (_value: number, pod: string) =>
-      rates.set(pod, { rate5m: rate5m.get(pod) ?? 0, rate15m: rate15m.get(pod) ?? 0 });
-    rate5m.forEach(record);
-    rate15m.forEach(record);
-    return rates;
-  }, [enabled, short.chartData, short.error, long.chartData, long.error]);
+    void load();
+    const timer = window.setInterval(() => void load(), POD_RATES_REFRESH_MS);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [host, namespaceId, pipelineId, vertexId, type, podNames]);
+
+  return rates;
 }
-
-const NO_FILTERS = {};

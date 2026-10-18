@@ -35,9 +35,10 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	MonoVertexDaemonService_GetMonoVertexMetrics_FullMethodName = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics"
-	MonoVertexDaemonService_GetMonoVertexStatus_FullMethodName  = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus"
-	MonoVertexDaemonService_GetMonoVertexErrors_FullMethodName  = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors"
+	MonoVertexDaemonService_GetMonoVertexMetrics_FullMethodName      = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics"
+	MonoVertexDaemonService_GetMonoVertexPodReadRates_FullMethodName = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexPodReadRates"
+	MonoVertexDaemonService_GetMonoVertexStatus_FullMethodName       = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus"
+	MonoVertexDaemonService_GetMonoVertexErrors_FullMethodName       = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors"
 )
 
 // MonoVertexDaemonServiceClient is the client API for MonoVertexDaemonService service.
@@ -47,6 +48,8 @@ const (
 // MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
 type MonoVertexDaemonServiceClient interface {
 	GetMonoVertexMetrics(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexMetricsResponse, error)
+	// GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
+	GetMonoVertexPodReadRates(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexPodReadRatesResponse, error)
 	GetMonoVertexStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error)
 	GetMonoVertexErrors(ctx context.Context, in *GetMonoVertexErrorsRequest, opts ...grpc.CallOption) (*GetMonoVertexErrorsResponse, error)
 }
@@ -63,6 +66,16 @@ func (c *monoVertexDaemonServiceClient) GetMonoVertexMetrics(ctx context.Context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMonoVertexMetricsResponse)
 	err := c.cc.Invoke(ctx, MonoVertexDaemonService_GetMonoVertexMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *monoVertexDaemonServiceClient) GetMonoVertexPodReadRates(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexPodReadRatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMonoVertexPodReadRatesResponse)
+	err := c.cc.Invoke(ctx, MonoVertexDaemonService_GetMonoVertexPodReadRates_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +109,8 @@ func (c *monoVertexDaemonServiceClient) GetMonoVertexErrors(ctx context.Context,
 // MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
 type MonoVertexDaemonServiceServer interface {
 	GetMonoVertexMetrics(context.Context, *emptypb.Empty) (*GetMonoVertexMetricsResponse, error)
+	// GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
+	GetMonoVertexPodReadRates(context.Context, *emptypb.Empty) (*GetMonoVertexPodReadRatesResponse, error)
 	GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error)
 	GetMonoVertexErrors(context.Context, *GetMonoVertexErrorsRequest) (*GetMonoVertexErrorsResponse, error)
 	mustEmbedUnimplementedMonoVertexDaemonServiceServer()
@@ -107,6 +122,9 @@ type UnimplementedMonoVertexDaemonServiceServer struct {
 
 func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexMetrics(context.Context, *emptypb.Empty) (*GetMonoVertexMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexMetrics not implemented")
+}
+func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexPodReadRates(context.Context, *emptypb.Empty) (*GetMonoVertexPodReadRatesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexPodReadRates not implemented")
 }
 func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexStatus not implemented")
@@ -142,6 +160,24 @@ func _MonoVertexDaemonService_GetMonoVertexMetrics_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MonoVertexDaemonServiceServer).GetMonoVertexMetrics(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MonoVertexDaemonService_GetMonoVertexPodReadRates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MonoVertexDaemonServiceServer).GetMonoVertexPodReadRates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MonoVertexDaemonService_GetMonoVertexPodReadRates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MonoVertexDaemonServiceServer).GetMonoVertexPodReadRates(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -192,6 +228,10 @@ var MonoVertexDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMonoVertexMetrics",
 			Handler:    _MonoVertexDaemonService_GetMonoVertexMetrics_Handler,
+		},
+		{
+			MethodName: "GetMonoVertexPodReadRates",
+			Handler:    _MonoVertexDaemonService_GetMonoVertexPodReadRates_Handler,
 		},
 		{
 			MethodName: "GetMonoVertexStatus",

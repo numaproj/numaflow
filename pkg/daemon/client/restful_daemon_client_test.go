@@ -342,3 +342,21 @@ func TestNewRESTfulDaemonServiceClient(t *testing.T) {
 		assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 	})
 }
+
+func TestRestfulDaemonClient_GetVertexPodReadRates(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/pipelines/simple-pipeline/vertices/cat/pods/read-rates", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"pods":[{"hostname":"simple-pipeline-cat-0","replica":0,"readRates":{"5m":1.5}}]}`))
+	}))
+	defer server.Close()
+
+	daemonClient, err := NewRESTfulDaemonServiceClient(server.URL)
+	assert.NoError(t, err)
+	pods, err := daemonClient.GetVertexPodReadRates(context.Background(), "simple-pipeline", "cat")
+	assert.NoError(t, err)
+	if assert.Len(t, pods, 1) {
+		assert.Equal(t, "simple-pipeline-cat-0", pods[0].Hostname)
+		assert.Equal(t, 1.5, pods[0].ReadRates["5m"].GetValue())
+	}
+}

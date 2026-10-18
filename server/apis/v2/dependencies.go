@@ -23,10 +23,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/server/application/capabilities"
 	"github.com/numaproj/numaflow/server/application/observability"
+	"github.com/numaproj/numaflow/server/application/podrates"
 )
 
-// NewClusterHandler assembles the API v2 handler from server capabilities and observability.
-func NewClusterHandler() (*Handler, error) {
+// NewClusterHandler assembles the API v2 handler from server capabilities, observability, and daemon clients.
+// daemonClientProtocol is "grpc" or "http", the same setting the v1 daemon clients use.
+func NewClusterHandler(daemonClientProtocol string) (*Handler, error) {
 	restConfig, err := util.K8sRestConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes REST config: %w", err)
@@ -35,9 +37,18 @@ func NewClusterHandler() (*Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Numaflow client: %w", err)
 	}
-	observabilityService, err := observability.NewService(numaflowClient.NumaflowV1alpha1())
+	numaflowAPI := numaflowClient.NumaflowV1alpha1()
+	observabilityService, err := observability.NewService(numaflowAPI)
 	if err != nil {
 		return nil, err
 	}
-	return NewHandler(capabilities.NewService(), observabilityService)
+	daemonClients, err := podrates.NewDaemonClients(daemonClientProtocol)
+	if err != nil {
+		return nil, err
+	}
+	podReadRatesService, err := podrates.NewService(numaflowAPI, daemonClients)
+	if err != nil {
+		return nil, err
+	}
+	return NewHandler(capabilities.NewService(), observabilityService, podReadRatesService)
 }

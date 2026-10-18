@@ -286,3 +286,43 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition2"))
 	})
 }
+
+func appendPartitionCounts(q *sharedqueue.OverflowQueue[*TimestampedCounts], timestamp int64, counts map[string]map[string]float64) {
+	tc := NewTimestampedCounts(timestamp)
+	for name, partitions := range counts {
+		tc.Update(&PodReadCount{name, partitions})
+	}
+	q.Append(tc)
+}
+
+func TestCalculatePodRates(t *testing.T) {
+	t.Run("warmup returns nil until the full window is observed", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now().Unix()
+		appendPartitionCounts(q, now-20, map[string]map[string]float64{"pl-v-0": {"p0": 1}})
+		appendPartitionCounts(q, now, map[string]map[string]float64{"pl-v-0": {"p0": 5}})
+		assert.Nil(t, CalculatePodRates(q, 60))
+	})
+
+	t.Run("sums partitions per pod and omits pods missing from the complete snapshot", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now().Unix()
+		appendPartitionCounts(q, now-40, map[string]map[string]float64{
+			"pl-v-0": {"p0": 0, "p1": 0},
+			"gone":   {"p0": 10},
+		})
+		appendPartitionCounts(q, now-20, map[string]map[string]float64{
+			"pl-v-0": {"p0": 10, "p1": 30},
+			"gone":   {"p0": 10},
+		})
+		appendPartitionCounts(q, now-10, map[string]map[string]float64{
+			"pl-v-0": {"p0": 20, "p1": 40},
+		})
+		appendPartitionCounts(q, now, map[string]map[string]float64{
+			"pl-v-0": {"p0": 1000, "p1": 1000},
+		})
+
+		// Complete window is now-20 to now-10: p0 +10 and p1 +10, so 20 messages in 10 seconds.
+		assert.Equal(t, map[string]float64{"pl-v-0": 2}, CalculatePodRates(q, 25))
+	})
+}

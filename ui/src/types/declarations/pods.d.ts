@@ -144,7 +144,7 @@ export type PodSeverity = "critical" | "warning" | "idle" | "healthy" | "unknown
 
 export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
 
-/** PodReadRates are per-pod source/ISB read rates (messages/s) from Prometheus. */
+/** PodReadRates are per-pod source/ISB read rates (messages/s) from the vertex daemon via API v2. */
 export interface PodReadRates {
   rate5m?: number;
   rate15m?: number;

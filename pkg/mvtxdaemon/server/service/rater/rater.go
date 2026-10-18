@@ -51,6 +51,9 @@ type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
 	GetPending() map[string]*wrapperspb.Int64Value
+	// GetPodReadRates returns per-pod 5m and 15m read rates for the fleet view.
+	// It does not affect the vertex totals used for autoscaling.
+	GetPodReadRates() []PodReadRate
 	GetActivePodsCount() int
 }
 
@@ -328,6 +331,12 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	}
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
+}
+
+// GetPodReadRates returns each active pod's 5m and 15m read rate.
+// A window is omitted until the in-memory timeline covers that full lookback.
+func (r *Rater) GetPodReadRates() []PodReadRate {
+	return podReadRates(r.timestampedPodCounts)
 }
 
 // GetActivePodsCount returns the number of HEAD-active pods tracked by the rater pod tracker.

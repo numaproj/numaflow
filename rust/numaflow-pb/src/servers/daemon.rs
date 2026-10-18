@@ -93,6 +93,30 @@ pub struct GetVertexMetricsResponse {
     #[prost(message, repeated, tag = "1")]
     pub vertex_metrics: ::prost::alloc::vec::Vec<VertexMetrics>,
 }
+/// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
+/// hostname is the pod hostname (for example "pipeline-vertex-0"); the Kubernetes pod name is "{hostname}-{suffix}".
+/// A window is omitted from readRates until the daemon has observed that full lookback.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PodReadRate {
+    #[prost(string, tag = "1")]
+    pub hostname: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub replica: i32,
+    #[prost(map = "string, message", tag = "3")]
+    pub read_rates: ::std::collections::HashMap<::prost::alloc::string::String, f64>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetVertexPodReadRatesRequest {
+    #[prost(string, tag = "1")]
+    pub pipeline: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub vertex: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetVertexPodReadRatesResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub pods: ::prost::alloc::vec::Vec<PodReadRate>,
+}
 /// EdgeWatermark has edge to watermark mapping.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EdgeWatermark {
@@ -188,6 +212,14 @@ pub mod daemon_service_server {
             request: tonic::Request<super::GetVertexMetricsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetVertexMetricsResponse>,
+            tonic::Status,
+        >;
+        /// GetVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
+        async fn get_vertex_pod_read_rates(
+            &self,
+            request: tonic::Request<super::GetVertexPodReadRatesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetVertexPodReadRatesResponse>,
             tonic::Status,
         >;
         /// GetPipelineWatermarks return the watermark of the given pipeline
@@ -411,6 +443,55 @@ pub mod daemon_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetVertexMetricsSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/daemon.DaemonService/GetVertexPodReadRates" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetVertexPodReadRatesSvc<T: DaemonService>(pub Arc<T>);
+                    impl<
+                        T: DaemonService,
+                    > tonic::server::UnaryService<super::GetVertexPodReadRatesRequest>
+                    for GetVertexPodReadRatesSvc<T> {
+                        type Response = super::GetVertexPodReadRatesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetVertexPodReadRatesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as DaemonService>::get_vertex_pod_read_rates(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetVertexPodReadRatesSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -1,41 +1,39 @@
 import { createElement, ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { AppContext } from "../../../../../../../App";
-import { latestByPod, usePodReadRates } from "./usePodReadRates";
+import { Pod } from "../../../../../../../types/declarations/pods";
+import { podReadRatesPath, ratesByPodName, usePodReadRates } from "./usePodReadRates";
 
 jest.mock("../../../../../../../App", () => {
   const { createContext } = jest.requireActual("react");
   return { AppContext: createContext({}) };
 });
 
+jest.mock("../../../../../../../utils", () => ({
+  getBaseHref: () => "",
+}));
+
 const fetchMock = jest.fn();
 
-function wrapper(disableMetricsCharts = false) {
+function wrapper() {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(
-      AppContext.Provider,
-      { value: { host: "", disableMetricsCharts } as any },
-      children
-    );
+    return createElement(AppContext.Provider, { value: { host: "" } as any }, children);
   };
 }
 
-function respondWith(byDuration: Record<string, any[]>) {
-  return (_url: string, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body));
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ data: byDuration[body.duration], errMsg: null }),
-    });
-  };
+function pod(name: string): Pod {
+  return { name, containers: [], containerSpecMap: new Map() };
 }
 
-const series = (pod: string, ...values: number[]) => ({
-  metric: { pod },
-  values: values.map((value, index) => [index, String(value)]),
-});
+const pods = [pod("orders-ingest-mv-1-abc"), pod("orders-ingest-mv-10-def"), pod("orders-ingest-mv-2-ghi")];
 
-const ids = { namespaceId: "ns", pipelineId: "mv", vertexId: "mv", type: "monoVertex" };
+const ids = {
+  namespaceId: "ns",
+  pipelineId: "orders",
+  vertexId: "orders-ingest",
+  type: "monoVertex",
+  pods,
+};
 
 describe("usePodReadRates", () => {
   beforeEach(() => {
@@ -43,47 +41,65 @@ describe("usePodReadRates", () => {
     global.fetch = fetchMock as any;
   });
 
-  it("queries per-pod MonoVertex read rates and fills silent pods with zero", async () => {
-    fetchMock.mockImplementation(
-      respondWith({
-        "5m": [series("mv-0", 4, 5)],
-        "15m": [series("mv-0", 6), series("mv-1", 0.5)],
-      })
-    );
+  it("loads MonoVertex rates from API v2 and joins hostnames without marking unknown pods idle", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          pods: [
+            { hostname: "orders-ingest-mv-1", replica: 1, rate5m: 4, rate15m: 5 },
+            { hostname: "orders-ingest-mv-2", replica: 2, rate15m: 0 },
+          ],
+        }),
+    });
 
     const { result } = renderHook(() => usePodReadRates(ids), { wrapper: wrapper() });
 
     await waitFor(() => expect(result.current).toBeDefined());
-    expect(result.current?.get("mv-0")).toEqual({ rate5m: 5, rate15m: 6 });
-    expect(result.current?.get("mv-1")).toEqual({ rate5m: 0, rate15m: 0.5 });
-    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body));
-    expect(bodies.map((body) => body.duration).sort()).toEqual(["15m", "5m"]);
-    expect(bodies[0]).toEqual(
-      expect.objectContaining({
-        metric_name: "monovtx_read_total",
-        pattern_name: "mono_vertex_throughput",
-        dimension: "pod",
-        filters: { namespace: "ns", mvtx_name: "mv" },
-      })
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v2/namespaces/ns/mono-vertices/orders-ingest/pods/read-rates",
+      expect.objectContaining({ signal: expect.anything() })
     );
+    expect(result.current?.get("orders-ingest-mv-1-abc")).toEqual({ rate5m: 4, rate15m: 5 });
+    expect(result.current?.get("orders-ingest-mv-10-def")).toEqual({});
+    expect(result.current?.get("orders-ingest-mv-2-ghi")).toEqual({
+      rate5m: undefined,
+      rate15m: 0,
+    });
   });
 
-  it("returns undefined when the long window has no series or metrics are disabled", async () => {
-    fetchMock.mockImplementation(respondWith({ "5m": [], "15m": [] }));
+  it("uses the pipeline vertex path", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ pods: [] }) });
+    const { result } = renderHook(
+      () => usePodReadRates({ ...ids, type: "pipeline", vertexId: "map", pods: [pod("orders-map-0-xyz")] }),
+      { wrapper: wrapper() }
+    );
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v2/namespaces/ns/pipelines/orders/vertices/map/pods/read-rates",
+      expect.anything()
+    );
+    expect(result.current?.get("orders-map-0-xyz")).toEqual({});
+  });
+
+  it("returns undefined when the daemon request fails", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) });
     const { result } = renderHook(() => usePodReadRates(ids), { wrapper: wrapper() });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(result.current).toBeUndefined();
+  });
+});
 
-    fetchMock.mockClear();
-    const disabled = renderHook(() => usePodReadRates(ids), { wrapper: wrapper(true) });
-    expect(disabled.result.current).toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
+describe("pod rate helpers", () => {
+  it("builds encoded paths", () => {
+    expect(podReadRatesPath({ ...ids, namespaceId: "team a" })).toBe(
+      "/api/v2/namespaces/team%20a/mono-vertices/orders-ingest/pods/read-rates"
+    );
   });
 
-  it("reads the latest value of each pod series", () => {
-    expect(latestByPod([series("a", 1, 2, 3), { metric: {}, values: [[0, "1"]] }])).toEqual(
-      new Map([["a", 3]])
-    );
-    expect(latestByPod(null).size).toBe(0);
+  it("does not let replica 1 match replica 10", () => {
+    const rates = ratesByPodName(pods, [{ hostname: "orders-ingest-mv-1", rate15m: 0 }]);
+    expect(rates.get("orders-ingest-mv-1-abc")).toEqual({ rate5m: undefined, rate15m: 0 });
+    expect(rates.get("orders-ingest-mv-10-def")).toEqual({});
   });
 });

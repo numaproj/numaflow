@@ -94,6 +94,44 @@ paths:
           $ref: "#/components/responses/ValidationFailed"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/pipelines/{pipeline}/vertices/{vertex}/pods/read-rates:
+    get:
+      operationId: getPipelineVertexPodReadRates
+      summary: Get per-pod read rates for a pipeline vertex
+      description: >
+        Read rates come from the pipeline daemon's in-memory scrape of each pod's metrics endpoint,
+        about every 5 seconds, with roughly 30 minutes of history. This is not a Prometheus query and does not list Pods.
+        A window is omitted until the daemon has observed that full lookback, including after a daemon restart.
+        The vertex path segment is the logical vertex name, not the Vertex custom resource name.
+      tags: [Vertex]
+      x-numaflow-authz-object: pipeline
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/Pipeline"
+        - $ref: "#/components/parameters/Vertex"
+      responses:
+        "200":
+          description: Per-pod read rates
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PodReadRates"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /namespaces/{namespace}/mono-vertices/{monoVertex}/summary:
     get:
       operationId: getMonoVertexSummary
@@ -160,6 +198,42 @@ paths:
           $ref: "#/components/responses/ValidationFailed"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/mono-vertices/{monoVertex}/pods/read-rates:
+    get:
+      operationId: getMonoVertexPodReadRates
+      summary: Get per-pod read rates for a MonoVertex
+      description: >
+        Read rates come from the MonoVertex daemon's in-memory scrape of each pod's metrics endpoint,
+        about every 5 seconds, with roughly 30 minutes of history. This is not a Prometheus query and does not list Pods.
+        A window is omitted until the daemon has observed that full lookback, including after a daemon restart.
+      tags: [MonoVertex]
+      x-numaflow-authz-object: mono-vertex
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/MonoVertex"
+      responses:
+        "200":
+          description: Per-pod read rates
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PodReadRates"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     cookieAuth:
@@ -215,6 +289,11 @@ components:
       description: Entity tag derived from the Kubernetes resource version
       schema:
         type: string
+    NoStore:
+      description: Live daemon rates must not be cached
+      schema:
+        type: string
+        example: no-store
   responses:
     NotModified:
       description: The target has not changed
@@ -251,6 +330,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    ServiceUnavailable:
+      description: The vertex daemon could not be reached
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
   schemas:
     Capabilities:
       type: object
@@ -270,6 +355,8 @@ components:
             - getPipelineVertexStatus
             - getMonoVertexSummary
             - getMonoVertexStatus
+            - getPipelineVertexPodReadRates
+            - getMonoVertexPodReadRates
         limits:
           $ref: "#/components/schemas/ApiLimits"
     ApiLimits:
@@ -478,6 +565,44 @@ components:
         lastTransitionTime:
           type: string
           format: date-time
+    PodReadRates:
+      description: >
+        Per-pod read rates from the vertex daemon's in-memory scrape. This is not a Prometheus query and does not list Pods.
+        A rate window is omitted until the daemon has observed that full lookback.
+      type: object
+      additionalProperties: false
+      required: [observedAt, pods]
+      properties:
+        observedAt:
+          type: string
+          format: date-time
+          description: Time the API server read the rates from the daemon, not a Kubernetes resource timestamp.
+        pods:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/PodReadRate"
+    PodReadRate:
+      type: object
+      additionalProperties: false
+      required: [replica, hostname]
+      properties:
+        replica:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Replica index from the pod hostname suffix.
+        hostname:
+          type: string
+          description: Pod hostname. The Kubernetes pod name is this hostname plus a generated suffix.
+        rate5m:
+          type: number
+          format: double
+          description: Messages read per second over 5 minutes. Omitted until that window is fully observed.
+        rate15m:
+          type: number
+          format: double
+          description: Messages read per second over 15 minutes. Omitted until that window is fully observed. Zero means the pod read nothing.
     Problem:
       type: object
       additionalProperties: false

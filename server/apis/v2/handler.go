@@ -18,6 +18,7 @@ package v2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -29,11 +30,18 @@ import (
 	"github.com/numaproj/numaflow/server/apis/v2/generated"
 	"github.com/numaproj/numaflow/server/application/capabilities"
 	"github.com/numaproj/numaflow/server/application/observability"
+	"github.com/numaproj/numaflow/server/application/podrates"
 )
 
 // CapabilitiesService provides transport-independent API v2 discovery data.
 type CapabilitiesService interface {
 	GetCapabilities() capabilities.Capabilities
+}
+
+// PodReadRatesService serves daemon-backed per-pod read rates for the new Pod View fleet.
+type PodReadRatesService interface {
+	GetMonoVertexPodReadRates(ctx context.Context, namespace, monoVertex string) (podrates.PodReadRates, error)
+	GetPipelineVertexPodReadRates(ctx context.Context, namespace, pipeline, vertex string) (podrates.PodReadRates, error)
 }
 
 // ObservabilityService serves Kubernetes-backed Vertex and MonoVertex observability reads.
@@ -48,17 +56,25 @@ type ObservabilityService interface {
 type Handler struct {
 	capabilitiesService  CapabilitiesService
 	observabilityService ObservabilityService
+	podReadRatesService  PodReadRatesService
 }
 
-// NewHandler builds the API v2 HTTP adapter from discovery and observability services.
-func NewHandler(capabilitiesService CapabilitiesService, observabilityService ObservabilityService) (*Handler, error) {
+// NewHandler builds the API v2 HTTP adapter from discovery, observability, and pod-rate services.
+func NewHandler(capabilitiesService CapabilitiesService, observabilityService ObservabilityService, podReadRatesService PodReadRatesService) (*Handler, error) {
 	if capabilitiesService == nil {
 		return nil, fmt.Errorf("capabilities service is required")
 	}
 	if observabilityService == nil {
 		return nil, fmt.Errorf("observability service is required")
 	}
-	return &Handler{capabilitiesService: capabilitiesService, observabilityService: observabilityService}, nil
+	if podReadRatesService == nil {
+		return nil, fmt.Errorf("pod read rates service is required")
+	}
+	return &Handler{
+		capabilitiesService:  capabilitiesService,
+		observabilityService: observabilityService,
+		podReadRatesService:  podReadRatesService,
+	}, nil
 }
 
 var _ generated.ServerInterface = (*Handler)(nil)
@@ -92,6 +108,32 @@ func (h *Handler) GetPipelineVertexStatus(c *gin.Context, namespace generated.Na
 		return
 	}
 	writeVersioned(c, result.ResourceVersion, params.IfNoneMatch, toVertexStatus(result.Value))
+}
+
+// GetPipelineVertexPodReadRates returns per-pod 5m and 15m read rates from the pipeline daemon.
+func (h *Handler) GetPipelineVertexPodReadRates(c *gin.Context, namespace generated.Namespace, pipeline generated.Pipeline, vertex generated.Vertex) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"pipeline", pipeline}, nameField{"vertex", vertex}) {
+		return
+	}
+	rates, err := h.podReadRatesService.GetPipelineVertexPodReadRates(c.Request.Context(), namespace, pipeline, vertex)
+	if err != nil {
+		writeServiceError(c, err, "pipeline daemon")
+		return
+	}
+	writeUncached(c, toPodReadRates(rates))
+}
+
+// GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates from the MonoVertex daemon.
+func (h *Handler) GetMonoVertexPodReadRates(c *gin.Context, namespace generated.Namespace, monoVertex generated.MonoVertex) {
+	if !validateNames(c, nameField{"namespace", namespace}, nameField{"monoVertex", monoVertex}) {
+		return
+	}
+	rates, err := h.podReadRatesService.GetMonoVertexPodReadRates(c.Request.Context(), namespace, monoVertex)
+	if err != nil {
+		writeServiceError(c, err, "MonoVertex daemon")
+		return
+	}
+	writeUncached(c, toPodReadRates(rates))
 }
 
 // GetMonoVertexSummary returns a compact Kubernetes MonoVertex CR projection.
@@ -159,8 +201,32 @@ func validateNames(c *gin.Context, fields ...nameField) bool {
 	return false
 }
 
-// writeServiceError maps Kubernetes read failures to stable Problem codes without leaking provider text.
+// writeUncached sends a live daemon response that must not be cached or ETag-matched.
+func writeUncached(c *gin.Context, value any) {
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, value)
+}
+
+func toPodReadRates(value podrates.PodReadRates) generated.PodReadRates {
+	pods := make([]generated.PodReadRate, 0, len(value.Pods))
+	for _, pod := range value.Pods {
+		pods = append(pods, generated.PodReadRate{
+			Hostname: pod.Hostname,
+			Replica:  int32(pod.Replica),
+			Rate5m:   pod.Rate5m,
+			Rate15m:  pod.Rate15m,
+		})
+	}
+	return generated.PodReadRates{ObservedAt: value.ObservedAt, Pods: pods}
+}
+
+// writeServiceError maps Kubernetes read failures and daemon outages to stable Problem codes
+// without leaking provider text.
 func writeServiceError(c *gin.Context, err error, target string) {
+	if errors.Is(err, podrates.ErrDaemonUnavailable) {
+		WriteRetryableProblem(c, http.StatusServiceUnavailable, "daemon_unavailable", "Daemon unavailable", fmt.Sprintf("Failed to read rates from the %s", target))
+		return
+	}
 	if apierrors.IsNotFound(err) {
 		WriteProblem(c, http.StatusNotFound, "target_not_found", "Target not found", fmt.Sprintf("The requested %s does not exist", target), nil)
 		return

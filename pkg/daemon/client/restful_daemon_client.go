@@ -134,6 +134,19 @@ func (rc *restfulDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, v
 	}
 }
 
+func (rc *restfulDaemonClient) GetVertexPodReadRates(ctx context.Context, pipeline, vertex string) ([]*daemon.PodReadRate, error) {
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/pods/read-rates", rc.hostURL, pipeline, vertex))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call get vertex pod read rates RESTful API, %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	res, err := unmarshalResponse[daemon.GetVertexPodReadRatesResponse](resp)
+	if err != nil {
+		return nil, err
+	}
+	return res.Pods, nil
+}
+
 // GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
 func (rc *restfulDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
 	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/watermarks", rc.hostURL, pipeline))

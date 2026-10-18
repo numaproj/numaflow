@@ -89,6 +89,24 @@ message GetVertexMetricsResponse {
   repeated VertexMetrics vertexMetrics = 1;
 }
 
+// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
+// hostname is the pod hostname (for example "pipeline-vertex-0"); the Kubernetes pod name is "{hostname}-{suffix}".
+// A window is omitted from readRates until the daemon has observed that full lookback.
+message PodReadRate {
+  string hostname = 1;
+  int32 replica = 2;
+  map<string, google.protobuf.DoubleValue> readRates = 3;
+}
+
+message GetVertexPodReadRatesRequest {
+  string pipeline = 1;
+  string vertex = 2;
+}
+
+message GetVertexPodReadRatesResponse {
+  repeated PodReadRate pods = 1;
+}
+
 /* Watermark */
 // EdgeWatermark has edge to watermark mapping.
 message EdgeWatermark {
@@ -148,6 +166,11 @@ service DaemonService {
 
   rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
+  };
+
+  // GetVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
+  rpc GetVertexPodReadRates (GetVertexPodReadRatesRequest) returns (GetVertexPodReadRatesResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/pods/read-rates";
   };
 
   // GetPipelineWatermarks return the watermark of the given pipeline

@@ -35,6 +35,8 @@ func (s *Service) GetCapabilities() Capabilities {
 			"getPipelineVertexStatus",
 			"getMonoVertexSummary",
 			"getMonoVertexStatus",
+			"getPipelineVertexPodReadRates",
+			"getMonoVertexPodReadRates",
 		},
 		Limits: Limits{
 			DefaultPageSize:     50,
