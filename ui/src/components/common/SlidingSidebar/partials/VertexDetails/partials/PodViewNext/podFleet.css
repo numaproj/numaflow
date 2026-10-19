@@ -1,0 +1,255 @@
+.pod-fleet {
+  padding: 2rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+}
+
+.pod-fleet-header,
+.pod-fleet-filters,
+.pod-fleet-actions,
+.pod-fleet-selected {
+  display: flex;
+  align-items: center;
+}
+
+.pod-fleet-header {
+  justify-content: space-between;
+  gap: 1.2rem;
+  margin-bottom: 1.6rem;
+}
+
+.pod-fleet-filters,
+.pod-fleet-actions {
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.pod-fleet-title {
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pod-fleet-filter-group.MuiToggleButtonGroup-root {
+  gap: 0.6rem;
+  overflow: visible;
+}
+
+.pod-fleet-filter-group .MuiToggleButtonGroup-grouped {
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 999px !important;
+}
+
+.pod-fleet-filter-group .MuiToggleButton-root {
+  height: 2.8rem;
+  gap: 0.6rem;
+  padding: 0 1.2rem;
+  border: none;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: none;
+}
+
+.pod-fleet-filter-group .Mui-selected {
+  background: #020617 !important;
+  color: #ffffff !important;
+}
+
+.pod-fleet-filter-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.pod-fleet-filter-dot--critical {
+  --pod-severity: #ef4444;
+}
+
+.pod-fleet-filter-dot--warning {
+  --pod-severity: #f59e0b;
+}
+
+.pod-fleet-filter-dot--healthy {
+  --pod-severity: #4ade80;
+}
+
+.pod-fleet-filter-dot--unknown {
+  --pod-severity: #64748b;
+}
+
+.pod-fleet-filter-dot {
+  background: var(--pod-severity);
+}
+
+.pod-fleet-search .MuiInputBase-root,
+.pod-fleet-sort .MuiInputBase-root {
+  height: 3.6rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 1.2rem;
+}
+
+.pod-fleet-search {
+  min-width: 20rem;
+}
+
+.pod-fleet-sort {
+  min-width: 11rem;
+}
+
+.pod-fleet-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  max-height: 21rem;
+  overflow: auto;
+  padding: 0.6rem;
+}
+
+.pod-fleet-cell {
+  position: relative;
+  display: grid;
+  width: 3.8rem;
+  height: 3.8rem;
+  place-items: center;
+  padding: 0;
+  overflow: visible;
+  border: none;
+  border-radius: 0.4rem;
+  background: var(--pod-chip-bg, #cbd5e1);
+  color: var(--pod-chip-fg, #64748b);
+  font-family: monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pod-fleet-cell--healthy {
+  --pod-chip-bg: #4ade80;
+  --pod-chip-fg: #ffffff;
+}
+
+.pod-fleet-cell--warning {
+  --pod-chip-bg: #f59e0b;
+  --pod-chip-fg: #ffffff;
+}
+
+.pod-fleet-cell--critical {
+  --pod-chip-bg: #ef4444;
+  --pod-chip-fg: #ffffff;
+}
+
+.pod-fleet-cell--unknown {
+  --pod-chip-bg: #ffffff;
+  --pod-chip-fg: #64748b;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.pod-fleet-tooltip {
+  display: flex;
+  max-width: 32rem;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pod-fleet-cell:hover {
+  transform: translateY(-0.1rem);
+  box-shadow: 0 0.2rem 0.6rem color-mix(in srgb, var(--text-primary) 18%, transparent);
+}
+
+.pod-fleet-cell:focus-visible {
+  outline: 0.2rem solid var(--accent-primary);
+  outline-offset: 0.2rem;
+}
+
+/* Bootstrap reboot's `button:focus:not(:focus-visible) { outline: 0 }` hides the ring on mouse focus. */
+.pod-fleet-cell--selected,
+.pod-fleet-cell--selected:focus:not(:focus-visible) {
+  outline: 0.2rem solid #0ea5e9;
+  outline-offset: 0.2rem;
+}
+
+.pod-fleet-restart-marker {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid #ffffff;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.pod-fleet-selected {
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border-secondary);
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+}
+
+.pod-fleet-selected strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-fleet-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.pod-fleet-status--running {
+  color: #059669;
+}
+
+.pod-fleet-status--running::before {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.pod-fleet-status--failed {
+  color: #ef4444;
+}
+
+.pod-fleet-empty {
+  margin: 2.4rem 0 1.2rem;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .pod-fleet {
+    padding: 1.2rem;
+  }
+
+  .pod-fleet-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pod-fleet-actions,
+  .pod-fleet-search,
+  .pod-fleet-sort {
+    width: 100%;
+  }
+}
