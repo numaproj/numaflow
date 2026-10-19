@@ -97,6 +97,56 @@ describe("Custom Pods hook", () => {
     });
     expect(mockedFetch).toBeCalledTimes(2);
   });
+  it.each([
+    [true, 1],
+    [false, 0],
+  ])(
+    "selects the first pod only when autoSelectFirstPod=%s",
+    async (autoSelectFirstPod, expectedSelections) => {
+      const podList = {
+        data: [
+          {
+            metadata: { name: "simple-mono-vertex-mv-0-abcde" },
+            spec: {
+              initContainers: [{ name: "udsource", restartPolicy: "Always" }],
+              containers: [{ name: "numa" }],
+            },
+          },
+        ],
+      };
+      (global as any).fetch = jest.fn((url: string) =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(url.includes("/metrics/") ? { data: [] } : podList),
+        })
+      );
+      const setSelectedPod = jest.fn();
+      const setSelectedContainer = jest.fn();
+
+      await act(async () => {
+        renderHook(() =>
+          usePodsViewFetch(
+            "default",
+            "simple-mono-vertex",
+            "simple-mono-vertex",
+            undefined,
+            "monoVertex",
+            setSelectedPod,
+            setSelectedContainer,
+            { autoSelectFirstPod }
+          )
+        );
+      });
+
+      const podSelections = setSelectedPod.mock.calls.filter(([pod]) => pod);
+      expect(podSelections).toHaveLength(expectedSelections);
+      if (expectedSelections) {
+        expect(podSelections[0][0].name).toBe("simple-mono-vertex-mv-0-abcde");
+        expect(setSelectedContainer).toHaveBeenCalledWith("udsource");
+      }
+    }
+  );
   it("should catch error", async () => {
     const mRes = {
       json: jest.fn().mockResolvedValueOnce(undefined),
@@ -118,5 +168,25 @@ describe("Custom Pods hook", () => {
       );
     });
     expect(mockedFetch).toBeCalledTimes(2);
+  });
+
+  it("does not fetch while the Pods tab is hidden", async () => {
+    const mockedFetch = jest.fn();
+    (global as any).fetch = mockedFetch;
+    await act(async () => {
+      renderHook(() =>
+        usePodsViewFetch(
+          "default",
+          "simple-pipeline",
+          "cat",
+          undefined,
+          "udf",
+          jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
+          jest.fn() as Dispatch<SetStateAction<string | undefined>>,
+          { active: false }
+        )
+      );
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 });

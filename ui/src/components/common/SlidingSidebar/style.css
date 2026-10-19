@@ -13,7 +13,10 @@
 }
 
 .sidebar-content--pod-beta {
+  height: 100% !important;
+  overflow-y: hidden !important;
   padding-right: 2.4rem !important;
+  padding-bottom: 1.6rem !important;
   padding-left: 2.4rem !important;
 }
 

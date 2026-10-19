@@ -21,7 +21,11 @@ export const usePodsViewFetch = (
   selectedPod: Pod | undefined,
   type: string,
   setSelectedPod: Dispatch<SetStateAction<Pod | undefined>>,
-  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>
+  setSelectedContainer: Dispatch<SetStateAction<string | undefined>>,
+  {
+    autoSelectFirstPod = true,
+    active = true,
+  }: { autoSelectFirstPod?: boolean; active?: boolean } = {}
 ) => {
   const [pods, setPods] = useState<Pod[] | undefined>(undefined);
   const [podsDetails, setPodsDetails] = useState<
@@ -103,6 +107,7 @@ export const usePodsViewFetch = (
               name: pod?.metadata?.name,
               containers,
               containerSpecMap,
+              createdAt: pod?.metadata?.creationTimestamp,
             };
           });
           setPods(pList || []); // Ensure we always set an array
@@ -141,16 +146,23 @@ export const usePodsViewFetch = (
   };
 
   useEffect(() => {
+    if (!active) return;
     fetchPods();
-  }, [vertexId, requestKey, host]);
+  }, [vertexId, requestKey, host, active]);
 
+  // Without auto-select, a selection is only cleared when its pod disappears.
   useEffect(() => {
     if (pods?.length) {
-      if (
-        !(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))
-      ) {
+      const selectionExists = Boolean(
+        selectedPod && pods.find((pod) => pod?.name === selectedPod?.name)
+      );
+      if (selectionExists) return;
+      if (autoSelectFirstPod) {
         setSelectedPod(pods[0]);
         setSelectedContainer(pods[0]?.containers[0]);
+      } else if (selectedPod) {
+        setSelectedPod(undefined);
+        setSelectedContainer(undefined);
       }
     } else {
       setSelectedPod(undefined);
@@ -237,23 +249,27 @@ export const usePodsViewFetch = (
     }
   };
 
-  // Fetch pod details whenever requestKey (after every 20 sec) or host changes
+  // Fetch pod details whenever requestKey (after every 20 sec) or host changes.
+  // A hidden Pods tab does not poll.
   useEffect(() => {
+    if (!active) return;
     fetchPodDetails();
-  }, [requestKey, host]);
+  }, [requestKey, host, active]);
 
-  // Refresh requestKey every 20 sec
+  // Refresh requestKey every 20 sec while the Pods tab is visible.
   useEffect(() => {
+    if (!active) return;
     const interval = setInterval(() => {
       setRequestKey(`${Date.now()}`);
     }, 20000);
     return () => {
       clearInterval(interval);
     };
-  }, []);
+  }, [active]);
 
   // Retry fetching pods details if there is an error
   useEffect(() => {
+    if (!active) return;
     const currentTime = Date.now();
     if (podsDetailsErr && currentTime - lastRetryTime > 5000) {
       const retryFetch = setTimeout(() => {
@@ -263,23 +279,15 @@ export const usePodsViewFetch = (
 
       return () => clearTimeout(retryFetch);
     }
-  }, [podsDetailsErr, lastRetryTime]);
+  }, [active, podsDetailsErr, lastRetryTime]);
 
-  // return false if pods/podsDetails are still undefined
-  const checkPodDetailsResponse = () => {
-    if (!pods || !podsDetails) return false;
-    return true;
-  };
-
-  //sets loading variable true only when requests are pending
+  // A failed metrics call must not end loading before the pod list exists.
   useEffect(() => {
-    if (checkPodDetailsResponse()) {
-      setLoading(false);
-    } else if (podsErr || podsDetailsErr) {
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    const podsReady = pods !== undefined;
+    const nextLoading = podsErr
+      ? false
+      : !podsReady || !(podsDetails || podsDetailsErr);
+    setLoading(nextLoading);
   }, [pods, podsDetails, podsErr, podsDetailsErr]);
 
   return {
