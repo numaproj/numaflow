@@ -15,10 +15,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Connecting to Kafka {server:?} - {error}")]
-    Connection {
-        server: Vec<RedactedUrl>,
-        error: String,
-    },
+    Connection { server: Vec<String>, error: String },
 
     #[error("Kafka - {0}")]
     Kafka(String),

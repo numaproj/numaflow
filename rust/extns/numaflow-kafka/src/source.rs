@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
+use numaflow_shared::redacted_url::RedactedUrl;
 use rdkafka::Offset;
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -178,16 +179,7 @@ impl KafkaActor {
         let consumer: Arc<NumaflowConsumer> =
             Arc::new(client_config.create_with_context(context).map_err(|err| {
                 Error::Connection {
-                    server: config
-                        .brokers
-                        .iter()
-                        .filter_map(|broker| {
-                            numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
-                                broker, "kafka",
-                            )
-                            .ok()
-                        })
-                        .collect(),
+                    server: config.brokers,
                     error: err.to_string(),
                 }
             })?);
