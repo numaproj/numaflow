@@ -5,7 +5,7 @@ export interface Pod {
   name: string;
   containers: string[];
   containerSpecMap: Map<string, PodContainerSpec>;
-  /** RFC3339 creation time; young pods are never classified idle. */
+  /** RFC3339 creation time. */
   createdAt?: string;
 }
 
@@ -142,15 +142,9 @@ export interface PodRuntimeInfo {
   containerDetailsMap: Record<string, ContainerInfoProps>;
 }
 
-export type PodSeverity = "critical" | "warning" | "idle" | "healthy" | "unknown";
+export type PodSeverity = "critical" | "warning" | "healthy" | "unknown";
 
 export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
-
-/** PodReadRates are per-pod source/ISB read rates (messages/s) from the vertex daemon via API v2. */
-export interface PodReadRates {
-  rate5m?: number;
-  rate15m?: number;
-}
 
 /** PodFleetItem joins pod specification, live usage, and runtime status for Beta presentation. */
 export interface PodFleetItem {
@@ -163,7 +157,6 @@ export interface PodFleetItem {
   /** Usage percentages cover user-defined containers only (`numa` is excluded). */
   maxCPUPercent?: number;
   maxMemoryPercent?: number;
-  readRates?: PodReadRates;
   restartCount: number;
 }
 

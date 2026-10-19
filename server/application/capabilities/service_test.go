@@ -33,8 +33,6 @@ func TestGetCapabilities(t *testing.T) {
 			"getPipelineVertexStatus",
 			"getMonoVertexSummary",
 			"getMonoVertexStatus",
-			"getPipelineVertexPodReadRates",
-			"getMonoVertexPodReadRates",
 		},
 		Limits: Limits{
 			DefaultPageSize:     50,

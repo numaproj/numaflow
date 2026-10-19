@@ -37,7 +37,6 @@ const (
 	DaemonService_ListBuffers_FullMethodName           = "/daemon.DaemonService/ListBuffers"
 	DaemonService_GetBuffer_FullMethodName             = "/daemon.DaemonService/GetBuffer"
 	DaemonService_GetVertexMetrics_FullMethodName      = "/daemon.DaemonService/GetVertexMetrics"
-	DaemonService_GetVertexPodReadRates_FullMethodName = "/daemon.DaemonService/GetVertexPodReadRates"
 	DaemonService_GetPipelineWatermarks_FullMethodName = "/daemon.DaemonService/GetPipelineWatermarks"
 	DaemonService_GetPipelineStatus_FullMethodName     = "/daemon.DaemonService/GetPipelineStatus"
 	DaemonService_GetVertexErrors_FullMethodName       = "/daemon.DaemonService/GetVertexErrors"
@@ -52,8 +51,6 @@ type DaemonServiceClient interface {
 	ListBuffers(ctx context.Context, in *ListBuffersRequest, opts ...grpc.CallOption) (*ListBuffersResponse, error)
 	GetBuffer(ctx context.Context, in *GetBufferRequest, opts ...grpc.CallOption) (*GetBufferResponse, error)
 	GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error)
-	// GetVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
-	GetVertexPodReadRates(ctx context.Context, in *GetVertexPodReadRatesRequest, opts ...grpc.CallOption) (*GetVertexPodReadRatesResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(ctx context.Context, in *GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*GetPipelineWatermarksResponse, error)
 	GetPipelineStatus(ctx context.Context, in *GetPipelineStatusRequest, opts ...grpc.CallOption) (*GetPipelineStatusResponse, error)
@@ -92,16 +89,6 @@ func (c *daemonServiceClient) GetVertexMetrics(ctx context.Context, in *GetVerte
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetVertexMetricsResponse)
 	err := c.cc.Invoke(ctx, DaemonService_GetVertexMetrics_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *daemonServiceClient) GetVertexPodReadRates(ctx context.Context, in *GetVertexPodReadRatesRequest, opts ...grpc.CallOption) (*GetVertexPodReadRatesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetVertexPodReadRatesResponse)
-	err := c.cc.Invoke(ctx, DaemonService_GetVertexPodReadRates_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +134,6 @@ type DaemonServiceServer interface {
 	ListBuffers(context.Context, *ListBuffersRequest) (*ListBuffersResponse, error)
 	GetBuffer(context.Context, *GetBufferRequest) (*GetBufferResponse, error)
 	GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error)
-	// GetVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
-	GetVertexPodReadRates(context.Context, *GetVertexPodReadRatesRequest) (*GetVertexPodReadRatesResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(context.Context, *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error)
 	GetPipelineStatus(context.Context, *GetPipelineStatusRequest) (*GetPipelineStatusResponse, error)
@@ -168,9 +153,6 @@ func (UnimplementedDaemonServiceServer) GetBuffer(context.Context, *GetBufferReq
 }
 func (UnimplementedDaemonServiceServer) GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVertexMetrics not implemented")
-}
-func (UnimplementedDaemonServiceServer) GetVertexPodReadRates(context.Context, *GetVertexPodReadRatesRequest) (*GetVertexPodReadRatesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVertexPodReadRates not implemented")
 }
 func (UnimplementedDaemonServiceServer) GetPipelineWatermarks(context.Context, *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPipelineWatermarks not implemented")
@@ -248,24 +230,6 @@ func _DaemonService_GetVertexMetrics_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DaemonService_GetVertexPodReadRates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVertexPodReadRatesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DaemonServiceServer).GetVertexPodReadRates(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DaemonService_GetVertexPodReadRates_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DaemonServiceServer).GetVertexPodReadRates(ctx, req.(*GetVertexPodReadRatesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _DaemonService_GetPipelineWatermarks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPipelineWatermarksRequest)
 	if err := dec(in); err != nil {
@@ -338,10 +302,6 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVertexMetrics",
 			Handler:    _DaemonService_GetVertexMetrics_Handler,
-		},
-		{
-			MethodName: "GetVertexPodReadRates",
-			Handler:    _DaemonService_GetVertexPodReadRates_Handler,
 		},
 		{
 			MethodName: "GetPipelineWatermarks",

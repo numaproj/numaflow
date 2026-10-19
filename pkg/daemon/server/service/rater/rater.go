@@ -43,9 +43,6 @@ type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
 	GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value
-	// GetPodReadRates returns per-pod 5m and 15m read rates for one vertex.
-	// It does not affect the partition totals used for autoscaling.
-	GetPodReadRates(vertexName string) []PodReadRate
 }
 
 var _ Ratable = (*Rater)(nil)
@@ -372,15 +369,12 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
-// A successful scrape whose counter family is missing or empty is an explicit zero: the pod is up
-// but has never exported a read series, so it must stay in the timeline. Callers do not invoke this
-// with a nil metrics document; that failed scrape leaves the previous snapshot unchanged.
 func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
 	value, ok := metricsData[readTotalMetricName]
 	if !ok || value == nil || len(value.GetMetric()) == 0 {
-		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is absent after a successful scrape; recording zero reads", vertexName, podName, readTotalMetricName)
-		return &PodReadCount{podName, map[string]float64{}}
+		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)
+		return nil
 	}
 
 	metricsList := value.GetMetric()
@@ -422,12 +416,6 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrappersp
 	}
 	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
-}
-
-// GetPodReadRates returns each active pod's 5m and 15m read rate for one vertex.
-// Partition counters on the same pod are summed. An unknown vertex returns nil.
-func (r *Rater) GetPodReadRates(vertexName string) []PodReadRate {
-	return podReadRates(r.timestampedPodCounts[vertexName])
 }
 
 // GetPending returns the pending count for the vertex partition in the format of lookback second to pending mappings

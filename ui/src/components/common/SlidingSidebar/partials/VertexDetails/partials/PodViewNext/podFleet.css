@@ -77,10 +77,6 @@
   --pod-severity: #f59e0b;
 }
 
-.pod-fleet-filter-dot--idle {
-  --pod-severity: #94a3b8;
-}
-
 .pod-fleet-filter-dot--healthy {
   --pod-severity: #4ade80;
 }
@@ -148,11 +144,6 @@
 
 .pod-fleet-cell--critical {
   --pod-chip-bg: #ef4444;
-  --pod-chip-fg: #ffffff;
-}
-
-.pod-fleet-cell--idle {
-  --pod-chip-bg: #94a3b8;
   --pod-chip-fg: #ffffff;
 }
 

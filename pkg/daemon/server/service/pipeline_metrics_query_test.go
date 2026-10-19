@@ -25,14 +25,11 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
-	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	nats2 "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
@@ -87,14 +84,6 @@ func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionN
 	res["5m"] = wrapperspb.Double(4.894736842105263)
 	res["15m"] = wrapperspb.Double(4.894736842105263)
 	return res
-}
-
-func (mr *mockRater_TestGetVertexMetrics) GetPodReadRates(vertexName string) []rater.PodReadRate {
-	if vertexName != "cat" {
-		return nil
-	}
-	five := 1.5
-	return []rater.PodReadRate{{Hostname: "simple-pipeline-cat-0", Replica: 0, Rate5m: &five}}
 }
 
 func (mr *mockRater_TestGetVertexMetrics) GetPending(pipelinename, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
@@ -242,25 +231,4 @@ func TestListBuffers(t *testing.T) {
 	resp, err := pipelineMetricsQueryService.ListBuffers(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, len(resp.Buffers), 2)
-}
-
-func TestGetVertexPodReadRates(t *testing.T) {
-	pipeline := &v1alpha1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{Name: "simple-pipeline"},
-		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: "cat"}}},
-	}
-	query := &PipelineMetadataQuery{pipeline: pipeline, rater: &mockRater_TestGetVertexMetrics{}}
-
-	_, err := query.GetVertexPodReadRates(context.Background(), &daemon.GetVertexPodReadRatesRequest{Vertex: "missing"})
-	assert.Equal(t, codes.NotFound, status.Code(err))
-
-	resp, err := query.GetVertexPodReadRates(context.Background(), &daemon.GetVertexPodReadRatesRequest{Vertex: "cat"})
-	assert.NoError(t, err)
-	if assert.Len(t, resp.Pods, 1) {
-		assert.Equal(t, "simple-pipeline-cat-0", resp.Pods[0].Hostname)
-		assert.Equal(t, int32(0), resp.Pods[0].Replica)
-		assert.Equal(t, 1.5, resp.Pods[0].ReadRates["5m"].GetValue())
-		_, has15m := resp.Pods[0].ReadRates["15m"]
-		assert.False(t, has15m)
-	}
 }

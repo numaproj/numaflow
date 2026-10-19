@@ -51,9 +51,6 @@ type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
 	GetPending() map[string]*wrapperspb.Int64Value
-	// GetPodReadRates returns per-pod 5m and 15m read rates for the fleet view.
-	// It does not affect the vertex totals used for autoscaling.
-	GetPodReadRates() []PodReadRate
 	GetActivePodsCount() int
 }
 
@@ -270,15 +267,12 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	return result
 }
 
-// getPodReadCounts returns the total number of messages read by the pod.
-// A successful scrape whose counter family is missing or empty is an explicit zero: the pod is up
-// but has never exported a read series, so it must stay in the timeline. Callers do not invoke this
-// with a nil metrics document; that failed scrape leaves the previous snapshot unchanged.
+// getPodReadCounts returns the total number of messages read by the pod
 func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
 	value, ok := result[monoVtxReadMetricName]
 	if !ok || value == nil || len(value.GetMetric()) == 0 {
-		r.log.Infof("[Pod name %s]: Metric %q is absent after a successful scrape; recording zero reads", podName, monoVtxReadMetricName)
-		return &PodMetricsCount{podName, 0}
+		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
+		return nil
 	}
 
 	metricsList := value.GetMetric()
@@ -334,12 +328,6 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	}
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
-}
-
-// GetPodReadRates returns each active pod's 5m and 15m read rate.
-// A window is omitted until the in-memory timeline covers that full lookback.
-func (r *Rater) GetPodReadRates() []PodReadRate {
-	return podReadRates(r.timestampedPodCounts)
 }
 
 // GetActivePodsCount returns the number of HEAD-active pods tracked by the rater pod tracker.

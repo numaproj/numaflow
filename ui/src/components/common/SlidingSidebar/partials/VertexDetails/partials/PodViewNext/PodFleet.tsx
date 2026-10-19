@@ -11,7 +11,6 @@ import {
   PodDetail,
   PodFleetItem,
   PodFleetSort,
-  PodReadRates,
   PodRuntimeInfo,
 } from "../../../../../../../types/declarations/pods";
 import {
@@ -28,8 +27,6 @@ interface PodFleetProps {
   pods: Pod[];
   detailsByName?: Map<string, PodDetail>;
   runtimeByName: Map<string, PodRuntimeInfo>;
-  /** Per-pod read rates; undefined until metrics load, in which case no pod is marked idle. */
-  readRates?: Map<string, PodReadRates>;
   selectedPod?: Pod;
   onPodSelect: (pod: Pod) => void;
 }
@@ -38,25 +35,17 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "critical", label: "Critical" },
   { value: "warning", label: "Warning" },
-  { value: "idle", label: "Idle" },
   { value: "healthy", label: "Healthy" },
   { value: "unknown", label: "Unknown" },
 ];
 
-function formatRate(rate?: number): string | undefined {
-  if (rate === undefined) return undefined;
-  return `${rate >= 10 ? Math.round(rate) : rate.toFixed(1)} msg/s`;
-}
-
 function chipTooltip(item: PodFleetItem, status: string) {
-  const rate = formatRate(item.readRates?.rate5m);
   return (
     <span className="pod-fleet-tooltip" data-testid={`pod-fleet-tooltip-${item.pod.name}`}>
       <strong>
         {item.pod.name} · {status}
       </strong>
       {item.reason && <span>{item.reason}</span>}
-      {rate && <span>Read rate (5m): {rate}</span>}
     </span>
   );
 }
@@ -66,7 +55,6 @@ export function PodFleet({
   pods,
   detailsByName,
   runtimeByName,
-  readRates,
   selectedPod,
   onPodSelect,
 }: PodFleetProps) {
@@ -74,8 +62,8 @@ export function PodFleet({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<PodFleetSort>("severity");
   const items = useMemo(
-    () => buildPodFleetItems(pods, detailsByName, runtimeByName, readRates),
-    [pods, detailsByName, runtimeByName, readRates]
+    () => buildPodFleetItems(pods, detailsByName, runtimeByName),
+    [pods, detailsByName, runtimeByName]
   );
   const visibleItems = useMemo(
     () => filterAndSortPodFleet(items, filter, search, sort),
@@ -169,9 +157,7 @@ export function PodFleet({
                 }`}
                 data-testid={`pod-fleet-cell-${item.pod.name}`}
                 aria-pressed={isSelected}
-                aria-label={`Select ${item.pod.name}, ${status}${
-                  item.severity === "idle" ? ", idle" : ""
-                }`}
+                aria-label={`Select ${item.pod.name}, ${status}`}
                 onClick={() => onPodSelect(item.pod)}
               >
                 <span>{chipLabel(item.pod.name)}</span>

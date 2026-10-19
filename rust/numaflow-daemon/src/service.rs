@@ -53,17 +53,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         Ok(Response::new(mock_resp))
     }
 
-    /// The Rust MonoVertex daemon is a mock and does not scrape pods, so per-pod rates are not available.
-    async fn get_mono_vertex_pod_read_rates(
-        &self,
-        _: Request<()>,
-    ) -> Result<Response<numaflow_pb::servers::mvtxdaemon::GetMonoVertexPodReadRatesResponse>, Status>
-    {
-        Err(Status::unimplemented(
-            "per-pod read rates are served by the Go MonoVertex daemon",
-        ))
-    }
-
     async fn get_mono_vertex_status(
         &self,
         _: Request<()>,

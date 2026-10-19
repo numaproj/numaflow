@@ -100,17 +100,6 @@ func (dc *grpcDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vert
 	}
 }
 
-func (dc *grpcDaemonClient) GetVertexPodReadRates(ctx context.Context, pipeline, vertex string) ([]*daemon.PodReadRate, error) {
-	rspn, err := dc.client.GetVertexPodReadRates(ctx, &daemon.GetVertexPodReadRatesRequest{
-		Pipeline: pipeline,
-		Vertex:   vertex,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return rspn.Pods, nil
-}
-
 // GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
 func (dc *grpcDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
 	if rspn, err := dc.client.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{

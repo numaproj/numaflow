@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { PodFleet } from "./PodFleet";
-import { IDLE_HINT } from "./podFleetModel";
 import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
 
 const alpha: Pod = {
@@ -40,12 +39,6 @@ const details = new Map<string, PodDetail>([
   ],
 ]);
 
-const charlie: Pod = {
-  ...alpha,
-  name: "pipeline-vertex-charlie",
-  createdAt: "2020-01-01T00:00:00Z",
-};
-
 const runtime = new Map<string, PodRuntimeInfo>([
   [alpha.name, { name: alpha.name, status: "Running", containerDetailsMap: {} }],
   [
@@ -58,13 +51,6 @@ const runtime = new Map<string, PodRuntimeInfo>([
       },
     },
   ],
-  [charlie.name, { name: charlie.name, status: "Running", containerDetailsMap: {} }],
-]);
-
-const rates = new Map([
-  [alpha.name, { rate5m: 12, rate15m: 12 }],
-  [bravo.name, { rate5m: 1, rate15m: 1 }],
-  [charlie.name, { rate5m: 0, rate15m: 0 }],
 ]);
 
 describe("PodFleet", () => {
@@ -132,33 +118,6 @@ describe("PodFleet", () => {
     expect(screen.queryByTestId(`pod-fleet-cell-${bravo.name}`)).not.toBeInTheDocument();
   });
 
-  it("shows silent pods under Idle with a partition hint", async () => {
-    render(
-      <PodFleet
-        pods={[alpha, bravo, charlie]}
-        detailsByName={details}
-        runtimeByName={runtime}
-        readRates={rates}
-        onPodSelect={jest.fn()}
-      />
-    );
-
-    const idle = screen.getByTestId(`pod-fleet-cell-${charlie.name}`);
-    expect(idle).toHaveClass("pod-fleet-cell--idle");
-    expect(screen.getByTestId(`pod-fleet-cell-${bravo.name}`)).toHaveClass(
-      "pod-fleet-cell--critical"
-    );
-    expect(screen.getByTestId(`pod-fleet-cell-${alpha.name}`)).toHaveClass(
-      "pod-fleet-cell--healthy"
-    );
-    fireEvent.click(screen.getByTestId("pods-filter-idle"));
-    expect(screen.queryByTestId(`pod-fleet-cell-${alpha.name}`)).not.toBeInTheDocument();
-
-    fireEvent.mouseOver(idle);
-    expect(await screen.findByText(IDLE_HINT)).toBeInTheDocument();
-    expect(screen.getByText("Read rate (5m): 0.0 msg/s")).toBeInTheDocument();
-  });
-
   it("filters pods whose runtime is unknown", () => {
     const delta: Pod = { ...alpha, name: "pipeline-vertex-delta" };
     render(
@@ -166,7 +125,6 @@ describe("PodFleet", () => {
         pods={[alpha, delta]}
         detailsByName={details}
         runtimeByName={new Map([[alpha.name, runtime.get(alpha.name)!]])}
-        readRates={rates}
         onPodSelect={jest.fn()}
       />
     );

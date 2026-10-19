@@ -54,14 +54,6 @@ func (dc *grpcClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.Mon
 	}
 }
 
-func (dc *grpcClient) GetMonoVertexPodReadRates(ctx context.Context) ([]*mvtxdaemon.PodReadRate, error) {
-	rspn, err := dc.client.GetMonoVertexPodReadRates(ctx, &emptypb.Empty{})
-	if err != nil {
-		return nil, err
-	}
-	return rspn.Pods, nil
-}
-
 func (dc *grpcClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
 	if rspn, err := dc.client.GetMonoVertexStatus(ctx, &emptypb.Empty{}); err != nil {
 		return nil, err

@@ -38,19 +38,6 @@ message GetMonoVertexMetricsResponse {
   MonoVertexMetrics metrics = 1;
 }
 
-// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
-// hostname is the pod hostname (for example "simple-mv-0"); the Kubernetes pod name is "{hostname}-{suffix}".
-// A window is omitted from readRates until the daemon has observed that full lookback.
-message PodReadRate {
-  string hostname = 1;
-  int32 replica = 2;
-  map<string, google.protobuf.DoubleValue> readRates = 3;
-}
-
-message GetMonoVertexPodReadRatesResponse {
-  repeated PodReadRate pods = 1;
-}
-
 // MonoVertexStatus is used to provide information about the mono vertex status.
 message MonoVertexStatus {
   string status = 1;
@@ -92,11 +79,6 @@ service MonoVertexDaemonService {
 
   rpc GetMonoVertexMetrics (google.protobuf.Empty) returns (GetMonoVertexMetricsResponse) {
     option (google.api.http).get = "/api/v1/metrics";
-  };
-
-  // GetMonoVertexPodReadRates returns per-pod 5m and 15m read rates from the daemon's in-memory scrape.
-  rpc GetMonoVertexPodReadRates (google.protobuf.Empty) returns (GetMonoVertexPodReadRatesResponse) {
-    option (google.api.http).get = "/api/v1/pods/read-rates";
   };
 
   rpc GetMonoVertexStatus (google.protobuf.Empty) returns (GetMonoVertexStatusResponse) {

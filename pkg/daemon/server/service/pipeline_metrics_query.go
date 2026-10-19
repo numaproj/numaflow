@@ -24,8 +24,6 @@ import (
 	"net/http"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -170,41 +168,6 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 
 	resp.VertexMetrics = metricsArr
 	return resp, nil
-}
-
-// GetVertexPodReadRates returns each pod's 5m and 15m read rate for one vertex.
-// Partition counters on a pod are already summed by the rater. An unknown vertex is NotFound
-// rather than a nil dereference, which GetVertexMetrics still does for a missing name.
-func (ps *PipelineMetadataQuery) GetVertexPodReadRates(ctx context.Context, req *daemon.GetVertexPodReadRatesRequest) (*daemon.GetVertexPodReadRatesResponse, error) {
-	vertexName := req.GetVertex()
-	if ps.pipeline.GetVertex(vertexName) == nil {
-		return nil, status.Errorf(codes.NotFound, "vertex %q was not found in pipeline %q", vertexName, ps.pipeline.Name)
-	}
-	return &daemon.GetVertexPodReadRatesResponse{
-		Pods: toPipelinePodReadRates(ps.rater.GetPodReadRates(vertexName)),
-	}, nil
-}
-
-func toPipelinePodReadRates(rates []rater.PodReadRate) []*daemon.PodReadRate {
-	if len(rates) == 0 {
-		return nil
-	}
-	pods := make([]*daemon.PodReadRate, 0, len(rates))
-	for _, rate := range rates {
-		item := &daemon.PodReadRate{Hostname: rate.Hostname, Replica: int32(rate.Replica)}
-		windows := make(map[string]*wrapperspb.DoubleValue)
-		if rate.Rate5m != nil {
-			windows["5m"] = wrapperspb.Double(*rate.Rate5m)
-		}
-		if rate.Rate15m != nil {
-			windows["15m"] = wrapperspb.Double(*rate.Rate15m)
-		}
-		if len(windows) > 0 {
-			item.ReadRates = windows
-		}
-		pods = append(pods, item)
-	}
-	return pods
 }
 
 func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {

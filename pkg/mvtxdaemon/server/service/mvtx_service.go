@@ -30,7 +30,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // MonoVtxPendingMetric is the metric emitted from the MonoVtx lag reader for pending stats
@@ -71,36 +70,6 @@ func NewMoveVertexService(
 
 func (mvs *MonoVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
 	return mvs.fetchMonoVertexMetrics(ctx)
-}
-
-// GetMonoVertexPodReadRates returns each pod's 5m and 15m read rate from the in-memory scrape.
-// A window is absent until the daemon has observed that full lookback.
-func (mvs *MonoVertexService) GetMonoVertexPodReadRates(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexPodReadRatesResponse, error) {
-	return &mvtxdaemon.GetMonoVertexPodReadRatesResponse{
-		Pods: toMonoVertexPodReadRates(mvs.rater.GetPodReadRates()),
-	}, nil
-}
-
-func toMonoVertexPodReadRates(rates []raterPkg.PodReadRate) []*mvtxdaemon.PodReadRate {
-	if len(rates) == 0 {
-		return nil
-	}
-	pods := make([]*mvtxdaemon.PodReadRate, 0, len(rates))
-	for _, rate := range rates {
-		item := &mvtxdaemon.PodReadRate{Hostname: rate.Hostname, Replica: int32(rate.Replica)}
-		windows := make(map[string]*wrapperspb.DoubleValue)
-		if rate.Rate5m != nil {
-			windows["5m"] = wrapperspb.Double(*rate.Rate5m)
-		}
-		if rate.Rate15m != nil {
-			windows["15m"] = wrapperspb.Double(*rate.Rate15m)
-		}
-		if len(windows) > 0 {
-			item.ReadRates = windows
-		}
-		pods = append(pods, item)
-	}
-	return pods
 }
 
 // fetchMonoVertexMetrics is a helper function to derive the MonoVertex metrics

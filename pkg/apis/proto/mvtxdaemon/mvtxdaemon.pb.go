@@ -147,113 +147,6 @@ func (x *GetMonoVertexMetricsResponse) GetMetrics() *MonoVertexMetrics {
 	return nil
 }
 
-// PodReadRate is one pod's read rate over the fixed windows the fleet view shows.
-// hostname is the pod hostname (for example "simple-mv-0"); the Kubernetes pod name is "{hostname}-{suffix}".
-// A window is omitted from readRates until the daemon has observed that full lookback.
-type PodReadRate struct {
-	state         protoimpl.MessageState             `protogen:"open.v1"`
-	Hostname      string                             `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Replica       int32                              `protobuf:"varint,2,opt,name=replica,proto3" json:"replica,omitempty"`
-	ReadRates     map[string]*wrapperspb.DoubleValue `protobuf:"bytes,3,rep,name=readRates,proto3" json:"readRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PodReadRate) Reset() {
-	*x = PodReadRate{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PodReadRate) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PodReadRate) ProtoMessage() {}
-
-func (x *PodReadRate) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PodReadRate.ProtoReflect.Descriptor instead.
-func (*PodReadRate) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *PodReadRate) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *PodReadRate) GetReplica() int32 {
-	if x != nil {
-		return x.Replica
-	}
-	return 0
-}
-
-func (x *PodReadRate) GetReadRates() map[string]*wrapperspb.DoubleValue {
-	if x != nil {
-		return x.ReadRates
-	}
-	return nil
-}
-
-type GetMonoVertexPodReadRatesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pods          []*PodReadRate         `protobuf:"bytes,1,rep,name=pods,proto3" json:"pods,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetMonoVertexPodReadRatesResponse) Reset() {
-	*x = GetMonoVertexPodReadRatesResponse{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetMonoVertexPodReadRatesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetMonoVertexPodReadRatesResponse) ProtoMessage() {}
-
-func (x *GetMonoVertexPodReadRatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetMonoVertexPodReadRatesResponse.ProtoReflect.Descriptor instead.
-func (*GetMonoVertexPodReadRatesResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *GetMonoVertexPodReadRatesResponse) GetPods() []*PodReadRate {
-	if x != nil {
-		return x.Pods
-	}
-	return nil
-}
-
 // MonoVertexStatus is used to provide information about the mono vertex status.
 type MonoVertexStatus struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -266,7 +159,7 @@ type MonoVertexStatus struct {
 
 func (x *MonoVertexStatus) Reset() {
 	*x = MonoVertexStatus{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[4]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -278,7 +171,7 @@ func (x *MonoVertexStatus) String() string {
 func (*MonoVertexStatus) ProtoMessage() {}
 
 func (x *MonoVertexStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[4]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -291,7 +184,7 @@ func (x *MonoVertexStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MonoVertexStatus.ProtoReflect.Descriptor instead.
 func (*MonoVertexStatus) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{4}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MonoVertexStatus) GetStatus() string {
@@ -324,7 +217,7 @@ type GetMonoVertexStatusResponse struct {
 
 func (x *GetMonoVertexStatusResponse) Reset() {
 	*x = GetMonoVertexStatusResponse{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[5]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -336,7 +229,7 @@ func (x *GetMonoVertexStatusResponse) String() string {
 func (*GetMonoVertexStatusResponse) ProtoMessage() {}
 
 func (x *GetMonoVertexStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[5]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -349,7 +242,7 @@ func (x *GetMonoVertexStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMonoVertexStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetMonoVertexStatusResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{5}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetMonoVertexStatusResponse) GetStatus() *MonoVertexStatus {
@@ -369,7 +262,7 @@ type GetMonoVertexErrorsRequest struct {
 
 func (x *GetMonoVertexErrorsRequest) Reset() {
 	*x = GetMonoVertexErrorsRequest{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[6]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +274,7 @@ func (x *GetMonoVertexErrorsRequest) String() string {
 func (*GetMonoVertexErrorsRequest) ProtoMessage() {}
 
 func (x *GetMonoVertexErrorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[6]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +287,7 @@ func (x *GetMonoVertexErrorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMonoVertexErrorsRequest.ProtoReflect.Descriptor instead.
 func (*GetMonoVertexErrorsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{6}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetMonoVertexErrorsRequest) GetMonoVertex() string {
@@ -419,7 +312,7 @@ type ContainerError struct {
 
 func (x *ContainerError) Reset() {
 	*x = ContainerError{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[7]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +324,7 @@ func (x *ContainerError) String() string {
 func (*ContainerError) ProtoMessage() {}
 
 func (x *ContainerError) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[7]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +337,7 @@ func (x *ContainerError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerError.ProtoReflect.Descriptor instead.
 func (*ContainerError) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{7}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ContainerError) GetContainer() string {
@@ -493,7 +386,7 @@ type ReplicaErrors struct {
 
 func (x *ReplicaErrors) Reset() {
 	*x = ReplicaErrors{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[8]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +398,7 @@ func (x *ReplicaErrors) String() string {
 func (*ReplicaErrors) ProtoMessage() {}
 
 func (x *ReplicaErrors) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[8]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +411,7 @@ func (x *ReplicaErrors) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaErrors.ProtoReflect.Descriptor instead.
 func (*ReplicaErrors) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{8}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ReplicaErrors) GetReplica() string {
@@ -544,7 +437,7 @@ type GetMonoVertexErrorsResponse struct {
 
 func (x *GetMonoVertexErrorsResponse) Reset() {
 	*x = GetMonoVertexErrorsResponse{}
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[9]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -556,7 +449,7 @@ func (x *GetMonoVertexErrorsResponse) String() string {
 func (*GetMonoVertexErrorsResponse) ProtoMessage() {}
 
 func (x *GetMonoVertexErrorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[9]
+	mi := &file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -569,7 +462,7 @@ func (x *GetMonoVertexErrorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMonoVertexErrorsResponse.ProtoReflect.Descriptor instead.
 func (*GetMonoVertexErrorsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{9}
+	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetMonoVertexErrorsResponse) GetErrors() []*ReplicaErrors {
@@ -598,16 +491,7 @@ const file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x121\n" +
 	"\x05value\x18\x02 \x01(\v2\x1b.google.protobuf.Int64ValueR\x05value:\x028\x01\"W\n" +
 	"\x1cGetMonoVertexMetricsResponse\x127\n" +
-	"\ametrics\x18\x01 \x01(\v2\x1d.mvtxdaemon.MonoVertexMetricsR\ametrics\"\xe5\x01\n" +
-	"\vPodReadRate\x12\x1a\n" +
-	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x18\n" +
-	"\areplica\x18\x02 \x01(\x05R\areplica\x12D\n" +
-	"\treadRates\x18\x03 \x03(\v2&.mvtxdaemon.PodReadRate.ReadRatesEntryR\treadRates\x1aZ\n" +
-	"\x0eReadRatesEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x122\n" +
-	"\x05value\x18\x02 \x01(\v2\x1c.google.protobuf.DoubleValueR\x05value:\x028\x01\"P\n" +
-	"!GetMonoVertexPodReadRatesResponse\x12+\n" +
-	"\x04pods\x18\x01 \x03(\v2\x17.mvtxdaemon.PodReadRateR\x04pods\"X\n" +
+	"\ametrics\x18\x01 \x01(\v2\x1d.mvtxdaemon.MonoVertexMetricsR\ametrics\"X\n" +
 	"\x10MonoVertexStatus\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
@@ -628,10 +512,9 @@ const file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDesc = "" +
 	"\areplica\x18\x01 \x01(\tR\areplica\x12D\n" +
 	"\x0fcontainerErrors\x18\x02 \x03(\v2\x1a.mvtxdaemon.ContainerErrorR\x0fcontainerErrors\"P\n" +
 	"\x1bGetMonoVertexErrorsResponse\x121\n" +
-	"\x06errors\x18\x01 \x03(\v2\x19.mvtxdaemon.ReplicaErrorsR\x06errors2\x9e\x04\n" +
+	"\x06errors\x18\x01 \x03(\v2\x19.mvtxdaemon.ReplicaErrorsR\x06errors2\x98\x03\n" +
 	"\x17MonoVertexDaemonService\x12q\n" +
-	"\x14GetMonoVertexMetrics\x12\x16.google.protobuf.Empty\x1a(.mvtxdaemon.GetMonoVertexMetricsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/metrics\x12\x83\x01\n" +
-	"\x19GetMonoVertexPodReadRates\x12\x16.google.protobuf.Empty\x1a-.mvtxdaemon.GetMonoVertexPodReadRatesResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/pods/read-rates\x12n\n" +
+	"\x14GetMonoVertexMetrics\x12\x16.google.protobuf.Empty\x1a(.mvtxdaemon.GetMonoVertexMetricsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/metrics\x12n\n" +
 	"\x13GetMonoVertexStatus\x12\x16.google.protobuf.Empty\x1a'.mvtxdaemon.GetMonoVertexStatusResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/status\x12\x99\x01\n" +
 	"\x13GetMonoVertexErrors\x12&.mvtxdaemon.GetMonoVertexErrorsRequest\x1a'.mvtxdaemon.GetMonoVertexErrorsResponse\"1\x82\xd3\xe4\x93\x02+\x12)/api/v1/mono-vertices/{monoVertex}/errorsB8Z6github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemonb\x06proto3"
 
@@ -647,52 +530,44 @@ func file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDescData
 }
 
-var file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_goTypes = []any{
-	(*MonoVertexMetrics)(nil),                 // 0: mvtxdaemon.MonoVertexMetrics
-	(*GetMonoVertexMetricsResponse)(nil),      // 1: mvtxdaemon.GetMonoVertexMetricsResponse
-	(*PodReadRate)(nil),                       // 2: mvtxdaemon.PodReadRate
-	(*GetMonoVertexPodReadRatesResponse)(nil), // 3: mvtxdaemon.GetMonoVertexPodReadRatesResponse
-	(*MonoVertexStatus)(nil),                  // 4: mvtxdaemon.MonoVertexStatus
-	(*GetMonoVertexStatusResponse)(nil),       // 5: mvtxdaemon.GetMonoVertexStatusResponse
-	(*GetMonoVertexErrorsRequest)(nil),        // 6: mvtxdaemon.GetMonoVertexErrorsRequest
-	(*ContainerError)(nil),                    // 7: mvtxdaemon.ContainerError
-	(*ReplicaErrors)(nil),                     // 8: mvtxdaemon.ReplicaErrors
-	(*GetMonoVertexErrorsResponse)(nil),       // 9: mvtxdaemon.GetMonoVertexErrorsResponse
-	nil,                                       // 10: mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry
-	nil,                                       // 11: mvtxdaemon.MonoVertexMetrics.PendingsEntry
-	nil,                                       // 12: mvtxdaemon.PodReadRate.ReadRatesEntry
-	(*timestamppb.Timestamp)(nil),             // 13: google.protobuf.Timestamp
-	(*wrapperspb.DoubleValue)(nil),            // 14: google.protobuf.DoubleValue
-	(*wrapperspb.Int64Value)(nil),             // 15: google.protobuf.Int64Value
-	(*emptypb.Empty)(nil),                     // 16: google.protobuf.Empty
+	(*MonoVertexMetrics)(nil),            // 0: mvtxdaemon.MonoVertexMetrics
+	(*GetMonoVertexMetricsResponse)(nil), // 1: mvtxdaemon.GetMonoVertexMetricsResponse
+	(*MonoVertexStatus)(nil),             // 2: mvtxdaemon.MonoVertexStatus
+	(*GetMonoVertexStatusResponse)(nil),  // 3: mvtxdaemon.GetMonoVertexStatusResponse
+	(*GetMonoVertexErrorsRequest)(nil),   // 4: mvtxdaemon.GetMonoVertexErrorsRequest
+	(*ContainerError)(nil),               // 5: mvtxdaemon.ContainerError
+	(*ReplicaErrors)(nil),                // 6: mvtxdaemon.ReplicaErrors
+	(*GetMonoVertexErrorsResponse)(nil),  // 7: mvtxdaemon.GetMonoVertexErrorsResponse
+	nil,                                  // 8: mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry
+	nil,                                  // 9: mvtxdaemon.MonoVertexMetrics.PendingsEntry
+	(*timestamppb.Timestamp)(nil),        // 10: google.protobuf.Timestamp
+	(*wrapperspb.DoubleValue)(nil),       // 11: google.protobuf.DoubleValue
+	(*wrapperspb.Int64Value)(nil),        // 12: google.protobuf.Int64Value
+	(*emptypb.Empty)(nil),                // 13: google.protobuf.Empty
 }
 var file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_depIdxs = []int32{
-	10, // 0: mvtxdaemon.MonoVertexMetrics.processingRates:type_name -> mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry
-	11, // 1: mvtxdaemon.MonoVertexMetrics.pendings:type_name -> mvtxdaemon.MonoVertexMetrics.PendingsEntry
+	8,  // 0: mvtxdaemon.MonoVertexMetrics.processingRates:type_name -> mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry
+	9,  // 1: mvtxdaemon.MonoVertexMetrics.pendings:type_name -> mvtxdaemon.MonoVertexMetrics.PendingsEntry
 	0,  // 2: mvtxdaemon.GetMonoVertexMetricsResponse.metrics:type_name -> mvtxdaemon.MonoVertexMetrics
-	12, // 3: mvtxdaemon.PodReadRate.readRates:type_name -> mvtxdaemon.PodReadRate.ReadRatesEntry
-	2,  // 4: mvtxdaemon.GetMonoVertexPodReadRatesResponse.pods:type_name -> mvtxdaemon.PodReadRate
-	4,  // 5: mvtxdaemon.GetMonoVertexStatusResponse.status:type_name -> mvtxdaemon.MonoVertexStatus
-	13, // 6: mvtxdaemon.ContainerError.timestamp:type_name -> google.protobuf.Timestamp
-	7,  // 7: mvtxdaemon.ReplicaErrors.containerErrors:type_name -> mvtxdaemon.ContainerError
-	8,  // 8: mvtxdaemon.GetMonoVertexErrorsResponse.errors:type_name -> mvtxdaemon.ReplicaErrors
-	14, // 9: mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry.value:type_name -> google.protobuf.DoubleValue
-	15, // 10: mvtxdaemon.MonoVertexMetrics.PendingsEntry.value:type_name -> google.protobuf.Int64Value
-	14, // 11: mvtxdaemon.PodReadRate.ReadRatesEntry.value:type_name -> google.protobuf.DoubleValue
-	16, // 12: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexMetrics:input_type -> google.protobuf.Empty
-	16, // 13: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexPodReadRates:input_type -> google.protobuf.Empty
-	16, // 14: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexStatus:input_type -> google.protobuf.Empty
-	6,  // 15: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexErrors:input_type -> mvtxdaemon.GetMonoVertexErrorsRequest
-	1,  // 16: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexMetrics:output_type -> mvtxdaemon.GetMonoVertexMetricsResponse
-	3,  // 17: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexPodReadRates:output_type -> mvtxdaemon.GetMonoVertexPodReadRatesResponse
-	5,  // 18: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexStatus:output_type -> mvtxdaemon.GetMonoVertexStatusResponse
-	9,  // 19: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexErrors:output_type -> mvtxdaemon.GetMonoVertexErrorsResponse
-	16, // [16:20] is the sub-list for method output_type
-	12, // [12:16] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	2,  // 3: mvtxdaemon.GetMonoVertexStatusResponse.status:type_name -> mvtxdaemon.MonoVertexStatus
+	10, // 4: mvtxdaemon.ContainerError.timestamp:type_name -> google.protobuf.Timestamp
+	5,  // 5: mvtxdaemon.ReplicaErrors.containerErrors:type_name -> mvtxdaemon.ContainerError
+	6,  // 6: mvtxdaemon.GetMonoVertexErrorsResponse.errors:type_name -> mvtxdaemon.ReplicaErrors
+	11, // 7: mvtxdaemon.MonoVertexMetrics.ProcessingRatesEntry.value:type_name -> google.protobuf.DoubleValue
+	12, // 8: mvtxdaemon.MonoVertexMetrics.PendingsEntry.value:type_name -> google.protobuf.Int64Value
+	13, // 9: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexMetrics:input_type -> google.protobuf.Empty
+	13, // 10: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexStatus:input_type -> google.protobuf.Empty
+	4,  // 11: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexErrors:input_type -> mvtxdaemon.GetMonoVertexErrorsRequest
+	1,  // 12: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexMetrics:output_type -> mvtxdaemon.GetMonoVertexMetricsResponse
+	3,  // 13: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexStatus:output_type -> mvtxdaemon.GetMonoVertexStatusResponse
+	7,  // 14: mvtxdaemon.MonoVertexDaemonService.GetMonoVertexErrors:output_type -> mvtxdaemon.GetMonoVertexErrorsResponse
+	12, // [12:15] is the sub-list for method output_type
+	9,  // [9:12] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_init() }
@@ -706,7 +581,7 @@ func file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDesc), len(file_pkg_apis_proto_mvtxdaemon_mvtxdaemon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
