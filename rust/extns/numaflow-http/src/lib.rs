@@ -547,6 +547,7 @@ pub fn create_router(
         None => format!("/vertices/{vertex_name}"),
     };
 
+    let token: Option<Arc<SecretString>> = token.map(Arc::new);
     Router::new()
         .route("/health", get(health_handler))
         .route(endpoint.as_str(), post(data_handler))
