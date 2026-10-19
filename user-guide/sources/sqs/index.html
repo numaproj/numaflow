@@ -1385,7 +1385,18 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Multiple Queues">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-dead-letter-queues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native Dead-Letter Queues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Native Dead-Letter Queues">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -5577,7 +5588,18 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Multiple Queues">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-dead-letter-queues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native Dead-Letter Queues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Native Dead-Letter Queues">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -5769,6 +5791,16 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <td><strong>Read</strong> these queues (XOR with <code>queueName</code>)</td>
 </tr>
 <tr>
+<td><code>deadLetterQueues</code></td>
+<td>source spec</td>
+<td>Native SQS DLQs, positionally mapped to source queues</td>
+</tr>
+<tr>
+<td><code>maxReceiveCount</code></td>
+<td>source spec</td>
+<td>Receives before SQS moves a message to its DLQ (default <code>10</code>)</td>
+</tr>
+<tr>
 <td><code>queue_name</code></td>
 <td><strong>system</strong> metadata, group <code>sqs</code></td>
 <td><strong>Origin</strong> of this message (single- or multi-queue)</td>
@@ -5866,6 +5898,52 @@ comma-separated list; the two queue selector fields are mutually exclusive.</p>
 accounts, regions, credentials, or tuning, configure separate source vertices.</p>
 <p>Messages from all configured queues are merged without a cross-queue ordering
 guarantee. Origin is on every SQS message; see <a href="#source-queue-origin">Source Queue Origin</a>.</p>
+<h3 id="native-dead-letter-queues">Native Dead-Letter Queues<a class="headerlink" href="#native-dead-letter-queues" title="Permanent link">&para;</a></h3>
+<p>Set <code>deadLetterQueues</code> to have Numaflow validate each source queue's native AWS
+SQS <code>RedrivePolicy</code> during source startup. The queue owner must create each DLQ
+and configure the source queue's redrive policy before starting the MonoVertex.
+Numaflow only reads the existing policy; it does not create queues or change
+queue attributes. SQS itself moves a message to the corresponding DLQ after it
+has been received more than <code>maxReceiveCount</code> times. Numaflow does not copy
+failed messages or maintain a separate receive counter.</p>
+<p>For a single source queue, the existing <code>queueName</code> form remains supported:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">source</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">"orders-queue"</span>
+<span class="w">    </span><span class="nt">deadLetterQueues</span><span class="p">:</span><span class="w"> </span><span class="s">"orders-dlq"</span>
+<span class="w">    </span><span class="nt">maxReceiveCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">    </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-east-1"</span>
+<span class="w">    </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"111111111111"</span>
+</code></pre></div>
+<p>For multiple queues, entries map by position. In this example, <code>orders-queue</code>
+uses <code>orders-dlq</code>, <code>refunds-queue</code> uses <code>refunds-dlq</code>, and <code>replay-queue</code> uses
+<code>replay-dlq</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">source</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">queueNames</span><span class="p">:</span><span class="w"> </span><span class="s">"orders-queue,refunds-queue,replay-queue"</span>
+<span class="w">    </span><span class="nt">deadLetterQueues</span><span class="p">:</span><span class="w"> </span><span class="s">"orders-dlq,refunds-dlq,replay-dlq"</span>
+<span class="w">    </span><span class="nt">maxReceiveCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">    </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">"us-east-1"</span>
+<span class="w">    </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">"111111111111"</span>
+</code></pre></div>
+<p><code>maxReceiveCount</code> defaults to <code>10</code> when <code>deadLetterQueues</code> is present and must
+be from <code>1</code> through <code>1000</code>. The number of DLQs must exactly match the number of
+source queues. A source cannot name itself as its DLQ, although several sources
+may share the same DLQ. Each source/DLQ pair must have the same queue type:
+standard with standard, or FIFO with FIFO. Because queue names are resolved
+using the source's configured AWS account and region, the DLQs must be in that
+same account and region.</p>
+<p>In addition to the permissions used for normal message consumption, the pod or
+assumed IAM role needs:</p>
+<ul>
+<li><code>sqs:GetQueueUrl</code> for every configured source and DLQ</li>
+<li><code>sqs:GetQueueAttributes</code> for every configured source and DLQ</li>
+</ul>
+<p>Startup fails before actors begin polling if a source or DLQ cannot be resolved,
+if a DLQ has no <code>QueueArn</code>, or if a source queue's <code>RedrivePolicy</code> is missing,
+malformed, or does not contain the expected DLQ ARN and <code>maxReceiveCount</code>.
+Attribute-read failures identify the required <code>sqs:GetQueueAttributes</code>
+permission. All source/DLQ pairs are validated before any source actor starts.</p>
 <h4 id="read-and-failure-behavior">Read and Failure Behavior<a class="headerlink" href="#read-and-failure-behavior" title="Permanent link">&para;</a></h4>
 <p>Every queue is polled concurrently, and a read returns as soon as any queue has
 messages. A slow or empty queue never holds back messages already received from
