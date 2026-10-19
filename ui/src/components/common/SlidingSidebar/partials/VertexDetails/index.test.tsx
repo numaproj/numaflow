@@ -14,6 +14,7 @@ import "@testing-library/jest-dom";
 
 const mockBuffersComponent = jest.fn();
 const mockMetricsComponent = jest.fn();
+const mockPodsComponent = jest.fn();
 
 jest.mock("./partials/VertexUpdate", () => {
   const originalModule = jest.requireActual("./partials/VertexUpdate");
@@ -77,7 +78,10 @@ jest.mock(
       __esModule: true,
       ...originalModule,
       // Named export mocks
-      Pods: () => <div>Mocked pods</div>,
+      Pods: (props) => {
+        mockPodsComponent(props);
+        return <div>Mocked pods</div>;
+      },
     };
   }
 );
@@ -401,6 +405,30 @@ describe("VertexDetails", () => {
       expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
       expect(screen.getByText("Mocked pods")).toBeInTheDocument();
     });
+  });
+
+  it("stops Pod View polling props when another tab is selected", async () => {
+    render(
+      <VertexDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        vertexId="test-vertex"
+        vertexSpecs={{}}
+        vertexMetrics={{}}
+        buffers={[]}
+        type="sink"
+        setModalOnClose={jest.fn()}
+        refresh={jest.fn()}
+      />,
+      { wrapper: BrowserRouter }
+    );
+    await waitFor(() => expect(mockPodsComponent).toHaveBeenCalled());
+    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(true);
+
+    fireEvent.click(screen.getByTestId("spec-tab"));
+    await waitFor(() => expect(screen.getByText("Mocked vertexupdate")).toBeInTheDocument());
+    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(false);
+    expect(screen.getByText("Mocked pods")).toBeInTheDocument();
   });
 
   it("Click through tabs", async () => {

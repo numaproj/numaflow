@@ -601,14 +601,14 @@ export function VertexDetails({
           role="tabpanel"
           hidden={tabValue !== PODS_VIEW_TAB_INDEX}
         >
-          {tabValue === PODS_VIEW_TAB_INDEX && (
-            <div className="vertex-details-pod-view-content">
+          <div className="vertex-details-pod-view-content">
               {podViewVersion === "beta" ? (
                 <PodViewNext
                   namespaceId={namespaceId}
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
+                  active={tabValue === PODS_VIEW_TAB_INDEX}
                 />
               ) : (
                 <Pods
@@ -616,10 +616,10 @@ export function VertexDetails({
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
+                  active={tabValue === PODS_VIEW_TAB_INDEX}
                 />
               )}
-            </div>
-          )}
+          </div>
         </div>
         {!disableMetricsCharts && (
           <div

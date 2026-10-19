@@ -132,17 +132,17 @@ describe("Pods", () => {
         screen.getByTestId("simple-pipeline-infer-0-xah5w-numa")
       ).toBeInTheDocument()
     );
-    expect(mockedFetch).toBeCalledTimes(5);
+    expect(mockedFetch).toBeCalledTimes(4);
     fireEvent.click(screen.getByTestId("simple-pipeline-infer-0-xah5w-numa"));
-    expect(mockedFetch).toBeCalledTimes(5);
+    expect(mockedFetch).toBeCalledTimes(4);
     const dropdown = screen.getByRole("button", { name: "Open" });
     fireEvent.click(dropdown);
-    expect(mockedFetch).toBeCalledTimes(5);
+    expect(mockedFetch).toBeCalledTimes(4);
     const option2 = screen.getByText("simple-pipeline-infer-1-xah5w");
     await act(async () => {
       fireEvent.click(option2);
     });
-    expect(mockedFetch).toBeCalledTimes(7);
+    expect(mockedFetch).toBeCalledTimes(5);
   });
 
   it("shows pod and container selectors only inside focus mode", async () => {

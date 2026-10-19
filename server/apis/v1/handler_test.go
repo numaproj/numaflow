@@ -372,6 +372,7 @@ func TestHandler_GetMonoVertexPodsInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 			c.Params = gin.Params{
 				{Key: "namespace", Value: tt.namespace},
 				{Key: "mono-vertex", Value: tt.monoVertex},
@@ -573,6 +574,7 @@ func TestHandler_GetVertexPodsInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 			c.Params = gin.Params{
 				{Key: "namespace", Value: tt.namespace},
 				{Key: "pipeline", Value: tt.pipeline},
@@ -815,12 +817,38 @@ func TestHandler_GetPodDetails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			podDetails, err := h.getPodDetails(tt.pod)
+			podDetails, err := h.getPodDetails(context.Background(), tt.pod)
 
 			assert.Equal(t, tt.expectedErr, err)
 			assert.Equal(t, tt.expectedDetails, podDetails)
 		})
 	}
+}
+
+func TestCollectPodDetailsKeepsContainerStatusWhenMetricsFail(t *testing.T) {
+	h := handler{metricsClient: &MockMetricsClient{}}
+	pods := []corev1.Pod{{
+		ObjectMeta: metav1.ObjectMeta{Name: "orders-0", Namespace: "team-a"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name:         "udf",
+				RestartCount: 4,
+				State: corev1.ContainerState{
+					Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "back-off"},
+				},
+			}},
+		},
+	}}
+
+	got := h.collectPodDetails(context.Background(), pods)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "orders-0", got[0].Name)
+	assert.Equal(t, "Running", got[0].Status)
+	assert.Empty(t, got[0].TotalCPU)
+	container := got[0].ContainerDetailsMap["udf"]
+	assert.Equal(t, int32(4), container.RestartCount)
+	assert.Equal(t, "CrashLoopBackOff", container.WaitingReason)
 }
 
 func TestHandler_GetContainerDetails(t *testing.T) {

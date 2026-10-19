@@ -14,10 +14,25 @@ const commonTypography = {
   fontFamily: ["IBM Plex Sans"].join(","),
 };
 
+// The root font-size is 10px, so MUI's default 0.6875rem tooltip renders at ~7px.
+const commonComponents = {
+  MuiTooltip: {
+    styleOverrides: {
+      tooltip: {
+        fontSize: "1.3rem",
+        lineHeight: 1.4,
+        padding: "0.6rem 1rem",
+        maxWidth: "40rem",
+      },
+    },
+  },
+};
+
 export function createLightTheme(): Theme {
   return createTheme({
     breakpoints: commonBreakpoints,
     typography: commonTypography,
+    components: commonComponents,
     palette: {
       mode: "light",
       primary: {
@@ -39,6 +54,7 @@ export function createDarkTheme(): Theme {
   return createTheme({
     breakpoints: commonBreakpoints,
     typography: commonTypography,
+    components: commonComponents,
     palette: {
       mode: "dark",
       primary: {

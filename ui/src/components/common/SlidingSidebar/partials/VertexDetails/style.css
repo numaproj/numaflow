@@ -145,13 +145,15 @@
 
 .vertex-details--pod-beta .vertex-details-header-icon {
   width: 3.6rem;
+  height: 3.6rem;
+  object-fit: contain;
 }
 
 .vertex-details--pod-beta .vertex-details-header-text {
   margin-left: 1.2rem;
   color: var(--text-secondary);
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
 }
 
 .vertex-details-beta-title-separator {
@@ -164,7 +166,7 @@
   overflow: hidden;
   color: var(--text-primary);
   font-size: 2rem;
-  font-weight: 600;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -185,6 +187,13 @@
 }
 
 .vertex-details--pod-beta .vertex-details-pod-view-content {
+  overflow: hidden;
+}
+
+.vertex-details--pod-beta .vertex-details-pod-view-panel {
+  flex: 1;
+  height: auto;
+  min-height: 0;
   overflow: hidden;
 }
 
