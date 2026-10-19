@@ -26,8 +26,7 @@ import (
 )
 
 // NewClusterHandler assembles the API v2 handler from server capabilities and observability.
-// The protocol argument is kept so the server command signature stays stable; API v2 does not dial daemons.
-func NewClusterHandler(_ string) (*Handler, error) {
+func NewClusterHandler() (*Handler, error) {
 	restConfig, err := util.K8sRestConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes REST config: %w", err)
@@ -36,8 +35,7 @@ func NewClusterHandler(_ string) (*Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Numaflow client: %w", err)
 	}
-	numaflowAPI := numaflowClient.NumaflowV1alpha1()
-	observabilityService, err := observability.NewService(numaflowAPI)
+	observabilityService, err := observability.NewService(numaflowClient.NumaflowV1alpha1())
 	if err != nil {
 		return nil, err
 	}

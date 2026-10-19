@@ -62,15 +62,6 @@ func (rc *restfulClient) Close() error {
 	return nil
 }
 
-// get sends a GET whose cancellation follows ctx. http.Client.Get does not.
-func (rc *restfulClient) get(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	return rc.httpClient.Do(req)
-}
-
 func unmarshalResponse[T any](r *http.Response) (*T, error) {
 	if r.StatusCode >= 300 {
 		return nil, fmt.Errorf("unexpected response %v: %s", r.StatusCode, r.Status)
@@ -87,7 +78,7 @@ func unmarshalResponse[T any](r *http.Response) (*T, error) {
 }
 
 func (rc *restfulClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.MonoVertexMetrics, error) {
-	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/metrics", rc.hostURL))
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/metrics", rc.hostURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get mono vertex metrics RESTful API, %w", err)
 	}
@@ -100,7 +91,7 @@ func (rc *restfulClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.
 }
 
 func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
-	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/status", rc.hostURL))
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/status", rc.hostURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get mono vertex status RESTful API, %w", err)
 	}
@@ -115,7 +106,7 @@ func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.M
 
 // GetMonoVertexErrors returns the []ReplicaErrors response instance for GetMonoVertexErrorsRequest
 func (rc *restfulClient) GetMonoVertexErrors(ctx context.Context, monoVertex string) ([]*mvtxdaemon.ReplicaErrors, error) {
-	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/mono-vertices/%s/errors", rc.hostURL, monoVertex))
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/mono-vertices/%s/errors", rc.hostURL, monoVertex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get mono vertex errors RESTful API, %w", err)
 	}

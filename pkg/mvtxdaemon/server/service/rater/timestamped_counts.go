@@ -18,7 +18,6 @@ package rater
 
 import (
 	"fmt"
-	"maps"
 	"sync"
 )
 
@@ -62,8 +61,7 @@ func (tc *TimestampedCounts) Update(podReadCount *PodMetricsCount) {
 func (tc *TimestampedCounts) PodCountSnapshot() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	// Return a copy so rate readers do not race with the scrape writers.
-	return maps.Clone(tc.podReadCounts)
+	return tc.podReadCounts
 }
 
 // String returns a string representation of the TimestampedCounts

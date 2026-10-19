@@ -92,7 +92,7 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
 
-	v2Handler, err := v2.NewClusterHandler(sysInfo.DaemonClientProtocol)
+	v2Handler, err := v2.NewClusterHandler()
 	if err != nil {
 		panic(err)
 	}

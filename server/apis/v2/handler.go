@@ -58,10 +58,7 @@ func NewHandler(capabilitiesService CapabilitiesService, observabilityService Ob
 	if observabilityService == nil {
 		return nil, fmt.Errorf("observability service is required")
 	}
-	return &Handler{
-		capabilitiesService:  capabilitiesService,
-		observabilityService: observabilityService,
-	}, nil
+	return &Handler{capabilitiesService: capabilitiesService, observabilityService: observabilityService}, nil
 }
 
 var _ generated.ServerInterface = (*Handler)(nil)
@@ -162,8 +159,7 @@ func validateNames(c *gin.Context, fields ...nameField) bool {
 	return false
 }
 
-// writeServiceError maps Kubernetes read failures to stable Problem codes
-// without leaking provider text.
+// writeServiceError maps Kubernetes read failures to stable Problem codes without leaking provider text.
 func writeServiceError(c *gin.Context, err error, target string) {
 	if apierrors.IsNotFound(err) {
 		WriteProblem(c, http.StatusNotFound, "target_not_found", "Target not found", fmt.Sprintf("The requested %s does not exist", target), nil)
