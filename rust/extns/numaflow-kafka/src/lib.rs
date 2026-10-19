@@ -213,32 +213,6 @@ mod tests {
     }
 
     #[test]
-    fn tls_debug_redacts_contents_and_client_receives_them() {
-        let tls = TlsConfigWithClientAuth {
-            insecure_skip_verify: true,
-            ca_cert: Some("secret-ca".into()),
-            client_auth: Some(TlsClientAuthCerts {
-                client_cert: "secret-cert".into(),
-                client_cert_private_key: "secret-key".into(),
-            }),
-        };
-        assert!(!format!("{tls:?}").contains("secret-"));
-        assert!(!format!("{tls:#?}").contains("secret-"));
-        let mut client = ClientConfig::new();
-        update_auth_config(&mut client, Some(tls), None);
-        for (key, value) in [
-            ("security.protocol", "SSL"),
-            ("enable.ssl.certificate.verification", "false"),
-            ("enable.ssl.certificate.verification", "false"),
-            ("ssl.ca.pem", "secret-ca"),
-            ("ssl.certificate.pem", "secret-cert"),
-            ("ssl.key.pem", "secret-key"),
-        ] {
-            assert_eq!(client.get(key), Some(value));
-        }
-    }
-
-    #[test]
     fn update_auth_config_with_plain_auth() {
         let mut config = ClientConfig::new();
         let auth = KafkaSaslAuth::Plain {
@@ -374,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_auth_config_tls_only() {
+    fn update_auth_config_tls_only() {
         let mut config = ClientConfig::new();
         let tls = TlsConfigWithClientAuth {
             insecure_skip_verify: true,
