@@ -40,6 +40,7 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "warning", label: "Warning" },
   { value: "idle", label: "Idle" },
   { value: "healthy", label: "Healthy" },
+  { value: "unknown", label: "Unknown" },
 ];
 
 function formatRate(rate?: number): string | undefined {

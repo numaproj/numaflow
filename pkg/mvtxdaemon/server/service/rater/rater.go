@@ -270,12 +270,15 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	return result
 }
 
-// getPodReadCounts returns the total number of messages read by the pod
+// getPodReadCounts returns the total number of messages read by the pod.
+// A successful scrape whose counter family is missing or empty is an explicit zero: the pod is up
+// but has never exported a read series, so it must stay in the timeline. Callers do not invoke this
+// with a nil metrics document; that failed scrape leaves the previous snapshot unchanged.
 func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
 	value, ok := result[monoVtxReadMetricName]
 	if !ok || value == nil || len(value.GetMetric()) == 0 {
-		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
-		return nil
+		r.log.Infof("[Pod name %s]: Metric %q is absent after a successful scrape; recording zero reads", podName, monoVtxReadMetricName)
+		return &PodMetricsCount{podName, 0}
 	}
 
 	metricsList := value.GetMetric()

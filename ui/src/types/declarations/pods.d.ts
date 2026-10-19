@@ -14,6 +14,8 @@ export interface PodsProps {
   pipelineId: string;
   vertexId: string;
   type: string;
+  /** When false the view stays mounted but does not poll or open a log stream. */
+  active?: boolean;
 }
 
 export interface PodContainerSpec {

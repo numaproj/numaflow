@@ -608,6 +608,7 @@ export function VertexDetails({
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
+                  active={tabValue === PODS_VIEW_TAB_INDEX}
                 />
               ) : (
                 <Pods
@@ -615,6 +616,7 @@ export function VertexDetails({
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
+                  active={tabValue === PODS_VIEW_TAB_INDEX}
                 />
               )}
           </div>

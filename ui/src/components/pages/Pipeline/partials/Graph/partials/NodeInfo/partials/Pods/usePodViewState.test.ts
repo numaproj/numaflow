@@ -81,6 +81,7 @@ describe("usePodViewState", () => {
     expect(result.current.state.selectedPod).toBeUndefined();
     expect(mockedUsePodsViewFetch.mock.calls[0][7]).toEqual({
       autoSelectFirstPod: false,
+      active: true,
     });
   });
 
@@ -126,6 +127,70 @@ describe("usePodViewState", () => {
     expect(result.current.state.selectedContainer).toBe("numa");
     expect(mockedUsePodsViewFetch.mock.calls[0][7]).toEqual({
       autoSelectFirstPod: true,
+      active: true,
     });
+  });
+
+  it("does not fetch runtime while the Pods tab is hidden", async () => {
+    renderPodViewState("?vertex=mvtx", { ...BETA, active: false });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a runtime fetch failure and ignores an older response", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    (global.fetch as jest.Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        })
+    );
+
+    const { result, rerender } = renderHook(
+      (vertexId: string) =>
+        usePodViewState(
+          { namespaceId: "default", pipelineId: "mvtx", vertexId, type: "monoVertex" },
+          BETA
+        ),
+      {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(MemoryRouter, { initialEntries: ["/"] }, children),
+        initialProps: "mvtx",
+      }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(resolvers.length).toBeGreaterThan(0);
+    const first = resolvers[0];
+
+    rerender("other");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      first({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [{ name: withNuma.name, status: "Running", containerDetailsMap: {} }],
+          }),
+      });
+      await Promise.resolve();
+    });
+    expect(result.current.podRuntimeByName.has(withNuma.name)).toBe(false);
+
+    const latest = resolvers[resolvers.length - 1];
+    await act(async () => {
+      latest({ ok: false, json: () => Promise.resolve({}) });
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(result.current.podRuntimeError).toBe("Failed to fetch pod details")
+    );
   });
 });

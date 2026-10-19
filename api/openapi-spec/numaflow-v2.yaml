@@ -579,7 +579,7 @@ components:
           description: Time the API server read the rates from the daemon, not a Kubernetes resource timestamp.
         pods:
           type: array
-          maxItems: 200
+          description: Every pod the daemon observed. The list is not capped.
           items:
             $ref: "#/components/schemas/PodReadRate"
     PodReadRate:

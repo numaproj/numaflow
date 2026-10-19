@@ -13,6 +13,8 @@ interface PodReadRateIds {
   vertexId: string;
   type: string;
   pods: Pod[] | undefined;
+  /** When false, keep the last rates but do not poll. */
+  active?: boolean;
 }
 
 interface DaemonPodRate {
@@ -59,8 +61,9 @@ export function ratesByPodName(
 
 /**
  * usePodReadRates returns per-pod read rates over 5m and 15m windows from the vertex daemon,
- * refreshed every minute. It returns undefined until the request succeeds, and again if the
- * daemon cannot be reached, so a broken path never makes every pod look idle.
+ * refreshed every minute while the Pods tab is visible. It returns undefined until the request
+ * succeeds, and again if the daemon cannot be reached or the vertex changes, so a broken or
+ * stale path never makes every pod look idle.
  */
 export function usePodReadRates({
   namespaceId,
@@ -68,6 +71,7 @@ export function usePodReadRates({
   vertexId,
   type,
   pods,
+  active = true,
 }: PodReadRateIds): Map<string, PodReadRates> | undefined {
   const { host } = useContext<AppContextProps>(AppContext);
   const [rates, setRates] = useState<Map<string, PodReadRates> | undefined>();
@@ -76,7 +80,11 @@ export function usePodReadRates({
   const podNames = (pods || []).map((pod) => pod.name).join("\n");
 
   useEffect(() => {
-    const controller = new AbortController();
+    if (!active) return;
+    // Drop the previous vertex's rates immediately so they cannot classify the new fleet.
+    setRates(undefined);
+    let generation = 0;
+    let controller: AbortController | undefined;
     const url = `${host}${getBaseHref()}${podReadRatesPath({
       namespaceId,
       pipelineId,
@@ -85,18 +93,22 @@ export function usePodReadRates({
     })}`;
 
     const load = async () => {
+      controller?.abort();
+      const current = new AbortController();
+      controller = current;
+      const request = ++generation;
       try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (controller.signal.aborted) return;
+        const response = await fetch(url, { signal: current.signal });
+        if (current.signal.aborted || request !== generation) return;
         if (!response.ok) {
           setRates(undefined);
           return;
         }
         const body = await response.json();
-        if (controller.signal.aborted) return;
+        if (current.signal.aborted || request !== generation) return;
         setRates(ratesByPodName(podsRef.current || [], body?.pods));
       } catch {
-        if (controller.signal.aborted) return;
+        if (current.signal.aborted || request !== generation) return;
         setRates(undefined);
       }
     };
@@ -104,10 +116,11 @@ export function usePodReadRates({
     void load();
     const timer = window.setInterval(() => void load(), POD_RATES_REFRESH_MS);
     return () => {
-      controller.abort();
+      generation += 1;
+      controller?.abort();
       window.clearInterval(timer);
     };
-  }, [host, namespaceId, pipelineId, vertexId, type, podNames]);
+  }, [active, host, namespaceId, pipelineId, vertexId, type, podNames]);
 
   return rates;
 }

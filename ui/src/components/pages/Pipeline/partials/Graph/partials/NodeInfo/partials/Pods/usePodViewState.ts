@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { AppContext } from "../../../../../../../../../App";
 import { notifyError } from "../../../../../../../../../utils/error";
@@ -44,6 +44,8 @@ export interface PodViewStateOptions {
   autoSelectFirstPod?: boolean;
   /** Container chosen when a pod is selected, if the pod runs it. */
   defaultContainer?: string;
+  /** When false, keep selection but do not poll runtime or pod metrics. */
+  active?: boolean;
 }
 
 /**
@@ -52,7 +54,7 @@ export interface PodViewStateOptions {
  */
 export function usePodViewState(
   { namespaceId, pipelineId, vertexId, type }: PodsProps,
-  { autoSelectFirstPod = true, defaultContainer }: PodViewStateOptions = {}
+  { autoSelectFirstPod = true, defaultContainer, active = true }: PodViewStateOptions = {}
 ) {
   const { host } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
@@ -66,6 +68,8 @@ export function usePodViewState(
   >(new Map());
   const [podRuntimeError, setPodRuntimeError] = useState<string | undefined>();
   const [runtimeRefreshKey, setRuntimeRefreshKey] = useState(`${Date.now()}`);
+  const runtimeRequestRef = useRef(0);
+  const runtimeAbortRef = useRef<AbortController | undefined>(undefined);
 
   const { pods, podsDetails, podsErr, podsDetailsErr, loading } =
     usePodsViewFetch(
@@ -76,20 +80,27 @@ export function usePodViewState(
       type,
       setSelectedPod,
       setSelectedContainer,
-      { autoSelectFirstPod }
+      { autoSelectFirstPod, active }
     );
 
   const fetchRuntime = useCallback(async () => {
+    runtimeAbortRef.current?.abort();
+    const controller = new AbortController();
+    runtimeAbortRef.current = controller;
+    const request = ++runtimeRequestRef.current;
     try {
       const response = await fetch(
         `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
           type === "monoVertex"
             ? "/mono-vertices"
             : `/pipelines/${pipelineId}/vertices`
-        }/${vertexId}/pods-info?refreshKey=${runtimeRefreshKey}`
+        }/${vertexId}/pods-info?refreshKey=${runtimeRefreshKey}`,
+        { signal: controller.signal }
       );
+      if (controller.signal.aborted || request !== runtimeRequestRef.current) return;
       if (!response.ok) throw new Error("Failed to fetch pod details");
       const body = await response.json();
+      if (controller.signal.aborted || request !== runtimeRequestRef.current) return;
       const nextRuntime = new Map<string, PodRuntimeInfo>();
       (body?.data || []).forEach((pod: PodRuntimeInfo) => {
         if (pod?.name) nextRuntime.set(pod.name, pod);
@@ -97,21 +108,34 @@ export function usePodViewState(
       setPodRuntimeByName(nextRuntime);
       setPodRuntimeError(undefined);
     } catch {
+      if (controller.signal.aborted || request !== runtimeRequestRef.current) return;
       setPodRuntimeError("Failed to fetch pod details");
     }
   }, [host, namespaceId, pipelineId, runtimeRefreshKey, type, vertexId]);
 
+  // A vertex switch must not keep the previous runtime map until the new request returns.
   useEffect(() => {
-    fetchRuntime();
-  }, [fetchRuntime]);
+    setPodRuntimeByName(new Map());
+    setPodRuntimeError(undefined);
+  }, [host, namespaceId, pipelineId, vertexId, type]);
 
   useEffect(() => {
+    if (!active) return;
+    void fetchRuntime();
+    return () => {
+      runtimeRequestRef.current += 1;
+      runtimeAbortRef.current?.abort();
+    };
+  }, [active, fetchRuntime]);
+
+  useEffect(() => {
+    if (!active) return;
     const interval = setInterval(
       () => setRuntimeRefreshKey(`${Date.now()}`),
       30000
     );
     return () => clearInterval(interval);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     if (podsErr) notifyError(podsErr);

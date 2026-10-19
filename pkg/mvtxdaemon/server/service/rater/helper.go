@@ -42,6 +42,9 @@ const (
 	// rateNotAvailable is returned when the processing rate cannot be derived from the currently
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
+	// podRateGapTolerance is three default 5s scrapes. An observed span shorter than the requested
+	// lookback by more than this is an incomplete window and is not reported.
+	podRateGapTolerance int64 = 15
 )
 
 // CalculateRate calculates the rate of a MonoVertex for a given lookback period.
@@ -75,9 +78,10 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 }
 
 // CalculatePodRates returns each active pod's read rate (messages per second) over lookbackSeconds.
-// The map is nil when the queue does not yet cover the whole window, so a freshly started daemon
-// does not report a 15 minute rate computed over a shorter interval. Only pods present in the latest
-// complete snapshot are included; pods that have gone away are omitted.
+// The map is nil when the queue does not yet cover the whole window, or when a scrape gap makes the
+// observed span shorter than the lookback by more than podRateGapTolerance, so a freshly started
+// daemon does not report a 15 minute rate computed over a shorter interval. Only pods present in the
+// latest complete snapshot are included; pods that have gone away are omitted.
 func CalculatePodRates(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) map[string]float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -95,7 +99,7 @@ func CalculatePodRates(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbac
 		return nil
 	}
 	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
-	if timeDiff <= 0 {
+	if timeDiff <= 0 || timeDiff < lookbackSeconds-podRateGapTolerance {
 		return nil
 	}
 

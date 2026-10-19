@@ -41,6 +41,9 @@ const (
 	// rateNotAvailable is returned when the processing rate cannot be derived from the currently
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
+	// podRateGapTolerance is three default 5s scrapes. An observed span shorter than the requested
+	// lookback by more than this is an incomplete window and is not reported.
+	podRateGapTolerance int64 = 15
 )
 
 // CalculatePending calculates the pending messages for a given partition in the last lookback seconds
@@ -96,7 +99,8 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 
 // CalculatePodRates returns each active pod's read rate (messages per second) over lookbackSeconds,
 // summing that pod's partition counters. The map is nil when the queue does not yet cover the whole
-// window. Only pods present in the latest complete snapshot are included.
+// window, or when a scrape gap makes the observed span shorter than the lookback by more than
+// podRateGapTolerance. Only pods present in the latest complete snapshot are included.
 func CalculatePodRates(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) map[string]float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -111,7 +115,7 @@ func CalculatePodRates(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbac
 		return nil
 	}
 	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
-	if timeDiff <= 0 {
+	if timeDiff <= 0 || timeDiff < lookbackSeconds-podRateGapTolerance {
 		return nil
 	}
 

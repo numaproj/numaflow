@@ -169,4 +169,24 @@ describe("Custom Pods hook", () => {
     });
     expect(mockedFetch).toBeCalledTimes(2);
   });
+
+  it("does not fetch while the Pods tab is hidden", async () => {
+    const mockedFetch = jest.fn();
+    (global as any).fetch = mockedFetch;
+    await act(async () => {
+      renderHook(() =>
+        usePodsViewFetch(
+          "default",
+          "simple-pipeline",
+          "cat",
+          undefined,
+          "udf",
+          jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
+          jest.fn() as Dispatch<SetStateAction<string | undefined>>,
+          { active: false }
+        )
+      );
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
 });

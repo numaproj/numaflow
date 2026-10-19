@@ -85,6 +85,10 @@
   --pod-severity: #4ade80;
 }
 
+.pod-fleet-filter-dot--unknown {
+  --pod-severity: #64748b;
+}
+
 .pod-fleet-filter-dot {
   background: var(--pod-severity);
 }

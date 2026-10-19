@@ -67,10 +67,16 @@ describe("classifyPod", () => {
     ).toBe(expected);
   });
 
-  it("never marks young pods or pods without rate data idle", () => {
+  it("never marks young pods, undated pods, or pods without rate data idle", () => {
     const young = new Date(NOW - 60_000).toISOString();
     expect(
       classifyPod({ runtime: running(), readRates: silent, createdAt: young, now: NOW }).severity
+    ).toBe("healthy");
+    expect(
+      classifyPod({ runtime: running(), readRates: silent, createdAt: undefined, now: NOW }).severity
+    ).toBe("healthy");
+    expect(
+      classifyPod({ runtime: running(), readRates: silent, createdAt: "not-a-date", now: NOW }).severity
     ).toBe("healthy");
     expect(classifyPod({ runtime: running(), createdAt: OLD, now: NOW }).severity).toBe("healthy");
   });
@@ -97,32 +103,37 @@ describe("podFleetModel helpers", () => {
     expect(podStatusTone("OOMKilled")).toBe("failed");
   });
 
-  it("excludes numa from usage and treats pods missing from rate data as silent", () => {
+  it("excludes numa from usage and does not treat a missing rate entry as idle", () => {
     const hotNuma = pod("hot-numa");
     const hotUdf = pod("hot-udf");
     const quiet = pod("quiet");
+    const unobserved = pod("unobserved");
     const details = new Map<string, PodDetail>([
       ["hot-numa", usage(50, 2)],
       ["hot-udf", usage(1, 15)],
       ["quiet", usage(1, 1)],
+      ["unobserved", usage(1, 1)],
     ]);
     const runtime = new Map<string, PodRuntimeInfo>(
-      ["hot-numa", "hot-udf", "quiet"].map((name) => [name, { ...running(), name }])
+      ["hot-numa", "hot-udf", "quiet", "unobserved"].map((name) => [name, { ...running(), name }])
     );
     const rates = new Map([
       ["hot-numa", { rate5m: 3, rate15m: 3 }],
       ["hot-udf", { rate5m: 9, rate15m: 9 }],
+      ["quiet", { rate5m: 0, rate15m: 0 }],
     ]);
 
-    const items = buildPodFleetItems([hotNuma, hotUdf, quiet], details, runtime, rates, NOW);
+    const items = buildPodFleetItems([hotNuma, hotUdf, quiet, unobserved], details, runtime, rates, NOW);
 
     expect(items.map((item) => [item.pod.name, item.severity])).toEqual([
       ["hot-numa", "healthy"],
       ["hot-udf", "warning"],
       ["quiet", "idle"],
+      ["unobserved", "healthy"],
     ]);
     expect(items[0].maxCPUPercent).toBe(20);
     expect(items[2].readRates).toEqual({ rate5m: 0, rate15m: 0 });
+    expect(items[3].readRates).toBeUndefined();
     expect(buildPodFleetItems([quiet], details, runtime, undefined, NOW)[0].severity).toBe("healthy");
   });
 
@@ -139,6 +150,7 @@ describe("podFleetModel helpers", () => {
       new Map([
         ["a", { rate5m: 1, rate15m: 1 }],
         ["b", { rate5m: 1, rate15m: 1 }],
+        ["c", { rate5m: 0, rate15m: 0 }],
       ]),
       NOW
     );

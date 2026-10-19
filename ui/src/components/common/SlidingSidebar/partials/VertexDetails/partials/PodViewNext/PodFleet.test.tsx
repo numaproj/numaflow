@@ -40,7 +40,11 @@ const details = new Map<string, PodDetail>([
   ],
 ]);
 
-const charlie: Pod = { ...alpha, name: "pipeline-vertex-charlie" };
+const charlie: Pod = {
+  ...alpha,
+  name: "pipeline-vertex-charlie",
+  createdAt: "2020-01-01T00:00:00Z",
+};
 
 const runtime = new Map<string, PodRuntimeInfo>([
   [alpha.name, { name: alpha.name, status: "Running", containerDetailsMap: {} }],
@@ -60,6 +64,7 @@ const runtime = new Map<string, PodRuntimeInfo>([
 const rates = new Map([
   [alpha.name, { rate5m: 12, rate15m: 12 }],
   [bravo.name, { rate5m: 1, rate15m: 1 }],
+  [charlie.name, { rate5m: 0, rate15m: 0 }],
 ]);
 
 describe("PodFleet", () => {
@@ -152,5 +157,23 @@ describe("PodFleet", () => {
     fireEvent.mouseOver(idle);
     expect(await screen.findByText(IDLE_HINT)).toBeInTheDocument();
     expect(screen.getByText("Read rate (5m): 0.0 msg/s")).toBeInTheDocument();
+  });
+
+  it("filters pods whose runtime is unknown", () => {
+    const delta: Pod = { ...alpha, name: "pipeline-vertex-delta" };
+    render(
+      <PodFleet
+        pods={[alpha, delta]}
+        detailsByName={details}
+        runtimeByName={new Map([[alpha.name, runtime.get(alpha.name)!]])}
+        readRates={rates}
+        onPodSelect={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("pods-filter-unknown")).toHaveTextContent("Unknown 1");
+    fireEvent.click(screen.getByTestId("pods-filter-unknown"));
+    expect(screen.getByTestId(`pod-fleet-cell-${delta.name}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`pod-fleet-cell-${alpha.name}`)).not.toBeInTheDocument();
   });
 });

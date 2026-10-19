@@ -230,7 +230,9 @@ func TestGetPodReadCounts_MultipleMetricSeries(t *testing.T) {
 	t.Run("metric not found", func(t *testing.T) {
 		result := map[string]*dto.MetricFamily{}
 		podMetricsCount := r.getPodReadCounts("test-pod", result)
-		assert.Nil(t, podMetricsCount)
+		assert.NotNil(t, podMetricsCount)
+		assert.Equal(t, "test-pod", podMetricsCount.Name())
+		assert.Equal(t, 0.0, podMetricsCount.ReadCount())
 	})
 
 	t.Run("empty metric list", func(t *testing.T) {
@@ -244,7 +246,9 @@ func TestGetPodReadCounts_MultipleMetricSeries(t *testing.T) {
 			},
 		}
 		podMetricsCount := r.getPodReadCounts("test-pod", result)
-		assert.Nil(t, podMetricsCount)
+		assert.NotNil(t, podMetricsCount)
+		assert.Equal(t, "test-pod", podMetricsCount.Name())
+		assert.Equal(t, 0.0, podMetricsCount.ReadCount())
 	})
 }
 

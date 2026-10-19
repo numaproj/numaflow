@@ -372,12 +372,15 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
+// A successful scrape whose counter family is missing or empty is an explicit zero: the pod is up
+// but has never exported a read series, so it must stay in the timeline. Callers do not invoke this
+// with a nil metrics document; that failed scrape leaves the previous snapshot unchanged.
 func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
 	value, ok := metricsData[readTotalMetricName]
 	if !ok || value == nil || len(value.GetMetric()) == 0 {
-		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)
-		return nil
+		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is absent after a successful scrape; recording zero reads", vertexName, podName, readTotalMetricName)
+		return &PodReadCount{podName, map[string]float64{}}
 	}
 
 	metricsList := value.GetMetric()

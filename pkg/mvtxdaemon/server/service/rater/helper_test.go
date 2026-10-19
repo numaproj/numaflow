@@ -409,6 +409,16 @@ func TestCalculatePodRates(t *testing.T) {
 		_, gone := rates["gone"]
 		assert.False(t, gone)
 	})
+
+	t.Run("a scrape gap is not reported as the full window", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now().Unix()
+		appendMonoVertexCounts(q, now-1000, map[string]float64{"mv-mv-0": 0})
+		appendMonoVertexCounts(q, now-20, map[string]float64{"mv-mv-0": 0})
+		appendMonoVertexCounts(q, now-10, map[string]float64{"mv-mv-0": 100})
+		appendMonoVertexCounts(q, now, map[string]float64{"mv-mv-0": 100})
+		assert.Nil(t, CalculatePodRates(q, 60))
+	})
 }
 
 func TestPodReadRatesWindows(t *testing.T) {

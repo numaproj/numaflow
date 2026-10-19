@@ -89,7 +89,25 @@ describe("PodViewNext", () => {
 
     expect(mockedUsePodViewState).toHaveBeenCalledWith(
       expect.objectContaining({ vertexId: "vertex" }),
-      { autoSelectFirstPod: false, defaultContainer: "numa" }
+      { autoSelectFirstPod: false, defaultContainer: "numa", active: true }
+    );
+  });
+
+  it("does not mount logs while the Pods tab is hidden", () => {
+    render(
+      <PodViewNext
+        namespaceId="default"
+        pipelineId="pipeline"
+        vertexId="vertex"
+        type="source"
+        active={false}
+      />
+    );
+
+    expect(screen.queryByTestId("pod-detail")).not.toBeInTheDocument();
+    expect(mockedUsePodViewState).toHaveBeenCalledWith(
+      expect.objectContaining({ active: false }),
+      expect.objectContaining({ active: false })
     );
   });
 

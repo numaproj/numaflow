@@ -79,8 +79,9 @@ export interface ClassifyPodInput {
 /**
  * classifyPod applies the fleet colour rules in precedence order Red > Yellow > Grey > Green:
  * critical (pod unhealthy), warning (a user-defined container above 80% of its CPU or memory
- * request), idle (no reads for 15 min on a pod at least 15 min old), healthy otherwise. Pods
- * without runtime status are unknown unless an earlier rule already matched.
+ * request), idle (no reads for 15 min on a pod whose creation time shows it is at least 15 min
+ * old), healthy otherwise. Pods without runtime status are unknown unless an earlier rule
+ * already matched. A missing creation time never counts as old enough.
  */
 export function classifyPod({
   runtime,
@@ -104,7 +105,8 @@ export function classifyPod({
   }
 
   const created = createdAt ? Date.parse(createdAt) : NaN;
-  const oldEnough = Number.isNaN(created) || now - created >= IDLE_WINDOW_MS;
+  // A missing or unparseable creation time is not evidence the pod is old enough.
+  const oldEnough = !Number.isNaN(created) && now - created >= IDLE_WINDOW_MS;
   if (readRates?.rate15m === 0 && oldEnough) {
     return { severity: "idle", reason: IDLE_HINT };
   }
@@ -140,10 +142,9 @@ export function buildPodFleetItems(
       (count, container) => count + (container?.restartCount || 0),
       0
     );
-    // A pod that never read has no counter series, so a missing entry is zero reads.
-    const readRates = ratesByName
-      ? ratesByName.get(pod.name) ?? { rate5m: 0, rate15m: 0 }
-      : undefined;
+    // A missing entry means this pod was not in the daemon response. That is not an
+    // observed zero; idle requires rate15m === 0 from a pod the daemon reported.
+    const readRates = ratesByName?.get(pod.name);
     const { severity, reason } = classifyPod({
       runtime,
       maxCPUPercent,

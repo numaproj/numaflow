@@ -19,7 +19,7 @@ import { PodFocusControls } from "./partials/PodFocusControls";
 import { usePodViewState } from "./usePodViewState";
 
 export function Pods(props: PodsProps) {
-  const { namespaceId, pipelineId, vertexId, type } = props;
+  const { namespaceId, pipelineId, vertexId, type, active = true } = props;
 
   if (!namespaceId || !pipelineId || !vertexId) {
     return (
@@ -34,6 +34,7 @@ export function Pods(props: PodsProps) {
     podsDetails,
     podsErr,
     loading,
+    podRuntimeError,
     selectedPod,
     selectedContainer,
     selectedPodDetails,
@@ -42,7 +43,7 @@ export function Pods(props: PodsProps) {
     selectPodFromFleet,
     selectPodFromSearch,
     selectContainer,
-  } = usePodViewState(props);
+  } = usePodViewState(props, { active });
 
   const handlePodClick = useCallback((_event: Element, p: any) => {
     const nextPod = p?.data?.pod;
@@ -182,6 +183,11 @@ export function Pods(props: PodsProps) {
     </Box>
   );
 
+  // Keep the hook mounted for selection, but do not build the log workspace while hidden.
+  if (!active) {
+    return null;
+  }
+
   if (loading) {
     return (
       <Box data-testid={"pods-loading"} sx={{ my: 2 }}>
@@ -211,6 +217,15 @@ export function Pods(props: PodsProps) {
 
   return (
     <Paper square elevation={0} sx={{ height: "100%" }}>
+      {podRuntimeError && (
+        <Box
+          role="status"
+          data-testid="pod-runtime-error"
+          sx={{ mx: 2, mt: 2, color: "#8A5A00" }}
+        >
+          Pod runtime details are temporarily unavailable. Logs and resource usage remain available.
+        </Box>
+      )}
       <Box sx={{ display: "flex", height: "100%" }}>
         {/*pod details container*/}
         <Box

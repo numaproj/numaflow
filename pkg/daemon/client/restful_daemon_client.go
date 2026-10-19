@@ -62,6 +62,15 @@ func (rc *restfulDaemonClient) Close() error {
 	return nil
 }
 
+// get sends a GET whose cancellation follows ctx. http.Client.Get does not.
+func (rc *restfulDaemonClient) get(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return rc.httpClient.Do(req)
+}
+
 func unmarshalResponse[T any](r *http.Response) (*T, error) {
 	if r.StatusCode >= 300 {
 		return nil, fmt.Errorf("unexpected response %v: %s", r.StatusCode, r.Status)
@@ -78,7 +87,7 @@ func unmarshalResponse[T any](r *http.Response) (*T, error) {
 }
 
 func (rc *restfulDaemonClient) IsDrained(ctx context.Context, pipeline string) (bool, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/buffers", rc.hostURL, pipeline))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/buffers", rc.hostURL, pipeline))
 	if err != nil {
 		return false, fmt.Errorf("failed to call list buffers RESTful API, %w", err)
 	}
@@ -96,7 +105,7 @@ func (rc *restfulDaemonClient) IsDrained(ctx context.Context, pipeline string) (
 }
 
 func (rc *restfulDaemonClient) ListPipelineBuffers(ctx context.Context, pipeline string) ([]*daemon.BufferInfo, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/buffers", rc.hostURL, pipeline))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/buffers", rc.hostURL, pipeline))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call list buffers RESTful API, %w", err)
 	}
@@ -109,7 +118,7 @@ func (rc *restfulDaemonClient) ListPipelineBuffers(ctx context.Context, pipeline
 }
 
 func (rc *restfulDaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer string) (*daemon.BufferInfo, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/buffers/%s", rc.hostURL, pipeline, buffer))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/buffers/%s", rc.hostURL, pipeline, buffer))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get buffer RESTful API, %w", err)
 	}
@@ -122,7 +131,7 @@ func (rc *restfulDaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, 
 }
 
 func (rc *restfulDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/metrics", rc.hostURL, pipeline, vertex))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/metrics", rc.hostURL, pipeline, vertex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get vertex metrics RESTful API, %w", err)
 	}
@@ -135,7 +144,7 @@ func (rc *restfulDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, v
 }
 
 func (rc *restfulDaemonClient) GetVertexPodReadRates(ctx context.Context, pipeline, vertex string) ([]*daemon.PodReadRate, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/pods/read-rates", rc.hostURL, pipeline, vertex))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/pods/read-rates", rc.hostURL, pipeline, vertex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get vertex pod read rates RESTful API, %w", err)
 	}
@@ -149,7 +158,7 @@ func (rc *restfulDaemonClient) GetVertexPodReadRates(ctx context.Context, pipeli
 
 // GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
 func (rc *restfulDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/watermarks", rc.hostURL, pipeline))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/watermarks", rc.hostURL, pipeline))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get pipeline watermark RESTful API, %w", err)
 	}
@@ -162,7 +171,7 @@ func (rc *restfulDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeli
 }
 
 func (rc *restfulDaemonClient) GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/status", rc.hostURL, pipeline))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/status", rc.hostURL, pipeline))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get pipeline status RESTful API, %w", err)
 	}
@@ -176,7 +185,7 @@ func (rc *restfulDaemonClient) GetPipelineStatus(ctx context.Context, pipeline s
 
 // GetVertexErrors returns the []ReplicaErrors response instance for GetVertexErrorsRequest
 func (rc *restfulDaemonClient) GetVertexErrors(ctx context.Context, pipeline, vertex string) ([]*daemon.ReplicaErrors, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/errors", rc.hostURL, pipeline, vertex))
+	resp, err := rc.get(ctx, fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/errors", rc.hostURL, pipeline, vertex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get vertex errors RESTful API, %w", err)
 	}

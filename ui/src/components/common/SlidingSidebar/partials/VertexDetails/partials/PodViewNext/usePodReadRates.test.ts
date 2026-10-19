@@ -1,5 +1,5 @@
 import { createElement, ReactNode } from "react";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { AppContext } from "../../../../../../../App";
 import { Pod } from "../../../../../../../types/declarations/pods";
 import { podReadRatesPath, ratesByPodName, usePodReadRates } from "./usePodReadRates";
@@ -80,6 +80,62 @@ describe("usePodReadRates", () => {
       expect.anything()
     );
     expect(result.current?.get("orders-map-0-xyz")).toEqual({});
+  });
+
+  it("clears rates when the vertex changes and ignores an older response", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        })
+    );
+    const { result, rerender } = renderHook((props: typeof ids) => usePodReadRates(props), {
+      wrapper: wrapper(),
+      initialProps: ids,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const first = resolvers[0];
+
+    rerender({ ...ids, vertexId: "other", pods: [pod("other-0-zzz")] });
+    expect(result.current).toBeUndefined();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const latest = resolvers[resolvers.length - 1];
+    await act(async () => {
+      latest({
+        ok: true,
+        json: () => Promise.resolve({ pods: [{ hostname: "other-0", rate15m: 0 }] }),
+      });
+      first({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: [{ hostname: "orders-ingest-mv-1", rate5m: 4, rate15m: 5 }],
+          }),
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(result.current?.get("other-0-zzz")).toEqual({ rate5m: undefined, rate15m: 0 })
+    );
+    expect(result.current?.get("orders-ingest-mv-1-abc")).toBeUndefined();
+  });
+
+  it("does not fetch while the Pods tab is hidden", async () => {
+    const { result } = renderHook(() => usePodReadRates({ ...ids, active: false }), {
+      wrapper: wrapper(),
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current).toBeUndefined();
   });
 
   it("returns undefined when the daemon request fails", async () => {

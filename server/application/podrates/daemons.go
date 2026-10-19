@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/singleflight"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -31,15 +32,34 @@ import (
 const daemonClientCacheSize = 500
 
 // DaemonClients opens cached connections to pipeline and MonoVertex daemons.
+// Concurrent cache misses for one address share a single dial. A client that loses a
+// replacement is closed, because the LRU does not close a value overwritten by Add.
 type DaemonClients interface {
 	MonoVertexDaemon(namespace, name string) (mvtxclient.MonoVertexDaemonClient, error)
 	PipelineDaemon(namespace, name string) (daemonclient.DaemonClient, error)
 }
 
 type daemonClients struct {
-	protocol string
-	mono     *lru.Cache[string, mvtxclient.MonoVertexDaemonClient]
-	pipeline *lru.Cache[string, daemonclient.DaemonClient]
+	protocol       string
+	mono           *lru.Cache[string, mvtxclient.MonoVertexDaemonClient]
+	pipeline       *lru.Cache[string, daemonclient.DaemonClient]
+	monoFlight     singleflight.Group
+	pipelineFlight singleflight.Group
+}
+
+// Constructors are variables so tests can count clients created on a cache miss.
+var newMonoVertexDaemonClient = func(protocol, address string) (mvtxclient.MonoVertexDaemonClient, error) {
+	if strings.EqualFold(protocol, "http") {
+		return mvtxclient.NewRESTfulClient(address)
+	}
+	return mvtxclient.NewGRPCClient(address)
+}
+
+var newPipelineDaemonClient = func(protocol, address string) (daemonclient.DaemonClient, error) {
+	if strings.EqualFold(protocol, "http") {
+		return daemonclient.NewRESTfulDaemonServiceClient(address)
+	}
+	return daemonclient.NewGRPCDaemonServiceClient(address)
 }
 
 // NewDaemonClients caches daemon clients by service address. protocol is "grpc" or "http",
@@ -65,12 +85,26 @@ func (c *daemonClients) MonoVertexDaemon(namespace, name string) (mvtxclient.Mon
 	if client, ok := c.mono.Get(address); ok {
 		return client, nil
 	}
-	client, err := newMonoVertexDaemonClient(c.protocol, address)
+	created, err, _ := c.monoFlight.Do(address, func() (any, error) {
+		if client, ok := c.mono.Get(address); ok {
+			return client, nil
+		}
+		client, err := newMonoVertexDaemonClient(c.protocol, address)
+		if err != nil {
+			return nil, err
+		}
+		// Add replaces an existing key without running the eviction callback, so close the loser.
+		if existing, ok := c.mono.Get(address); ok {
+			_ = client.Close()
+			return existing, nil
+		}
+		c.mono.Add(address, client)
+		return client, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	c.mono.Add(address, client)
-	return client, nil
+	return created.(mvtxclient.MonoVertexDaemonClient), nil
 }
 
 func (c *daemonClients) PipelineDaemon(namespace, name string) (daemonclient.DaemonClient, error) {
@@ -78,24 +112,23 @@ func (c *daemonClients) PipelineDaemon(namespace, name string) (daemonclient.Dae
 	if client, ok := c.pipeline.Get(address); ok {
 		return client, nil
 	}
-	client, err := newPipelineDaemonClient(c.protocol, address)
+	created, err, _ := c.pipelineFlight.Do(address, func() (any, error) {
+		if client, ok := c.pipeline.Get(address); ok {
+			return client, nil
+		}
+		client, err := newPipelineDaemonClient(c.protocol, address)
+		if err != nil {
+			return nil, err
+		}
+		if existing, ok := c.pipeline.Get(address); ok {
+			_ = client.Close()
+			return existing, nil
+		}
+		c.pipeline.Add(address, client)
+		return client, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	c.pipeline.Add(address, client)
-	return client, nil
-}
-
-func newMonoVertexDaemonClient(protocol, address string) (mvtxclient.MonoVertexDaemonClient, error) {
-	if strings.EqualFold(protocol, "http") {
-		return mvtxclient.NewRESTfulClient(address)
-	}
-	return mvtxclient.NewGRPCClient(address)
-}
-
-func newPipelineDaemonClient(protocol, address string) (daemonclient.DaemonClient, error) {
-	if strings.EqualFold(protocol, "http") {
-		return daemonclient.NewRESTfulDaemonServiceClient(address)
-	}
-	return daemonclient.NewGRPCDaemonServiceClient(address)
+	return created.(daemonclient.DaemonClient), nil
 }

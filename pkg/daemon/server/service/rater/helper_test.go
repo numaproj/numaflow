@@ -325,4 +325,14 @@ func TestCalculatePodRates(t *testing.T) {
 		// Complete window is now-20 to now-10: p0 +10 and p1 +10, so 20 messages in 10 seconds.
 		assert.Equal(t, map[string]float64{"pl-v-0": 2}, CalculatePodRates(q, 25))
 	})
+
+	t.Run("a scrape gap is not reported as the full window", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now().Unix()
+		appendPartitionCounts(q, now-1000, map[string]map[string]float64{"pl-v-0": {"p0": 0}})
+		appendPartitionCounts(q, now-20, map[string]map[string]float64{"pl-v-0": {"p0": 0}})
+		appendPartitionCounts(q, now-10, map[string]map[string]float64{"pl-v-0": {"p0": 100}})
+		appendPartitionCounts(q, now, map[string]map[string]float64{"pl-v-0": {"p0": 100}})
+		assert.Nil(t, CalculatePodRates(q, 60))
+	})
 }

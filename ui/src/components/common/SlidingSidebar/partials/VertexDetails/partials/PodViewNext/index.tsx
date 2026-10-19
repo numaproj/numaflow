@@ -26,6 +26,7 @@ const BETA_SELECTION: PodViewStateOptions = {
  * v1 selection, metrics, and virtualized-log behavior from Classic Pod View.
  */
 export function PodViewNext(props: PodsProps) {
+  const active = props.active !== false;
   const {
     pods,
     podsDetails,
@@ -40,14 +41,19 @@ export function PodViewNext(props: PodsProps) {
     selectPodFromFleet,
     selectPodFromSearch,
     selectContainer,
-  } = usePodViewState(props, BETA_SELECTION);
+  } = usePodViewState(props, { ...BETA_SELECTION, active });
   const readRates = usePodReadRates({
     namespaceId: props.namespaceId,
     pipelineId: props.pipelineId,
     vertexId: props.vertexId,
     type: props.type,
     pods,
+    active,
   });
+
+  if (!active) {
+    return null;
+  }
 
   if (podsErr) {
     return (
