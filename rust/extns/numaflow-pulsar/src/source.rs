@@ -35,8 +35,23 @@ pub struct PulsarSourceConfig {
     pub max_unack: usize,
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
     pub auth: Option<PulsarAuth>,
-    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
-    /// Only one-way TLS is supported by the `pulsar` crate's builder.
+    /// TLS configuration for connecting to a Pulsar broker.
+    ///
+    /// Only server-authentication (one-way TLS) is supported: `ca_cert` lets the
+    /// client trust a custom/self-signed broker CA via
+    /// `PulsarBuilder::with_certificate_chain`. Mutual TLS (presenting a client
+    /// certificate) is intentionally not supported here because the underlying
+    /// `pulsar` crate's `PulsarBuilder` does not currently expose a way to set a
+    /// client certificate/key for the broker connection - see
+    /// https://docs.rs/pulsar/latest/pulsar/struct.PulsarBuilder.html.
+    ///
+    /// `ca_cert`: PEM-encoded custom CA certificate chain used to authenticate the Pulsar
+    /// broker's TLS certificate. Required when the broker presents a
+    /// certificate that isn't trusted by the process's default trust store
+    /// (e.g. a self-signed/internal CA).
+    ///
+    /// `insecure_skip_verify`: When true, skip TLS server verification entirely. Prefer setting
+    /// `ca_cert` instead; this is only for testing against untrusted setups.
     pub tls: Option<TlsConfig>,
 }
 
