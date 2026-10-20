@@ -21,6 +21,11 @@ import {
   PipelineISBStream,
   PipelineISBStreamsResponse,
 } from "../../../../../types/declarations/pipeline";
+import {
+  formatBytes,
+  formatDecimal,
+  formatNumber,
+} from "../../../../../utils/formatters";
 
 export interface PipelineISBDebugInfoProps {
   streams?: PipelineISBStreamsResponse;
@@ -30,31 +35,6 @@ export interface PipelineISBDebugInfoProps {
   error?: any;
   edgeScoped?: boolean;
 }
-
-const formatNumber = (value?: number) => (value ?? 0).toLocaleString("en-US");
-
-const formatDecimal = (value: number, precision = 2) => {
-  const multiplier = Math.pow(10, precision);
-  return (
-    Math.round((value + Number.EPSILON) * multiplier) / multiplier
-  ).toFixed(precision);
-};
-
-const formatBytes = (value?: number) => {
-  const bytes = value ?? 0;
-  if (bytes === 0) {
-    return "0 B";
-  }
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-  const scaled = bytes / Math.pow(1024, index);
-  return `${index === 0 ? formatNumber(scaled) : formatDecimal(scaled)} ${
-    units[index]
-  }`;
-};
 
 const formatOptional = (value?: string | number) => {
   if (value === undefined || value === "") {
