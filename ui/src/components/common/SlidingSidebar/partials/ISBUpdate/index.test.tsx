@@ -371,8 +371,11 @@ describe("ISBUpdate", () => {
       expect(screen.getByText("RAFT Meta Group Information")).toBeInTheDocument();
       expect(screen.getAllByText("js-0").length).toBeGreaterThan(0);
       expect(screen.getAllByText("js-1").length).toBeGreaterThan(0);
-      expect(screen.getByText("400,006")).toBeInTheDocument();
-      expect(screen.getByText("250,263")).toBeInTheDocument();
+      expect(screen.getAllByText("200k")).toHaveLength(2);
+      expect(screen.getByText("400k")).toBeInTheDocument();
+      expect(screen.getByText("65.4k")).toBeInTheDocument();
+      expect(screen.getByText("149.7k")).toBeInTheDocument();
+      expect(screen.getByText("250.3k")).toBeInTheDocument();
       expect(screen.getByText("12 / 0.018%")).toBeInTheDocument();
       expect(screen.getByText("4 / 0.003%")).toBeInTheDocument();
       expect(screen.getByText("16 / 0.006%")).toBeInTheDocument();
@@ -402,7 +405,8 @@ describe("ISBUpdate", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(2);
-      expect(screen.getAllByText("300,000")).toHaveLength(2);
+      expect(screen.getAllByText("300k")).toHaveLength(2);
+      expect(screen.getAllByText("1k")).toHaveLength(2);
       expect(screen.getAllByText("1 / 0.10%")).toHaveLength(2);
     });
   });
