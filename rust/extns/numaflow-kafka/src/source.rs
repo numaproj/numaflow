@@ -154,15 +154,6 @@ impl KafkaActor {
             .set("heartbeat.interval.ms", "15000")
             .set("auto.offset.reset", "earliest");
         if !config.kafka_raw_config.is_empty() {
-            info!(
-                "Applying user-specified kafka config: {}",
-                config
-                    .kafka_raw_config
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
             for (key, value) in config.kafka_raw_config {
                 client_config.set(key, value);
             }
