@@ -366,6 +366,13 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref common.ReferenceC
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -604,6 +611,13 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"volumes": {
@@ -1405,6 +1419,13 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"replicas": {
@@ -2662,6 +2683,13 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"settings": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of headroom for platform injected data. For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.",
@@ -2966,6 +2994,13 @@ func schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref common.ReferenceCallback)
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -3562,6 +3597,13 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -5611,6 +5653,13 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"msgIDHeaderKey"},
 			},
@@ -5881,6 +5930,13 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.Refe
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -6890,6 +6946,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"volumes": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -7329,6 +7392,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {

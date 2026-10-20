@@ -571,6 +571,27 @@ available to those containers which consume them by name.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>schedulerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+If specified, the pod will be dispatched by specified scheduler. If not
+specified, the pod will be dispatched by default scheduler. More info:
+<a href="https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/">https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/</a>
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

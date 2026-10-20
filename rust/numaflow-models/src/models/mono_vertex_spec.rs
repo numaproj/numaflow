@@ -68,6 +68,9 @@ pub struct MonoVertexSpec {
     pub runtime_class_name: Option<String>,
     #[serde(rename = "scale", skip_serializing_if = "Option::is_none")]
     pub scale: Option<Box<crate::models::Scale>>,
+    /// If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
+    #[serde(rename = "schedulerName", skip_serializing_if = "Option::is_none")]
+    pub scheduler_name: Option<String>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
     pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     /// ServiceAccountName applied to the pod
@@ -116,6 +119,7 @@ impl MonoVertexSpec {
             resource_claims: None,
             runtime_class_name: None,
             scale: None,
+            scheduler_name: None,
             security_context: None,
             service_account_name: None,
             sidecars: None,

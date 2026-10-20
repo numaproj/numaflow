@@ -1338,6 +1338,8 @@ spec:
                     type: array
                   runtimeClassName:
                     type: string
+                  schedulerName:
+                    type: string
                   securityContext:
                     properties:
                       appArmorProfile:
@@ -3417,6 +3419,8 @@ spec:
                     type: array
                   runtimeClassName:
                     type: string
+                  schedulerName:
+                    type: string
                   securityContext:
                     properties:
                       appArmorProfile:
@@ -4590,6 +4594,8 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              schedulerName:
+                type: string
               securityContext:
                 properties:
                   appArmorProfile:
@@ -12682,6 +12688,8 @@ spec:
                         type: array
                       runtimeClassName:
                         type: string
+                      schedulerName:
+                        type: string
                       securityContext:
                         properties:
                           appArmorProfile:
@@ -13549,6 +13557,8 @@ spec:
                           type: object
                         type: array
                       runtimeClassName:
+                        type: string
+                      schedulerName:
                         type: string
                       securityContext:
                         properties:
@@ -14673,6 +14683,8 @@ spec:
                         type: array
                       runtimeClassName:
                         type: string
+                      schedulerName:
+                        type: string
                       securityContext:
                         properties:
                           appArmorProfile:
@@ -15792,6 +15804,8 @@ spec:
                           type: object
                         type: array
                       runtimeClassName:
+                        type: string
+                      schedulerName:
                         type: string
                       securityContext:
                         properties:
@@ -17918,6 +17932,8 @@ spec:
                           format: int32
                           type: integer
                       type: object
+                    schedulerName:
+                      type: string
                     securityContext:
                       properties:
                         appArmorProfile:
@@ -26263,6 +26279,8 @@ spec:
                             type: array
                           runtimeClassName:
                             type: string
+                          schedulerName:
+                            type: string
                           securityContext:
                             properties:
                               appArmorProfile:
@@ -27130,6 +27148,8 @@ spec:
                               type: object
                             type: array
                           runtimeClassName:
+                            type: string
+                          schedulerName:
                             type: string
                           securityContext:
                             properties:
@@ -28254,6 +28274,8 @@ spec:
                             type: array
                           runtimeClassName:
                             type: string
+                          schedulerName:
+                            type: string
                           securityContext:
                             properties:
                               appArmorProfile:
@@ -29373,6 +29395,8 @@ spec:
                               type: object
                             type: array
                           runtimeClassName:
+                            type: string
+                          schedulerName:
                             type: string
                           securityContext:
                             properties:
@@ -31499,6 +31523,8 @@ spec:
                               format: int32
                               type: integer
                           type: object
+                        schedulerName:
+                          type: string
                         securityContext:
                           properties:
                             appArmorProfile:
@@ -38059,6 +38085,8 @@ spec:
                     type: array
                   runtimeClassName:
                     type: string
+                  schedulerName:
+                    type: string
                   securityContext:
                     properties:
                       appArmorProfile:
@@ -41175,6 +41203,8 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              schedulerName:
+                type: string
               securityContext:
                 properties:
                   appArmorProfile:

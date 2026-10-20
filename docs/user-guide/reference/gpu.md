@@ -60,6 +60,29 @@ vertices:
 
 > Adjust the nodeSelector and annotations as required by your cluster setup.
 
+## Using an Alternate Scheduler
+
+Some clusters allocate GPUs with a scheduler other than the default Kubernetes scheduler, for example an AI workload scheduler such as KAI, Volcano or YuniKorn. Set `schedulerName` to have the vertex pods scheduled by it. Scheduler-specific settings, such as a queue label, can be added under `metadata.labels`.
+
+```yaml
+vertices:
+  - name: gpu-vertex
+    schedulerName: my-gpu-scheduler        # Replace with the name of your cluster's scheduler
+    metadata:
+      labels:
+        my-scheduler.example.com/queue: inference  # Replace with the labels your scheduler expects
+    udf:
+      container:
+        image: my-ml-image:latest
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+```
+
+To use the same scheduler for all vertices of a pipeline, set `schedulerName` under `spec.templates.vertex`. A value set on a vertex takes precedence. For a MonoVertex, set `schedulerName` under `spec`.
+
+> If no scheduler with the given name is running in the cluster, the pods stay `Pending`.
+
 ## Dynamic Resource Allocation (Advanced)
 
 For advanced GPU scheduling using Dynamic Resource Allocation (DRA), see [Dynamic Resource Allocation documentation](./configuration/dra.md).
