@@ -160,6 +160,40 @@ export interface PodFleetItem {
   restartCount: number;
 }
 
+export type SignalTone = "ok" | "warn" | "critical" | "neutral";
+
+export type SignalId = "latency" | "traffic" | "backlog" | "loss" | "errors";
+
+/** InspectTarget is where a vertex health card navigates when inspected. */
+export type InspectTarget =
+  | { kind: "metrics"; metric: string; presets?: Record<string, string> }
+  | { kind: "tab"; tab: "processingRates" | "errors" | "buffers" }
+  | { kind: "critical-pods" };
+
+export interface HealthCard {
+  id: SignalId;
+  index: string;
+  title: string;
+  value: string;
+  detail: string;
+  /** Status of the signal; cards keep identity colors and only tint the detail. */
+  tone: SignalTone;
+  /** Bar heights as percentages of the largest bucket; omitted without a series. */
+  sparkline?: number[];
+  stages?: { name: string; value: string }[];
+  stagesNote?: string;
+  inspect?: InspectTarget;
+}
+
+/** VertexHealth is the presentation model for the Beta Pod View vertex health strip. */
+export interface VertexHealth {
+  tone: SignalTone;
+  verdict?: { label: string; tone: SignalTone };
+  replicas?: { label: string; tone: SignalTone };
+  meta: string;
+  cards: HealthCard[];
+}
+
 export interface PodInfoProps {
   namespaceId: string;
   pipelineId: string;

@@ -1,0 +1,275 @@
+.vertex-health {
+  overflow: hidden;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+  box-shadow: 0 0.1rem 0.2rem color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+.vertex-health-header,
+.vertex-health-heading {
+  display: flex;
+  align-items: center;
+}
+
+.vertex-health-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.8rem 1.6rem;
+  padding: 1.2rem 2rem;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.vertex-health-heading {
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.vertex-health-dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.vertex-health-dot--ok {
+  background: #10b981;
+}
+
+.vertex-health-dot--warn {
+  background: #f59e0b;
+}
+
+.vertex-health-dot--critical {
+  background: #ef4444;
+}
+
+.vertex-health-title {
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.vertex-health-verdict,
+.vertex-health-meta {
+  font-size: 1.1rem;
+}
+
+.vertex-health-verdict {
+  font-weight: 600;
+}
+
+.vertex-health-meta {
+  color: var(--text-tertiary);
+}
+
+.vertex-health-badge {
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.vertex-health-badge--warn {
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: #b45309;
+}
+
+.vertex-health-tone--ok,
+.vertex-health-tone--neutral {
+  color: var(--text-tertiary);
+}
+
+.vertex-health-verdict.vertex-health-tone--ok {
+  color: #059669;
+}
+
+.vertex-health-tone--warn {
+  color: #d97706;
+}
+
+.vertex-health-tone--critical {
+  color: #dc2626;
+}
+
+.vertex-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.vertex-health-card {
+  --signal-icon: #d97706;
+  --signal-bar: #f59e0b;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 1.6rem 2rem;
+  border: none;
+  /* Right and bottom hairlines; `.vertex-health` clips the ones on its outer edges when cards wrap. */
+  box-shadow:
+    1px 0 0 var(--border-secondary),
+    0 1px 0 var(--border-secondary);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  transition: background-color 120ms ease;
+}
+
+.vertex-health-card:not(:disabled) {
+  cursor: pointer;
+}
+
+.vertex-health-card:not(:disabled):hover {
+  background: var(--bg-secondary);
+}
+
+.vertex-health-card:focus-visible {
+  outline: 0.2rem solid var(--accent-primary);
+  outline-offset: -0.2rem;
+}
+
+.vertex-health-card--traffic {
+  --signal-icon: #0284c7;
+  --signal-bar: #0ea5e9;
+}
+
+.vertex-health-card--backlog {
+  --signal-icon: #7c3aed;
+  --signal-bar: #8b5cf6;
+}
+
+.vertex-health-card--loss {
+  --signal-icon: #e11d48;
+  --signal-bar: #f43f5e;
+}
+
+.vertex-health-card--errors {
+  --signal-icon: #dc2626;
+  --signal-bar: #ef4444;
+}
+
+.vertex-health-card-head,
+.vertex-health-card-foot {
+  display: flex;
+  align-items: center;
+}
+
+.vertex-health-card-head {
+  justify-content: space-between;
+  margin-bottom: 1.6rem;
+}
+
+.vertex-health-card-label {
+  color: var(--text-tertiary);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.vertex-health-card-icon {
+  display: inline-flex;
+  color: var(--signal-icon);
+  transition: transform 120ms ease;
+}
+
+.vertex-health-card:not(:disabled):hover .vertex-health-card-icon {
+  transform: translateX(0.2rem);
+}
+
+.vertex-health-card-value {
+  margin-bottom: 0.4rem;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vertex-health-card-detail {
+  margin: 0 0 1.2rem;
+  overflow: hidden;
+  font-size: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vertex-health-card-foot {
+  align-items: flex-end;
+  gap: 0.6rem;
+  min-height: 2rem;
+}
+
+.vertex-health-card-dot {
+  flex-shrink: 0;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-bottom: 0.2rem;
+  border-radius: 50%;
+  background: var(--signal-bar);
+}
+
+.vertex-health-sparkline {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: 0.2rem;
+  height: 2rem;
+}
+
+.vertex-health-sparkline span {
+  flex: 1;
+  border-radius: 0.2rem;
+  background: var(--signal-bar);
+  opacity: 0.4;
+}
+
+.vertex-health-sparkline span:last-child {
+  opacity: 1;
+}
+
+.vertex-health-card-inspect {
+  margin-left: auto;
+  padding-left: 0.4rem;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vertex-health-card:not(:disabled):hover .vertex-health-card-inspect {
+  color: var(--text-primary);
+}
+
+.vertex-health-stages {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 16rem;
+}
+
+.vertex-health-stages-title {
+  font-weight: 700;
+}
+
+.vertex-health-stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.6rem;
+}
+
+.vertex-health-stage strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.vertex-health-stages-note {
+  max-width: 24rem;
+  margin-top: 0.4rem;
+  opacity: 0.8;
+}

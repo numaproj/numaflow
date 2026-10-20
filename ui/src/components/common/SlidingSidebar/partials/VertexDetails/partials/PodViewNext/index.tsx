@@ -1,17 +1,28 @@
+import { useCallback, useContext, useMemo, useState } from "react";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Containers } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/Containers";
 import { PodDetail } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails";
 import { PodFocusControls } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodFocusControls";
-import { PodsProps } from "../../../../../../../types/declarations/pods";
+import {
+  InspectTarget,
+  PodFleetItem,
+  PodsProps,
+} from "../../../../../../../types/declarations/pods";
+import { BufferInfo } from "../../../../../../../types/declarations/pipeline";
 import {
   getDefaultContainerName,
   PodViewStateOptions,
   usePodViewState,
 } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
+import { VertexDetailsContext } from "../../index";
+import { buildVertexHealth, isUnhealthyPod, readDaemonRates } from "./goldenSignalsModel";
 import { PodFleet } from "./PodFleet";
+import { buildPodFleetItems, PodFleetFilter } from "./podFleetModel";
 import { PodInspector } from "./PodInspector";
+import { useVertexHealthData } from "./useVertexHealthData";
+import { VertexHealthStrip } from "./VertexHealthStrip";
 
 import "./style.css";
 
@@ -20,11 +31,30 @@ const BETA_SELECTION: PodViewStateOptions = {
   defaultContainer: "numa",
 };
 
+export interface PodViewNextProps extends PodsProps {
+  /** Daemon processing rates and pendings: one object for MonoVertex, a map by vertex for pipelines. */
+  vertexMetrics?: any;
+  buffers?: BufferInfo[];
+  recentErrorCount?: number;
+  vertexSpec?: any;
+}
+
+/** failingContainer prefers a container that is not Running, then the one with the most restarts. */
+export function failingContainer(item: PodFleetItem): string | undefined {
+  const containers = Object.entries(item.runtime?.containerDetailsMap || {});
+  const notRunning = containers.find(([, info]) => info?.state && info.state !== "Running");
+  if (notRunning) return notRunning[0];
+  const restarted = containers
+    .filter(([, info]) => (info?.restartCount || 0) > 0)
+    .sort(([, left], [, right]) => (right?.restartCount || 0) - (left?.restartCount || 0));
+  return restarted[0]?.[0];
+}
+
 /**
  * PodViewNext owns the Beta Pod View presentation while preserving the shared
  * v1 selection, metrics, and virtualized-log behavior from Classic Pod View.
  */
-export function PodViewNext(props: PodsProps) {
+export function PodViewNext(props: PodViewNextProps) {
   const active = props.active !== false;
   const {
     pods,
@@ -39,8 +69,78 @@ export function PodViewNext(props: PodsProps) {
     selectedPodDetails,
     selectPodFromFleet,
     selectPodFromSearch,
+    selectPodWithContainer,
     selectContainer,
   } = usePodViewState(props, { ...BETA_SELECTION, active });
+  const { openMetrics, openVertexTab } = useContext(VertexDetailsContext);
+  const [filter, setFilter] = useState<PodFleetFilter>("all");
+  const { namespaceId, pipelineId, vertexId, type, vertexMetrics, buffers, recentErrorCount, vertexSpec } =
+    props;
+  const { queries, series, health, monoStatus, watermarkEdges, metricsEnabled, now } =
+    useVertexHealthData({ namespaceId, pipelineId, vertexId, type, active });
+
+  const fleetItems = useMemo(
+    () => buildPodFleetItems(pods, podsDetails, podRuntimeByName),
+    [pods, podsDetails, podRuntimeByName]
+  );
+  const vertexHealth = useMemo(
+    () =>
+      buildVertexHealth({
+        type,
+        vertexId,
+        metricsEnabled,
+        now,
+        daemon: readDaemonRates(vertexMetrics, type, vertexId),
+        series,
+        queries,
+        buffers,
+        watermarkEdges,
+        health,
+        monoStatus,
+        scale: vertexSpec?.scale,
+        fleetItems,
+        recentErrorCount,
+      }),
+    [
+      buffers,
+      fleetItems,
+      health,
+      metricsEnabled,
+      monoStatus,
+      now,
+      queries,
+      recentErrorCount,
+      series,
+      type,
+      vertexId,
+      vertexMetrics,
+      vertexSpec,
+      watermarkEdges,
+    ]
+  );
+
+  const handleInspect = useCallback(
+    (target: InspectTarget) => {
+      if (target.kind === "metrics") {
+        openMetrics({ panelId: `${target.metric}-panel`, presets: target.presets });
+        return;
+      }
+      if (target.kind === "tab") {
+        openVertexTab(target.tab);
+        return;
+      }
+      const affected = fleetItems.find(isUnhealthyPod);
+      if (!affected) return;
+      setFilter("critical");
+      const container = failingContainer(affected);
+      if (container) {
+        selectPodWithContainer(affected.pod, container);
+      } else {
+        selectPodFromFleet(affected.pod);
+      }
+    },
+    [fleetItems, openMetrics, openVertexTab, selectPodFromFleet, selectPodWithContainer]
+  );
 
   if (!active) {
     return null;
@@ -95,9 +195,11 @@ export function PodViewNext(props: PodsProps) {
   return (
     <div className="pod-view-next" data-testid="pod-view-beta">
       <div className="pod-view-next-scroll">
+        <VertexHealthStrip health={vertexHealth} onInspect={handleInspect} />
         <PodFleet
-          pods={pods}
-          detailsByName={podsDetails}
+          items={fleetItems}
+          filter={filter}
+          onFilterChange={setFilter}
           runtimeByName={podRuntimeByName}
           selectedPod={selectedPod}
           onPodSelect={selectPodFromFleet}

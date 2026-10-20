@@ -277,10 +277,25 @@ data:
     Processing Rate\n      metric_description: This metric represents the message
     write rate of UDF.\n      required_filters:\n        - namespace\n        - pipeline\n
     \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
-    \         filters:\n            - name: pod\n              required: false\n\n-
-    name: mono_vertex_throughput\n  objects: \n    - mono-vertex\n  title: MonoVertex
-    Throughput and Message Rates\n  description: This pattern measures the throughput
-    of a MonoVertex in messages per second across different dimensions.\n  expr: sum(rate($metric_name{$filters}[$duration]))
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: forwarder_drop_total\n      display_name: Vertex Drop Rate\n      metric_description:
+    This metric represents the number of messages dropped by a vertex per second.\n
+    \     required_filters:\n        - namespace\n        - pipeline\n        - vertex\n
+    \     dimensions:\n        - name: vertex\n        - name: pod\n          filters:\n
+    \           - name: pod\n              required: false\n    - metric_name: forwarder_nack_total\n
+    \     display_name: Vertex Nack Rate\n      metric_description: This metric represents
+    the number of messages negatively acknowledged by a vertex per second.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: forwarder_critical_error_total\n
+    \     display_name: Vertex Critical Error Rate\n      metric_description: This
+    metric represents the number of critical errors, such as UDF crashes, per second.\n
+    \     required_filters:\n        - namespace\n        - pipeline\n        - vertex\n
+    \     dimensions:\n        - name: vertex\n        - name: pod\n          filters:\n
+    \           - name: pod\n              required: false\n\n- name: mono_vertex_throughput\n
+    \ objects: \n    - mono-vertex\n  title: MonoVertex Throughput and Message Rates\n
+    \ description: This pattern measures the throughput of a MonoVertex in messages
+    per second across different dimensions.\n  expr: sum(rate($metric_name{$filters}[$duration]))
     by ($dimension)\n  params:\n    - name: duration\n      required: true\n    -
     name: start_time\n      required: false\n    - name: end_time\n      required:
     false\n  metrics:\n    - metric_name: monovtx_read_total\n      display_name:
@@ -302,22 +317,43 @@ data:
     \     metric_description: This metric represents the total number of messages
     dropped by UDF per second.\n      required_filters:\n        - namespace\n        -
     mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
-    \         filters:\n            - name: pod\n              required: false\n\n-
-    name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n    - vertex\n
-    \ title: CPU and Memory Utilisation by Pod\n  description: This pattern represents
-    the CPU and Memory utilisation by pod for mono-vertex and vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
-    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
-    \     required: false\n    - name: end_time\n      required: false\n  metrics:
-    \n    # set your cpu metric name here\n    - metric_name: namespace_pod_cpu_utilization\n
-    \     display_name: Pod CPU Utilization\n      metric_description: This metric
-    represents the percentage utilization of cpu usage over cpu resource limits for
-    a pod.\n      required_filters:\n        - namespace\n        - pod  \n      dimensions:\n
-    \       - name: mono-vertex\n          filters: \n            - name: pod\n              #
-    expr: optional expression for prometheus query\n              # overrides the
-    default expression\n              required: false\n        - name: vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression \n              required:
-    false\n    # set your memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: monovtx_dropped_total\n      display_name: MonoVertex Drop Rate\n
+    \     metric_description: This metric represents the number of messages dropped
+    by the MonoVertex per second.\n      required_filters:\n        - namespace\n
+    \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
+    name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_nack_total\n      display_name: MonoVertex Nack
+    Rate\n      metric_description: This metric represents the number of messages
+    negatively acknowledged by the sink per second.\n      required_filters:\n        -
+    namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
+    \       - name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_fallback_sink_write_total\n      display_name:
+    MonoVertex Fallback Sink Write Rate\n      metric_description: This metric represents
+    the number of messages written to the fallback sink per second.\n      required_filters:\n
+    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
+    \       - name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_critical_error_total\n      display_name: MonoVertex
+    Critical Error Rate\n      metric_description: This metric represents the number
+    of critical errors, such as UDF crashes, per second.\n      required_filters:\n
+    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
+    \       - name: pod\n          filters:\n            - name: pod\n              required:
+    false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
+    \   - vertex\n  title: CPU and Memory Utilisation by Pod\n  description: This
+    pattern represents the CPU and Memory utilisation by pod for mono-vertex and vertex\n
+    \ expr: avg_over_time($metric_name{$filters}[$duration])\n  params:\n    - name:
+    duration\n      required: true\n    - name: start_time\n      required: false\n
+    \   - name: end_time\n      required: false\n  metrics: \n    # set your cpu metric
+    name here\n    - metric_name: namespace_pod_cpu_utilization\n      display_name:
+    Pod CPU Utilization\n      metric_description: This metric represents the percentage
+    utilization of cpu usage over cpu resource limits for a pod.\n      required_filters:\n
+    \       - namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n
+    \         filters: \n            - name: pod\n              # expr: optional expression
+    for prometheus query\n              # overrides the default expression\n              required:
+    false\n        - name: vertex\n          filters: \n            - name: pod\n
+    \             # expr: optional expression for prometheus query\n              #
+    overrides the default expression \n              required: false\n    # set your
+    memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
     \     display_name: Pod Memory Utilization\n      metric_description: This metric
     represents the percentage utilization of memory usage in bytes over memory resource
     limits for a pod.\n      required_filters:\n        - namespace\n        - pod
