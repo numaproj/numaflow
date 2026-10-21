@@ -62,15 +62,14 @@ vertices:
 
 ## Using an Alternate Scheduler
 
-Some clusters allocate GPUs with a scheduler other than the default Kubernetes scheduler, for example an AI workload scheduler such as KAI, Volcano or YuniKorn. Set `schedulerName` to have the vertex pods scheduled by it. Scheduler-specific settings, such as a queue label, can be added under `metadata.labels`.
+Some clusters allocate GPUs with a scheduler other than the default Kubernetes scheduler, for example an AI workload scheduler such as KAI, Volcano or YuniKorn. Set `schedulerName` to have the vertex pods scheduled by it. Scheduler-specific settings, such as queue labels or annotations, can be added under `metadata`.
+
+The following example uses [Volcano](https://volcano.sh):
 
 ```yaml
 vertices:
   - name: gpu-vertex
-    schedulerName: my-gpu-scheduler        # Replace with the name of your cluster's scheduler
-    metadata:
-      labels:
-        my-scheduler.example.com/queue: inference  # Replace with the labels your scheduler expects
+    schedulerName: volcano        # Replace with the name of your cluster's scheduler
     udf:
       container:
         image: my-ml-image:latest
