@@ -1,8 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { PodViewNext } from "./index";
+import { failingContainer, PodViewNext } from "./index";
 import { usePodViewState } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
+import { VertexDetailsContext } from "../../index";
+import { signalQueries } from "./goldenSignalsModel";
+import { PodFleetItem } from "../../../../../../../types/declarations/pods";
 
+const mockFleetProps = jest.fn();
+jest.mock("./useVertexHealthData", () => ({
+  useVertexHealthData: jest.fn(() => ({
+    queries: jest
+      .requireActual("./goldenSignalsModel")
+      .signalQueries({ namespaceId: "default", pipelineId: "pipeline", vertexId: "vertex", type: "udf" }),
+    series: { p99: [1000, 2000] },
+    metricsEnabled: true,
+    now: Date.now(),
+  })),
+}));
 jest.mock(
   "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState",
   () => ({
@@ -13,7 +27,10 @@ jest.mock(
   })
 );
 jest.mock("./PodFleet", () => ({
-  PodFleet: () => <div data-testid="pod-fleet" />,
+  PodFleet: (props: any) => {
+    mockFleetProps(props);
+    return <div data-testid="pod-fleet" />;
+  },
 }));
 jest.mock("./PodInspector", () => ({
   PodInspector: () => <aside data-testid="pod-inspector" />,
@@ -147,5 +164,94 @@ describe("PodViewNext", () => {
 
     expect(screen.getByTestId(testId)).toBeInTheDocument();
     expect(container.querySelector(".pod-view-next-workspace")).toBeNull();
+  });
+
+  it("renders the vertex health strip above the fleet", () => {
+    renderPodView();
+
+    const strip = screen.getByTestId("vertex-health");
+    expect(strip.compareDocumentPosition(screen.getByTestId("pod-fleet"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(screen.getByTestId("vertex-health-card-latency")).toHaveTextContent("P99 2.0 ms");
+  });
+
+  it("opens the processing-time panel from the Latency card", () => {
+    const openMetrics = jest.fn();
+    render(
+      <VertexDetailsContext.Provider value={{ openMetrics, openVertexTab: jest.fn() } as any}>
+        <PodViewNext namespaceId="default" pipelineId="pipeline" vertexId="vertex" type="udf" />
+      </VertexDetailsContext.Provider>
+    );
+
+    fireEvent.click(screen.getByTestId("vertex-health-card-latency"));
+    expect(openMetrics).toHaveBeenCalledWith({
+      panelId: `${signalQueries({
+        namespaceId: "default",
+        pipelineId: "pipeline",
+        vertexId: "vertex",
+        type: "udf",
+      }).p99?.metric_name}-panel`,
+      presets: { quantile: "0.99", duration: "5m" },
+    });
+  });
+
+  it("filters to critical pods and opens the failing container from the Errors card", () => {
+    const failingPod = {
+      name: "pipeline-vertex-1",
+      containers: ["numa", "udf"],
+      containerSpecMap: new Map(),
+    };
+    const selectPodWithContainer = jest.fn();
+    mockedUsePodViewState.mockReturnValueOnce({
+      pods: [selectedPod, failingPod],
+      podsDetails: new Map(),
+      loading: false,
+      podRuntimeByName: new Map([
+        [
+          failingPod.name,
+          {
+            name: failingPod.name,
+            status: "Error",
+            containerDetailsMap: {
+              numa: { state: "Running", restartCount: 0 },
+              udf: { state: "Terminated", restartCount: 4 },
+            },
+          },
+        ],
+      ]),
+      selectedPod: undefined,
+      selectPodFromFleet: jest.fn(),
+      selectPodWithContainer,
+    });
+
+    renderPodView();
+    expect(screen.getByTestId("vertex-health-card-errors")).toHaveTextContent("1 unhealthy pod");
+    fireEvent.click(screen.getByTestId("vertex-health-card-errors"));
+
+    expect(selectPodWithContainer).toHaveBeenCalledWith(failingPod, "udf");
+    expect(mockFleetProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filter: "critical" })
+    );
+  });
+});
+
+describe("failingContainer", () => {
+  const item = (containerDetailsMap: any): PodFleetItem =>
+    ({ runtime: { name: "p", containerDetailsMap }, restartCount: 0 } as any);
+
+  it("prefers a container that is not running, then the most restarts", () => {
+    expect(
+      failingContainer(item({ numa: { state: "Running" }, udf: { state: "Waiting" } }))
+    ).toBe("udf");
+    expect(
+      failingContainer(
+        item({
+          numa: { state: "Running", restartCount: 1 },
+          udf: { state: "Running", restartCount: 5 },
+        })
+      )
+    ).toBe("udf");
+    expect(failingContainer(item({ numa: { state: "Running", restartCount: 0 } }))).toBeUndefined();
   });
 });

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { PodFleet } from "./PodFleet";
+import { buildPodFleetItems, PodFleetFilter } from "./podFleetModel";
 import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
 
 const alpha: Pod = {
@@ -53,30 +55,38 @@ const runtime = new Map<string, PodRuntimeInfo>([
   ],
 ]);
 
+const items = buildPodFleetItems([alpha, bravo], details, runtime);
+
+function StatefulFleet({
+  selectedPod,
+  onPodSelect = jest.fn(),
+  initialFilter = "all",
+}: {
+  selectedPod?: Pod;
+  onPodSelect?: (pod: Pod) => void;
+  initialFilter?: PodFleetFilter;
+}) {
+  const [filter, setFilter] = useState<PodFleetFilter>(initialFilter);
+  return (
+    <PodFleet
+      items={items}
+      filter={filter}
+      onFilterChange={setFilter}
+      runtimeByName={runtime}
+      selectedPod={selectedPod}
+      onPodSelect={onPodSelect}
+    />
+  );
+}
+
 describe("PodFleet", () => {
   it("outlines only the pod the parent has selected", () => {
-    const { rerender } = render(
-      <PodFleet
-        pods={[alpha, bravo]}
-        detailsByName={details}
-        runtimeByName={runtime}
-        selectedPod={undefined}
-        onPodSelect={jest.fn()}
-      />
-    );
+    const { rerender } = render(<StatefulFleet selectedPod={undefined} />);
 
     expect(document.querySelectorAll(".pod-fleet-cell--selected")).toHaveLength(0);
     expect(screen.queryByTestId("pod-fleet-selected")).not.toBeInTheDocument();
 
-    rerender(
-      <PodFleet
-        pods={[alpha, bravo]}
-        detailsByName={details}
-        runtimeByName={runtime}
-        selectedPod={bravo}
-        onPodSelect={jest.fn()}
-      />
-    );
+    rerender(<StatefulFleet selectedPod={bravo} />);
 
     expect(screen.getByTestId(`pod-fleet-cell-${bravo.name}`)).toHaveClass(
       "pod-fleet-cell--selected"
@@ -89,15 +99,7 @@ describe("PodFleet", () => {
 
   it("filters, searches, and selects pods", () => {
     const onPodSelect = jest.fn();
-    render(
-      <PodFleet
-        pods={[alpha, bravo]}
-        detailsByName={details}
-        runtimeByName={runtime}
-        selectedPod={alpha}
-        onPodSelect={onPodSelect}
-      />
-    );
+    render(<StatefulFleet selectedPod={alpha} onPodSelect={onPodSelect} />);
 
     expect(screen.getByText("All 2")).toBeVisible();
     expect(screen.getByTestId(`pod-fleet-cell-${alpha.name}`)).toHaveTextContent("alpha");
@@ -118,20 +120,20 @@ describe("PodFleet", () => {
     expect(screen.queryByTestId(`pod-fleet-cell-${bravo.name}`)).not.toBeInTheDocument();
   });
 
-  it("filters pods whose runtime is unknown", () => {
-    const delta: Pod = { ...alpha, name: "pipeline-vertex-delta" };
+  it("reports filter changes to the parent and honours a parent-set filter", () => {
+    const onFilterChange = jest.fn();
     render(
       <PodFleet
-        pods={[alpha, delta]}
-        detailsByName={details}
-        runtimeByName={new Map([[alpha.name, runtime.get(alpha.name)!]])}
+        items={items}
+        filter="critical"
+        onFilterChange={onFilterChange}
+        runtimeByName={runtime}
         onPodSelect={jest.fn()}
       />
     );
 
-    expect(screen.getByTestId("pods-filter-unknown")).toHaveTextContent("Unknown 1");
-    fireEvent.click(screen.getByTestId("pods-filter-unknown"));
-    expect(screen.getByTestId(`pod-fleet-cell-${delta.name}`)).toBeInTheDocument();
     expect(screen.queryByTestId(`pod-fleet-cell-${alpha.name}`)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("pods-filter-all"));
+    expect(onFilterChange).toHaveBeenCalledWith("all");
   });
 });
