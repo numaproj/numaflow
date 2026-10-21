@@ -5277,6 +5277,7 @@
 <li><code>dnsPolicy</code></li>
 <li><code>dnsConfig</code></li>
 <li><code>resourceClaims</code></li>
+<li><code>schedulerName</code></li>
 </ul>
 <p>All the fields above are optional, click <a href="../../../../APIs/#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">here</a> to see full list of supported fields.</p>
 <p>These fields can be specified in the <code>Pipeline</code> spec under:</p>
@@ -5296,6 +5297,9 @@
 <ul>
 <li><code>spec.jetstream</code></li>
 </ul>
+<blockquote>
+<p>The InterStepBufferService usually doesn't need an alternate scheduler. Only set <code>spec.jetstream.schedulerName</code> if your cluster requires all pods to go through that scheduler. JetStream is stateful, so avoid schedulers that may preempt its pods.</p>
+</blockquote>
 
 
 

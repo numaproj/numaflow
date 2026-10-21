@@ -3282,6 +3282,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#using-an-alternate-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using an Alternate Scheduler
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dynamic-resource-allocation-advanced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5418,6 +5429,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#using-an-alternate-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using an Alternate Scheduler
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dynamic-resource-allocation-advanced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5517,6 +5539,46 @@ For GPUs, Kubernetes requires that <code>requests</code> and <code>limits</code>
 </code></pre></div>
 <blockquote>
 <p>Adjust the nodeSelector and annotations as required by your cluster setup.</p>
+</blockquote>
+<h2 id="using-an-alternate-scheduler">Using an Alternate Scheduler<a class="headerlink" href="#using-an-alternate-scheduler" title="Permanent link">&para;</a></h2>
+<p>Some clusters allocate GPUs with a scheduler other than the default Kubernetes scheduler, for example an AI workload scheduler such as KAI, Volcano or YuniKorn. Set <code>schedulerName</code> to have the vertex pods scheduled by it. Scheduler-specific settings, such as queue labels or annotations, can be added under <code>metadata</code>.</p>
+<p>The following example uses <a href="https://volcano.sh">Volcano</a>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-vertex</span>
+<span class="w">    </span><span class="nt">schedulerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volcano</span><span class="w">        </span><span class="c1"># Replace with the name of your cluster's scheduler</span>
+<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ml-image:latest</span>
+<span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</code></pre></div>
+<p>To use the same scheduler for all vertices of a pipeline, set <code>schedulerName</code> under <code>spec.templates.vertex</code>. A value set on a vertex takes precedence. In the following example, <code>in</code> inherits <code>volcano</code> from the template, while <code>out</code> overrides it to use the default scheduler:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">templates</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">vertex</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">schedulerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volcano</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">schedulerName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default-scheduler</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+</code></pre></div>
+<p>For a MonoVertex, set <code>schedulerName</code> under <code>spec</code>.</p>
+<blockquote>
+<p>If no scheduler with the given name is running in the cluster, the pods stay <code>Pending</code>.</p>
 </blockquote>
 <h2 id="dynamic-resource-allocation-advanced">Dynamic Resource Allocation (Advanced)<a class="headerlink" href="#dynamic-resource-allocation-advanced" title="Permanent link">&para;</a></h2>
 <p>For advanced GPU scheduling using Dynamic Resource Allocation (DRA), see <a href="../configuration/dra/">Dynamic Resource Allocation documentation</a>.</p>
