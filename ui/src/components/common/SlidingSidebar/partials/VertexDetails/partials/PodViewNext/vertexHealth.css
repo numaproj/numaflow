@@ -273,3 +273,29 @@
   margin-top: 0.4rem;
   opacity: 0.8;
 }
+
+.vertex-health-outcomes {
+  min-width: 28rem;
+}
+
+.vertex-health-outcome {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.6rem;
+}
+
+.vertex-health-outcome > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.vertex-health-outcome strong {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.vertex-health-outcome-description {
+  max-width: 30rem;
+  opacity: 0.8;
+}

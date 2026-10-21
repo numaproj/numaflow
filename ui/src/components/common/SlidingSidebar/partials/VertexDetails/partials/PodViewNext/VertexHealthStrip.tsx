@@ -44,6 +44,23 @@ function StageBreakdown({
   );
 }
 
+function OutcomeBreakdown({ outcomes }: { outcomes: NonNullable<HealthCard["outcomes"]> }) {
+  return (
+    <div className="vertex-health-stages vertex-health-outcomes" data-testid="vertex-health-outcomes">
+      <span className="vertex-health-stages-title">Message outcomes</span>
+      {outcomes.map((outcome) => (
+        <div key={outcome.name} className="vertex-health-outcome">
+          <div>
+            <span>{outcome.name}</span>
+            <span className="vertex-health-outcome-description">{outcome.description}</span>
+          </div>
+          <strong>{outcome.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HealthCardButton({
   card,
   onInspect,
@@ -89,17 +106,26 @@ function HealthCardButton({
       </div>
     </button>
   );
-  if (!card.stages?.length) return button;
-  return (
-    <Tooltip
-      title={<StageBreakdown stages={card.stages} note={card.stagesNote} />}
-      arrow
-      describeChild
-      placement="bottom"
-    >
-      {button}
-    </Tooltip>
-  );
+  if (card.stages?.length) {
+    return (
+      <Tooltip
+        title={<StageBreakdown stages={card.stages} note={card.stagesNote} />}
+        arrow
+        describeChild
+        placement="bottom"
+      >
+        {button}
+      </Tooltip>
+    );
+  }
+  if (card.outcomes?.length) {
+    return (
+      <Tooltip title={<OutcomeBreakdown outcomes={card.outcomes} />} arrow describeChild placement="bottom">
+        {button}
+      </Tooltip>
+    );
+  }
+  return button;
 }
 
 /** VertexHealthStrip summarizes vertex-level stream signals above the Beta Pod View fleet. */

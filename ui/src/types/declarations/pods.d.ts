@@ -182,6 +182,13 @@ export interface HealthCard {
   sparkline?: number[];
   stages?: { name: string; value: string }[];
   stagesNote?: string;
+  /** Outcome metrics and their semantics, rendered in the Message outcomes card tooltip. */
+  outcomes?: {
+    name: string;
+    value: string;
+    description: string;
+    available: boolean;
+  }[];
   inspect?: InspectTarget;
 }
 

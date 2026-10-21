@@ -213,7 +213,11 @@ describe("buildVertexHealth", () => {
     );
     expect(card(health, "backlog").value).toBe("No backlog");
     expect(card(health, "loss")).toEqual(
-      expect.objectContaining({ value: "No drops", detail: "nacks 0/s · fallback 0/s · critical 0" })
+      expect.objectContaining({
+        title: "Message outcomes",
+        value: "No drops",
+        detail: "No active outcomes · hover for details",
+      })
     );
     expect(card(health, "errors")).toEqual(
       expect.objectContaining({ value: "All 1 pod healthy", detail: "0 restarts · 0 errors (24h)", tone: "ok" })
@@ -349,7 +353,7 @@ describe("buildVertexHealth", () => {
     expect(loss({}).value).toBe("Loading…");
   });
 
-  it("does not present partial loss metrics as zero", () => {
+  it("does not present partial outcome metrics as zero", () => {
     const loss = (series: VertexHealthInput["series"]) =>
       card(buildVertexHealth(input({ series: { p99: [1], ...series } })), "loss");
 
@@ -358,16 +362,38 @@ describe("buildVertexHealth", () => {
     );
     expect(loss({ drops: [], nacks: null, critical: [], fallback: [] })).toEqual(
       expect.objectContaining({
-        value: "Loss metrics unavailable",
-        detail: expect.stringContaining("nacks unavailable"),
+        value: "Outcome metrics unavailable",
+        detail: expect.stringContaining("1 outcome metrics unavailable"),
         tone: "neutral",
       })
     );
     expect(loss({ drops: [], nacks: [], critical: [], fallback: null })).toEqual(
-      expect.objectContaining({ value: "Loss metrics unavailable", tone: "neutral" })
+      expect.objectContaining({ value: "Outcome metrics unavailable", tone: "neutral" })
     );
     expect(loss({ drops: [2], nacks: null, critical: [], fallback: [] })).toEqual(
       expect.objectContaining({ value: "2 drops/s", tone: "critical" })
+    );
+  });
+
+  it("labels every fetched MonoVertex outcome with an explanation", () => {
+    const health = buildVertexHealth(
+      input({
+        series: {
+          drops: [1],
+          nacks: [2],
+          fallback: [3],
+          critical: [4],
+        },
+      })
+    );
+    const outcomes = card(health, "loss").outcomes;
+    expect(outcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Duplicate-message drops", value: "1/s", available: true }),
+        expect.objectContaining({ name: "Nacks / redeliveries", value: "2/s" }),
+        expect.objectContaining({ name: "Fallback deliveries", value: "3/s" }),
+        expect.objectContaining({ name: "Critical runtime errors", value: "4/s" }),
+      ])
     );
   });
 

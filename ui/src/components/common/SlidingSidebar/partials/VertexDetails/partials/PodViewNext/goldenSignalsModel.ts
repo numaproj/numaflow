@@ -515,26 +515,28 @@ function backlogCard(input: VertexHealthInput): HealthCard {
 }
 
 function lossCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "loss" as const, index: "04", title: "Data loss" };
+  const base = { id: "loss" as const, index: "04", title: "Message outcomes" };
   if (!input.metricsEnabled) {
     return { ...base, value: UNAVAILABLE, detail: UNAVAILABLE_DETAIL, tone: "neutral" };
   }
+  const isMono = input.type === MONO_VERTEX;
   const { drops, nacks, fallback, critical } = input.series;
   const inspect = metricsTarget(input.queries, "drops");
-  const requested = [
-    drops,
-    nacks,
-    critical,
-    ...(input.queries.fallback ? [fallback] : []),
-  ];
+  const requestedKeys = [
+    "drops",
+    "nacks",
+    "critical",
+    ...(isMono ? ["fallback" as const] : []),
+  ] as SignalQueryKey[];
+  const requested = requestedKeys.map((key) => input.series[key]);
   if (requested.some((series) => series === undefined)) {
-    return { ...base, value: LOADING, detail: "Fetching drop and nack rates", tone: "neutral", inspect };
+    return { ...base, value: LOADING, detail: "Fetching message outcome rates", tone: "neutral", inspect };
   }
   if (requested.every((series) => series === null)) {
     return {
       ...base,
       value: "No data",
-      detail: "Drop metrics are not served by the metrics proxy",
+      detail: "Message outcome metrics are not served by the metrics proxy",
       tone: "neutral",
       inspect,
     };
@@ -546,17 +548,50 @@ function lossCard(input: VertexHealthInput): HealthCard {
   const fallbackRate = rate(fallback);
   const criticalRate = rate(critical);
   const partiallyUnavailable = requested.some((series) => series === null);
-  const detail = [
-    nacks === null ? "nacks unavailable" : `nacks ${formatCompact(nackRate)}/s`,
-    input.queries.fallback
-      ? fallback === null
-        ? "fallback unavailable"
-        : `fallback ${formatCompact(fallbackRate)}/s`
-      : undefined,
-    critical === null ? "critical unavailable" : `critical ${formatCompact(criticalRate)}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const outcomes = [
+    {
+      key: "drops" as const,
+      name: isMono ? "Duplicate-message drops" : "Other runtime drops",
+      description: isMono
+        ? "Duplicate source messages discarded by MonoVertex."
+        : "Messages discarded by vertex runtime paths, such as a full buffer, unmatched forwarding rule, duplicate, write failure, or exhausted sink handling.",
+    },
+    {
+      key: "nacks" as const,
+      name: "Nacks / redeliveries",
+      description: "Messages negatively acknowledged for redelivery. A nack is a retry signal, not a confirmed message drop.",
+    },
+    ...(isMono
+      ? [
+          {
+            key: "fallback" as const,
+            name: "Fallback deliveries",
+            description:
+              "Messages delivered to the configured fallback sink or DLQ instead of the primary sink; this is alternate delivery, not loss.",
+          },
+        ]
+      : []),
+    {
+      key: "critical" as const,
+      name: "Critical runtime errors",
+      description: "Severe runtime errors that can interrupt processing. They also contribute to the Errors card.",
+    },
+  ].map(({ key, name, description }) => {
+    const series = input.series[key];
+    return {
+      name,
+      value: series === null ? "Unavailable" : `${formatCompact(rate(series))}/s`,
+      description,
+      available: series !== null,
+    };
+  });
+  const activeOutcomes = outcomes.filter((outcome) => outcome.available && outcome.value !== "0/s").length;
+  const unavailableOutcomes = outcomes.filter((outcome) => !outcome.available).length;
+  const detail = unavailableOutcomes
+    ? `${unavailableOutcomes} outcome metrics unavailable · hover for details`
+    : activeOutcomes
+    ? `${activeOutcomes} active outcome ${activeOutcomes === 1 ? "type" : "types"} · hover for details`
+    : "No active outcomes · hover for details";
   const tone: SignalTone =
     criticalRate > 0 || dropRate > 0
       ? "critical"
@@ -570,11 +605,12 @@ function lossCard(input: VertexHealthInput): HealthCard {
     value: dropRate > 0
       ? `${formatCompact(dropRate)} drops/s`
       : partiallyUnavailable
-      ? "Loss metrics unavailable"
+      ? "Outcome metrics unavailable"
       : "No drops",
     detail,
     tone,
-    // Drop counters only appear after the first drop, so no samples means a flat zero line.
+    outcomes,
+    // Runtime drop counters only appear after the first drop, so no samples mean a flat zero line.
     sparkline: toSparkline(drops && !drops.length ? [0] : drops),
     inspect,
   };

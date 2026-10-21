@@ -39,10 +39,36 @@ const cards: HealthCard[] = [
   {
     id: "loss",
     index: "04",
-    title: "Data loss",
+    title: "Message outcomes",
     value: "2 drops/s",
-    detail: "nacks 0/s",
-    tone: "critical",
+    detail: "2 active outcome types · hover for details",
+    tone: "warn",
+    outcomes: [
+      {
+        name: "Duplicate-message drops",
+        value: "2/s",
+        description: "Duplicate source messages discarded by MonoVertex.",
+        available: true,
+      },
+      {
+        name: "Nacks / redeliveries",
+        value: "1/s",
+        description: "Messages negatively acknowledged for redelivery. A nack is not a confirmed drop.",
+        available: true,
+      },
+      {
+        name: "Fallback deliveries",
+        value: "0/s",
+        description: "Messages delivered to the fallback sink instead of the primary sink.",
+        available: true,
+      },
+      {
+        name: "Critical runtime errors",
+        value: "Unavailable",
+        description: "Severe runtime errors that can interrupt processing.",
+        available: false,
+      },
+    ],
     inspect: { kind: "metrics", metric: "monovtx_dropped_total" },
   },
   {
@@ -81,7 +107,7 @@ describe("VertexHealthStrip", () => {
       ).toBeInTheDocument()
     );
     expect(screen.getByTestId("vertex-health-card-loss").querySelector("p")).toHaveClass(
-      "vertex-health-tone--critical"
+      "vertex-health-tone--warn"
     );
   });
 
@@ -108,6 +134,21 @@ describe("VertexHealthStrip", () => {
     expect(stages).toHaveTextContent("P99 by stage");
     expect(stages).toHaveTextContent("sink3.10 s");
     expect(stages).toHaveTextContent("waiting for messages");
+  });
+
+  it("shows all message outcome types and their explanations on the loss card", async () => {
+    render(<VertexHealthStrip health={health} onInspect={jest.fn()} />);
+
+    fireEvent.mouseOver(screen.getByTestId("vertex-health-card-loss"));
+    const outcomes = await screen.findByTestId("vertex-health-outcomes");
+    expect(outcomes).toHaveTextContent("Message outcomes");
+    expect(outcomes).toHaveTextContent("Duplicate-message drops");
+    expect(outcomes).toHaveTextContent("2/s");
+    expect(outcomes).toHaveTextContent("A nack is not a confirmed drop");
+    expect(outcomes).toHaveTextContent("Fallback deliveries");
+    expect(outcomes).toHaveTextContent("0/s");
+    expect(outcomes).toHaveTextContent("Critical runtime errors");
+    expect(outcomes).toHaveTextContent("Unavailable");
   });
 
   it("reports each card's inspect target", () => {
