@@ -348,7 +348,11 @@ export function Pods(props: PodsProps) {
     return (
       <Box
         data-testid={"pods-poddetails"}
-        sx={{ height: "100%", width: "100%", border: "1px solid #E0E0E0" }}
+        sx={{
+          height: "100%",
+          width: "100%",
+          border: "1px solid var(--border-primary)",
+        }}
       >
         <PodDetail
           namespaceId={namespaceId}
@@ -413,7 +417,7 @@ export function Pods(props: PodsProps) {
               }}
               sx={{
                 width: "100%",
-                border: "1px solid #E0E0E0",
+                border: "1px solid var(--border-primary)",
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "0",
                 },
@@ -492,7 +496,7 @@ export function Pods(props: PodsProps) {
             sx={{
               display: "flex",
               width: "100%",
-              border: "1px solid #E0E0E0",
+              border: "1px solid var(--border-primary)",
             }}
             data-testid={"pods-searchablePodsHeatMap"}
           >
@@ -521,7 +525,7 @@ export function Pods(props: PodsProps) {
               display: "flex",
               height: "100%",
               width: "100%",
-              border: "1px solid #E0E0E0",
+              border: "1px solid var(--border-primary)",
               overflow: "auto",
             }}
           >

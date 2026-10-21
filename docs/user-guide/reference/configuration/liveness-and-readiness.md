@@ -152,3 +152,7 @@ A `startupProbe` is deliberately not offered on the user-defined containers (`ud
 sidecar reports started. A startup probe on a sidecar would therefore gate itself on an endpoint
 that cannot exist yet, and the pod would never start. Use the liveness settings above for those
 containers.
+
+A reduce vertex with persistence enabled can wait for a stale fence file that a previous instance
+left. During that wait, `/sidecar-livez` reports the user-defined containers as live, so the wait
+does not use their liveness budget.

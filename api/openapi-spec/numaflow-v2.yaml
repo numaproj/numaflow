@@ -94,6 +94,72 @@ paths:
           $ref: "#/components/responses/ValidationFailed"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/mono-vertices/{monoVertex}/summary:
+    get:
+      operationId: getMonoVertexSummary
+      summary: Get a compact MonoVertex summary
+      tags: [MonoVertex]
+      x-numaflow-authz-object: mono-vertex
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/MonoVertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: MonoVertex summary
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /namespaces/{namespace}/mono-vertices/{monoVertex}/status:
+    get:
+      operationId: getMonoVertexStatus
+      summary: Get detailed Kubernetes status for a MonoVertex
+      tags: [MonoVertex]
+      x-numaflow-authz-object: mono-vertex
+      x-numaflow-requires-authz: true
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/MonoVertex"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: MonoVertex Kubernetes CR status. It excludes live Pod inspection and data-flow health.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VertexStatus"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
     cookieAuth:
@@ -124,6 +190,15 @@ components:
       in: path
       required: true
       description: Vertex name within the pipeline
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 253
+    MonoVertex:
+      name: monoVertex
+      in: path
+      required: true
+      description: MonoVertex name
       schema:
         type: string
         minLength: 1
@@ -193,6 +268,8 @@ components:
             - getCapabilities
             - getPipelineVertexSummary
             - getPipelineVertexStatus
+            - getMonoVertexSummary
+            - getMonoVertexStatus
         limits:
           $ref: "#/components/schemas/ApiLimits"
     ApiLimits:
@@ -219,7 +296,7 @@ components:
     TargetRef:
       type: object
       additionalProperties: false
-      required: [kind, namespace, pipeline, name, uid]
+      required: [kind, namespace, name, uid]
       properties:
         kind:
           $ref: "#/components/schemas/TargetKind"
@@ -227,18 +304,19 @@ components:
           type: string
         pipeline:
           type: string
+          description: Pipeline name for Vertex targets; omitted for MonoVertex targets.
         name:
           type: string
         uid:
           type: string
     TargetKind:
       type: string
-      enum: [PipelineVertex]
+      enum: [Vertex, MonoVertex]
     VertexType:
       type: string
-      enum: [Source, Sink, MapUDF, ReduceUDF]
+      enum: [Source, Sink, MapUDF, ReduceUDF, MonoVertex]
     Health:
-      description: Compact health derived from Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+      description: Compact health derived from Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required: [state]
@@ -290,7 +368,7 @@ components:
           format: date-time
         observedAt:
           type: string
-          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+          description: Latest condition-transition or scaling timestamp from CR status, not response generation time.
           format: date-time
         lastScaledAt:
           type: string
@@ -306,7 +384,7 @@ components:
           items:
             type: string
     VertexStatus:
-      description: Detailed Kubernetes Vertex CR status. It excludes live Pod inspection and data-flow health.
+      description: Detailed Kubernetes Vertex or MonoVertex CR status. It excludes live Pod inspection and data-flow health.
       type: object
       additionalProperties: false
       required:
@@ -346,7 +424,7 @@ components:
           format: int64
         observedAt:
           type: string
-          description: Latest condition-transition or scaling timestamp from Vertex CR status, not response generation time.
+          description: Latest condition-transition or scaling timestamp from CR status, not response generation time.
           format: date-time
         truncatedFields:
           type: array

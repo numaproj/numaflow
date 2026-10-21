@@ -4,17 +4,17 @@
   align-items: center;
   justify-content: center;
   height: 20rem;
-  border: 0.1rem dashed #ccc;
+  border: 0.1rem dashed var(--border-primary);
   border-radius: 0.5rem;
   padding: 2rem;
 }
 
 .circle_icon {
-  color: #999;
+  color: var(--text-tertiary);
   margin-bottom: 1.5rem;
   font-size: 4rem !important;
 }
 
 .empty_text {
-  color: #666;
+  color: var(--text-secondary);
 }

@@ -4508,7 +4508,6 @@ spec:
               priorityClassName:
                 type: string
               replicas:
-                default: 1
                 format: int32
                 type: integer
               resourceClaims:
@@ -8220,9 +8219,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:
@@ -21802,9 +21806,14 @@ spec:
                               type: array
                             awsRegion:
                               type: string
+                            deadLetterQueues:
+                              type: string
                             endpointUrl:
                               type: string
                             maxNumberOfMessages:
+                              format: int32
+                              type: integer
+                            maxReceiveCount:
                               format: int32
                               type: integer
                             messageAttributeNames:
@@ -35378,9 +35387,14 @@ spec:
                                   type: array
                                 awsRegion:
                                   type: string
+                                deadLetterQueues:
+                                  type: string
                                 endpointUrl:
                                   type: string
                                 maxNumberOfMessages:
+                                  format: int32
+                                  type: integer
+                                maxReceiveCount:
                                   format: int32
                                   type: integer
                                 messageAttributeNames:
@@ -41079,7 +41093,6 @@ spec:
               priorityClassName:
                 type: string
               replicas:
-                default: 1
                 format: int32
                 type: integer
               resourceClaims:
@@ -45050,9 +45063,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:
@@ -48002,8 +48020,8 @@ data:
         settings: |
           # https://docs.nats.io/running-a-nats-service/configuration#limits
           # Only support to configure "max_payload".
-          # Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
-          max_payload: 1048576
+          # Max payload size in bytes, defaults to 65 MB, i.e. the gRPC max message size (64 MB) plus 1 MB of headroom for platform injected data.
+          max_payload: 68157440
           # https://docs.nats.io/running-a-nats-service/configuration#jetstream
           # Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
           # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
@@ -48018,6 +48036,9 @@ data:
             maxMsgs: 100000
             maxAge: 72h
             maxBytes: -1
+            # Max size of a single message in bytes, defaults to 32 MB - 1KB, which is also the max value allowed,
+            # since JetStream file storage does not support messages larger than 32 MB.
+            maxMsgSize: 33553408
             # 0: File, 1: Memory
             storage: 0
             replicas: 3

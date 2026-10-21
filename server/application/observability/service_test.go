@@ -60,7 +60,7 @@ func TestPipelineVertexSummary(t *testing.T) {
 	summary, err := service.GetPipelineVertexSummary(context.Background(), "team-a", "orders", "map")
 	require.NoError(t, err)
 	assert.Equal(t, "17", summary.ResourceVersion)
-	assert.Equal(t, TargetKindPipelineVertex, summary.Value.Ref.Kind)
+	assert.Equal(t, TargetKindVertex, summary.Value.Ref.Kind)
 	assert.Equal(t, "orders", summary.Value.Ref.Pipeline)
 	assert.Equal(t, "map", summary.Value.Ref.Name)
 	assert.Equal(t, string(dfv1.VertexTypeMapUDF), summary.Value.VertexType)
@@ -233,6 +233,7 @@ func TestPipelineVertexStatus(t *testing.T) {
 	status, err := service.GetPipelineVertexStatus(context.Background(), "team-a", "orders", "map")
 	require.NoError(t, err)
 	assert.Equal(t, "18", status.ResourceVersion)
+	assert.Equal(t, TargetKindVertex, status.Value.Ref.Kind)
 	assert.Equal(t, "Running", status.Value.Phase)
 	assert.Equal(t, "Running", status.Value.DesiredPhase)
 	assert.Equal(t, ReplicaStatus{Current: 3, Desired: 4, Ready: 2, Updated: 3, UpdatedReady: 2}, status.Value.Replicas)
@@ -279,6 +280,150 @@ func TestPipelineVertexStatusRejectsAmbiguousResourceName(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
+func TestMonoVertexSummaryAndStatus(t *testing.T) {
+	conditionTransition := metav1.NewTime(summaryObservedAt.Add(-2 * time.Minute))
+	lastUpdated := metav1.NewTime(summaryObservedAt)
+	monoVertex := testMonoVertex()
+	monoVertex.ObjectMeta = metav1.ObjectMeta{
+		Name:              "orders-ingest",
+		Namespace:         "team-a",
+		UID:               types.UID("mono-vertex-uid"),
+		ResourceVersion:   "19",
+		Generation:        4,
+		CreationTimestamp: metav1.NewTime(summaryObservedAt.Add(-time.Hour)),
+	}
+	monoVertex.Status = dfv1.MonoVertexStatus{
+		Status: dfv1.Status{Conditions: []metav1.Condition{
+			{Type: string(dfv1.MonoVertexConditionDeployed), Status: metav1.ConditionTrue, LastTransitionTime: conditionTransition},
+			{Type: string(dfv1.MonoVertexConditionDaemonHealthy), Status: metav1.ConditionTrue, LastTransitionTime: conditionTransition},
+			{Type: string(dfv1.MonoVertexPodsHealthy), Status: metav1.ConditionTrue, Reason: "Ready", Message: "All pods are ready", LastTransitionTime: conditionTransition},
+		}},
+		Phase:                dfv1.MonoVertexPhaseRunning,
+		Replicas:             3,
+		DesiredReplicas:      4,
+		ReadyReplicas:        2,
+		UpdatedReplicas:      3,
+		UpdatedReadyReplicas: 2,
+		ObservedGeneration:   4,
+		LastUpdated:          lastUpdated,
+		LastScaledAt:         metav1.NewTime(summaryObservedAt.Add(-time.Minute)),
+	}
+	service := newTestService(t, monoVertex)
+
+	summary, err := service.GetMonoVertexSummary(context.Background(), "team-a", "orders-ingest")
+	require.NoError(t, err)
+	assert.Equal(t, "19", summary.ResourceVersion)
+	assert.Equal(t, TargetKindMonoVertex, summary.Value.Ref.Kind)
+	assert.Empty(t, summary.Value.Ref.Pipeline)
+	assert.Equal(t, "orders-ingest", summary.Value.Ref.Name)
+	assert.Equal(t, "MonoVertex", summary.Value.VertexType)
+	assert.Equal(t, HealthStateHealthy, summary.Value.Health.State)
+	assert.Equal(t, lastUpdated.Time, summary.Value.ObservedAt)
+
+	status, err := service.GetMonoVertexStatus(context.Background(), "team-a", "orders-ingest")
+	require.NoError(t, err)
+	assert.Equal(t, "19", status.ResourceVersion)
+	assert.Equal(t, ReplicaStatus{Current: 3, Desired: 4, Ready: 2, Updated: 3, UpdatedReady: 2}, status.Value.Replicas)
+	require.Len(t, status.Value.Conditions, 3)
+	assert.Equal(t, "DaemonHealthy", status.Value.Conditions[1].Type)
+	assert.Equal(t, lastUpdated.Time, status.Value.ObservedAt)
+}
+
+func TestNormalizeMonoVertexHealthStates(t *testing.T) {
+	tests := []struct {
+		name               string
+		phase              dfv1.MonoVertexPhase
+		desiredPhase       dfv1.MonoVertexPhase
+		generation         int64
+		observedGeneration int64
+		conditions         []metav1.Condition
+		want               HealthState
+	}{
+		{
+			name:               "failed is critical",
+			phase:              dfv1.MonoVertexPhaseFailed,
+			desiredPhase:       dfv1.MonoVertexPhaseRunning,
+			observedGeneration: 1,
+			want:               HealthStateCritical,
+		},
+		{
+			name:               "requested pause is inactive",
+			phase:              dfv1.MonoVertexPhaseRunning,
+			desiredPhase:       dfv1.MonoVertexPhasePaused,
+			observedGeneration: 1,
+			want:               HealthStateInactive,
+		},
+		{
+			name:               "unobserved generation is warning",
+			phase:              dfv1.MonoVertexPhaseRunning,
+			desiredPhase:       dfv1.MonoVertexPhaseRunning,
+			generation:         2,
+			observedGeneration: 1,
+			want:               HealthStateWarning,
+		},
+		{
+			name:               "ready running MonoVertex is healthy",
+			phase:              dfv1.MonoVertexPhaseRunning,
+			desiredPhase:       dfv1.MonoVertexPhaseRunning,
+			generation:         1,
+			observedGeneration: 1,
+			conditions: []metav1.Condition{
+				{Type: string(dfv1.MonoVertexConditionDeployed), Status: metav1.ConditionTrue},
+				{Type: string(dfv1.MonoVertexConditionDaemonHealthy), Status: metav1.ConditionTrue},
+				{Type: string(dfv1.MonoVertexPodsHealthy), Status: metav1.ConditionTrue},
+			},
+			want: HealthStateHealthy,
+		},
+		{
+			name:               "unready running MonoVertex is warning",
+			phase:              dfv1.MonoVertexPhaseRunning,
+			desiredPhase:       dfv1.MonoVertexPhaseRunning,
+			generation:         1,
+			observedGeneration: 1,
+			conditions:         []metav1.Condition{{Type: string(dfv1.MonoVertexConditionDaemonHealthy), Status: metav1.ConditionFalse}},
+			want:               HealthStateWarning,
+		},
+		{
+			name:               "unknown phase is unknown",
+			desiredPhase:       dfv1.MonoVertexPhaseRunning,
+			observedGeneration: 1,
+			want:               HealthStateUnknown,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			monoVertex := testMonoVertex()
+			monoVertex.Generation = test.generation
+			monoVertex.Spec.Lifecycle.DesiredPhase = test.desiredPhase
+			monoVertex.Status = dfv1.MonoVertexStatus{
+				Status:             dfv1.Status{Conditions: test.conditions},
+				Phase:              test.phase,
+				ObservedGeneration: test.observedGeneration,
+			}
+			health, _ := normalizeMonoVertexHealth(monoVertex)
+			assert.Equal(t, test.want, health.State)
+		})
+	}
+}
+
+func TestMonoVertexReadErrors(t *testing.T) {
+	service := newTestService(t)
+
+	_, err := service.GetMonoVertexSummary(context.Background(), "team-a", "missing")
+	require.Error(t, err)
+	assert.True(t, apierrors.IsNotFound(err))
+
+	clientset := fakeclientset.NewSimpleClientset()
+	clientset.PrependReactor("get", "monovertices", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, assert.AnError
+	})
+	service, err = NewService(clientset.NumaflowV1alpha1())
+	require.NoError(t, err)
+
+	_, err = service.GetMonoVertexStatus(context.Background(), "team-a", "orders-ingest")
+	assert.ErrorIs(t, err, assert.AnError)
+}
+
 func testPipelineVertex() *dfv1.Vertex {
 	return &dfv1.Vertex{
 		ObjectMeta: metav1.ObjectMeta{Name: "orders-map", Namespace: "team-a"},
@@ -286,6 +431,15 @@ func testPipelineVertex() *dfv1.Vertex {
 			AbstractVertex: dfv1.AbstractVertex{Name: "map", UDF: &dfv1.UDF{}},
 			PipelineName:   "orders",
 			Lifecycle:      dfv1.VertexLifecycle{DesiredPhase: dfv1.VertexPhaseRunning},
+		},
+	}
+}
+
+func testMonoVertex() *dfv1.MonoVertex {
+	return &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Name: "orders-ingest", Namespace: "team-a"},
+		Spec: dfv1.MonoVertexSpec{
+			Lifecycle: dfv1.MonoVertexLifecycle{DesiredPhase: dfv1.MonoVertexPhaseRunning},
 		},
 	}
 }
@@ -302,6 +456,19 @@ func newTestService(t *testing.T, objects ...runtime.Object) *Service {
 			vertex, ok := object.(*dfv1.Vertex)
 			if ok && action.GetNamespace() == vertex.Namespace && getAction.GetName() == vertex.Name {
 				return true, vertex.DeepCopy(), nil
+			}
+		}
+		return false, nil, nil
+	})
+	clientset.PrependReactor("get", "monovertices", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		getAction, ok := action.(k8stesting.GetAction)
+		if !ok {
+			return false, nil, nil
+		}
+		for _, object := range objects {
+			monoVertex, ok := object.(*dfv1.MonoVertex)
+			if ok && action.GetNamespace() == monoVertex.Namespace && getAction.GetName() == monoVertex.Name {
+				return true, monoVertex.DeepCopy(), nil
 			}
 		}
 		return false, nil, nil

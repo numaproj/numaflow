@@ -72,8 +72,8 @@ func TestParseCronSchedules(t *testing.T) {
 }
 
 func TestEffectiveScaleBoundsAt(t *testing.T) {
-	min := int32(5)
-	max := int32(10)
+	min := int32(2)
+	max := int32(3)
 
 	scale := dfv1.Scale{
 		Min: ptr.To[int32](1),
@@ -112,5 +112,34 @@ func TestEffectiveScaleBoundsAt(t *testing.T) {
 		assert.False(t, active)
 		assert.Equal(t, int32(1), gotMin)
 		assert.Equal(t, int32(3), gotMax)
+	})
+
+	t.Run("cron bounds wider than base are clamped to base min/max", func(t *testing.T) {
+		// Base min/max stay the source of truth (numaproj/numaflow#3628): a cron window
+		// outside that range must be narrowed to fit it, not widen it.
+		wideCronMin, wideCronMax := int32(0), int32(100)
+		wideScale := dfv1.Scale{
+			Min: ptr.To[int32](5),
+			Max: ptr.To[int32](10),
+			Cron: &dfv1.CronScheduling{
+				Timezone: "UTC",
+				Schedules: []dfv1.CronSchedule{
+					{
+						Start: "0 0 9 * * *",
+						End:   "0 0 17 * * *",
+						Min:   &wideCronMin,
+						Max:   &wideCronMax,
+					},
+				},
+			},
+		}
+		wideParsed, err := ParseCronSchedules(wideScale.Cron)
+		assert.NoError(t, err)
+
+		gotMin, gotMax, active := EffectiveScaleBoundsAt(wideScale, wideParsed, time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC))
+
+		assert.True(t, active)
+		assert.Equal(t, int32(5), gotMin, "cron min below base min must clamp up to base min")
+		assert.Equal(t, int32(10), gotMax, "cron max above base max must clamp down to base max")
 	})
 }

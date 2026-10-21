@@ -28,6 +28,9 @@ pub struct SqsSource {
     /// AWSRegion is the AWS Region where the SQS queue is located
     #[serde(rename = "awsRegion")]
     pub aws_region: String,
+    /// DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.
+    #[serde(rename = "deadLetterQueues", skip_serializing_if = "Option::is_none")]
+    pub dead_letter_queues: Option<String>,
     /// EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.
     #[serde(rename = "endpointUrl", skip_serializing_if = "Option::is_none")]
     pub endpoint_url: Option<String>,
@@ -37,6 +40,9 @@ pub struct SqsSource {
         skip_serializing_if = "Option::is_none"
     )]
     pub max_number_of_messages: Option<i32>,
+    /// MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.
+    #[serde(rename = "maxReceiveCount", skip_serializing_if = "Option::is_none")]
+    pub max_receive_count: Option<i32>,
     /// MessageAttributeNames is a list of message attributes that need to be returned along with each message.
     #[serde(
         rename = "messageAttributeNames",
@@ -67,8 +73,10 @@ impl SqsSource {
             assume_role: None,
             attribute_names: None,
             aws_region,
+            dead_letter_queues: None,
             endpoint_url: None,
             max_number_of_messages: None,
+            max_receive_count: None,
             message_attribute_names: None,
             queue_name: None,
             queue_names: None,

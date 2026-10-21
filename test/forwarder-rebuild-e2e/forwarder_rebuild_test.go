@@ -101,11 +101,11 @@ func monoVertexHasContainerError(replicaErrors []*mvtxdaemonpb.ReplicaErrors, co
 }
 
 func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromUDFCrash() {
-	w := s.Given().Pipeline("@testdata/runtime-error-pipeline.yaml").
+	w := s.Given().Pipeline("@testdata/runtime-error-map-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "runtime-error-pipeline"
+	pipelineName := "runtime-error-map-pipeline"
 
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("p1")
@@ -191,9 +191,161 @@ func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromSinkCrash() {
 		VertexNumaStable(podSnapshot, "out")
 }
 
+func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromSourceCrash() {
+	w := s.Given().Pipeline("@testdata/runtime-error-source-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "runtime-error-source-pipeline"
+
+	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("in")
+	w.Expect().DaemonPodsRunning()
+
+	defer w.VertexPodPortForward("in", 8945, dfv1.VertexRuntimePort).
+		DaemonPodPortForward(pipelineName, 1245, dfv1.DaemonServicePort).
+		UXServerPodPortForward(8145, 8443).
+		TerminateAllPodPortForwards()
+
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1245")
+	assert.NoError(s.T(), err)
+	defer func() { assert.NoError(s.T(), client.Close()) }()
+
+	// source-panic fails on Read with UDF_EXECUTION_ERROR(udsource).
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains("https://localhost:8945", "/runtime/errors", `"container":"udsource"`)
+	}, 2*time.Minute, time.Second, "udsource runtime error not reported by the in pod runtime endpoint")
+
+	assert.Eventually(s.T(), func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "in")
+		return err == nil && vertexHasContainerError(replicaErrors, "udsource")
+	}, 2*time.Minute, time.Second, "udsource runtime error not reported by the daemon for vertex in")
+
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains(
+			"https://localhost:8145",
+			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "in"),
+			`"container":"udsource"`,
+		)
+	}, 2*time.Minute, time.Second, "udsource runtime error not reported by the UX server for vertex in")
+
+	w.Expect().
+		VertexPodLogContains("in", "Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", "Starting source forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexNumaStable(podSnapshot, "in")
+}
+
+func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromTransformerCrash() {
+	w := s.Given().Pipeline("@testdata/runtime-error-transformer-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "runtime-error-transformer-pipeline"
+
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("in")
+
+	defer w.VertexPodPortForward("in", 8946, dfv1.VertexRuntimePort).
+		DaemonPodPortForward(pipelineName, 1246, dfv1.DaemonServicePort).
+		UXServerPodPortForward(8146, 8443).
+		TerminateAllPodPortForwards()
+
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1246")
+	assert.NoError(s.T(), err)
+	defer func() { assert.NoError(s.T(), client.Close()) }()
+
+	go func() {
+		defer func() {
+			// The HTTP request can outlive the test because the transformer panics before ACKing it.
+			_ = recover()
+		}()
+		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("panic")))
+	}()
+
+	// mapt-panic fails on Transform with UDF_EXECUTION_ERROR(transformer).
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains("https://localhost:8946", "/runtime/errors", `"container":"transformer"`)
+	}, 2*time.Minute, time.Second, "transformer runtime error not reported by the in pod runtime endpoint")
+
+	assert.Eventually(s.T(), func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "in")
+		return err == nil && vertexHasContainerError(replicaErrors, "transformer")
+	}, 2*time.Minute, time.Second, "transformer runtime error not reported by the daemon for vertex in")
+
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains(
+			"https://localhost:8146",
+			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "in"),
+			`"container":"transformer"`,
+		)
+	}, 2*time.Minute, time.Second, "transformer runtime error not reported by the UX server for vertex in")
+
+	w.Expect().
+		VertexPodLogContains("in", "Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("in", "Starting source forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexNumaStable(podSnapshot, "in")
+}
+
+func (s *ForwarderRebuildSuite) TestPipelineForwarderRebuildFromReduceCrash() {
+	w := s.Given().Pipeline("@testdata/runtime-error-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "runtime-error-reduce-pipeline"
+
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+	podSnapshot := w.Expect().VertexPodRuntimeSnapshot("r")
+
+	defer w.VertexPodPortForward("r", 8947, dfv1.VertexRuntimePort).
+		DaemonPodPortForward(pipelineName, 1247, dfv1.DaemonServicePort).
+		UXServerPodPortForward(8147, 8443).
+		TerminateAllPodPortForwards()
+
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1247")
+	assert.NoError(s.T(), err)
+	defer func() { assert.NoError(s.T(), client.Close()) }()
+
+	// reduce-panic fails on the first datum in an open window; event-time advances close the window.
+	eventTime := fmt.Sprintf("%d", time.Now().Add(-10*time.Second).UnixMilli())
+	nextWindow := fmt.Sprintf("%d", time.Now().UnixMilli())
+	go func() {
+		defer func() { _ = recover() }()
+		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+			SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+			SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", nextWindow))
+	}()
+
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains("https://localhost:8947", "/runtime/errors", `"container":"udf"`)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the r pod runtime endpoint")
+
+	assert.Eventually(s.T(), func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		replicaErrors, err := client.GetVertexErrors(ctx, pipelineName, "r")
+		return err == nil && vertexHasContainerError(replicaErrors, "udf")
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the daemon for vertex r")
+
+	assert.Eventually(s.T(), func() bool {
+		return httpBodyContains(
+			"https://localhost:8147",
+			fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/errors", Namespace, pipelineName, "r"),
+			`"container":"udf"`,
+		)
+	}, 2*time.Minute, time.Second, "udf runtime error not reported by the UX server for vertex r")
+
+	w.Expect().
+		VertexPodLogContains("r", "Forwarder attempt failed; rebuilding forwarder", PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("r", LogReduceVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexNumaStable(podSnapshot, "r")
+}
+
 func (s *ForwarderRebuildSuite) TestMonoVertexForwarderRebuildFromUDFCrash() {
-	monoVertexName := "runtime-error-monovertex"
-	w := s.Given().MonoVertex("@testdata/runtime-error-monovertex.yaml").
+	monoVertexName := "runtime-error-map-monovertex"
+	w := s.Given().MonoVertex("@testdata/runtime-error-map-monovertex.yaml").
 		When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 

@@ -43,6 +43,8 @@ type Handler interface {
 	ListVertexPods(c *gin.Context)
 	ListPodsMetrics(c *gin.Context)
 	PodLogs(c *gin.Context)
+	PipelinePodLogs(c *gin.Context)
+	MonoVertexPodLogs(c *gin.Context)
 	GetMonoVertexPodsInfo(c *gin.Context)
 	GetVertexPodsInfo(c *gin.Context)
 	GetNamespaceEvents(c *gin.Context)

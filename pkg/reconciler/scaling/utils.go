@@ -56,27 +56,42 @@ func ParseCronSchedules(cronScheduling *dfv1.CronScheduling) ([]ParsedCronSchedu
 }
 
 // EffectiveScaleBoundsAt returns the effective scale bounds (minReplicas, maxReplicas, active) for a given Scale spec at time at.
+// A cron schedule's min/max is clamped to the base scale.min/scale.max: base bounds are the
+// source of truth (numaproj/numaflow#3628), cron windows can only narrow within them, not widen
+// beyond them.
 func EffectiveScaleBoundsAt(scale dfv1.Scale, parsed []ParsedCronSchedule, at time.Time) (int32, int32, bool) {
-	minReplicas := scale.GetMinReplicas()
-	maxReplicas := scale.GetMaxReplicas()
+	baseMin := scale.GetMinReplicas()
+	baseMax := scale.GetMaxReplicas()
 	if scale.Cron == nil || len(parsed) == 0 {
-		return minReplicas, maxReplicas, false
+		return baseMin, baseMax, false
 	}
 	location, err := time.LoadLocation(scale.Cron.GetTimezone())
 	if err != nil {
-		return minReplicas, maxReplicas, false
+		return baseMin, baseMax, false
 	}
 	at = at.In(location)
 	for i := range parsed {
 		if parsed[i].IsActiveAt(at) {
+			minReplicas, maxReplicas := baseMin, baseMax
 			if parsed[i].Schedule.Min != nil {
-				minReplicas = *parsed[i].Schedule.Min
+				minReplicas = clampInt32(*parsed[i].Schedule.Min, baseMin, baseMax)
 			}
 			if parsed[i].Schedule.Max != nil {
-				maxReplicas = *parsed[i].Schedule.Max
+				maxReplicas = clampInt32(*parsed[i].Schedule.Max, baseMin, baseMax)
 			}
 			return minReplicas, maxReplicas, true
 		}
 	}
-	return minReplicas, maxReplicas, false
+	return baseMin, baseMax, false
+}
+
+// clampInt32 restricts v to [lo, hi].
+func clampInt32(v, lo, hi int32) int32 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

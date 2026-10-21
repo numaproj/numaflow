@@ -193,14 +193,14 @@ export const PodsHeatMap = ({
   return (
     <Box
       sx={{
-        border: "1px solid #E0E0E0",
+        border: "1px solid var(--border-primary)",
         width: "100%",
       }}
     >
       <Box
         sx={{
           display: "flex",
-          borderBottom: "1px solid #E0E0E0",
+          borderBottom: "1px solid var(--border-primary)",
         }}
       >
         <div className="heatmap-graph-title">CPU</div>

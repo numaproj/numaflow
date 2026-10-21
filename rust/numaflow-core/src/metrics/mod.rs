@@ -16,7 +16,7 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::TcpListener;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
@@ -215,6 +215,7 @@ pub(crate) struct WatermarkFetcherState {
 #[derive(Clone, Default)]
 pub(crate) struct MetricsState {
     inner: Arc<RwLock<MetricsStateInner>>,
+    sidecars_assumed_live: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -258,12 +259,35 @@ impl MetricsState {
         *self.inner.write() = MetricsStateInner::default();
     }
 
+    /// Reports the user-defined containers as live while no forwarder attempt is registered,
+    /// until the returned guard is dropped. Use it for a startup step that does not use those
+    /// containers and can take longer than their liveness budget, so that Kubernetes does not
+    /// restart them because of a delay in the numa container.
+    pub(crate) fn assume_sidecars_live(&self) -> SidecarsAssumedLive {
+        self.sidecars_assumed_live.store(true, Ordering::Release);
+        SidecarsAssumedLive(Arc::clone(&self.sidecars_assumed_live))
+    }
+
+    fn sidecars_assumed_live(&self) -> bool {
+        self.sidecars_assumed_live.load(Ordering::Acquire)
+    }
+
     fn health_checks(&self) -> Option<Arc<dyn HealthCheck>> {
         self.inner.read().health_checks.clone()
     }
 
     fn watermark_fetcher_state(&self) -> Option<WatermarkFetcherState> {
         self.inner.read().watermark_fetcher_state.clone()
+    }
+}
+
+/// Keeps the user-defined containers reported as live while no forwarder attempt is
+/// registered. See [MetricsState::assume_sidecars_live].
+pub(crate) struct SidecarsAssumedLive(Arc<AtomicBool>);
+
+impl Drop for SidecarsAssumedLive {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
     }
 }
 
@@ -1225,7 +1249,7 @@ impl PipelineMetrics {
         );
         jetstream_isb_registry.register(
             JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
-            "Total number of JetStream publish attempts exceeding the server-advertised maximum payload",
+            "Total number of jetstream writes rejected because the message exceeds the max message size",
             metrics.jetstream_isb.max_payload_exceeded_total.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
@@ -1399,6 +1423,7 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+/// pipeline metric labels with the partition name label added.
 pub(crate) fn pipeline_partition_metric_labels(
     vertex_type: &str,
     partition_name: &str,
@@ -1574,7 +1599,7 @@ fn metrics_router(metrics_state: MetricsState) -> Router {
         .route("/metrics", get(metrics_handler))
         .route("/runtime/watermark", get(watermark_handler))
         .route("/livez", get(livez))
-        .route("/readyz", get(sidecar_livez))
+        .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
         .with_state(metrics_state)
 }
@@ -1583,14 +1608,35 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
-    // Check if health checks are disabled via the environment variable
-    if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
-        .map(|v| v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-    {
+/// Readiness of the numa container. It is not ready until a forwarder attempt is registered
+/// and its components are healthy.
+async fn readyz(State(state): State<MetricsState>) -> impl IntoResponse {
+    if health_checks_disabled() {
         return StatusCode::NO_CONTENT;
     }
+    components_status(&state).await
+}
+
+/// Liveness of the user-defined containers, which Kubernetes probes through the numa container.
+/// While [MetricsState::assume_sidecars_live] is in effect and no forwarder attempt is
+/// registered, the containers are reported as live.
+async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
+    if health_checks_disabled() {
+        return StatusCode::NO_CONTENT;
+    }
+    if state.health_checks().is_none() && state.sidecars_assumed_live() {
+        return StatusCode::NO_CONTENT;
+    }
+    components_status(&state).await
+}
+
+fn health_checks_disabled() -> bool {
+    env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+async fn components_status(state: &MetricsState) -> StatusCode {
     let Some(health_checks) = state.health_checks() else {
         error!("No active forwarder attempt is registered for health checks");
         return StatusCode::INTERNAL_SERVER_ERROR;
@@ -1855,12 +1901,41 @@ mod tests {
             StatusCode::INTERNAL_SERVER_ERROR
         );
 
+        let response = readyz(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
         let response = watermark_handler(
             State(metrics_state),
             Query(WatermarkQueryParams { from: None }),
         )
         .await;
         assert_eq!(response.into_response().status(), StatusCode::NOT_FOUND);
+    }
+
+    /// While the sidecars are assumed live, an empty state makes the sidecar probe pass, but the
+    /// numa container stays not ready. When the guard is dropped, the sidecar probe fails again.
+    #[tokio::test]
+    async fn empty_metrics_state_reports_sidecars_live_only_while_assumed() {
+        let metrics_state = MetricsState::new();
+
+        let assumed_live = metrics_state.assume_sidecars_live();
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        drop(assumed_live);
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[tokio::test]
@@ -2005,8 +2080,10 @@ mod tests {
                 .unwrap();
         });
 
-        // invoke the sidecar-livez endpoint
+        // invoke the sidecar-livez and readyz endpoints
         let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state.clone())).await;
         assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
 
         // invoke the livez endpoint
@@ -2199,17 +2276,6 @@ mod tests {
             .get_or_create(&common_pipeline_labels)
             .inc();
 
-        let mut isb_max_payload_labels = common_pipeline_labels.clone();
-        isb_max_payload_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            "test-partition".to_string(),
-        ));
-        pipeline_metrics
-            .jetstream_isb
-            .max_payload_exceeded_total
-            .get_or_create(&isb_max_payload_labels)
-            .inc();
-
         pipeline_metrics
             .forwarder
             .ack_processing_time
@@ -2300,7 +2366,6 @@ mod tests {
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
             r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_max_payload_exceeded_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica",partition_name="test-partition"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

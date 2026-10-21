@@ -18,7 +18,7 @@ export type LogVirtualListProps = {
   logs: string[];
   search: string;
   wrapLines: boolean;
-  colorMode: string;
+  theme: "light" | "dark";
   podName: string;
   activeIndex: number | null;
 };
@@ -33,11 +33,11 @@ export const LogVirtualList = forwardRef<
   LogVirtualListHandle,
   LogVirtualListProps
 >(function LogVirtualList(
-  { logs, search, wrapLines, colorMode, podName, activeIndex },
+  { logs, search, wrapLines, theme, podName, activeIndex },
   ref
 ) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const isDark = colorMode === "dark";
+  const isDark = theme === "dark";
   const isEmptyState =
     logs.length === 0 ||
     (logs.length === 1 &&

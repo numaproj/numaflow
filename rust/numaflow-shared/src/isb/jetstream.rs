@@ -76,13 +76,19 @@ impl futures::Stream for JetstreamWatcher {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         // only poll recreate_watcher if it is set. This happens when the watcher has failed.
+        // Take the recreation future out to poll it.
         if let Some(mut future) = self.recreate_future.take() {
             match future.as_mut().poll(cx) {
                 Poll::Ready(watcher) => {
                     self.watcher = watcher;
                     // fall through and poll the watcher
                 }
-                Poll::Pending => return Poll::Pending,
+                Poll::Pending => {
+                    // watcher creation future isn't ready
+                    // put it back so that it can be polled again later.
+                    self.recreate_future = Some(future);
+                    return Poll::Pending;
+                }
             }
         }
 
@@ -393,6 +399,67 @@ mod tests {
         let _watcher_no_rev = create_watcher(kv_store.clone(), None).await;
 
         // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// Once the underlying NATS watcher fails, `JetstreamWatcher`
+    /// has to recreate it and keep delivering entries.
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_watcher_recovers_after_underlying_watcher_fails() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let store_name = "test-watcher-recovers-after-failure";
+        let _ = js_context.delete_key_value(store_name).await;
+        let kv_config = jetstream::kv::Config {
+            bucket: store_name.to_string(),
+            history: 5,
+            ..Default::default()
+        };
+        let kv_store = js_context
+            .create_key_value(kv_config.clone())
+            .await
+            .unwrap();
+
+        let mut watcher = JetstreamWatcher::new(kv_store.clone(), None).await.unwrap();
+
+        // healthy to start with
+        kv_store.put("before", "1".into()).await.unwrap();
+        let entry = timeout(Duration::from_secs(10), watcher.next())
+            .await
+            .expect("timed out waiting for the first entry")
+            .expect("watcher stream ended");
+        assert_eq!(entry.key, "before");
+
+        // break the underlying watcher, then make recovery possible again
+        js_context.delete_key_value(store_name).await.unwrap();
+        let kv_store = js_context.create_key_value(kv_config).await.unwrap();
+
+        // keep writing, a recreated watcher only sees changes made after it was created
+        let writer = tokio::spawn({
+            let kv = kv_store.clone();
+            async move {
+                loop {
+                    let _ = kv.put("after", "2".into()).await;
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        });
+
+        let entry = timeout(Duration::from_secs(45), async {
+            loop {
+                let entry = watcher.next().await.expect("watcher stream ended");
+                if entry.key == "after" {
+                    return entry;
+                }
+            }
+        })
+        .await
+        .expect("watcher never recovered after the underlying watcher failed");
+        assert_eq!(entry.key, "after");
+        writer.abort();
+
         let _ = js_context.delete_key_value(store_name).await;
     }
 }

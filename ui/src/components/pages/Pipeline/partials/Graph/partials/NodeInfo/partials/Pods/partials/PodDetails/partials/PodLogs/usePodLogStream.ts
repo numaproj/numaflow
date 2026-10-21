@@ -7,8 +7,11 @@ import { extractLogChunk, parsePodLogs } from "./parsePodLogs";
 export type BuildPodLogsUrlParams = {
   host: string;
   namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
   podName: string;
   containerName: string;
+  type: string;
   previous?: boolean;
   tailLines?: number;
   follow?: boolean;
@@ -17,13 +20,20 @@ export type BuildPodLogsUrlParams = {
 export function buildPodLogsUrl({
   host,
   namespaceId,
+  pipelineId,
+  vertexId,
   podName,
   containerName,
+  type,
   previous = false,
   tailLines = MAX_LOGS,
   follow = true,
 }: BuildPodLogsUrlParams): string {
-  const base = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=${follow}&tailLines=${tailLines}`;
+  const resourcePath =
+    type === "monoVertex"
+      ? `mono-vertices/${vertexId}`
+      : `pipelines/${pipelineId}/vertices/${vertexId}`;
+  const base = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/${resourcePath}/pods/${podName}/logs?container=${containerName}&follow=${follow}&tailLines=${tailLines}`;
   return previous ? `${base}&previous=true` : base;
 }
 
@@ -71,6 +81,8 @@ function isAbortError(err: unknown): boolean {
 
 export type UsePodLogStreamParams = {
   namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
   podName: string;
   containerName: string;
   type: string;
@@ -90,6 +102,8 @@ export type UsePodLogStreamResult = {
 
 export function usePodLogStream({
   namespaceId,
+  pipelineId,
+  vertexId,
   podName,
   containerName,
   type,
@@ -128,7 +142,7 @@ export function usePodLogStream({
   useEffect(() => {
     setLogs([]);
     setPreviousLogs([]);
-  }, [namespaceId, podName, containerName]);
+  }, [namespaceId, pipelineId, vertexId, podName, containerName, type]);
 
   // Live follow stream. Restarts when tailLines or parse options change.
   // Skip while viewing previous/terminated logs so N-lines only refetches previous.
@@ -149,8 +163,11 @@ export function usePodLogStream({
           buildPodLogsUrl({
             host,
             namespaceId,
+            pipelineId,
+            vertexId,
             podName,
             containerName,
+            type,
             tailLines,
           }),
           { signal: controller.signal }
@@ -222,6 +239,8 @@ export function usePodLogStream({
     };
   }, [
     namespaceId,
+    pipelineId,
+    vertexId,
     podName,
     containerName,
     paused,
@@ -265,8 +284,11 @@ export function usePodLogStream({
           buildPodLogsUrl({
             host,
             namespaceId,
+            pipelineId,
+            vertexId,
             podName,
             containerName,
+            type,
             follow: false,
             tailLines,
           }),
@@ -356,6 +378,8 @@ export function usePodLogStream({
     showPreviousLogs,
     tailLines,
     namespaceId,
+    pipelineId,
+    vertexId,
     podName,
     containerName,
     host,
@@ -383,8 +407,11 @@ export function usePodLogStream({
           buildPodLogsUrl({
             host,
             namespaceId,
+            pipelineId,
+            vertexId,
             podName,
             containerName,
+            type,
             previous: true,
             follow: false,
             tailLines,
@@ -459,6 +486,8 @@ export function usePodLogStream({
   }, [
     showPreviousLogs,
     namespaceId,
+    pipelineId,
+    vertexId,
     podName,
     containerName,
     host,

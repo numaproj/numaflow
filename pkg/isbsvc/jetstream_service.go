@@ -31,6 +31,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+// maxStreamMaxMsgSize is the max message size allowed for the streams created for the buffers.
+// JetStream file storage rejects any message record larger than 32MB with "message too large".
+// Provide 1KB headroom as overhead.
+const maxStreamMaxMsgSize = 32*1024*1024 - 1024
+
 type jetStreamSvc struct {
 	jsClient *jsclient.Client
 	js       nats.JetStreamContext
@@ -62,8 +67,12 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	}
 	v := viper.New()
 	v.SetConfigType("yaml")
+	v.SetDefault("stream.maxMsgSize", maxStreamMaxMsgSize)
 	if err := v.ReadConfig(bytes.NewBufferString(creatOpts.config)); err != nil {
 		return err
+	}
+	if maxMsgSize := v.GetSizeInBytes("stream.maxMsgSize"); maxMsgSize <= 0 || maxMsgSize > maxStreamMaxMsgSize {
+		return fmt.Errorf("invalid stream.maxMsgSize %d, it can not be greater than %d (32MB)", maxMsgSize, maxStreamMaxMsgSize)
 	}
 
 	if sideInputsStore != "" {
@@ -183,6 +192,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
+				MaxMsgSize: v.GetInt32("stream.maxMsgSize"),
 				Storage:    nats.StorageType(v.GetInt("stream.storage")),
 				Replicas:   v.GetInt("stream.replicas"),
 				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period

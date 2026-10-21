@@ -20766,7 +20766,7 @@
           "type": "boolean"
         },
         "bufferConfig": {
-          "description": "Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5).",
+          "description": "Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxMsgSize\" (defaults to 33553408, i.e. 32MB - 1KB, which is also the max value allowed), \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5).",
           "type": "string"
         },
         "containerTemplate": {
@@ -20852,7 +20852,7 @@
           "type": "string"
         },
         "settings": {
-          "description": "Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but max_payload can be set up to 67108864 (64MB). For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.",
+          "description": "Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of headroom for platform injected data. For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.",
           "type": "string"
         },
         "startArgs": {
@@ -22761,12 +22761,21 @@
           "description": "AWSRegion is the AWS Region where the SQS queue is located",
           "type": "string"
         },
+        "deadLetterQueues": {
+          "description": "DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.",
+          "type": "string"
+        },
         "endpointUrl": {
           "description": "EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.",
           "type": "string"
         },
         "maxNumberOfMessages": {
           "description": "MaxNumberOfMessages is the maximum number of messages to return in a single poll. Valid values: 1-10 Defaults to 1",
+          "format": "int32",
+          "type": "integer"
+        },
+        "maxReceiveCount": {
+          "description": "MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.",
           "format": "int32",
           "type": "integer"
         },

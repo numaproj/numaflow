@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: MonoVertex
 metadata:
-  name: runtime-error-monovertex
+  name: runtime-error-map-monovertex
 spec:
   scale:
     min: 1
