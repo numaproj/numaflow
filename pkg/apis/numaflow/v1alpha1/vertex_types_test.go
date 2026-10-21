@@ -265,6 +265,7 @@ func TestGetPodSpec(t *testing.T) {
 			AutomountServiceAccountToken: ptr.To(true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
+			SchedulerName:                "my-scheduler",
 		}
 		testObj.Spec.ContainerTemplate = &ContainerTemplate{
 			Resources: corev1.ResourceRequirements{
@@ -304,6 +305,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.True(t, *s.AutomountServiceAccountToken)
 		assert.Equal(t, corev1.DNSClusterFirstWithHostNet, s.DNSPolicy)
 		assert.Equal(t, s.DNSConfig, testObj.Spec.DNSConfig)
+		assert.Equal(t, "my-scheduler", s.SchedulerName)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)

@@ -15,6 +15,7 @@ Most of the Kunernetes Pod specification fields are supported in the spec of `Pi
 - `dnsPolicy`
 - `dnsConfig`
 - `resourceClaims`
+- `schedulerName`
 
 All the fields above are optional, click [here](../../../APIs.md#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate) to see full list of supported fields.
 
@@ -34,3 +35,5 @@ Or in the `MonoVertex` spec under:
 Or in `InterStepBufferService` spec at:
 
 - `spec.jetstream`
+
+> The InterStepBufferService usually doesn't need an alternate scheduler. Only set `spec.jetstream.schedulerName` if your cluster requires all pods to go through that scheduler. JetStream is stateful, so avoid schedulers that may preempt its pods.
