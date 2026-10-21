@@ -53,9 +53,9 @@ const BufferHeaderCell = ({
   <TableCell
     align={align}
     sx={{
-      backgroundColor: "#F4F4F4",
-      borderBottom: "0.1rem solid #C6C6C6",
-      color: "#393939",
+      backgroundColor: "var(--bg-tertiary)",
+      borderBottom: "0.1rem solid var(--border-primary)",
+      color: "var(--text-primary)",
       padding: "1.2rem 1.6rem",
       whiteSpace: "nowrap",
       width,
@@ -90,7 +90,7 @@ const BufferBodyCell = ({
     align={align}
     data-testid={testId}
     sx={{
-      borderBottom: "0.1rem solid #E0E0E0",
+      borderBottom: "0.1rem solid var(--border-primary)",
       padding: "1.2rem 1.6rem",
       verticalAlign: "middle",
       whiteSpace: "nowrap",
@@ -262,7 +262,7 @@ export function Buffers({
     >
       <TableContainer
         sx={{
-          backgroundColor: "#FFF",
+          backgroundColor: "var(--bg-secondary)",
           flex: "0 0 auto",
           maxHeight: "20rem",
           overflowX: "auto",
@@ -316,8 +316,9 @@ export function Buffers({
         expanded={advancedDetailsExpanded}
         onChange={handleAdvancedDetailsChange}
         sx={{
-          backgroundColor: "#FFF",
-          border: "0.1rem solid #DADCE0",
+          backgroundColor: "var(--bg-secondary)",
+          border: "0.1rem solid var(--border-primary)",
+          color: "var(--text-primary)",
           borderRadius: "0.8rem",
           boxShadow: "none",
           flex: advancedDetailsExpanded ? "1 1 auto" : "0 0 auto",
@@ -331,13 +332,17 @@ export function Buffers({
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
           sx={{
-            backgroundColor: "#FAFBFC",
+            backgroundColor: "var(--bg-tertiary)",
             borderBottom: advancedDetailsExpanded
-              ? "0.1rem solid #E0E0E0"
+              ? "0.1rem solid var(--border-primary)"
               : "none",
+            color: "var(--text-primary)",
             "& .MuiAccordionSummary-content": {
               alignItems: "center",
               margin: "1.2rem 0",
+            },
+            "& .MuiAccordionSummary-expandIconWrapper": {
+              color: "var(--text-primary)",
             },
             left: 0,
             minHeight: "5.6rem",
