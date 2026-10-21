@@ -15,6 +15,12 @@ import "@testing-library/jest-dom";
 const mockBuffersComponent = jest.fn();
 const mockMetricsComponent = jest.fn();
 const mockPodsComponent = jest.fn();
+const mockUseErrorsFetch = jest.fn();
+let mockBetaPodViewInstance = 0;
+
+jest.mock("../../../../../utils/fetchWrappers/errorsFetch", () => ({
+  useErrorsFetch: (props: any) => mockUseErrorsFetch(props),
+}));
 
 jest.mock("./partials/VertexUpdate", () => {
   const originalModule = jest.requireActual("./partials/VertexUpdate");
@@ -85,6 +91,19 @@ jest.mock(
     };
   }
 );
+jest.mock("./partials/PodViewNext", () => ({
+  PodViewNext: ({ recentErrorCount }: { recentErrorCount?: number }) => {
+    const ReactModule = jest.requireActual("react");
+    const [instance] = ReactModule.useState(() => ++mockBetaPodViewInstance);
+    return (
+      <div
+        data-testid="pod-view-beta"
+        data-instance={instance}
+        data-recent-errors={recentErrorCount}
+      />
+    );
+  },
+}));
 jest.mock(
   "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics",
   () => {
@@ -128,6 +147,13 @@ describe("VertexDetails", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     window.localStorage.clear();
+    mockBetaPodViewInstance = 0;
+    mockUseErrorsFetch.mockReturnValue({
+      data: undefined,
+      loading: false,
+      error: undefined,
+      refresh: jest.fn(),
+    });
   });
 
   it("SOURCE vertex", async () => {
@@ -248,6 +274,53 @@ describe("VertexDetails", () => {
     expect(screen.getByTestId("location-search")).toHaveTextContent(
       "pod=shared-pod"
     );
+  });
+
+  it("does not pass a previous vertex's error count to the Beta Pod View", async () => {
+    const timestamp = new Date().toISOString();
+    const firstErrors = [
+      {
+        replica: "first-0",
+        containerErrors: [{ container: "udf", timestamp, code: "E1", message: "failed" }],
+      },
+    ];
+    const refresh = jest.fn();
+    mockUseErrorsFetch.mockImplementation(({ vertexId }: { vertexId: string }) => ({
+      data: vertexId === "first" ? firstErrors : undefined,
+      loading: false,
+      error: undefined,
+      refresh,
+    }));
+    const props = {
+      namespaceId: "test-namespace",
+      pipelineId: "test-pipeline",
+      vertexSpecs: {},
+      vertexMetrics: {},
+      buffers: [],
+      type: "udf",
+      refresh: jest.fn(),
+    };
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/?vertex=first&vertexTab=pods&podViewVersion=beta"]}>
+        <VertexDetails {...props} vertexId="first" />
+      </MemoryRouter>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-recent-errors", "1")
+    );
+    expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-instance", "1");
+
+    rerender(
+      <MemoryRouter initialEntries={["/?vertex=first&vertexTab=pods&podViewVersion=beta"]}>
+        <VertexDetails {...props} vertexId="second" />
+      </MemoryRouter>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-recent-errors", "0")
+    );
+    expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-instance", "2");
   });
 
   it("switches pod view modes without clearing observability state", async () => {

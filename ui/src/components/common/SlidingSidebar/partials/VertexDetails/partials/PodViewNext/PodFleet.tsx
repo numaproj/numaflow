@@ -8,13 +8,11 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import {
   Pod,
-  PodDetail,
   PodFleetItem,
   PodFleetSort,
   PodRuntimeInfo,
 } from "../../../../../../../types/declarations/pods";
 import {
-  buildPodFleetItems,
   chipLabel,
   filterAndSortPodFleet,
   podStatusTone,
@@ -24,8 +22,10 @@ import {
 import "./podFleet.css";
 
 interface PodFleetProps {
-  pods: Pod[];
-  detailsByName?: Map<string, PodDetail>;
+  items: PodFleetItem[];
+  /** Owned by the parent so the vertex health strip can jump to critical pods. */
+  filter: PodFleetFilter;
+  onFilterChange: (filter: PodFleetFilter) => void;
   runtimeByName: Map<string, PodRuntimeInfo>;
   selectedPod?: Pod;
   onPodSelect: (pod: Pod) => void;
@@ -52,19 +52,15 @@ function chipTooltip(item: PodFleetItem, status: string) {
 
 /** PodFleet renders the selectable, filterable fleet health surface for Beta Pod View. */
 export function PodFleet({
-  pods,
-  detailsByName,
+  items,
+  filter,
+  onFilterChange,
   runtimeByName,
   selectedPod,
   onPodSelect,
 }: PodFleetProps) {
-  const [filter, setFilter] = useState<PodFleetFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<PodFleetSort>("severity");
-  const items = useMemo(
-    () => buildPodFleetItems(pods, detailsByName, runtimeByName),
-    [pods, detailsByName, runtimeByName]
-  );
   const visibleItems = useMemo(
     () => filterAndSortPodFleet(items, filter, search, sort),
     [filter, items, search, sort]
@@ -88,13 +84,13 @@ export function PodFleet({
     <section className="pod-fleet" data-testid="pod-fleet">
       <div className="pod-fleet-header">
         <div className="pod-fleet-filters">
-          <span className="pod-fleet-title">Fleet Health · {pods.length} Pods</span>
+          <span className="pod-fleet-title">Fleet Health · {items.length} Pods</span>
           <ToggleButtonGroup
             aria-label="Filter pods by health"
             className="pod-fleet-filter-group"
             exclusive
             value={filter}
-            onChange={(_event, value: PodFleetFilter | null) => value && setFilter(value)}
+            onChange={(_event, value: PodFleetFilter | null) => value && onFilterChange(value)}
             size="small"
           >
             {filters.map((option) => (
