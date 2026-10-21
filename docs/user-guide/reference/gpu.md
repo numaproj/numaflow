@@ -78,7 +78,33 @@ vertices:
             nvidia.com/gpu: 1
 ```
 
-To use the same scheduler for all vertices of a pipeline, set `schedulerName` under `spec.templates.vertex`. A value set on a vertex takes precedence. For a MonoVertex, set `schedulerName` under `spec`.
+To use the same scheduler for all vertices of a pipeline, set `schedulerName` under `spec.templates.vertex`. A value set on a vertex takes precedence. In the following example, `in` inherits `volcano` from the template, while `out` overrides it to use the default scheduler:
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  templates:
+    vertex:
+      schedulerName: volcano
+  vertices:
+    - name: in
+      source:
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: out
+      schedulerName: default-scheduler
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out
+```
+
+For a MonoVertex, set `schedulerName` under `spec`.
 
 > If no scheduler with the given name is running in the cluster, the pods stay `Pending`.
 
