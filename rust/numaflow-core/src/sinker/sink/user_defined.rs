@@ -92,11 +92,16 @@ impl UserDefinedSink {
 
         Ok((sink_tx, resp_stream))
     }
+}
 
-    async fn sink_once(&mut self, requests: &[SinkRequest]) -> Result<Vec<ResponseFromSink>> {
+impl Sink for UserDefinedSink {
+    /// writes a set of messages to the sink.
+    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+        let requests: Vec<SinkRequest> =
+            messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
 
-        for request in requests.iter().cloned() {
+        for request in requests {
             self.sink_tx
                 .send(request)
                 .await
@@ -155,15 +160,6 @@ impl UserDefinedSink {
             );
         }
         Ok(responses)
-    }
-}
-
-impl Sink for UserDefinedSink {
-    /// writes a set of messages to the sink.
-    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        let requests: Vec<SinkRequest> =
-            messages.into_iter().map(|message| message.into()).collect();
-        self.sink_once(&requests).await
     }
 }
 

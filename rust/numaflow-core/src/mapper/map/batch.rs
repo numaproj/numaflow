@@ -392,14 +392,6 @@ impl UserDefinedBatchMap {
         requests: Vec<MapRequest>,
         cln_token: CancellationToken,
     ) -> Vec<Result<BatchMapResponse>> {
-        self.batch_once(requests, cln_token).await
-    }
-
-    async fn batch_once(
-        &self,
-        requests: Vec<MapRequest>,
-        cln_token: CancellationToken,
-    ) -> Vec<Result<BatchMapResponse>> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             requests.iter().map(|_| oneshot::channel()).unzip();
         let sender_map = Arc::clone(&self.connection.senders);
@@ -748,7 +740,7 @@ mod tests {
         };
 
         let results = client
-            .batch_once(vec![request("0"), request("1")], CancellationToken::new())
+            .batch(vec![request("0"), request("1")], CancellationToken::new())
             .await;
         let err = results
             .into_iter()
@@ -773,9 +765,9 @@ mod tests {
         Ok(())
     }
 
-    /// `batch_once` must consume the EOT that delimits its own batch before returning.
+    /// `batch` must consume the EOT that delimits its own batch before returning.
     #[tokio::test]
-    async fn batch_once_consumes_its_eot_before_returning() {
+    async fn batch_consumes_its_eot_before_returning() {
         // Capacity covers the request and the EOT, so nothing blocks on the request stream.
         let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
         let dummy_handle = tokio::spawn(async {});
@@ -792,7 +784,7 @@ mod tests {
 
         let batch = tokio::spawn(async move {
             mapper
-                .batch_once(vec![test_request("0")], CancellationToken::new())
+                .batch(vec![test_request("0")], CancellationToken::new())
                 .await
         });
 
@@ -807,7 +799,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(
             !batch.is_finished(),
-            "batch_once returned before its EOT was consumed"
+            "batch returned before its EOT was consumed"
         );
 
         // Consuming the EOT releases the batch.
@@ -821,7 +813,7 @@ mod tests {
 
         let results = tokio::time::timeout(Duration::from_secs(1), batch)
             .await
-            .expect("batch_once should return once its EOT is consumed")
+            .expect("batch should return once its EOT is consumed")
             .expect("batch task should not panic");
         assert_eq!(results.len(), 1);
         assert!(results.into_iter().next().expect("one result").is_ok());
@@ -1014,9 +1006,7 @@ mod tests {
             status: None,
         };
 
-        let results = mapper
-            .batch_once(vec![request], CancellationToken::new())
-            .await;
+        let results = mapper.batch(vec![request], CancellationToken::new()).await;
 
         // batch() returns vec![error] on first failure (early return).
         assert_eq!(results.len(), 1);
@@ -1072,9 +1062,7 @@ mod tests {
             status: None,
         };
 
-        let results = mapper
-            .batch_once(vec![request], CancellationToken::new())
-            .await;
+        let results = mapper.batch(vec![request], CancellationToken::new()).await;
         let err = results
             .into_iter()
             .next()
@@ -1108,7 +1096,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn batch_once_returns_grpc_error_when_sender_map_is_closed() {
+    async fn batch_returns_grpc_error_when_sender_map_is_closed() {
         let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
         let dummy_handle = tokio::spawn(async {});
         let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
@@ -1124,7 +1112,7 @@ mod tests {
         };
 
         let results = mapper
-            .batch_once(vec![test_request("closed")], CancellationToken::new())
+            .batch(vec![test_request("closed")], CancellationToken::new())
             .await;
         assert_eq!(results.len(), 1);
         let err = results

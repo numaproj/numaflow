@@ -390,22 +390,14 @@ impl UserDefinedStreamMap {
         request: MapRequest,
         cln_token: CancellationToken,
     ) -> mpsc::Receiver<Result<StreamMapResponse>> {
-        match self.stream_once(request, cln_token).await {
-            Ok(rx) => rx,
-            Err(e) => Self::error_receiver(e).await,
-        }
-    }
-
-    async fn stream_once(
-        &self,
-        request: MapRequest,
-        cln_token: CancellationToken,
-    ) -> Result<mpsc::Receiver<Result<StreamMapResponse>>> {
         let (tx, rx) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
 
         // Check if already canceled before sending
         if cln_token.is_cancelled() {
-            return Err(Error::Mapper("stream map operation cancelled".to_string()));
+            return Self::error_receiver(Error::Mapper(
+                "stream map operation cancelled".to_string(),
+            ))
+            .await;
         }
 
         let key = request.id.clone();
@@ -427,9 +419,10 @@ impl UserDefinedStreamMap {
         };
 
         if mapper_closed {
-            return Err(Error::Grpc(Box::new(Status::unavailable(
+            return Self::error_receiver(Error::Grpc(Box::new(Status::unavailable(
                 "stream map stream closed",
-            ))));
+            ))))
+            .await;
         }
 
         // only insert if we are able to send the message to the server
@@ -446,12 +439,13 @@ impl UserDefinedStreamMap {
                     .remove(&key);
             };
 
-            return Err(Error::Grpc(Box::new(Status::unavailable(format!(
+            return Self::error_receiver(Error::Grpc(Box::new(Status::unavailable(format!(
                 "failed to send message to map stream server: {e}"
-            )))));
+            )))))
+            .await;
         }
 
-        Ok(rx)
+        rx
     }
 
     async fn error_receiver(error: Error) -> mpsc::Receiver<Result<StreamMapResponse>> {
@@ -833,10 +827,12 @@ mod tests {
             status: None,
         };
 
-        let err = mapper
-            .stream_once(request, CancellationToken::new())
+        let mut rx = mapper.stream(request, CancellationToken::new()).await;
+        let err = rx
+            .recv()
             .await
-            .expect_err("expected gRPC error from stream_once()");
+            .expect("expected error on response channel")
+            .expect_err("expected gRPC error from stream()");
         assert!(matches!(err, MapError::Grpc(_)));
         assert!(
             err.to_string()
@@ -868,7 +864,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stream_once_returns_grpc_error_when_sender_map_is_closed() {
+    async fn stream_returns_grpc_error_when_sender_map_is_closed() {
         let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
         let dummy_handle = tokio::spawn(async {});
         let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
@@ -883,9 +879,13 @@ mod tests {
             }),
         };
 
-        let err = mapper
-            .stream_once(test_request("closed"), CancellationToken::new())
+        let mut rx = mapper
+            .stream(test_request("closed"), CancellationToken::new())
+            .await;
+        let err = rx
+            .recv()
             .await
+            .expect("expected error on response channel")
             .expect_err("expected closed sender map to return gRPC error");
         assert!(matches!(err, MapError::Grpc(_)));
         assert!(err.to_string().contains("stream map stream closed"));
