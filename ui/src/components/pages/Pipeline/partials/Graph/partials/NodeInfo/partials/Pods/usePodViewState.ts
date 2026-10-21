@@ -184,9 +184,11 @@ export function usePodViewState(
   ]);
 
   const selectPod = useCallback(
-    (pod: Pod | undefined, preserveContainer: boolean) => {
+    (pod: Pod | undefined, preserveContainer: boolean, preferredContainer?: string) => {
       if (!pod) return;
-      const container = preserveContainer
+      const container = preferredContainer
+        ? resolveContainerForPod(pod, preferredContainer, defaultContainer)
+        : preserveContainer
         ? resolveContainerForPod(pod, selectedContainer, defaultContainer)
         : getDefaultContainerName(pod, defaultContainer);
       setSelectedPod(pod);
@@ -246,6 +248,8 @@ export function usePodViewState(
     podSpecificInfo,
     selectPodFromFleet: (pod: Pod) => selectPod(pod, false),
     selectPodFromSearch: (pod: Pod) => selectPod(pod, true),
+    /** Selects a pod and container in one URL write; falls back to the default if the pod lacks it. */
+    selectPodWithContainer: (pod: Pod, container: string) => selectPod(pod, false, container),
     selectContainer,
   };
 }
