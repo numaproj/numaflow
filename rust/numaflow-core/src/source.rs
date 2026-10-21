@@ -531,6 +531,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
                 let mut result = Ok(());
                 loop {
+                    if cln_token.is_cancelled() {
+                        break;
+                    }
+
                     // Acquire the semaphore permit before reading the next batch to make
                     // sure we are not reading ahead and all the inflight messages are acked.
                     let _permit = Arc::clone(&semaphore)
@@ -661,7 +665,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                     ?e,
                                     "Non retryable error while invoking ack, stopping the source forwarder"
                                 );
-                                // This cancels the source forwarder, which will stop the source.
+                                // At the top level, we treat internally cancelled
+                                // attempt as failed and rebuild the forwarder.
                                 cln_token.cancel();
                             }
                         }
@@ -814,6 +819,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let mut result = Ok(());
 
         'outer: loop {
+            if cln_token.is_cancelled() {
+                break 'outer;
+            }
+
             // Apply rate limiting before reading if configured.
             if let Some(ref rate_limiter) = self.rate_limiter
                 && rate_limiter
@@ -1172,7 +1181,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Ok(())
     }
 
-    /// Invokes ack with infinite retries until the cancellation token is cancelled.
+    /// Invokes ack with retries until cancellation or a non-retryable error.
     async fn ack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,

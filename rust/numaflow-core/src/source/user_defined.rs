@@ -1,3 +1,5 @@
+use std::error::Error as StdError;
+use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -324,6 +326,13 @@ impl UserDefinedSourceAck {
 
         Ok((ack_tx, ack_resp_stream))
     }
+
+    #[cfg(test)]
+    fn close_ack_tx_for_test(&mut self) {
+        let (tx, rx) = mpsc::channel(1);
+        drop(rx);
+        self.ack_tx = tx;
+    }
 }
 
 impl SourceAcker for UserDefinedSourceAck {
@@ -342,20 +351,18 @@ impl SourceAcker for UserDefinedSourceAck {
             })
             .await
         {
-            return Err(Error::Grpc(Box::new(Status::unavailable(format!(
+            return Err(Error::NonRetryable(format!(
                 "source ack stream closed: {e}"
-            )))));
+            )));
         }
 
         match self.ack_resp_stream.message().await {
             Ok(Some(_)) => {}
             Ok(None) => {
-                return Err(Error::Grpc(Box::new(Status::unavailable(
-                    "source ack stream closed",
-                ))));
+                return Err(Error::NonRetryable("source ack stream closed".to_string()));
             }
             Err(e) => {
-                return Err(Error::Grpc(Box::new(e)));
+                return Err(Error::NonRetryable(e.to_string()));
             }
         }
 
@@ -395,6 +402,11 @@ impl SourceAcker for UserDefinedSourceAck {
         {
             Ok(response) => response,
             Err(e) => {
+                if is_stream_closed(&e) {
+                    return Err(Error::NonRetryable(format!(
+                        "source nack stream closed: {e}"
+                    )));
+                }
                 return Err(Error::Grpc(Box::new(e)));
             }
         };
@@ -406,6 +418,30 @@ impl SourceAcker for UserDefinedSourceAck {
 
         Ok(())
     }
+}
+
+fn has_io_kind_in_chain(err: &(dyn StdError + 'static), kinds: &[ErrorKind]) -> bool {
+    let mut current: Option<&(dyn StdError + 'static)> = Some(err);
+    while let Some(error) = current {
+        if let Some(io_error) = error.downcast_ref::<std::io::Error>()
+            && kinds.contains(&io_error.kind())
+        {
+            return true;
+        }
+        current = error.source();
+    }
+    false
+}
+
+fn is_stream_closed(status: &Status) -> bool {
+    has_io_kind_in_chain(
+        status,
+        &[
+            ErrorKind::BrokenPipe,
+            ErrorKind::ConnectionReset,
+            ErrorKind::NotConnected,
+        ],
+    )
 }
 
 #[derive(Clone)]
@@ -445,6 +481,32 @@ mod tests {
     use super::*;
     use crate::message::{IntOffset, NackOptions};
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
+
+    #[test]
+    fn io_error_chain_identifies_closed_stream() {
+        let error = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(has_io_kind_in_chain(&error, &[ErrorKind::BrokenPipe]));
+        assert!(has_io_kind_in_chain(
+            &error,
+            &[ErrorKind::ConnectionReset, ErrorKind::BrokenPipe]
+        ));
+
+        let status = Status::from_error(Box::new(std::io::Error::new(
+            ErrorKind::ConnectionReset,
+            "connection reset",
+        )));
+        assert!(is_stream_closed(&status));
+    }
+
+    #[test]
+    fn io_error_chain_rejects_other_errors() {
+        let error = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(!has_io_kind_in_chain(&error, &[ErrorKind::ConnectionReset]));
+        assert!(!has_io_kind_in_chain(&error, &[]));
+
+        let status = Status::from_error(Box::new(std::io::Error::other("other")));
+        assert!(!is_stream_closed(&status));
+    }
 
     struct SimpleSource {
         num: usize,
@@ -630,6 +692,60 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
         server_handle.await.expect("failed to join server task");
+    }
+
+    #[tokio::test]
+    async fn ack_stream_closed_returns_non_retryable() {
+        let cln_token = CancellationToken::new();
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource::new(10))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
+        let (_src_read, mut src_ack, _) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // Simulate a closed ACK gRPC stream (receiver dropped).
+        src_ack.close_ack_tx_for_test();
+
+        // Offsets are base64-encoded in the UDSource wire format (see TryFrom<Offset>).
+        let offset = crate::message::Offset::String(StringOffset::new(
+            BASE64_STANDARD.encode(b"closed-ack"),
+            0,
+        ));
+        let result = src_ack.ack(vec![offset]).await;
+        server_handle.abort();
+
+        match result {
+            Err(Error::NonRetryable(msg)) => {
+                assert!(
+                    msg.contains("source ack stream closed"),
+                    "unexpected NonRetryable message: {msg}"
+                );
+            }
+            other => panic!("expected NonRetryable, got {other:?}"),
+        }
     }
 
     #[tokio::test]
