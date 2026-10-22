@@ -212,7 +212,7 @@ impl JetStreamReader {
         msg.double_ack()
             .await
             .map_err(|e| Error::ISB(ISBError::Ack(format!("offset {}: {}", offset, e))))?;
-        self.get_js_message(offset, true);
+        let _ = self.get_js_message(offset, true);
         Ok(())
     }
 
@@ -231,7 +231,7 @@ impl JetStreamReader {
         msg.ack_with(AckKind::Nak(delay))
             .await
             .map_err(|e| Error::ISB(ISBError::Nack(format!("offset {}: {}", offset, e))))?;
-        self.get_js_message(offset, true);
+        let _ = self.get_js_message(offset, true);
         Ok(())
     }
 
