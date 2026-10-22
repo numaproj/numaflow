@@ -248,11 +248,33 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("cron autoscaling is not supported for pipeline vertices", func(t *testing.T) {
+	t.Run("valid cron autoscaling is accepted for source pipeline vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[1].Scale.Cron = &dfv1.CronScheduling{}
+		testObj.Spec.Vertices[0].Scale.Cron = &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: "0 0 9 * * *", End: "0 0 18 * * *", Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+			},
+		}
 		err := ValidatePipeline(testObj)
-		assert.ErrorContains(t, err, `vertex "p1": cron autoscaling is not supported for pipeline vertices`)
+		assert.NoError(t, err)
+	})
+
+	t.Run("cron autoscaling on non-source pipeline vertex is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[1].Scale.Cron = &dfv1.CronScheduling{
+			Schedules: []dfv1.CronSchedule{
+				{Start: "0 0 9 * * *", End: "0 0 18 * * *", Min: ptr.To[int32](1), Max: ptr.To[int32](5)},
+			},
+		}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "p1": cron autoscaling is only supported for source vertices`)
+	})
+
+	t.Run("invalid cron config on source pipeline vertex is rejected", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale.Cron = &dfv1.CronScheduling{} // empty schedules → validateCronScaling rejects
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, `vertex "input": invalid scale.cron`)
 	})
 
 	t.Run("test nil pipeline", func(t *testing.T) {
@@ -1133,6 +1155,39 @@ func Test_validateIdleSource(t *testing.T) {
 	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than or equal to incrementBy`)
 }
 
+func Test_validateHTTPSource(t *testing.T) {
+	tests := []struct {
+		name          string
+		endpoint      string
+		expectedError bool
+	}{
+		{name: "empty endpoint uses default, allowed", endpoint: "", expectedError: false},
+		{name: "single segment", endpoint: "ingest", expectedError: false},
+		{name: "multiple segments", endpoint: "api/v1/ingest", expectedError: false},
+		{name: "url-safe characters", endpoint: "my-endpoint_1.0~test", expectedError: false},
+		{name: "leading slash", endpoint: "/ingest", expectedError: true},
+		{name: "trailing slash", endpoint: "ingest/", expectedError: true},
+		{name: "double slash", endpoint: "api//ingest", expectedError: true},
+		{name: "path parameter braces", endpoint: "ingest/{id}", expectedError: true},
+		{name: "path parameter colon", endpoint: "ingest/:id", expectedError: true},
+		{name: "whitespace", endpoint: "my endpoint", expectedError: true},
+		{name: "query character", endpoint: "ingest?x=1", expectedError: true},
+		{name: "dot segment", endpoint: "api/./ingest", expectedError: true},
+		{name: "dotdot segment", endpoint: "api/../ingest", expectedError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHTTPSource(dfv1.HTTPSource{Endpoint: tt.endpoint})
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 // TestValidateSink tests the validateSink function with different sink configurations.
 func TestValidateSink(t *testing.T) {
 	onFailFallback := dfv1.OnFailureFallback
@@ -1187,6 +1242,32 @@ func TestValidateSink(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateTransformerRetryStrategy covers the pointer-typed RetryStrategy on the source
+// transformer: the validator must nil-guard the optional field (never deref a nil pointer), accept
+// an unset or valid strategy, and reject the unsupported fallback strategy for a non-sink component.
+func TestValidateTransformerRetryStrategy(t *testing.T) {
+	drop := dfv1.OnFailureDrop
+	fallback := dfv1.OnFailureFallback
+
+	t.Run("nil transformer is valid", func(t *testing.T) {
+		assert.NoError(t, validateTransformer(nil))
+	})
+	t.Run("unset retryStrategy is valid", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}}
+		assert.NoError(t, validateTransformer(tr))
+	})
+	t.Run("drop strategy is valid", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}, RetryStrategy: &dfv1.RetryStrategy{OnFailure: &drop}}
+		assert.NoError(t, validateTransformer(tr))
+	})
+	t.Run("fallback strategy is rejected", func(t *testing.T) {
+		tr := &dfv1.UDTransformer{Container: &dfv1.Container{Image: "img"}, RetryStrategy: &dfv1.RetryStrategy{OnFailure: &fallback}}
+		if err := validateTransformer(tr); assert.Error(t, err) {
+			assert.Contains(t, err.Error(), "fallback OnFailure strategy is not currently supported")
+		}
+	})
 }
 
 func TestIsValidSinkRetryStrategy(t *testing.T) {
@@ -1706,6 +1787,272 @@ func TestValidateOrderedProcessing(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateOrderedProcessing() error = %v, wantErr %v", err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func Test_validateSQSSource(t *testing.T) {
+	tests := []struct {
+		name    string
+		sqs     dfv1.SqsSource
+		wantErr string
+	}{
+		{
+			name: "valid legacy queueName",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue,replay-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames with whitespace",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             " orders-queue , refunds-queue ",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames and assume role",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+				AssumeRole: &dfv1.AWSAssumeRole{
+					RoleARN: "arn:aws:iam::111111111111:role/numaflow-sqs",
+				},
+			},
+		},
+		{
+			name: "valid legacy queueName with DLQ and explicit max receive count",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](5),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid queueNames with positional DLQs and default max receive count",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue,replay-queue",
+				DeadLetterQueues:       "orders-dlq,refunds-dlq,replay-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid shared DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "shared-dlq,shared-dlq",
+				MaxReceiveCount:        ptr.To[int32](1000),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "valid FIFO queue and FIFO DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders.fifo",
+				DeadLetterQueues:       "orders-dlq.fifo",
+				MaxReceiveCount:        ptr.To[int32](1),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+		},
+		{
+			name: "queueName and queueNames are mutually exclusive",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				QueueNames:             "refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name: "queue selector is required",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "either 'queueName' or 'queueNames'",
+		},
+		{
+			name: "queueNames rejects empty entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "empty queue name",
+		},
+		{
+			name: "queueNames rejects whitespace-only entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,   ,refunds-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "empty queue name",
+		},
+		{
+			name: "queueNames rejects duplicate trimmed name",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue, orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "duplicate queue name",
+		},
+		{
+			name: "awsRegion is required",
+			sqs: dfv1.SqsSource{
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "awsRegion is required",
+		},
+		{
+			name: "queueOwnerAWSAccountID is required",
+			sqs: dfv1.SqsSource{
+				AWSRegion:  "us-east-1",
+				QueueNames: "orders-queue",
+			},
+			wantErr: "queueOwnerAWSAccountID is required",
+		},
+		{
+			name: "queueOwnerAWSAccountID must be valid",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "12345",
+			},
+			wantErr: "valid 12-digit AWS account ID",
+		},
+		{
+			name: "invalid assume role is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+				AssumeRole:             &dfv1.AWSAssumeRole{},
+			},
+			wantErr: "invalid assume role configuration",
+		},
+		{
+			name: "deadLetterQueues rejects empty entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq,,refunds-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "deadLetterQueues contains empty queue name",
+		},
+		{
+			name: "deadLetterQueues rejects whitespace-only entry",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq,   ",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "deadLetterQueues contains empty queue name",
+		},
+		{
+			name: "deadLetterQueues cardinality must match source queues",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueNames:             "orders-queue,refunds-queue",
+				DeadLetterQueues:       "orders-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "exactly one entry for each source queue",
+		},
+		{
+			name: "source queue cannot be its own DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-queue",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "cannot be its own dead-letter queue",
+		},
+		{
+			name: "standard source rejects FIFO DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq.fifo",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "both be FIFO queues or both be standard queues",
+		},
+		{
+			name: "FIFO source rejects standard DLQ",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders.fifo",
+				DeadLetterQueues:       "orders-dlq",
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "both be FIFO queues or both be standard queues",
+		},
+		{
+			name: "maxReceiveCount requires deadLetterQueues",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				MaxReceiveCount:        ptr.To[int32](5),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "requires 'deadLetterQueues'",
+		},
+		{
+			name: "maxReceiveCount below AWS minimum is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](0),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "between 1 and 1000",
+		},
+		{
+			name: "maxReceiveCount above AWS maximum is rejected",
+			sqs: dfv1.SqsSource{
+				AWSRegion:              "us-east-1",
+				QueueName:              "orders-queue",
+				DeadLetterQueues:       "orders-dlq",
+				MaxReceiveCount:        ptr.To[int32](1001),
+				QueueOwnerAWSAccountID: "111111111111",
+			},
+			wantErr: "between 1 and 1000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSQSSource(tt.sqs)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }

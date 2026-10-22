@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
@@ -34,6 +35,11 @@ import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
 import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
+import { CopyViewLinkButton } from "../../../CopyViewLinkButton";
+import {
+  ObservabilityPatch,
+  replaceObservabilityState,
+} from "../../../../../utils/observabilityURLState";
 
 import "./style.css";
 
@@ -44,6 +50,29 @@ const PROCESSING_RATES_TAB_INDEX = 3;
 const K8S_EVENTS_TAB_INDEX = 4;
 const ERRORS_TAB_INDEX = 5;
 const BUFFERS_TAB_INDEX = 6;
+const TAB_KEY_BY_INDEX: Record<number, string> = {
+  [PODS_VIEW_TAB_INDEX]: "pods",
+  [METRICS_TAB_INDEX]: "metrics",
+  [SPEC_TAB_INDEX]: "spec",
+  [PROCESSING_RATES_TAB_INDEX]: "processingRates",
+  [K8S_EVENTS_TAB_INDEX]: "k8sEvents",
+  [ERRORS_TAB_INDEX]: "errors",
+  [BUFFERS_TAB_INDEX]: "buffers",
+};
+const TAB_INDEX_BY_KEY = Object.entries(TAB_KEY_BY_INDEX).reduce(
+  (tabs, [index, key]) => ({ ...tabs, [key]: Number(index) }),
+  {} as Record<string, number>
+);
+const METRIC_PARAM_RESET: ObservabilityPatch = {
+  metric: null,
+  metricPanels: null,
+  metricDimension: null,
+  metricQuantile: null,
+  metricDuration: null,
+  metricStart: null,
+  metricEnd: null,
+  metricFilter: null,
+};
 
 export enum VertexType {
   SOURCE,
@@ -103,6 +132,10 @@ export function VertexDetails({
 }: VertexDetailsProps) {
   const { addError, disableMetricsCharts } =
     useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const location = useLocation();
+  const isDeepLinkedVertex =
+    new URLSearchParams(location.search).get("vertex") === vertexId;
   const [errorsCount, setErrorsCount] = useState<number>(0);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
@@ -207,21 +240,68 @@ export function VertexDetails({
     }
   }, [vertexType]);
 
+  const showBuffersTab = !!buffers || type === "source";
+
+  const syncVertexTabToUrl = useCallback(
+    (newValue: number) => {
+      if (!isDeepLinkedVertex) return;
+      replaceObservabilityState(history, location, {
+        vertexTab: TAB_KEY_BY_INDEX[newValue],
+        specLine: newValue === SPEC_TAB_INDEX ? undefined : null,
+        ...(newValue === METRICS_TAB_INDEX ? {} : METRIC_PARAM_RESET),
+      });
+    },
+    [history, location, isDeepLinkedVertex]
+  );
+
+  const applyVertexTab = useCallback(
+    (newValue: number) => {
+      setTabValue(newValue);
+      syncVertexTabToUrl(newValue);
+    },
+    [syncVertexTabToUrl]
+  );
+
   const handleTabChange = useCallback(
     (event: React.SyntheticEvent, newValue: number) => {
       if (tabValue === SPEC_TAB_INDEX && updateModalOnClose) {
         setTargetTab(newValue);
         setUpdateModalOpen(true);
       } else {
-        setTabValue(newValue);
-        if (newValue === METRICS_TAB_INDEX) {
-          setMetricsPod(undefined);
-          setPresets(undefined);
-        }
+        applyVertexTab(newValue);
       }
     },
-    [tabValue, updateModalOnClose]
+    [tabValue, updateModalOnClose, applyVertexTab]
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedTab = params.get("vertexTab");
+    const requestedTabIndex = requestedTab
+      ? TAB_INDEX_BY_KEY[requestedTab]
+      : undefined;
+    if (!isDeepLinkedVertex || requestedTabIndex === undefined) return;
+
+    const resolvedTabIndex =
+      (requestedTabIndex === METRICS_TAB_INDEX && disableMetricsCharts) ||
+      (requestedTabIndex === BUFFERS_TAB_INDEX && !showBuffersTab)
+        ? PODS_VIEW_TAB_INDEX
+        : requestedTabIndex;
+
+    if (resolvedTabIndex !== requestedTabIndex) {
+      syncVertexTabToUrl(resolvedTabIndex);
+    }
+    if (resolvedTabIndex !== tabValue) {
+      setTabValue(resolvedTabIndex);
+    }
+  }, [
+    location.search,
+    tabValue,
+    disableMetricsCharts,
+    isDeepLinkedVertex,
+    showBuffersTab,
+    syncVertexTabToUrl,
+  ]);
 
   const handleUpdateModalConfirm = useCallback(() => {
     // Close modal
@@ -229,13 +309,8 @@ export function VertexDetails({
     // Clear modal on close
     setUpdateModalOnClose(undefined);
     setModalOnClose && setModalOnClose(undefined);
-    // Change to tab requested
-    if (targetTab === METRICS_TAB_INDEX) {
-      setMetricsPod(undefined);
-      setPresets(undefined);
-    }
-    setTabValue(targetTab || PODS_VIEW_TAB_INDEX);
-  }, [targetTab]);
+    applyVertexTab(targetTab || PODS_VIEW_TAB_INDEX);
+  }, [targetTab, applyVertexTab]);
 
   const handleUpdateModalCancel = useCallback(() => {
     setUpdateModalOpen(false);
@@ -311,19 +386,25 @@ export function VertexDetails({
         new Set(previousExpanded).add(panelId)
       );
       setTabValue(METRICS_TAB_INDEX);
+      if (isDeepLinkedVertex) {
+        replaceObservabilityState(history, location, {
+          vertexTab: "metrics",
+          metric: panelId.replace(/-panel$/, ""),
+          metricPanels: panelId,
+          pod: pod?.name,
+          metricDuration: nextPresets?.duration,
+          metricQuantile: nextPresets?.quantile,
+        });
+      }
     },
-    [disableMetricsCharts]
+    [disableMetricsCharts, history, location, isDeepLinkedVertex]
   );
 
   useEffect(() => {
     if (disableMetricsCharts && tabValue === METRICS_TAB_INDEX) {
-      setMetricsPod(undefined);
-      setPresets(undefined);
-      setTabValue(PODS_VIEW_TAB_INDEX);
+      applyVertexTab(PODS_VIEW_TAB_INDEX);
     }
-  }, [disableMetricsCharts, tabValue]);
-
-  const showBuffersTab = !!buffers || type === "source";
+  }, [disableMetricsCharts, tabValue, applyVertexTab]);
 
   return (
     <VertexDetailsContext.Provider
@@ -342,7 +423,14 @@ export function VertexDetails({
           height: "100%",
         }}
       >
-        {header}
+        <Box className="vertex-details-header">
+          {header}
+          {tabValue !== METRICS_TAB_INDEX && (
+            <Box className="vertex-details-header-actions">
+              <CopyViewLinkButton />
+            </Box>
+          )}
+        </Box>
         <Box
           sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
         >
@@ -461,6 +549,11 @@ export function VertexDetails({
                 type={type}
                 vertexId={vertexId}
                 pod={metricsPod}
+                podName={
+                  metricsPod?.name ||
+                  new URLSearchParams(location.search).get("pod") ||
+                  undefined
+                }
               />
             )}
           </div>

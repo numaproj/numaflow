@@ -1,4 +1,5 @@
 import { EventType } from "@visx/event/lib/types";
+import type { ReactNode } from "react";
 
 export interface Pod {
   name: string;
@@ -97,6 +98,7 @@ export interface PodDetailProps {
   containerName: string;
   pod: Pod;
   vertexId: string;
+  focusControls?: ReactNode;
 }
 export interface ContainerInfoProps {
   state: string;
@@ -138,9 +140,13 @@ export interface PodInfoProps {
 
 export interface PodLogsProps {
   namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
   podName: string;
   containerName: string;
   type: string;
+  /** Rendered only inside the Focus logs dialog, never in the sidebar view. */
+  focusControls?: ReactNode;
 }
 
 export interface ResourceUsage {

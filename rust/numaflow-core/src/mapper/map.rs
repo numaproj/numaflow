@@ -2,6 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::config::pipeline::map::MapMode;
+use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::error::{self, Error};
+use crate::message::{Message, MessageHandle, MessageID, Offset};
+use crate::metadata::Metadata;
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::tracker::Tracker;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{Semaphore, mpsc};
@@ -13,29 +20,17 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::{error, info, warn};
 
-use crate::config::pipeline::map::MapMode;
-use crate::config::{get_vertex_name, is_mono_vertex};
-use crate::error::{self, Error};
-use crate::message::{Message, MessageHandle, MessageID, Offset};
-use crate::metadata::Metadata;
-use crate::metrics::critical_error_reasons;
-#[cfg(not(test))]
-use crate::runtime_server::runtime;
-use crate::shared::grpc::{
-    DEFAULT_RECONNECT_INTERVAL, UdfReconnectConfig, create_mapper_client, prost_timestamp_from_utc,
-};
-use crate::tracker::Tracker;
-
 pub(super) mod batch;
 pub(super) mod stream;
 pub(super) mod unary;
 
+use crate::config::components::sink::RetryConfig;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
-use batch::{BatchMapTaskError, MapBatchTask, UserDefinedBatchMap};
+use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::{MapUnaryTask, UserDefinedUnaryMap};
 
@@ -79,6 +74,7 @@ pub(crate) struct MapHandle {
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
     health_checker: Option<MapClient<Channel>>,
+    retry_config: Option<RetryConfig>,
 }
 
 /// Response channel size for streaming map.
@@ -87,6 +83,7 @@ const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
 impl MapHandle {
     /// Creates a new mapper with the given batch size, concurrency, client, and
     /// tracker handle. It creates the appropriate mapper based on the map mode.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         map_mode: MapMode,
         batch_size: usize,
@@ -95,44 +92,19 @@ impl MapHandle {
         concurrency: usize,
         client: MapClient<Channel>,
         tracker: Tracker,
-    ) -> error::Result<Self> {
-        Self::new_with_reconnect_config(
-            map_mode,
-            batch_size,
-            read_timeout,
-            graceful_timeout,
-            concurrency,
-            client,
-            tracker,
-            None,
-        )
-        .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn new_with_reconnect_config(
-        map_mode: MapMode,
-        batch_size: usize,
-        read_timeout: Duration,
-        graceful_timeout: Duration,
-        concurrency: usize,
-        client: MapClient<Channel>,
-        tracker: Tracker,
-        reconnect_config: Option<UdfReconnectConfig>,
+        retry_config: Option<RetryConfig>,
     ) -> error::Result<Self> {
         // Based on the map mode, create the appropriate mapper
         let mapper = match map_mode {
             MapMode::Unary => MapperType::Concurrent(ConcurrentMapper::Unary(
-                UserDefinedUnaryMap::new(batch_size, client.clone(), reconnect_config.clone())
-                    .await?,
+                UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
             )),
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
-                UserDefinedStreamMap::new(batch_size, client.clone(), reconnect_config.clone())
-                    .await?,
+                UserDefinedStreamMap::new(batch_size, client.clone()).await?,
             )),
-            MapMode::Batch => MapperType::Batch(
-                UserDefinedBatchMap::new(batch_size, client.clone(), reconnect_config).await?,
-            ),
+            MapMode::Batch => {
+                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
+            }
         };
 
         Ok(Self {
@@ -145,6 +117,7 @@ impl MapHandle {
             final_result: Ok(()),
             shutting_down_on_err: false,
             health_checker: Some(client),
+            retry_config,
         })
     }
 
@@ -209,6 +182,7 @@ impl MapHandle {
                         bypass_router,
                         hard_shutdown_token,
                         is_mono_vertex: is_mono_vertex(),
+                        retry_config: self.retry_config.clone(),
                     });
                     let ctx = ConcurrentMapContext {
                         error_rx,
@@ -225,6 +199,7 @@ impl MapHandle {
                         cln_token: hard_shutdown_token,
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
+                        retry_config: self.retry_config.clone(),
                     };
                     self.process_batch_messages(input_stream, ctx, cln_token)
                         .await;
@@ -268,10 +243,6 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
-                    if matches!(error, Error::UdfRedrive(_)) {
-                        warn!(?error, "redrivable map error reached the map error channel");
-                        continue;
-                    }
                     // we only cancel when we get the first error
                     if self.final_result.is_ok() {
                         upstream_cln_token.cancel();
@@ -291,7 +262,7 @@ impl MapHandle {
 
                     // if there are errors then we need to drain the stream and nack
                     if self.shutting_down_on_err {
-                        warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                        warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is draining after an error; not accepting the message");
                         read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                     } else {
                         let permit = Arc::clone(&ctx.semaphore).acquire_owned()
@@ -344,16 +315,14 @@ impl MapHandle {
             // if there are errors then we need to drain the stream and nack
             if self.shutting_down_on_err {
                 for read_msg in read_batch {
-                    warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                    warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is draining after an error; not accepting the message");
                     read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                 }
                 continue;
             }
 
             if !read_batch.is_empty()
-                && let Err(e) = self
-                    .process_batch_with_redrive(read_batch, &ctx, is_mono_vertex)
-                    .await
+                && let Err(e) = self.process_batch(read_batch, &ctx, is_mono_vertex).await
             {
                 error!(?e, "error received while performing batch map operation");
                 upstream_cln_token.cancel();
@@ -363,35 +332,25 @@ impl MapHandle {
         }
     }
 
-    async fn process_batch_with_redrive(
+    /// Runs the batch UDF for one batch. A returned error is terminal for the component.
+    async fn process_batch(
         &self,
-        mut read_batch: Vec<MessageHandle>,
+        read_batch: Vec<MessageHandle>,
         ctx: &BatchMapContext,
         is_mono_vertex: bool,
     ) -> error::Result<()> {
-        loop {
-            let result = (MapBatchTask {
-                mapper: ctx.batch_mapper.clone(),
-                msg_handles: read_batch,
-                output_tx: ctx.output_tx.clone(),
-                tracker: self.tracker.clone(),
-                bypass_router: ctx.bypass_router.clone(),
-                is_mono_vertex,
-                cln_token: ctx.cln_token.clone(),
-            })
-            .execute()
-            .await;
-
-            match result {
-                Err(BatchMapTaskError::Redrive { error, msg_handles }) => {
-                    warn!(?error, "redriving batch map messages after UDF reconnect");
-                    wait_before_map_redrive(&ctx.cln_token).await?;
-                    read_batch = msg_handles;
-                }
-                Err(BatchMapTaskError::Terminal(error)) => return Err(error),
-                Ok(()) => return Ok(()),
-            }
-        }
+        (MapBatchTask {
+            mapper: ctx.batch_mapper.clone(),
+            msg_handles: read_batch,
+            output_tx: ctx.output_tx.clone(),
+            tracker: self.tracker.clone(),
+            bypass_router: ctx.bypass_router.clone(),
+            is_mono_vertex,
+            cln_token: ctx.cln_token.clone(),
+            retry_config: ctx.retry_config.clone(),
+        })
+        .execute()
+        .await
     }
 }
 
@@ -403,6 +362,7 @@ pub(in crate::mapper) struct SharedMapTaskContext {
     pub bypass_router: Option<MvtxBypassRouter>,
     pub hard_shutdown_token: CancellationToken,
     pub is_mono_vertex: bool,
+    pub retry_config: Option<RetryConfig>,
 }
 
 /// Context for concurrent (unary/stream) map processing.
@@ -419,6 +379,7 @@ struct BatchMapContext {
     cln_token: CancellationToken,
     bypass_router: Option<MvtxBypassRouter>,
     batch_mapper: UserDefinedBatchMap,
+    retry_config: Option<RetryConfig>,
 }
 
 fn update_udf_error_metric(is_mono_vertex: bool) {
@@ -437,47 +398,27 @@ fn update_udf_error_metric(is_mono_vertex: bool) {
     }
 }
 
-pub(in crate::mapper) fn map_redrive_error(status: tonic::Status) -> Error {
-    warn!(?status, "map UDF error, redriving after reconnect");
-    critical_error!(
-        VERTEX_TYPE_MAP_UDF,
-        critical_error_reasons::MAP_RUNTIME_ERROR
-    );
-    #[cfg(not(test))]
-    runtime::persist_application_error_with_container(status.clone(), "udf");
-    Error::UdfRedrive(Box::new(status))
-}
-
-pub(in crate::mapper) fn grpc_error_to_redrive<T>(result: error::Result<T>) -> error::Result<T> {
-    result.map_err(|error| match error {
-        Error::Grpc(status) => map_redrive_error(*status),
-        error => error,
-    })
-}
-
-pub(in crate::mapper) async fn reconnect_mapper_client(
-    reconnect_config: &UdfReconnectConfig,
-) -> error::Result<MapClient<Channel>> {
-    let (client, _) = grpc_error_to_redrive(
-        create_mapper_client(
-            reconnect_config.socket_path(),
-            reconnect_config.server_info_path(),
-            reconnect_config.cln_token(),
-            reconnect_config.grpc_max_message_size(),
-            reconnect_config.retry_interval(),
-        )
-        .await,
-    )?;
-    Ok(client)
-}
-
-pub(in crate::mapper) async fn wait_before_map_redrive(
-    cln_token: &CancellationToken,
-) -> error::Result<()> {
-    tokio::select! {
-        _ = cln_token.cancelled() => Err(Error::Cancelled()),
-        _ = tokio::time::sleep(DEFAULT_RECONNECT_INTERVAL) => Ok(()),
+fn update_udf_drop_metric_by_n(is_mono_vertex: bool, n: u64) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .dropped_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .inc_by(n);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc_by(n);
     }
+}
+
+/// Records a message dropped by the map UDF, whether via an explicit DROP tag (counted downstream
+/// at write time) or because retries were exhausted under `OnFailureStrategy::Drop` (counted here,
+/// since such a message never leaves the mapper).
+fn update_udf_drop_metric(is_mono_vertex: bool) {
+    update_udf_drop_metric_by_n(is_mono_vertex, 1);
 }
 
 fn update_udf_process_time_metric(is_mono_vertex: bool) {
@@ -724,6 +665,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -763,6 +705,7 @@ mod tests {
             bypass_router: None,
             hard_shutdown_token: CancellationToken::new(),
             is_mono_vertex: false,
+            retry_config: None,
         });
 
         MapUnaryTask {
@@ -848,6 +791,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -974,6 +918,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -1296,36 +1241,5 @@ mod tests {
         let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
         assert!(!msg_plain.nacked());
         assert_eq!(msg_plain.nack_options, None);
-    }
-
-    #[test]
-    fn grpc_error_to_redrive_converts_grpc_errors() {
-        let result: error::Result<()> = Err(Error::Grpc(Box::new(tonic::Status::unavailable(
-            "map unavailable",
-        ))));
-
-        let err = grpc_error_to_redrive(result).expect_err("gRPC error should be redrivable");
-        assert!(matches!(err, Error::UdfRedrive(_)));
-        assert!(err.to_string().contains("map unavailable"));
-    }
-
-    #[test]
-    fn grpc_error_to_redrive_preserves_non_grpc_errors() {
-        let result: error::Result<()> = Err(Error::Mapper("terminal mapper error".to_string()));
-
-        let err = grpc_error_to_redrive(result).expect_err("non-gRPC error should be preserved");
-        assert!(matches!(err, Error::Mapper(_)));
-        assert!(err.to_string().contains("terminal mapper error"));
-    }
-
-    #[tokio::test]
-    async fn wait_before_map_redrive_returns_cancelled_when_token_is_cancelled() {
-        let cln_token = CancellationToken::new();
-        cln_token.cancel();
-
-        let err = wait_before_map_redrive(&cln_token)
-            .await
-            .expect_err("cancelled token should interrupt redrive wait");
-        assert!(matches!(err, Error::Cancelled()));
     }
 }

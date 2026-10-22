@@ -1,7 +1,418 @@
+.PodLogs-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.PodLogs-toolbar {
+  flex-shrink: 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 1.2rem 1rem 0.8rem 1.6rem;
+}
+
+.PodLogs-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.PodLogs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  min-width: 0;
+}
+
+.PodLogs-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-left: auto;
+}
+
+.PodLogs-title {
+  color: var(--text-primary);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.PodLogs-source-badge {
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+  font-family: Consolas, Liberation Mono, Courier, monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.PodLogs-tail-size-group {
+  height: 2.8rem;
+}
+
+.PodLogs-tail-size-main {
+  text-transform: none !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  padding: 0 1rem !important;
+  border-color: var(--border-primary) !important;
+  color: var(--accent-primary) !important;
+}
+
+.PodLogs-tail-size-menu-btn {
+  min-width: 2.8rem !important;
+  padding: 0 !important;
+  border-color: var(--border-primary) !important;
+  color: var(--accent-primary) !important;
+}
+
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-main,
+.PodLogs-tail-size-group.Mui-disabled .PodLogs-tail-size-menu-btn,
+.PodLogs-tail-size-main.Mui-disabled,
+.PodLogs-tail-size-menu-btn.Mui-disabled {
+  color: var(--text-tertiary) !important;
+  cursor: not-allowed;
+}
+
+.PodLogs-status-banner {
+  display: inline-flex;
+  align-items: center;
+  height: 2.8rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.PodLogs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+}
+
 .PodLogs-search {
-  margin-right: 1.6rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 22.4rem;
+  height: 3.2rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.6rem;
+  background: var(--bg-primary);
+}
+
+.PodLogs-search .MuiInputBase-root {
+  flex: 1;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  padding-left: 1.2rem;
+  padding-right: 2.8rem;
+}
+
+.PodLogs-search .MuiInputBase-input::placeholder {
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+
+.PodLogs-search-clear {
+  position: absolute !important;
+  right: 0.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8 !important;
+  padding: 0.4rem !important;
+}
+
+.PodLogs-search-clear .MuiSvgIcon-root {
+  font-size: 1.4rem;
+}
+
+.PodLogs-match-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 3.2rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.6rem;
+  padding: 0 0.4rem;
+  background: var(--bg-primary);
+}
+
+.PodLogs-match-count {
+  padding: 0 0.4rem;
+  font-family: Consolas, Liberation Mono, Courier, monospace;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.PodLogs-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 !important;
+}
+
+.PodLogs-checkbox-label .MuiTypography-root {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+
+.PodLogs-checkbox-label .MuiCheckbox-root {
+  padding: 0.2rem;
+}
+
+.PodLogs-checkbox-label .MuiSvgIcon-root {
+  font-size: 1.6rem;
+}
+
+.PodLogs-copy-link {
+  height: 3.2rem !important;
+}
+
+.PodLogs-icon-btn {
+  display: inline-grid !important;
+  place-items: center;
+  width: 2.8rem !important;
+  height: 2.8rem !important;
+  padding: 0 !important;
+  border: 1px solid var(--border-primary) !important;
+  border-radius: 0.6rem !important;
+  background: var(--bg-primary) !important;
+  color: var(--text-secondary) !important;
+}
+
+.PodLogs-icon-btn:hover {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.PodLogs-icon-btn.PodLogs-icon-btn--active {
+  border-color: var(--accent-primary) !important;
+  background: var(--bg-tertiary) !important;
+  color: var(--accent-primary) !important;
+}
+
+.PodLogs-icon-btn .MuiSvgIcon-root {
+  font-size: 1.4rem;
+}
+
+.PodLogs-icon-btn.Mui-disabled {
+  opacity: 0.45;
+}
+
+.PodLogs-level-select {
+  height: 3.2rem;
+  font-size: 1.2rem !important;
+  color: var(--text-primary) !important;
+  background: var(--bg-primary);
+  border-radius: 0.6rem;
+}
+
+.PodLogs-level-select .MuiOutlinedInput-notchedOutline {
+  border-color: var(--border-primary);
+}
+
+.PodLogs-level-select .MuiSelect-select {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  font-size: 1.2rem;
+}
+
+.PodLogs-list-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.PodLogs-focus-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 12.8rem;
+  padding: 1.6rem;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.PodLogs-focus-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.2rem 2rem;
+  flex-shrink: 0;
+  padding: 0.8rem 1.6rem;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.PodLogs-focus-context-label {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.PodLogs-focus-context-pod {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  width: min(40rem, 45%);
+  flex: 1 1 22rem;
+}
+
+.PodLogs-focus-context-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  flex: 1 1 28rem;
+}
+
+.PodLogs-focus-dialog-paper {
+  width: 90vw !important;
+  max-width: 90vw !important;
+  height: 85vh !important;
+  max-height: 85vh !important;
+  margin: 0 !important;
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.PodLogs-focus-dialog-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.PodLogs-focus-dialog .PodLogs-root {
+  height: 100%;
+  min-height: 0;
+}
+
+.PodLogs-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.PodLogs-virtual-list {
+  height: 100%;
+  overflow: auto;
+  font-family: Consolas, Liberation Mono, Courier, monospace;
+  font-size: 1.2rem;
+}
+
+.PodLogs-virtual-list--dark {
+  background: #0a0a0a;
+}
+
+.PodLogs-virtual-list--light {
+  background: #f8fafc;
+}
+
+.PodLogs-virtual-inner--wrap {
+  width: 100%;
+}
+
+.PodLogs-virtual-inner--scroll {
+  width: max-content;
+  min-width: 100%;
+}
+
+.PodLogs-row {
+  display: block;
+  padding: 0 1rem 0 1.6rem;
+  box-sizing: border-box;
+}
+
+.PodLogs-row--nowrap {
+  width: max-content;
+  min-width: 100%;
+  white-space: nowrap;
+}
+
+.PodLogs-row--wrap {
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  line-height: 1.8rem;
+}
+
+.PodLogs-row--dark {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.PodLogs-row--light {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+}
+
+.PodLogs-row--dark:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.PodLogs-row--light:hover {
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.PodLogs-row--active {
+  background: rgba(251, 191, 36, 0.15) !important;
+}
+
+.PodLogs-line--dark {
+  color: #e2e8f0;
+}
+
+.PodLogs-line--light {
+  color: #334155;
+}
+
+.PodLogs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 12.8rem;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
 }
 
 .icon-tooltip {
   font-size: 1.3rem;
+}
+
+@media (max-width: 720px) {
+  .PodLogs-search {
+    width: min(22.4rem, 100%);
+  }
 }

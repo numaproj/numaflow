@@ -95,6 +95,10 @@ func TestGetDaemonServiceName(t *testing.T) {
 	assert.Equal(t, testPipeline.Name+"-daemon-svc", n)
 }
 
+func TestGetVertexHeadlessServiceName(t *testing.T) {
+	assert.Equal(t, testPipeline.Name+"-in-headless", testPipeline.GetVertexHeadlessServiceName("in"))
+}
+
 func TestGetDaemonDeployName(t *testing.T) {
 	n := testPipeline.GetDaemonDeploymentName()
 	assert.Equal(t, testPipeline.Name+"-daemon", n)

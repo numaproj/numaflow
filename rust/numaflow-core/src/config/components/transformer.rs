@@ -1,3 +1,5 @@
+use crate::config::components::sink::RetryConfig;
+
 pub(crate) const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
 const DEFAULT_TRANSFORMER_SERVER_INFO_FILE: &str =
@@ -7,6 +9,7 @@ const DEFAULT_TRANSFORMER_SERVER_INFO_FILE: &str =
 pub(crate) struct TransformerConfig {
     pub(crate) concurrency: usize,
     pub(crate) transformer_type: TransformerType,
+    pub(crate) retry_config: Option<Box<RetryConfig>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,16 +36,6 @@ impl Default for UserDefinedConfig {
             socket_path: DEFAULT_TRANSFORMER_SOCKET.to_string(),
             server_info_path: DEFAULT_TRANSFORMER_SERVER_INFO_FILE.to_string(),
         }
-    }
-}
-
-impl UserDefinedConfig {
-    pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
-        crate::shared::grpc::GrpcClientConfig::new(
-            self.socket_path.clone(),
-            self.server_info_path.clone(),
-            self.grpc_max_message_size,
-        )
     }
 }
 
@@ -73,6 +66,7 @@ mod tests {
         let transformer_config = TransformerConfig {
             concurrency: 1,
             transformer_type: TransformerType::UserDefined(user_defined_config.clone()),
+            retry_config: None,
         };
         if let TransformerType::UserDefined(config) = transformer_config.transformer_type {
             assert_eq!(config, user_defined_config);

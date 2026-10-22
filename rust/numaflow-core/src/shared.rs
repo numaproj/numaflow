@@ -11,6 +11,10 @@ pub(crate) mod create_components;
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
 
+/// Shared retry machinery (backoff + on-failure strategy dispatch) for UDF components that honor
+/// a user-configured `retryStrategy` (transformer, map).
+pub(crate) mod retry;
+
 /// OpenTelemetry propagation helpers for distributed tracing.
 /// Functions in this module are consumed by span creation code in source, mapper, and sinker.
 #[allow(dead_code)]

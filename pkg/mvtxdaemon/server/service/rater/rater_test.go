@@ -105,7 +105,12 @@ func TestRater_Start(t *testing.T) {
 		},
 	}
 	r := NewRater(ctx, pipeline, WithTaskInterval(1000))
-	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
+	podTracker := NewPodTracker(
+		ctx,
+		pipeline,
+		WithRefreshInterval(time.Second),
+		WithPodResolver(&fakePodResolver{count: 2}),
+	)
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.podTracker = podTracker
@@ -316,7 +321,12 @@ func TestRater_Start_MultiplePartitions(t *testing.T) {
 		},
 	}
 	r := NewRater(ctx, pipeline, WithTaskInterval(1000))
-	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
+	podTracker := NewPodTracker(
+		ctx,
+		pipeline,
+		WithRefreshInterval(time.Second),
+		WithPodResolver(&fakePodResolver{count: 2}),
+	)
 	podTracker.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.podTracker = podTracker

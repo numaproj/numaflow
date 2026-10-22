@@ -4,7 +4,7 @@ use bytes::Bytes;
 use pulsar::{Authentication, Producer, Pulsar, SerializeMessage, TokioExecutor, producer};
 use tracing::info;
 
-use crate::{Error, PulsarAuth, Result};
+use crate::{Error, PulsarAuth, Result, TlsConfig};
 
 pub struct Sink {
     producer: Producer<TokioExecutor>,
@@ -21,6 +21,8 @@ pub struct Config {
     pub producer_name: String,
     /// The authentication mechanism to use for the Pulsar producer
     pub auth: Option<PulsarAuth>,
+    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    pub tls: Option<TlsConfig>,
 }
 
 /// The message to send to a Pulsar topic
@@ -56,6 +58,14 @@ pub struct Response {
 
 pub async fn new_sink(config: Config) -> Result<Sink> {
     let mut pulsar = Pulsar::builder(&config.addr, TokioExecutor);
+    if let Some(tls) = &config.tls {
+        if let Some(ca_cert) = &tls.ca_cert {
+            pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+        }
+        if tls.insecure_skip_verify {
+            pulsar = pulsar.with_allow_insecure_connection(true);
+        }
+    }
     match config.auth {
         Some(PulsarAuth::JWT(token)) => {
             let auth_token = Authentication {
@@ -208,6 +218,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -249,6 +260,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-multi".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -296,6 +308,7 @@ mod tests {
             topic: topic_name,
             producer_name: "test-producer-empty".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 
@@ -315,6 +328,7 @@ mod tests {
             topic: topic_name.clone(),
             producer_name: "test-producer-large".to_string(),
             auth: None,
+            tls: None,
         };
         let mut sink = new_sink(config).await.expect("Failed to create PulsarSink");
 

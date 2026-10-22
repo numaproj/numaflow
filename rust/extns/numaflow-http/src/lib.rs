@@ -101,6 +101,7 @@ pub struct HttpSourceConfig {
     pub timeout: Duration,
     pub token: Option<&'static str>,
     pub graceful_shutdown_time: Duration,
+    pub endpoint: Option<&'static str>,
 }
 
 impl Debug for HttpSourceConfig {
@@ -124,6 +125,7 @@ impl Default for HttpSourceConfig {
             timeout: Duration::from_millis(5),
             token: None,
             graceful_shutdown_time: Duration::from_secs(20),
+            endpoint: None,
         }
     }
 }
@@ -136,6 +138,7 @@ pub struct HttpSourceConfigBuilder {
     timeout: Option<Duration>,
     token: Option<&'static str>,
     graceful_shutdown_time: Option<Duration>,
+    endpoint: Option<&'static str>,
 }
 
 impl HttpSourceConfigBuilder {
@@ -148,6 +151,7 @@ impl HttpSourceConfigBuilder {
             timeout: None,
             token: None,
             graceful_shutdown_time: None,
+            endpoint: None,
         }
     }
 
@@ -194,6 +198,11 @@ impl HttpSourceConfigBuilder {
         self
     }
 
+    pub fn endpoint(mut self, endpoint: &'static str) -> Self {
+        self.endpoint = Some(endpoint);
+        self
+    }
+
     pub fn build(self) -> HttpSourceConfig {
         HttpSourceConfig {
             vertex_name: self.vertex_name,
@@ -208,6 +217,7 @@ impl HttpSourceConfigBuilder {
             graceful_shutdown_time: self
                 .graceful_shutdown_time
                 .unwrap_or(Duration::from_secs(20)),
+            endpoint: self.endpoint,
         }
     }
 }
@@ -244,6 +254,7 @@ impl HttpSourceActor {
             http_source_config.token,
             Arc::clone(&inflight_requests),
             axum_handle.clone(),
+            http_source_config.endpoint,
         ));
 
         let http_server_handle = http_source_config.http_addr.map(|http_addr| {
@@ -254,6 +265,7 @@ impl HttpSourceActor {
                 http_source_config.token,
                 Arc::clone(&inflight_requests),
                 axum_handle.clone(),
+                http_source_config.endpoint,
             ))
         });
 
@@ -539,13 +551,16 @@ pub fn create_router(
     token: Option<&'static str>,
     tx: mpsc::Sender<HttpMessage>,
     inflight_requests: InflightRequestsMap,
+    endpoint: Option<&'static str>,
 ) -> Router {
+    let endpoint = match endpoint {
+        Some(ep) => format!("/vertices/{ep}"),
+        None => format!("/vertices/{vertex_name}"),
+    };
+
     Router::new()
         .route("/health", get(health_handler))
-        .route(
-            format!("/vertices/{vertex_name}").as_str(),
-            post(data_handler),
-        )
+        .route(endpoint.as_str(), post(data_handler))
         .route_layer(middleware::from_fn(
             move |request: Request<Body>, next: Next| async move {
                 // if no token is provided, skip the auth check
@@ -590,8 +605,9 @@ pub async fn start_server(
     token: Option<&'static str>,
     inflight_requests: InflightRequestsMap,
     axum_handle: AxumHandle,
+    endpoint: Option<&'static str>,
 ) -> Result<()> {
-    let router = create_router(vertex_name, token, tx, inflight_requests);
+    let router = create_router(vertex_name, token, tx, inflight_requests, endpoint);
 
     info!(?addr, "Starting HTTPS source server");
 
@@ -619,8 +635,9 @@ pub async fn start_http_server(
     token: Option<&'static str>,
     inflight_requests: InflightRequestsMap,
     axum_handle: AxumHandle,
+    endpoint: Option<&'static str>,
 ) -> Result<()> {
-    let router = create_router(vertex_name, token, tx, inflight_requests);
+    let router = create_router(vertex_name, token, tx, inflight_requests, endpoint);
 
     info!(?addr, "Starting HTTP source server");
 
@@ -969,7 +986,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel(500);
         let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx, pending_responses);
+        let app = create_router("test", None, tx, pending_responses, None);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -986,7 +1003,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(10);
         let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses), None);
 
         // Spawn a task to simulate ack after receiving the message
         let pending_responses_clone = Arc::clone(&pending_responses);
@@ -1017,7 +1034,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(10);
         let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses), None);
 
         // Spawn a task to simulate ack after receiving the message
         let pending_responses_clone = Arc::clone(&pending_responses);
@@ -1369,7 +1386,13 @@ mod tests {
 
         // Set up router with auth token
         let test_token = "test-token";
-        let app = create_router("test", Some(test_token), tx, Arc::clone(&pending_responses));
+        let app = create_router(
+            "test",
+            Some(test_token),
+            tx,
+            Arc::clone(&pending_responses),
+            None,
+        );
 
         // Spawn a task to simulate ack for successful requests
         let pending_responses_clone = Arc::clone(&pending_responses);
@@ -1426,7 +1449,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(10);
         let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses), None);
 
         // Send a request in a background task
         let request_handle = tokio::spawn(async move {
@@ -1467,7 +1490,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(10);
         let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses), None);
 
         // Spawn a task to simulate ack for the first successful request
         let pending_responses_clone = Arc::clone(&pending_responses);

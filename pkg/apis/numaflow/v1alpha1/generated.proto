@@ -166,6 +166,12 @@ message AbstractPodTemplate {
   // +patchStrategy=merge,retainKeys
   // +optional
   repeated .k8s.io.api.core.v1.PodResourceClaim resourceClaims = 14;
+
+  // If specified, the pod will be dispatched by specified scheduler.
+  // If not specified, the pod will be dispatched by default scheduler.
+  // More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
+  // +optional
+  optional string schedulerName = 15;
 }
 
 message AbstractSink {
@@ -440,6 +446,12 @@ message ContainerTemplate {
 
   // +optional
   optional Probe livenessProbe = 7;
+
+  // StartupProbe runs the same check as the liveness probe, but only until the container has
+  // started successfully, giving a slow first start its own budget. No startup probe is
+  // configured unless this is set.
+  // +optional
+  optional Probe startupProbe = 8;
 }
 
 message CronSchedule {
@@ -726,6 +738,12 @@ message HTTPSource {
   // To enable plain HTTP, set ports.http explicitly.
   // +optional
   optional Ports ports = 3;
+
+  // Endpoint customizes the path segment that follows `/vertices/` in the URL
+  // where the HTTP source accepts messages.
+  // If unset, it defaults to `vertices/<vertex-name>` (or `vertices/<mvtx-name>` for a MonoVertex).
+  // +optional
+  optional string endpoint = 4;
 }
 
 message IdleSource {
@@ -829,7 +847,7 @@ message JetStreamBufferService {
 
   // Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
   // See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream.
-  // For limits, only "max_payload" is supported for configuration, defaults to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but max_payload can be set up to 67108864 (64MB).
+  // For limits, only "max_payload" is supported for configuration, defaults to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of headroom for platform injected data.
   // For jetstream, only "max_memory_store" and "max_file_store" are supported for configuration, do not set "store_dir" as it has been hardcoded.
   // +optional
   optional string settings = 8;
@@ -841,7 +859,7 @@ message JetStreamBufferService {
 
   // Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config.
   // It accepts a YAML format configuration, it may include 4 sections, "stream", "consumer", "otBucket" and "procBucket".
-  // Available fields under "stream" include "retention" (e.g. interest, limits, workerQueue), "maxMsgs", "maxAge" (e.g. 72h), "replicas" (1, 3, 5), "duplicates" (e.g. 5m).
+  // Available fields under "stream" include "retention" (e.g. interest, limits, workerQueue), "maxMsgs", "maxMsgSize" (defaults to 33553408, i.e. 32MB - 1KB, which is also the max value allowed), "maxAge" (e.g. 72h), "replicas" (1, 3, 5), "duplicates" (e.g. 5m).
   // Available fields under "consumer" include "ackWait" (e.g. 60s)
   // Available fields under "otBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
   // Available fields under "procBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
@@ -1105,7 +1123,6 @@ message MonoVertexList {
 }
 
 message MonoVertexSpec {
-  // +kubebuilder:default=1
   // +optional
   optional int32 replicas = 1;
 
@@ -1541,6 +1558,14 @@ message PulsarSink {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
+
+  // TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+  // broker CA. Only server-authentication (one-way TLS) is supported today:
+  // CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+  // since the underlying pulsar-rs client does not currently support presenting
+  // a client certificate.
+  // +optional
+  optional TLS tls = 7;
 }
 
 message PulsarSource {
@@ -1562,6 +1587,14 @@ message PulsarSource {
   // Consumer level dead letter policy.
   // +optional
   optional PulsarDeadLetterPolicy deadLetterPolicy = 7;
+
+  // TLS configuration for the Pulsar client, e.g. to trust a custom/self-signed
+  // broker CA. Only server-authentication (one-way TLS) is supported today:
+  // CACertSecret is honored, but CertSecret/KeySecret (mutual TLS) are not,
+  // since the underlying pulsar-rs client does not currently support presenting
+  // a client certificate.
+  // +optional
+  optional TLS tls = 8;
 }
 
 message RateLimit {
@@ -2133,7 +2166,9 @@ message SqsSource {
   // AWSRegion is the AWS Region where the SQS queue is located
   optional string awsRegion = 1;
 
-  // QueueName is the name of the SQS queue
+  // QueueName is the name of the SQS queue.
+  // Mutually exclusive with queueNames.
+  // +optional
   optional string queueName = 2;
 
   // QueueOwnerAWSAccountID is the queue owner aws account id
@@ -2181,6 +2216,23 @@ message SqsSource {
   // When specified, the SQS client will assume the specified role for authentication.
   // +optional
   optional AWSAssumeRole assumeRole = 10;
+
+  // QueueNames is a comma-separated list of SQS queue names to consume from.
+  // All queues must live in the configured awsRegion and queueOwnerAWSAccountID.
+  // Mutually exclusive with queueName.
+  // +optional
+  optional string queueNames = 11;
+
+  // DeadLetterQueues is a comma-separated list of SQS dead-letter queue names.
+  // Entries correspond positionally to the configured source queues.
+  // +optional
+  optional string deadLetterQueues = 12;
+
+  // MaxReceiveCount is the maximum number of receives before SQS moves a
+  // message to its configured dead-letter queue. Valid values: 1-1000.
+  // Defaults to 10 when deadLetterQueues is configured.
+  // +optional
+  optional int32 maxReceiveCount = 13;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -2217,6 +2269,7 @@ message TagConditions {
   optional string operator = 1;
 
   // Values tag values for conditional forwarding
+  // +kubebuilder:validation:MinItems=1
   repeated string values = 2;
 }
 
@@ -2244,6 +2297,9 @@ message UDF {
 
   // +optional
   optional GroupBy groupBy = 3;
+
+  // +optional
+  optional RetryStrategy retryStrategy = 4;
 }
 
 message UDSink {
@@ -2257,6 +2313,10 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
+
+  // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+  // +optional
+  optional RetryStrategy retryStrategy = 2;
 }
 
 // UpdateStrategy indicates the strategy that the
@@ -2373,7 +2433,6 @@ message VertexSpec {
   // +optional
   optional string interStepBufferServiceName = 3;
 
-  // +kubebuilder:default=1
   // +optional
   optional int32 replicas = 4;
 

@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: cron-scale-up-mono-vertex
+spec:
+  replicas: 0
+  scale:
+    min: 0
+    max: 5
+    scaleUpCooldownSeconds: 0
+    scaleDownCooldownSeconds: 0
+    cron:
+      timezone: UTC
+      schedules:
+        - start: "{{.Start}}"
+          end: "{{.End}}"
+          min: 3
+          max: 5
+  source:
+    generator:
+      rpu: 5
+  sink:
+    log: {}

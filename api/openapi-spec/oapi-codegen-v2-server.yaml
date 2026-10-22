@@ -1,0 +1,6 @@
+package: generated
+generate:
+  embedded-spec: true
+  gin-server: true
+  models: true
+output: server/apis/v2/generated/server.gen.go

@@ -1,9 +1,13 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as renderBase, screen } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import { MetricsModal } from "./index";
 import { VertexDetailsContext } from "../../../SlidingSidebar/partials/VertexDetails";
 
 import "@testing-library/jest-dom";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 jest.mock(
   "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics",
@@ -55,6 +59,7 @@ describe("MetricsModal", () => {
           type="udf"
           presets={presets}
           pod={pod}
+          shareUrl="https://example.test/?vertex=test-vertex&vertexTab=metrics"
         />
       </VertexDetailsContext.Provider>
     );
@@ -63,6 +68,7 @@ describe("MetricsModal", () => {
       await screen.findByText("Click to see detailed view with additional filters")
     );
 
+    expect(screen.getByTestId("copy-view-link")).toBeInTheDocument();
     expect(handleCloseModal).toHaveBeenCalledTimes(1);
     expect(openMetrics).toHaveBeenCalledWith({
       panelId: "test_metric-panel",

@@ -2,14 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use super::{
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
+    create_response_stream, update_udf_drop_metric, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+};
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
-use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
+use crate::shared::retry::{RetryController, RetryStep};
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, mpsc};
+use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -17,13 +22,6 @@ use tonic::Status;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::{error, warn};
-
-use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, grpc_error_to_redrive, map_redrive_error, reconnect_mapper_client,
-    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_only_metric, wait_before_map_redrive,
-};
 
 /// Type alias for the stream response - raw results from the UDF
 pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
@@ -79,11 +77,12 @@ impl MapStreamTask {
             otel::TraceStage::Map,
         );
 
-        // Store parent message info before sending to UDF. This is reset for every redrive so
-        // sibling indexes stay deterministic across retries.
+        // Store parent message info before sending to UDF.
         let initial_parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
         let request: MapRequest = self.msg_handle.message().clone().into();
+
+        let mut retry = RetryController::new(&self.shared_ctx.retry_config);
 
         loop {
             let mut parent_info = initial_parent_info.clone();
@@ -103,8 +102,8 @@ impl MapStreamTask {
                 .await
                 .expect("failed to reset tracker");
 
-            let mut should_redrive = false;
-            loop {
+            let mut failed_message = false;
+            'receiver: loop {
                 let result = receiver.recv().await;
                 match result {
                     Some(Ok(results)) => {
@@ -115,6 +114,13 @@ impl MapStreamTask {
                             let mut mapped_message: Message =
                                 UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                     .into();
+
+                            // If a message was marked for failure mark it to be retried by default
+                            if mapped_message.failed() {
+                                failed_message = true;
+                                break 'receiver;
+                            }
+
                             parent_info.current_index += 1;
                             mapped_message.strip_tracing_udf();
 
@@ -156,17 +162,6 @@ impl MapStreamTask {
                                 .expect("failed to send response");
                         }
                     }
-                    Some(Err(Error::UdfRedrive(status))) => {
-                        warn!(?status, offset = ?parent_info.offset, "redriving stream map message after UDF reconnect");
-                        if wait_before_map_redrive(&self.shared_ctx.hard_shutdown_token)
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-                        should_redrive = true;
-                        break;
-                    }
                     Some(Err(e)) => {
                         error!(?e, "failed to map message");
                         mark_failed!(self.msg_handle, &e, None);
@@ -181,8 +176,35 @@ impl MapStreamTask {
                 }
             }
 
-            if !should_redrive {
+            if !failed_message {
                 break;
+            }
+
+            match retry.next_step(&self.shared_ctx.hard_shutdown_token).await {
+                // Retry the UDF: after the backoff wait, or immediately when no retry config
+                // is set (retry forever, no backoff).
+                RetryStep::Again => {}
+                RetryStep::Cancelled => {
+                    mark_failed!(self.msg_handle, "map UDF retry wait cancelled", None);
+                    return;
+                }
+                // Retries exhausted under `onFailure: drop` — drop and ack.
+                RetryStep::Drop => {
+                    warn!(
+                        offset = ?parent_info.offset,
+                        "Retries exhausted, dropping message."
+                    );
+                    update_udf_drop_metric(self.shared_ctx.is_mono_vertex);
+                    mark_success!(self.msg_handle);
+                    return;
+                }
+                // Retries exhausted under `onFailure: retry` — nack.
+                RetryStep::Nack => {
+                    let e = Error::Mapper("Retries exhausted".to_string());
+                    mark_failed!(self.msg_handle, &e, None);
+                    let _ = self.shared_ctx.error_tx.send(e).await;
+                    return;
+                }
             }
         }
 
@@ -194,13 +216,10 @@ impl MapStreamTask {
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
-    batch_size: usize,
-    connection: Arc<AsyncMutex<StreamMapConnection>>,
-    reconnect_config: Option<UdfReconnectConfig>,
+    connection: Arc<StreamMapConnection>,
 }
 
 struct StreamMapConnection {
-    generation: u64,
     read_tx: mpsc::Sender<MapRequest>,
     senders: Arc<Mutex<StreamSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
@@ -211,21 +230,17 @@ impl UserDefinedStreamMap {
     pub(in crate::mapper) async fn new(
         batch_size: usize,
         mut client: MapClient<Channel>,
-        reconnect_config: Option<UdfReconnectConfig>,
     ) -> Result<Self> {
-        let connection = Self::create_connection(batch_size, &mut client, 0).await?;
+        let connection = Self::create_connection(batch_size, &mut client).await?;
 
         Ok(Self {
-            batch_size,
-            connection: Arc::new(AsyncMutex::new(connection)),
-            reconnect_config,
+            connection: Arc::new(connection),
         })
     }
 
     async fn create_connection(
         batch_size: usize,
         client: &mut MapClient<Channel>,
-        generation: u64,
     ) -> Result<StreamMapConnection> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, client).await?;
@@ -241,7 +256,6 @@ impl UserDefinedStreamMap {
         });
 
         Ok(StreamMapConnection {
-            generation,
             read_tx,
             senders: sender_map,
             _handle: Arc::new(AbortOnDropHandle::new(handle)),
@@ -259,7 +273,7 @@ impl UserDefinedStreamMap {
             std::mem::take(&mut sender_guard.map)
         };
 
-        let error = map_redrive_error(error);
+        let error = Error::Grpc(Box::new(error));
         for (_, sender) in senders {
             let _ = sender.send(Err(error.clone())).await;
             update_udf_error_metric(is_mono_vertex());
@@ -376,60 +390,19 @@ impl UserDefinedStreamMap {
         request: MapRequest,
         cln_token: CancellationToken,
     ) -> mpsc::Receiver<Result<StreamMapResponse>> {
-        let (generation, result) = self
-            .stream_once_with_generation(request.clone(), cln_token.clone())
-            .await;
-        match result {
-            Ok(rx) => rx,
-            Err(Error::UdfRedrive(error)) => {
-                warn!(
-                    ?error,
-                    "stream map request failed before responses, reconnecting"
-                );
-                match self.reconnect(generation).await {
-                    Ok(()) => match self.stream_once(request, cln_token).await {
-                        Ok(rx) => rx,
-                        Err(e) => Self::error_receiver(e).await,
-                    },
-                    Err(e) => Self::error_receiver(e).await,
-                }
-            }
-            Err(e) => Self::error_receiver(e).await,
-        }
-    }
-
-    async fn stream_once(
-        &self,
-        request: MapRequest,
-        cln_token: CancellationToken,
-    ) -> Result<mpsc::Receiver<Result<StreamMapResponse>>> {
-        self.stream_once_with_generation(request, cln_token).await.1
-    }
-
-    async fn stream_once_with_generation(
-        &self,
-        request: MapRequest,
-        cln_token: CancellationToken,
-    ) -> (u64, Result<mpsc::Receiver<Result<StreamMapResponse>>>) {
         let (tx, rx) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
 
         // Check if already canceled before sending
         if cln_token.is_cancelled() {
-            return (
-                0,
-                Err(Error::Mapper("stream map operation cancelled".to_string())),
-            );
+            return Self::error_receiver(Error::Mapper(
+                "stream map operation cancelled".to_string(),
+            ))
+            .await;
         }
 
         let key = request.id.clone();
-        let (generation, senders, read_tx) = {
-            let connection = self.connection.lock().await;
-            (
-                connection.generation,
-                Arc::clone(&connection.senders),
-                connection.read_tx.clone(),
-            )
-        };
+        let senders = Arc::clone(&self.connection.senders);
+        let read_tx = self.connection.read_tx.clone();
 
         // Move the senders_guard out of the scope to drop the guard before sending the response
         // Do this before we send the message to the server to avoid the race condition
@@ -446,12 +419,10 @@ impl UserDefinedStreamMap {
         };
 
         if mapper_closed {
-            return (
-                generation,
-                Err(map_redrive_error(Status::unavailable(
-                    "stream map stream closed",
-                ))),
-            );
+            return Self::error_receiver(Error::Grpc(Box::new(Status::unavailable(
+                "stream map stream closed",
+            ))))
+            .await;
         }
 
         // only insert if we are able to send the message to the server
@@ -468,54 +439,13 @@ impl UserDefinedStreamMap {
                     .remove(&key);
             };
 
-            return (
-                generation,
-                Err(map_redrive_error(Status::unavailable(format!(
-                    "failed to send message to map stream server: {e}"
-                )))),
-            );
+            return Self::error_receiver(Error::Grpc(Box::new(Status::unavailable(format!(
+                "failed to send message to map stream server: {e}"
+            )))))
+            .await;
         }
 
-        (generation, Ok(rx))
-    }
-
-    async fn reconnect(&self, failed_generation: u64) -> Result<()> {
-        let Some(reconnect_config) = &self.reconnect_config else {
-            return Err(map_redrive_error(Status::unavailable(
-                "stream map reconnect config missing",
-            )));
-        };
-
-        let mut connection = self.connection.lock().await;
-        if connection.generation != failed_generation {
-            return Ok(());
-        }
-        Self::drain_senders(
-            &connection.senders,
-            map_redrive_error(Status::unavailable("stream map reconnecting")),
-        )
-        .await;
-        let next_generation = connection.generation.saturating_add(1);
-
-        let mut client = reconnect_mapper_client(reconnect_config).await?;
-
-        *connection = grpc_error_to_redrive(
-            Self::create_connection(self.batch_size, &mut client, next_generation).await,
-        )?;
-
-        Ok(())
-    }
-
-    async fn drain_senders(sender_map: &Arc<Mutex<StreamSenderMapState>>, error: Error) {
-        let senders = {
-            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-            sender_guard.closed = true;
-            std::mem::take(&mut sender_guard.map)
-        };
-
-        for (_, sender) in senders {
-            let _ = sender.send(Err(error.clone())).await;
-        }
+        rx
     }
 
     async fn error_receiver(error: Error) -> mpsc::Receiver<Result<StreamMapResponse>> {
@@ -527,18 +457,26 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
+    use super::MapStreamTask;
+    use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+    use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
+    use crate::mapper::map::SharedMapTaskContext;
     use crate::mapper::map::stream::{StreamSenderMapState, UserDefinedStreamMap};
-    use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
+    use crate::message::{Message, MessageHandle, ReadAck};
+    use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::tracker::Tracker;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::map::{MapRequest, MapResponse, TransmissionStatus};
     use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
-    use tokio::sync::mpsc;
+    use tokio::sync::{Semaphore, mpsc, oneshot};
     use tokio_util::sync::CancellationToken;
     use tokio_util::task::AbortOnDropHandle;
 
@@ -586,12 +524,9 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = UserDefinedStreamMap::new(
-            500,
-            MapClient::new(create_rpc_channel(sock_file).await?),
-            None,
-        )
-        .await?;
+        let client =
+            UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
 
         // Create a MapRequest directly instead of a Message
         let request = numaflow_pb::clients::map::MapRequest {
@@ -770,7 +705,7 @@ mod tests {
         for rx in [&mut rx_a, &mut rx_b] {
             let received = rx.recv().await.expect("expected error broadcast");
             let err = received.expect_err("expected Err variant");
-            assert!(matches!(err, MapError::UdfRedrive(_)));
+            assert!(matches!(err, MapError::Grpc(_)));
         }
     }
 
@@ -816,7 +751,6 @@ mod tests {
         let client = UserDefinedStreamMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
-            None,
         )
         .await
         .unwrap();
@@ -872,14 +806,11 @@ mod tests {
 
         let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
         let mapper = UserDefinedStreamMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::StreamMapConnection {
-                generation: 0,
+            connection: Arc::new(super::StreamMapConnection {
                 read_tx,
                 senders: Arc::clone(&senders),
                 _handle: _abort_handle,
-            })),
-            reconnect_config: None,
+            }),
         };
 
         let request = MapRequest {
@@ -896,11 +827,13 @@ mod tests {
             status: None,
         };
 
-        let err = mapper
-            .stream_once(request, CancellationToken::new())
+        let mut rx = mapper.stream(request, CancellationToken::new()).await;
+        let err = rx
+            .recv()
             .await
-            .expect_err("expected UdfRedrive error from stream_once()");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
+            .expect("expected error on response channel")
+            .expect_err("expected gRPC error from stream()");
+        assert!(matches!(err, MapError::Grpc(_)));
         assert!(
             err.to_string()
                 .contains("failed to send message to map stream server"),
@@ -912,18 +845,6 @@ mod tests {
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
         );
-    }
-
-    fn dummy_reconnect_config() -> UdfReconnectConfig {
-        UdfReconnectConfig::new(
-            GrpcClientConfig::new(
-                "/tmp/missing-stream-map.sock",
-                "/tmp/missing-stream-server-info",
-                1024,
-            ),
-            CancellationToken::new(),
-            Duration::from_millis(1),
-        )
     }
 
     fn test_request(id: &str) -> MapRequest {
@@ -943,7 +864,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stream_once_returns_redrive_when_sender_map_is_closed() {
+    async fn stream_returns_grpc_error_when_sender_map_is_closed() {
         let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
         let dummy_handle = tokio::spawn(async {});
         let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
@@ -951,77 +872,323 @@ mod tests {
         let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
         senders.lock().unwrap().closed = true;
         let mapper = UserDefinedStreamMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::StreamMapConnection {
-                generation: 0,
+            connection: Arc::new(super::StreamMapConnection {
                 read_tx,
                 senders,
                 _handle: abort_handle,
-            })),
-            reconnect_config: None,
+            }),
         };
 
-        let err = mapper
-            .stream_once(test_request("closed"), CancellationToken::new())
+        let mut rx = mapper
+            .stream(test_request("closed"), CancellationToken::new())
+            .await;
+        let err = rx
+            .recv()
             .await
-            .expect_err("expected closed sender map to be redrivable");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
+            .expect("expected error on response channel")
+            .expect_err("expected closed sender map to return gRPC error");
+        assert!(matches!(err, MapError::Grpc(_)));
         assert!(err.to_string().contains("stream map stream closed"));
     }
 
-    #[tokio::test]
-    async fn stream_reconnect_without_config_returns_redrive() {
-        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
-        let dummy_handle = tokio::spawn(async {});
-        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+    // ---- retryStrategy tests ----
 
-        let mapper = UserDefinedStreamMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::StreamMapConnection {
-                generation: 0,
-                read_tx,
-                senders: Arc::new(Mutex::new(StreamSenderMapState::default())),
-                _handle: abort_handle,
-            })),
-            reconnect_config: None,
-        };
+    /// Stream mapper that fails (via the reserved FAIL tag) the first `fail_first_n` invocations,
+    /// then succeeds. It emits a single result so a FAIL is always the first (and only) output —
+    /// this keeps the retry clean (no partially-forwarded prefix to duplicate).
+    struct StreamRetryThenSucceed {
+        attempts: AtomicUsize,
+        fail_first_n: usize,
+    }
 
-        let err = mapper
-            .reconnect(0)
-            .await
-            .expect_err("missing reconnect config should be redrivable");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
-        assert!(
-            err.to_string()
-                .contains("stream map reconnect config missing")
-        );
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for StreamRetryThenSucceed {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: tokio::sync::mpsc::Sender<mapstream::Message>,
+        ) {
+            let fail = self.attempts.fetch_add(1, Ordering::SeqCst) < self.fail_first_n;
+            let tags = if fail {
+                vec!["U+005C__FAIL__".to_string()] // must match message.rs FAIL const
+            } else {
+                vec![]
+            };
+            let _ = tx
+                .send(
+                    mapstream::Message::new(input.value)
+                        .with_keys(input.keys)
+                        .with_tags(tags),
+                )
+                .await;
+        }
+    }
+
+    /// Stream mapper that always fails (via the reserved FAIL tag), emitting a single result.
+    struct StreamAlwaysFail;
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for StreamAlwaysFail {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: tokio::sync::mpsc::Sender<mapstream::Message>,
+        ) {
+            let _ = tx
+                .send(
+                    mapstream::Message::new(input.value)
+                        .with_keys(input.keys)
+                        .with_tags(vec!["U+005C__FAIL__".to_string()]),
+                )
+                .await;
+        }
+    }
+
+    fn fast_retry_config(strategy: OnFailureStrategy, max_attempts: u16) -> RetryConfig {
+        RetryConfig {
+            sink_max_retry_attempts: max_attempts,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_retry_factor: 1.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 5,
+            sink_retry_on_fail_strategy: strategy,
+        }
+    }
+
+    fn test_message() -> Message {
+        Message {
+            value: b"hello".to_vec().into(),
+            ..Default::default()
+        }
+    }
+
+    async fn build_stream_client<T>(
+        svc: T,
+    ) -> (
+        UserDefinedStreamMap,
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<()>,
+        TempDir,
+    )
+    where
+        T: mapstream::MapStreamer + Send + Sync + 'static,
+    {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map_stream.sock");
+        let server_info_file = tmp_dir.path().join("map_stream-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(svc)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let client = UserDefinedStreamMap::new(
+            500,
+            MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
+        )
+        .await
+        .unwrap();
+        (client, shutdown_tx, handle, tmp_dir)
+    }
+
+    /// Spawns a [MapStreamTask] for `message` against `mapper` with the given retry config, and
+    /// returns the channels needed to observe the outcome: the ack/nak receiver, the mapped-output
+    /// receiver, and the map-error receiver.
+    async fn spawn_stream_task(
+        mapper: UserDefinedStreamMap,
+        message: Message,
+        retry_config: Option<RetryConfig>,
+    ) -> (
+        oneshot::Receiver<ReadAck>,
+        mpsc::Receiver<MessageHandle>,
+        mpsc::Receiver<MapError>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(message, ack_tx);
+
+        let (output_tx, output_rx) = mpsc::channel(10);
+        let (error_tx, error_rx) = mpsc::channel(10);
+        let semaphore = Arc::new(Semaphore::new(1));
+        let permit = semaphore.acquire_owned().await.unwrap();
+
+        let shared_ctx = Arc::new(SharedMapTaskContext {
+            output_tx,
+            error_tx,
+            tracker: Tracker::new(None, CancellationToken::new()),
+            bypass_router: None,
+            hard_shutdown_token: CancellationToken::new(),
+            is_mono_vertex: false,
+            retry_config,
+        });
+
+        MapStreamTask {
+            mapper,
+            permit,
+            msg_handle,
+            shared_ctx,
+        }
+        .spawn();
+
+        (ack_rx, output_rx, error_rx)
     }
 
     #[tokio::test]
-    async fn stream_reconnect_skips_stale_generation() {
-        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
-        let dummy_handle = tokio::spawn(async {});
-        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+    async fn stream_retries_then_succeeds() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 2,
+        })
+        .await;
 
-        let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
-        let mapper = UserDefinedStreamMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::StreamMapConnection {
-                generation: 2,
-                read_tx,
-                senders: Arc::clone(&senders),
-                _handle: abort_handle,
-            })),
-            reconnect_config: Some(dummy_reconnect_config()),
-        };
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Retry, 10)),
+        )
+        .await;
 
-        mapper
-            .reconnect(1)
-            .await
-            .expect("stale generation should be a no-op");
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message after retries succeed");
+        assert!(!mapped.message().failed());
+        assert_eq!(mapped.message().value, "hello");
+        // Simulate the downstream ISB writer marking the forwarded copy success.
+        mapped.mark_success();
+
         assert!(
-            !senders.lock().unwrap().closed,
-            "stale reconnect should not drain the current sender map"
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
         );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_retries_without_config_until_success() -> Result<(), Box<dyn Error>> {
+        // With no retry config, a FAIL-tagged response must still be retried (indefinitely,
+        // with no backoff) rather than forwarded as-is.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamRetryThenSucceed {
+            attempts: AtomicUsize::new(0),
+            fail_first_n: 3,
+        })
+        .await;
+
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_stream_task(client, test_message(), None).await;
+
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message once the UDF stops failing");
+        assert!(!mapped.message().failed());
+        mapped.mark_success();
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn stream_drops_message_on_retries_exhausted() -> Result<(), Box<dyn Error>> {
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamAlwaysFail).await;
+
+        let drop_before = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Drop, 1)),
+        )
+        .await;
+
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx).await??;
+        assert_eq!(ack, ReadAck::Ack, "dropped message must be ACK'd");
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+
+        let drop_after = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+        assert_eq!(drop_after, drop_before + 1);
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_retries_exhausted_propagates_error() -> Result<(), Box<dyn Error>> {
+        // A finite `Retry` budget is only reachable by constructing RetryConfig directly (the spec
+        // conversion forces u16::MAX for onFailure=Retry); this exercises the exhaustion arm.
+        let (client, shutdown_tx, handle, _tmp_dir) = build_stream_client(StreamAlwaysFail).await;
+
+        let (ack_rx, mut output_rx, mut error_rx) = spawn_stream_task(
+            client,
+            test_message(),
+            Some(fast_retry_config(OnFailureStrategy::Retry, 1)),
+        )
+        .await;
+
+        let err = tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+            .await?
+            .expect("expected an error once retries are exhausted");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(err.to_string().contains("Retries exhausted"));
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Nak(None)
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
     }
 }

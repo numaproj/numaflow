@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.8.4 (2026-09-10)
+
+ * [85dbc9516](https://github.com/numaproj/numaflow/commit/85dbc9516a1a2f316f7b8dce63e0580c3fe595df) Update manifests to v1.8.4
+ * [8beca6a10](https://github.com/numaproj/numaflow/commit/8beca6a10173b3b4f4a94f638758e31f2cb0102d) fix(isbsvc): use quorum-aware health threshold for JetStream (#3484)
+
+### Contributors
+
+ * Da.Sanchez
+ * Vaibhav Tiwari
+
+## v1.8.3 (2026-08-07)
+
+ * [4db03f0d7](https://github.com/numaproj/numaflow/commit/4db03f0d753e93a7fe39dafe778f634497334e5c) Update manifests to v1.8.3
+ * [b4227aa0d](https://github.com/numaproj/numaflow/commit/b4227aa0d8c99952a1f549038df106850f2fef0c) feat: support cron-based autoscaling for source vertices (#3569)
+ * [b06527dcf](https://github.com/numaproj/numaflow/commit/b06527dcf9a7856bd72efad75f9443f7af714f3b) feat: cron-based MonoVertex autoscaling spec (#3558)
+ * [00bda73d6](https://github.com/numaproj/numaflow/commit/00bda73d67db17f78ad4f5eba00963c9be76b539) fix(test): missing artifact from fixing merge conflict (#3579)
+ * [e34df254e](https://github.com/numaproj/numaflow/commit/e34df254ec1a3bbba225c0ea837614be55cdbf33) feat: set max message size to 64mb for udsource (#3578)
+
+### Contributors
+
+ * Ayush Srivastava
+ * Sarvesh
+ * Vaibhav Kant Tiwari
+ * Vaibhav Tiwari
+
 ## v1.8.2 (2026-07-24)
 
  * [d5f32d110](https://github.com/numaproj/numaflow/commit/d5f32d11014d3fe131ef57fc710b9caa7b28d37e) Update manifests to v1.8.2

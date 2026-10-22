@@ -296,6 +296,39 @@ describe("SpecEditor", () => {
     expect(screen.getByTestId("spec-editor")).toBeInTheDocument();
   });
 
+  it("Renders a linked line selection without remounting the editor", () => {
+    const { rerender } = render(
+      <SpecEditor
+        initialYaml={"kind: Pipeline\napiVersion: v1\n"}
+        onValidate={onValidate}
+        onSubmit={onSubmit}
+        onResetApplied={onResetApplied}
+        onMutatedChange={onMutatedChange}
+        loading={false}
+        viewType={2}
+        allowNonMutatedSubmit={false}
+        initialLine={1}
+        initialEndLine={2}
+      />
+    );
+    expect(screen.getByTestId("spec-editor")).toBeInTheDocument();
+    rerender(
+      <SpecEditor
+        initialYaml={"kind: Pipeline\napiVersion: v1\n"}
+        onValidate={onValidate}
+        onSubmit={onSubmit}
+        onResetApplied={onResetApplied}
+        onMutatedChange={onMutatedChange}
+        loading={false}
+        viewType={2}
+        allowNonMutatedSubmit={false}
+        initialLine={2}
+        initialEndLine={2}
+      />
+    );
+    expect(screen.getByTestId("spec-editor")).toBeInTheDocument();
+  });
+
   it("Renders when initialYaml is a string", () => {
     render(
       <SpecEditor

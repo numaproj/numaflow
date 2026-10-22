@@ -248,11 +248,13 @@ impl TryFrom<Box<PulsarSink>> for SinkType {
     type Error = Error;
     fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
         let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(sink_config.auth)?;
+        let tls = super::parse_pulsar_tls_config(sink_config.tls)?;
         let pulsar_sink_config = numaflow_pulsar::sink::Config {
             addr: sink_config.server_addr,
             topic: sink_config.topic,
             producer_name: sink_config.producer_name,
             auth,
+            tls,
         };
         Ok(SinkType::Pulsar(Box::new(pulsar_sink_config)))
     }
@@ -382,14 +384,6 @@ impl UserDefinedConfig {
             socket_path: DEFAULT_ONS_SINK_SOCKET.to_string(),
             server_info_path: DEFAULT_ONS_SINK_SERVER_INFO_FILE.to_string(),
         }
-    }
-
-    pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
-        crate::shared::grpc::GrpcClientConfig::new(
-            self.socket_path.clone(),
-            self.server_info_path.clone(),
-            self.grpc_max_message_size,
-        )
     }
 }
 
@@ -691,6 +685,7 @@ mod tests {
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
+            tls: None,
         });
 
         let result = SinkType::try_from(valid_pulsar_sink);
@@ -721,6 +716,7 @@ mod tests {
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
             topic: "persistent://public/default/test-topic".to_string(),
+            tls: None,
         });
 
         let result = SinkType::try_from(valid_pulsar_sink_with_auth);
@@ -754,6 +750,7 @@ mod tests {
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
             topic: "test-topic".to_string(),
+            tls: None,
         });
 
         let result = SinkType::try_from(invalid_pulsar_sink);
@@ -782,6 +779,7 @@ mod tests {
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
             topic: "test-topic".to_string(),
+            tls: None,
         });
 
         let result = SinkType::try_from(invalid_pulsar_sink);
@@ -817,6 +815,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             on_success: Some(Box::new(AbstractSink {
@@ -831,6 +830,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             retry_strategy: None,
@@ -892,6 +892,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             on_success: Some(Box::new(AbstractSink {
@@ -913,6 +914,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             retry_strategy: None,
@@ -981,6 +983,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             on_success: Some(Box::new(AbstractSink {
@@ -998,6 +1001,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             retry_strategy: None,
@@ -1051,6 +1055,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             on_success: Some(Box::new(AbstractSink {
@@ -1072,6 +1077,7 @@ mod tests {
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
                     topic: "fallback-topic".to_string(),
+                    tls: None,
                 })),
             })),
             retry_strategy: None,

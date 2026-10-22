@@ -3,7 +3,9 @@ use axum::extract::{Query, State};
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
+use axum_server::from_tcp_rustls;
 use axum_server::tls_rustls::RustlsConfig;
+use parking_lot::RwLock;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -13,9 +15,9 @@ use prometheus_client::registry::Registry;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::OnceLock;
-use std::sync::atomic::AtomicU64;
+use std::net::TcpListener;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 use tokio::task::JoinHandle;
@@ -35,6 +37,8 @@ use crate::watermark::WatermarkHandle;
 
 pub(crate) mod sqs;
 pub(crate) use sqs::sqs_metrics;
+
+pub(crate) type MetricLabels = Arc<Vec<(String, String)>>;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -91,13 +95,6 @@ const UDF_ERROR_TOTAL: &str = "udf_error";
 const CRITICAL_ERROR_TOTAL: &str = "critical_error";
 const MONOVTX_UDF_ERROR_TOTAL: &str = "error";
 
-pub(crate) mod critical_error_reasons {
-    pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
-    pub(crate) const SOURCE_TRANSFORMER_RUNTIME_ERROR: &str = "source_transformer_runtime_error";
-    pub(crate) const SINK_RUNTIME_ERROR: &str = "sink_runtime_error";
-    pub(crate) const MAP_RUNTIME_ERROR: &str = "map_runtime_error";
-}
-
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
 const FALLBACK_SINK_WRITE_ERRORS_TOTAL: &str = "fbsink_write_errors";
@@ -128,6 +125,7 @@ const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
 const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
 const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
 const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
+const JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL: &str = "max_payload_exceeded";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING_RAW: &str = "pending_raw";
@@ -210,12 +208,155 @@ pub(crate) struct WatermarkFetcherState {
     pub(crate) partitions: Vec<u16>,
 }
 
-/// MetricsState holds both component health checks and optional watermark fetcher state
-/// for serving metrics and watermark endpoints
-#[derive(Clone)]
-pub(crate) struct MetricsState<C: crate::typ::NumaflowTypeConfig> {
-    pub(crate) health_checks: ComponentHealthChecks<C>,
-    pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+/// Process-bound state for the metrics server.
+///
+/// The active forwarder attempt replaces the health and watermark handles without rebinding the
+/// server.
+#[derive(Clone, Default)]
+pub(crate) struct MetricsState {
+    inner: Arc<RwLock<MetricsStateInner>>,
+    sidecars_assumed_live: Arc<AtomicBool>,
+}
+
+#[derive(Default)]
+struct MetricsStateInner {
+    health_checks: Option<Arc<dyn HealthCheck>>,
+    watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+#[async_trait::async_trait]
+trait HealthCheck: Send + Sync {
+    async fn check(&self) -> bool;
+}
+
+#[async_trait::async_trait]
+impl<C: crate::typ::NumaflowTypeConfig> HealthCheck for ComponentHealthChecks<C> {
+    async fn check(&self) -> bool {
+        self.clone().ready().await
+    }
+}
+
+impl MetricsState {
+    /// Creates process-bound metrics state without an active forwarder attempt.
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Replaces the health and watermark handles exposed by the metrics server.
+    pub(crate) fn set<C: crate::typ::NumaflowTypeConfig>(
+        &self,
+        health_checks: ComponentHealthChecks<C>,
+        watermark_fetcher_state: Option<WatermarkFetcherState>,
+    ) {
+        *self.inner.write() = MetricsStateInner {
+            health_checks: Some(Arc::new(health_checks)),
+            watermark_fetcher_state,
+        };
+    }
+
+    /// Removes references to a completed forwarder attempt.
+    pub(crate) fn clear(&self) {
+        *self.inner.write() = MetricsStateInner::default();
+    }
+
+    /// Reports the user-defined containers as live while no forwarder attempt is registered,
+    /// until the returned guard is dropped. Use it for a startup step that does not use those
+    /// containers and can take longer than their liveness budget, so that Kubernetes does not
+    /// restart them because of a delay in the numa container.
+    pub(crate) fn assume_sidecars_live(&self) -> SidecarsAssumedLive {
+        self.sidecars_assumed_live.store(true, Ordering::Release);
+        SidecarsAssumedLive(Arc::clone(&self.sidecars_assumed_live))
+    }
+
+    fn sidecars_assumed_live(&self) -> bool {
+        self.sidecars_assumed_live.load(Ordering::Acquire)
+    }
+
+    fn health_checks(&self) -> Option<Arc<dyn HealthCheck>> {
+        self.inner.read().health_checks.clone()
+    }
+
+    fn watermark_fetcher_state(&self) -> Option<WatermarkFetcherState> {
+        self.inner.read().watermark_fetcher_state.clone()
+    }
+}
+
+/// Keeps the user-defined containers reported as live while no forwarder attempt is
+/// registered. See [MetricsState::assume_sidecars_live].
+pub(crate) struct SidecarsAssumedLive(Arc<AtomicBool>);
+
+impl Drop for SidecarsAssumedLive {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+impl<C: crate::typ::NumaflowTypeConfig> ComponentHealthChecks<C> {
+    async fn ready(self) -> bool {
+        match self {
+            ComponentHealthChecks::Monovertex(mut monovertex_state) => {
+                // This call also checks the transformer when one is configured in the source.
+                if !monovertex_state.source.ready().await {
+                    error!("Monovertex source component is not ready");
+                    return false;
+                }
+                if !monovertex_state.sink.ready().await {
+                    error!("Monovertex sink client is not ready");
+                    return false;
+                }
+                if let Some(ref mut mapper) = monovertex_state.mapper
+                    && !mapper.ready().await
+                {
+                    error!("Monovertex mapper component is not ready");
+                    return false;
+                }
+            }
+            ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
+                PipelineComponents::Source(mut source) => {
+                    if !source.ready().await {
+                        error!("Pipeline source component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Sink(mut sink) => {
+                    // This call also checks the fallback sink when one is configured.
+                    if !sink.ready().await {
+                        error!("Pipeline sink component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Map(mut map) => {
+                    if !map.ready().await {
+                        error!("Pipeline map component is not ready");
+                        return false;
+                    }
+                }
+                PipelineComponents::Reduce(reducer) => match reducer {
+                    UserDefinedReduce::Aligned(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline aligned reduce is not ready");
+                            return false;
+                        }
+                    }
+                    UserDefinedReduce::Unaligned(reducer) => match reducer {
+                        UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
+                            if !reducer.ready().await {
+                                error!("Pipeline accumulator reduce component is not ready");
+                                return false;
+                            }
+                        }
+                        UserDefinedUnalignedReduce::Session(mut reducer) => {
+                            if !reducer.ready().await {
+                                error!("Pipeline session reduce component is not ready");
+                                return false;
+                            }
+                        }
+                    },
+                },
+            },
+        }
+        true
+    }
 }
 
 /// WatermarkQueryParams represents the query parameters for the /watermark endpoint
@@ -568,6 +709,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) max_payload_exceeded_total: Family<Vec<(String, String)>, Counter>,
 
     pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
@@ -588,6 +730,7 @@ impl JetStreamISBMetrics {
             isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
+            max_payload_exceeded_total: Family::<Vec<(String, String)>, Counter>::default(),
 
             buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
@@ -1104,6 +1247,11 @@ impl PipelineMetrics {
             "Total number of jetstream write timeouts",
             metrics.jetstream_isb.write_timeout_total.clone(),
         );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
+            "Total number of jetstream writes rejected because the message exceeds the max message size",
+            metrics.jetstream_isb.max_payload_exceeded_total.clone(),
+        );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
             JETSTREAM_ISB_BUFFER_SOFT_USAGE,
@@ -1275,6 +1423,19 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+/// pipeline metric labels with the partition name label added.
+pub(crate) fn pipeline_partition_metric_labels(
+    vertex_type: &str,
+    partition_name: &str,
+) -> Vec<(String, String)> {
+    let mut labels = pipeline_metric_labels(vertex_type).clone();
+    labels.push((
+        PIPELINE_PARTITION_NAME_LABEL.to_string(),
+        partition_name.to_string(),
+    ));
+    labels
+}
+
 /// drop metric labels which can be due to buffer-full and retry strategy,
 /// or due to conditional forwarding rules not being met, or user setting "to_drop"
 pub(crate) fn pipeline_drop_metric_labels(
@@ -1349,11 +1510,11 @@ pub async fn metrics_handler() -> impl IntoResponse {
 // watermark_handler is used to fetch and return watermark information
 // for all partitions based on available watermark handles.
 // Optionally accepts a 'from' query parameter to filter watermarks by edge (from vertex).
-pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
+pub async fn watermark_handler(
+    State(state): State<MetricsState>,
     Query(params): Query<WatermarkQueryParams>,
 ) -> impl IntoResponse {
-    let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
+    let Some(watermark_fetcher_state) = state.watermark_fetcher_state() else {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
             .header(axum::http::header::CONTENT_TYPE, "application/json")
@@ -1402,10 +1563,7 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
         .unwrap()
 }
 
-pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig>(
-    addr: SocketAddr,
-    metrics_state: MetricsState<C>,
-) -> crate::Result<()> {
+pub(crate) async fn create_metrics_tls_config() -> crate::Result<RustlsConfig> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -1417,9 +1575,17 @@ pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig
         .await
         .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {e}")))?;
 
+    Ok(tls_config)
+}
+
+pub(crate) async fn start_metrics_https_server(
+    listener: TcpListener,
+    tls_config: RustlsConfig,
+    metrics_state: MetricsState,
+) -> crate::Result<()> {
     let metrics_app = metrics_router(metrics_state);
 
-    axum_server::bind_rustls(addr, tls_config)
+    from_tcp_rustls(listener, tls_config)
         .serve(metrics_app.into_make_service())
         .await
         .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {e}")))?;
@@ -1428,12 +1594,12 @@ pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router<C: crate::typ::NumaflowTypeConfig>(metrics_state: MetricsState<C>) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/runtime/watermark", get(watermark_handler))
         .route("/livez", get(livez))
-        .route("/readyz", get(sidecar_livez))
+        .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
         .with_state(metrics_state)
 }
@@ -1442,79 +1608,45 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
-    State(state): State<MetricsState<C>>,
-) -> impl IntoResponse {
-    // Check if health checks are disabled via the environment variable
-    if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
-        .map(|v| v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-    {
+/// Readiness of the numa container. It is not ready until a forwarder attempt is registered
+/// and its components are healthy.
+async fn readyz(State(state): State<MetricsState>) -> impl IntoResponse {
+    if health_checks_disabled() {
         return StatusCode::NO_CONTENT;
     }
-    match state.health_checks {
-        ComponentHealthChecks::Monovertex(mut monovertex_state) => {
-            // this call also check the health of transformer if it is configured in the Source.
-            if !monovertex_state.source.ready().await {
-                error!("Monovertex source component is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            if !monovertex_state.sink.ready().await {
-                error!("Monovertex sink client is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            if let Some(ref mut mapper) = monovertex_state.mapper
-                && !mapper.ready().await
-            {
-                error!("Monovertex mapper component is not ready");
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-        }
-        ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
-            PipelineComponents::Source(mut source) => {
-                if !source.ready().await {
-                    error!("Pipeline source component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Sink(mut sink) => {
-                // this call also check for fbsink if it is there
-                if !sink.ready().await {
-                    error!("Pipeline sink component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Map(mut map) => {
-                if !map.ready().await {
-                    error!("Pipeline map component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            PipelineComponents::Reduce(reducer) => match reducer {
-                UserDefinedReduce::Aligned(mut reducer) => {
-                    if !reducer.ready().await {
-                        error!("Pipeline aligned reduce is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
-                }
-                UserDefinedReduce::Unaligned(reducer) => match reducer {
-                    UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
-                        if !reducer.ready().await {
-                            error!("Pipeline accumulator reduce component is not ready");
-                            return StatusCode::INTERNAL_SERVER_ERROR;
-                        }
-                    }
-                    UserDefinedUnalignedReduce::Session(mut reducer) => {
-                        if !reducer.ready().await {
-                            error!("Pipeline session reduce component is not ready");
-                            return StatusCode::INTERNAL_SERVER_ERROR;
-                        }
-                    }
-                },
-            },
-        },
+    components_status(&state).await
+}
+
+/// Liveness of the user-defined containers, which Kubernetes probes through the numa container.
+/// While [MetricsState::assume_sidecars_live] is in effect and no forwarder attempt is
+/// registered, the containers are reported as live.
+async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
+    if health_checks_disabled() {
+        return StatusCode::NO_CONTENT;
     }
-    StatusCode::NO_CONTENT
+    if state.health_checks().is_none() && state.sidecars_assumed_live() {
+        return StatusCode::NO_CONTENT;
+    }
+    components_status(&state).await
+}
+
+fn health_checks_disabled() -> bool {
+    env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+async fn components_status(state: &MetricsState) -> StatusCode {
+    let Some(health_checks) = state.health_checks() else {
+        error!("No active forwarder attempt is registered for health checks");
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    if health_checks.check().await {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
 
 #[derive(Clone)]
@@ -1620,11 +1752,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-                        metric_labels.push((
-                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                            get_vertex_name().to_string(),
-                        ));
+                        let metric_labels =
+                            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
                         pipeline_metrics()
                             .pending_raw
                             .get_or_create(&metric_labels)
@@ -1654,11 +1783,8 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                                     reader_name,
                                 );
                             }
-                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
-                            metric_labels.push((
-                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                reader_name.to_string(),
-                            ));
+                            let metric_labels =
+                                pipeline_partition_metric_labels(reader_name, reader_name);
                             pipeline_metrics()
                                 .pending_raw
                                 .get_or_create(&metric_labels)
@@ -1690,15 +1816,12 @@ async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use super::*;
-    use crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
-    use crate::source::user_defined::{ReconnectConfig, new_source};
+    use crate::source::user_defined::new_source;
     use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -1763,6 +1886,56 @@ mod tests {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             vec![map::Message::new(input.value).with_keys(input.keys)]
         }
+    }
+
+    #[tokio::test]
+    async fn empty_metrics_state_is_live_but_not_ready() {
+        let metrics_state = MetricsState::new();
+
+        let response = livez().await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let response = readyz(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let response = watermark_handler(
+            State(metrics_state),
+            Query(WatermarkQueryParams { from: None }),
+        )
+        .await;
+        assert_eq!(response.into_response().status(), StatusCode::NOT_FOUND);
+    }
+
+    /// While the sidecars are assumed live, an empty state makes the sidecar probe pass, but the
+    /// numa container stays not ready. When the guard is dropped, the sidecar probe fails again.
+    #[tokio::test]
+    async fn empty_metrics_state_reports_sidecars_live_only_while_assumed() {
+        let metrics_state = MetricsState::new();
+
+        let assumed_live = metrics_state.assume_sidecars_live();
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state.clone())).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        drop(assumed_live);
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[tokio::test]
@@ -1842,15 +2015,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    src_sock_file,
-                    src_info_file,
-                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .expect("Failed to create source reader");
@@ -1873,19 +2037,13 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sink_sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sink_sock_file).await.unwrap(),
+            ))),
         )
-        .fb_sink_client(SinkClientType::UserDefined(
-            Box::new(SinkClient::new(
-                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
-            )),
-            None,
-        ))
+        .fb_sink_client(SinkClientType::UserDefined(Box::new(SinkClient::new(
+            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+        ))))
         .build()
         .await
         .expect("failed to create sink writer");
@@ -1901,25 +2059,31 @@ mod tests {
         )
         .await;
 
-        let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
-            health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
-                source,
-                sink: sink_writer,
-                mapper: Some(mapper_handle.mapper),
-            })),
-            watermark_fetcher_state: None,
-        };
+        let metrics_state = MetricsState::new();
+        metrics_state.set(
+            ComponentHealthChecks::<crate::typ::WithoutRateLimiter>::Monovertex(Box::new(
+                MonovertexComponents {
+                    source,
+                    sink: sink_writer,
+                    mapper: Some(mapper_handle.mapper),
+                },
+            )),
+            None,
+        );
 
-        let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let tls_config = create_metrics_tls_config().await.unwrap();
         let metrics_state_clone = metrics_state.clone();
         let server_handle = tokio::spawn(async move {
-            start_metrics_https_server::<crate::typ::WithoutRateLimiter>(addr, metrics_state_clone)
+            start_metrics_https_server(listener, tls_config, metrics_state_clone)
                 .await
                 .unwrap();
         });
 
-        // invoke the sidecar-livez endpoint
-        let response = sidecar_livez::<crate::typ::WithoutRateLimiter>(State(metrics_state)).await;
+        // invoke the sidecar-livez and readyz endpoints
+        let response = sidecar_livez(State(metrics_state.clone())).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+        let response = readyz(State(metrics_state.clone())).await;
         assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
 
         // invoke the livez endpoint
@@ -1929,6 +2093,13 @@ mod tests {
         // invoke the metrics endpoint
         let response = metrics_handler().await;
         assert_eq!(response.into_response().status(), StatusCode::OK);
+
+        metrics_state.clear();
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(
+            response.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
 
         // Stop the servers
         server_handle.abort();

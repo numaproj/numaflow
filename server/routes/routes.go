@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	v2 "github.com/numaproj/numaflow/server/apis/v2"
 	"github.com/numaproj/numaflow/server/authz"
 )
 
@@ -64,6 +65,14 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	// disable metrics charts if metric config or prometheus client is not set.
 	sysInfo.DisableMetricsCharts = promQlServiceObj.DisableMetricsChart()
 
+	var authorizer authz.Authorizer
+	if !authInfo.DisableAuth {
+		authorizer, err = authz.NewCasbinObject(ctx, authRouteMap)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj, localUsersAuthObj)
@@ -73,10 +82,6 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	r1Group := r.Group(baseHref + "api/v1")
 	r1Group.Use(cleanResponseMiddleware())
 	if !authInfo.DisableAuth {
-		authorizer, err := authz.NewCasbinObject(ctx, authRouteMap)
-		if err != nil {
-			panic(err)
-		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
 		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
@@ -86,6 +91,17 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
+
+	v2Handler, err := v2.NewClusterHandler()
+	if err != nil {
+		panic(err)
+	}
+	r2Group := r.Group(baseHref + "api/v2")
+	r2Group.Use(cleanResponseMiddleware())
+	if !authInfo.DisableAuth {
+		r2Group.Use(v2AuthMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
+	}
+	registerV2Routes(r2Group, v2Handler)
 }
 
 func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
@@ -159,9 +175,11 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/metrics", handler.GetVerticesMetrics)
 	// Get all the pods of a vertex.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
+	// Get logs for a pod belonging to a pipeline vertex.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods/:pod/logs", handler.PipelinePodLogs)
 	// Get the metrics such as cpu, memory usage for a pod.
 	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
-	// Get pod logs.
+	// Get logs for a Numaflow-managed pod. Prefer the resource-scoped routes above and below.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// Get the pod metrics for a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods-info", handler.GetMonoVertexPodsInfo)
@@ -177,6 +195,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.DELETE("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.DeleteMonoVertex)
 	// Get all the pods of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.ListMonoVertexPods)
+	// Get logs for a pod belonging to a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods/:pod/logs", handler.MonoVertexPodLogs)
 	// Create a mono vertex.
 	r.POST("/namespaces/:namespace/mono-vertices", handler.CreateMonoVertex)
 	// Get the metrics of a mono vertex.

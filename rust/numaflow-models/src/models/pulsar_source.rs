@@ -31,6 +31,8 @@ pub struct PulsarSource {
     pub server_addr: String,
     #[serde(rename = "subscriptionName")]
     pub subscription_name: String,
+    #[serde(rename = "tls", skip_serializing_if = "Option::is_none")]
+    pub tls: Option<Box<crate::models::Tls>>,
     #[serde(rename = "topic")]
     pub topic: String,
 }
@@ -49,6 +51,7 @@ impl PulsarSource {
             max_unack: None,
             server_addr,
             subscription_name,
+            tls: None,
             topic,
         }
     }

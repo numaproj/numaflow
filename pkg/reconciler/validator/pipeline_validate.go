@@ -211,8 +211,11 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
 		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
 	}
-	if v.Scale.Cron != nil {
-		return fmt.Errorf("vertex %q: cron autoscaling is not supported for pipeline vertices", v.Name)
+	if v.Scale.Cron != nil && !v.IsASource() {
+		return fmt.Errorf("vertex %q: cron autoscaling is only supported for source vertices", v.Name)
+	}
+	if err := validateCronScaling(v.Scale); err != nil {
+		return fmt.Errorf("vertex %q: invalid scale.cron: %w", v.Name, err)
 	}
 	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
 	if v.Scale.Min != nil {
@@ -293,6 +296,13 @@ func validateMapUDF(udf dfv1.UDF) error {
 	if udf.Container == nil || udf.Container.Image == "" {
 		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
+
+	if udf.RetryStrategy != nil {
+		if err := hasValidNonSinkRetryStrategy(*udf.RetryStrategy); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -301,6 +311,10 @@ func validateReduceUDF(udf dfv1.UDF) error {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")
 		}
+	}
+
+	if udf.RetryStrategy != nil {
+		return fmt.Errorf("invalid udf spec, retryStrategy not supported for reduce udf")
 	}
 
 	f := udf.GroupBy.Window.Fixed
@@ -587,10 +601,8 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 }
 
 func validateSource(source dfv1.Source) error {
-	if transformer := source.UDTransformer; transformer != nil {
-		if transformer.Container == nil || transformer.Container.Image == "" {
-			return fmt.Errorf("invalid source transformer, specify a customized image")
-		}
+	if err := validateTransformer(source.UDTransformer); err != nil {
+		return err
 	}
 	// TODO: add more validations for each source type
 	if source.UDSource != nil {
@@ -606,6 +618,55 @@ func validateSource(source dfv1.Source) error {
 	if source.Sqs != nil {
 		if err := validateSQSSource(*source.Sqs); err != nil {
 			return fmt.Errorf("invalid SQS source: %w", err)
+		}
+	}
+
+	// HTTP source validation
+	if source.HTTP != nil {
+		if err := validateHTTPSource(*source.HTTP); err != nil {
+			return fmt.Errorf("invalid HTTP source: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// httpEndpointRegex matches a valid HTTP source endpoint: one or more path
+// segments of URL-safe characters separated by single slashes, with no leading
+// or trailing slash. This rejects empty values, leading slashes (which would
+// produce an unreachable "/vertices//..." route), and path-parameter syntax
+// such as "{id}" or ":id" that would panic the Axum router at pod startup.
+var httpEndpointRegex = regexp.MustCompile(`^[A-Za-z0-9\-._~]+(/[A-Za-z0-9\-._~]+)*$`)
+
+// validateHTTPSource validates the HTTP source configuration. The endpoint, when
+// set, is served under the "/vertices/" prefix by the runtime, so it must be a
+// clean relative path. An invalid value would otherwise be accepted at admission
+// and then crash-loop the source pod when the router is built.
+func validateHTTPSource(http dfv1.HTTPSource) error {
+	if http.Endpoint == "" {
+		return nil
+	}
+	if !httpEndpointRegex.MatchString(http.Endpoint) {
+		return fmt.Errorf("invalid endpoint %q, must be one or more '/'-separated path segments using characters [A-Za-z0-9-._~], with no leading or trailing slash", http.Endpoint)
+	}
+	for seg := range strings.SplitSeq(http.Endpoint, "/") {
+		if seg == "." || seg == ".." {
+			return fmt.Errorf("invalid endpoint %q, path segments '.' and '..' are not allowed", http.Endpoint)
+		}
+	}
+	return nil
+}
+
+func validateTransformer(udTransformer *dfv1.UDTransformer) error {
+	if transformer := udTransformer; transformer != nil {
+		if transformer.Container == nil || transformer.Container.Image == "" {
+			return fmt.Errorf("invalid source transformer, specify a customized image")
+		}
+
+		if transformer.RetryStrategy != nil {
+			if err := hasValidNonSinkRetryStrategy(*transformer.RetryStrategy); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -639,26 +700,52 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
 	}
 
-	if s.RetryStrategy.BackOff != nil {
+	if err := hasValidBackOff(s.RetryStrategy.BackOff); err != nil {
+		return err
+	}
+
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
+}
+
+// hasValidNonSinkRetryStrategy checks if the provided RetryStrategy is valid for non-sink components.
+func hasValidNonSinkRetryStrategy(retryStrategy dfv1.RetryStrategy) error {
+	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
+	// we return an error
+	if retryStrategy.OnFailure != nil && *retryStrategy.OnFailure == dfv1.OnFailureFallback {
+		return fmt.Errorf("given fallback OnFailure strategy is not currently supported")
+	}
+
+	if err := hasValidBackOff(retryStrategy.BackOff); err != nil {
+		return err
+	}
+
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
+}
+
+// hasValidBackOff checks if the provided backoff in the retry strategy is valid
+func hasValidBackOff(backOff *dfv1.Backoff) error {
+	if backOff != nil {
 		// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
-		if s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+		if backOff.Steps != nil && *backOff.Steps == 0 {
 			return fmt.Errorf("steps in backoff strategy cannot be 0")
 		}
 		// If factor is provided in the strategy it should be greater than or equal to 1
-		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor < 1 {
+		if backOff.Factor != nil && *backOff.Factor < 1 {
 			return fmt.Errorf("factor in backoff strategy cannot be less than 1")
 		}
 
 		// If cap and interval are provided, cap must be greater than or equal to interval
-		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval != nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < s.RetryStrategy.BackOff.Interval.Duration {
+		if backOff.Cap != nil && backOff.Interval != nil {
+			if backOff.Cap.Duration < backOff.Interval.Duration {
 				return fmt.Errorf("cap in backoff strategy cannot be less than interval")
 			}
 		}
 
 		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
-		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < dfv1.DefaultRetryInterval {
+		if backOff.Cap != nil && backOff.Interval == nil {
+			if backOff.Cap.Duration < dfv1.DefaultRetryInterval {
 				return fmt.Errorf("cap in backoff strategy cannot be less than default interval value, if interval is not provided")
 			}
 		}
@@ -666,11 +753,11 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 		// If jitter is provided, it should be greater than or equal to 0 and less than 1
 		// Jitter is typically used to introduce small random variations to avoid synchronized retries
 		// A jitter value less than 1 ensures that the delay remains within a reasonable range around the base delay.
-		if s.RetryStrategy.BackOff.Jitter != nil && (*s.RetryStrategy.BackOff.Jitter < 0 || *s.RetryStrategy.BackOff.Jitter >= 1) {
+		if backOff.Jitter != nil && (*backOff.Jitter < 0 || *backOff.Jitter >= 1) {
 			return fmt.Errorf("jitter in backoff strategy should be between 0 and 1")
 		}
 	}
-	// If no errors are found, the function returns nil indicating the validation passed.
+
 	return nil
 }
 
@@ -719,29 +806,113 @@ func validateAWSAssumeRole(assumeRole *dfv1.AWSAssumeRole) error {
 	return nil
 }
 
-// validateSQSSource validates SQS source configuration
+// validateSQSSource validates SQS source configuration.
+// Exactly one of queueName or queueNames is required. All names share awsRegion
+// and queueOwnerAWSAccountID.
 func validateSQSSource(sqs dfv1.SqsSource) error {
-	// Basic required field validation
-	if sqs.AWSRegion == "" {
-		return fmt.Errorf("awsRegion is required")
+	if sqs.QueueName != "" && sqs.QueueNames != "" {
+		return fmt.Errorf("'queueNames' is mutually exclusive with 'queueName'")
 	}
-	if sqs.QueueName == "" {
-		return fmt.Errorf("queueName is required")
+	if sqs.QueueName == "" && sqs.QueueNames == "" {
+		return fmt.Errorf("either 'queueName' or 'queueNames' must be specified")
 	}
-	if sqs.QueueOwnerAWSAccountID == "" {
-		return fmt.Errorf("queueOwnerAWSAccountID is required")
+
+	var sourceQueueNames []string
+	if sqs.QueueNames != "" {
+		queueNames, err := parseSQSQueueList("queueNames", sqs.QueueNames)
+		if err != nil {
+			return err
+		}
+		sourceQueueNames = queueNames
+
+		seen := make(map[string]struct{}, len(queueNames))
+		for i, queueName := range queueNames {
+			if _, ok := seen[queueName]; ok {
+				return fmt.Errorf("duplicate queue name in 'queueNames': %q", queueName)
+			}
+			seen[queueName] = struct{}{}
+
+			if err := validateSQSQueueIdentity(sqs.AWSRegion, queueName, sqs.QueueOwnerAWSAccountID); err != nil {
+				return fmt.Errorf("invalid queueNames[%d]: %w", i, err)
+			}
+		}
 	} else {
-		// Basic AWS Account ID validation
-		// https://docs.aws.amazon.com/organizations/latest/APIReference/API_Account.html
-		validAccountID := regexp.MustCompile(`^\d{12}$`)
-		if !validAccountID.MatchString(sqs.QueueOwnerAWSAccountID) {
-			return fmt.Errorf("queueOwnerAWSAccountID must be a valid 12-digit AWS account ID")
+		sourceQueueNames = []string{sqs.QueueName}
+		if err := validateSQSQueueIdentity(sqs.AWSRegion, sqs.QueueName, sqs.QueueOwnerAWSAccountID); err != nil {
+			return err
+		}
+	}
+
+	if sqs.DeadLetterQueues == "" {
+		if sqs.MaxReceiveCount != nil {
+			return fmt.Errorf("'maxReceiveCount' requires 'deadLetterQueues'")
+		}
+	} else {
+		deadLetterQueueNames, err := parseSQSQueueList("deadLetterQueues", sqs.DeadLetterQueues)
+		if err != nil {
+			return err
+		}
+		if len(sourceQueueNames) != len(deadLetterQueueNames) {
+			return fmt.Errorf("'deadLetterQueues' must contain exactly one entry for each source queue: got %d source queues and %d dead-letter queues", len(sourceQueueNames), len(deadLetterQueueNames))
+		}
+
+		for i, deadLetterQueueName := range deadLetterQueueNames {
+			if err := validateSQSQueueIdentity(sqs.AWSRegion, deadLetterQueueName, sqs.QueueOwnerAWSAccountID); err != nil {
+				return fmt.Errorf("invalid deadLetterQueues[%d]: %w", i, err)
+			}
+			if sourceQueueNames[i] == deadLetterQueueName {
+				return fmt.Errorf("source queue %q cannot be its own dead-letter queue", sourceQueueNames[i])
+			}
+			if strings.HasSuffix(sourceQueueNames[i], ".fifo") != strings.HasSuffix(deadLetterQueueName, ".fifo") {
+				return fmt.Errorf("source queue %q and dead-letter queue %q must both be FIFO queues or both be standard queues", sourceQueueNames[i], deadLetterQueueName)
+			}
+		}
+
+		if sqs.MaxReceiveCount != nil && (*sqs.MaxReceiveCount < 1 || *sqs.MaxReceiveCount > 1000) {
+			return fmt.Errorf("maxReceiveCount must be between 1 and 1000")
 		}
 	}
 
 	// Validate assume role if present
 	if err := validateAWSAssumeRole(sqs.AssumeRole); err != nil {
 		return fmt.Errorf("invalid assume role configuration: %w", err)
+	}
+
+	return nil
+}
+
+// parseSQSQueueList parses a comma-separated SQS queue-name field. Empty
+// entries are rejected rather than silently discarded.
+func parseSQSQueueList(fieldName, value string) ([]string, error) {
+	parts := strings.Split(value, ",")
+	names := make([]string, 0, len(parts))
+	for i, part := range parts {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			return nil, fmt.Errorf("%s contains empty queue name at position %d", fieldName, i)
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// validateSQSQueueIdentity validates the fields identifying an SQS queue.
+func validateSQSQueueIdentity(awsRegion, queueName, queueOwnerAWSAccountID string) error {
+	if awsRegion == "" {
+		return fmt.Errorf("awsRegion is required")
+	}
+	if queueName == "" {
+		return fmt.Errorf("queueName is required")
+	}
+	if queueOwnerAWSAccountID == "" {
+		return fmt.Errorf("queueOwnerAWSAccountID is required")
+	} else {
+		// Basic AWS Account ID validation
+		// https://docs.aws.amazon.com/organizations/latest/APIReference/API_Account.html
+		validAccountID := regexp.MustCompile(`^\d{12}$`)
+		if !validAccountID.MatchString(queueOwnerAWSAccountID) {
+			return fmt.Errorf("queueOwnerAWSAccountID must be a valid 12-digit AWS account ID")
+		}
 	}
 
 	return nil

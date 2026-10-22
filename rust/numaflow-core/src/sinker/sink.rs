@@ -4,8 +4,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::{Message, MessageHandle, MessageID, NackOptions};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metrics,
+    pipeline_partition_metric_labels,
 };
 use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
@@ -71,10 +71,7 @@ pub(crate) enum SinkClientType {
     Log,
     Blackhole,
     Serve,
-    UserDefined(
-        Box<SinkClient<Channel>>,
-        Option<user_defined::ReconnectConfig>,
-    ),
+    UserDefined(Box<SinkClient<Channel>>),
     Sqs(SqsSink),
     Kafka(KafkaSink),
     Pulsar(Box<PulsarSink>),
@@ -248,7 +245,7 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(read_batch) = chunk_stream.next().await {
-                    // We are in shutting down mode, NAK all messages
+                    // Forwarder attempt is draining after an error; NAK all messages
                     if self.shutting_down_on_err {
                         for msg in read_batch {
                             msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
@@ -271,14 +268,12 @@ impl SinkWriter {
                             mark_success_batch!(acked_handles);
                         }
                         Err(e) => {
-                            if matches!(e, Error::UdfRedrive(_)) {
-                                mark_failed_batch!(read_batch, &e);
-                                error!(?e, "redrivable sink error");
-                                continue;
-                            }
                             mark_failed_batch!(read_batch, &e);
-                            // Critical error, cancel upstream and initiate shutdown
-                            error!(?e, "Error writing to sink, initiating shutdown.");
+                            // Critical error: cancel the current forwarder attempt and drain.
+                            error!(
+                                ?e,
+                                "Error writing to sink; cancelling forwarder attempt and draining"
+                            );
                             cln_token.cancel();
                             self.final_result = Err(e);
                             self.shutting_down_on_err = true;
@@ -664,11 +659,7 @@ impl SinkWriter {
                     .inc_by(dropped_messages_count as u64);
             }
         } else {
-            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-            labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
 
             pipeline_metrics()
                 .forwarder
@@ -718,11 +709,7 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         } else {
-            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-            labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_total
@@ -760,11 +747,7 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(ons_sink_start.elapsed().as_micros() as f64);
         } else {
-            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-            labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
             pipeline_metrics()
                 .sink_forwarder
                 .onsuccess_sink_write_total
@@ -793,11 +776,7 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc();
         } else {
-            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-            labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .write_error_total
@@ -1103,13 +1082,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_streaming_write_redrivable_error_nacks_batch() {
+    async fn test_streaming_write_sink_error_stops_writer() {
         let (sink_tx, mut sink_rx) = mpsc::channel::<SinkActorMessage>(1);
         tokio::spawn(async move {
             while let Some(msg) = sink_rx.recv().await {
-                let _ = msg.respond_to.send(Err(Error::UdfRedrive(Box::new(
-                    tonic::Status::unavailable("sink reconnecting"),
-                ))));
+                let _ =
+                    msg.respond_to
+                        .send(Err(Error::Grpc(Box::new(tonic::Status::unavailable(
+                            "sink stream closed",
+                        )))));
             }
         });
 
@@ -1165,7 +1146,7 @@ mod tests {
             .unwrap();
 
         let result = handle.await.unwrap();
-        assert!(result.is_ok());
+        assert!(matches!(result, Err(Error::Grpc(_))));
         for ack_rx in ack_rxs {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
         }
@@ -1198,12 +1179,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            ))),
         )
         .build()
         .await
@@ -1289,12 +1267,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            ))),
         )
         .fb_sink_client(SinkClientType::Log)
         .build()
@@ -1374,12 +1349,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            ))),
         )
         .on_success_sink_client(SinkClientType::Log)
         .build()
@@ -1480,12 +1452,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            ))),
         )
         .serving_store(serving_store.clone())
         .build()
@@ -1652,11 +1621,7 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_send_error_metrics_pipeline() {
-        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-        labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            get_vertex_name().to_string(),
-        ));
+        let labels = pipeline_partition_metric_labels(VERTEX_TYPE_SINK, get_vertex_name());
 
         let before = pipeline_metrics()
             .forwarder
@@ -1987,12 +1952,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file.clone()).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file.clone()).await.unwrap(),
+            ))),
         )
         .build()
         .await

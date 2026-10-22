@@ -49,10 +49,20 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 // but we have to trigger it explicitly.
 // When unhealthy, message carries the free-form per-container failure detail (e.g. OOMKilled,
 // ImagePullBackOff) so it can be surfaced in the PodsHealthy condition.
+// Pending pods with PodScheduled=False are unhealthy; other Pending pods (still scheduling
+// or starting, including during scale-up) remain healthy.
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string, isTransientUnhealthy bool) {
 	// Skip pods that are terminating or already completed
 	if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
 		return true, "", "", false
+	}
+
+	// Pending + Unschedulable pods have empty container statuses and would
+	// otherwise look healthy. Other Pending (still scheduling / starting) stays healthy.
+	if pod.Status.Phase == corev1.PodPending {
+		if unschedReason, unschedMsg, unschedulable := unschedulableReasonAndMessage(pod); unschedulable {
+			return false, unschedReason, unschedMsg, false
+		}
 	}
 
 	// check both container and initContainer statuses
@@ -67,6 +77,35 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, message string,
 
 	return true, "", "", false
 
+}
+
+// unschedulableReasonAndMessage reports a Pending pod that Kubernetes cannot schedule.
+// It looks for PodScheduled=False on the pod status conditions.
+func unschedulableReasonAndMessage(pod *corev1.Pod) (reason, message string, unschedulable bool) {
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
+			msg := summarizeSchedulingMessage(c.Message)
+			if msg == "" {
+				msg = "Pod is unschedulable"
+			}
+			reason = c.Reason
+			if reason == "" {
+				reason = "Unschedulable"
+			}
+			return reason, msg, true
+		}
+	}
+	return "", "", false
+}
+
+// summarizeSchedulingMessage keeps the useful first sentence from Kubernetes'
+// verbose scheduler message. Full scheduling details remain available in Events.
+func summarizeSchedulingMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if first, _, found := strings.Cut(message, "."); found {
+		return first + "."
+	}
+	return message
 }
 
 // checkContainerStatuses inspects a set of container statuses and, when any are unhealthy,

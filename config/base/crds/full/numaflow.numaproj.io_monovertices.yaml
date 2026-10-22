@@ -506,6 +506,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -526,6 +527,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -546,6 +548,7 @@ spec:
                           values:
                             items:
                               type: string
+                            minItems: 1
                             type: array
                         required:
                         - values
@@ -789,6 +792,24 @@ spec:
                           runAsUserName:
                             type: string
                         type: object
+                    type: object
+                  startupProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
                     type: object
                 type: object
               daemonTemplate:
@@ -1470,6 +1491,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   dnsConfig:
                     properties:
@@ -1741,6 +1780,24 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      startupProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                     type: object
                   metadata:
                     properties:
@@ -1779,6 +1836,8 @@ spec:
                       type: object
                     type: array
                   runtimeClassName:
+                    type: string
+                  schedulerName:
                     type: string
                   securityContext:
                     properties:
@@ -2871,7 +2930,6 @@ spec:
               priorityClassName:
                 type: string
               replicas:
-                default: 1
                 format: int32
                 type: integer
               resourceClaims:
@@ -2954,6 +3012,8 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              schedulerName:
+                type: string
               securityContext:
                 properties:
                   appArmorProfile:
@@ -4045,6 +4105,50 @@ spec:
                             type: string
                           serverAddr:
                             type: string
+                          tls:
+                            properties:
+                              caCertSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              certSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              insecureSkipVerify:
+                                type: boolean
+                              keySecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           topic:
                             type: string
                         required:
@@ -4983,6 +5087,50 @@ spec:
                             type: string
                           serverAddr:
                             type: string
+                          tls:
+                            properties:
+                              caCertSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              certSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              insecureSkipVerify:
+                                type: boolean
+                              keySecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           topic:
                             type: string
                         required:
@@ -5375,6 +5523,50 @@ spec:
                         type: string
                       serverAddr:
                         type: string
+                      tls:
+                        properties:
+                          caCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          certSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          insecureSkipVerify:
+                            type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       topic:
                         type: string
                     required:
@@ -5782,6 +5974,8 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      endpoint:
+                        type: string
                       ports:
                         properties:
                           http:
@@ -6367,6 +6561,50 @@ spec:
                         type: string
                       subscriptionName:
                         type: string
+                      tls:
+                        properties:
+                          caCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          certSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          insecureSkipVerify:
+                            type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       topic:
                         type: string
                     required:
@@ -6405,9 +6643,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:
@@ -6415,6 +6658,8 @@ spec:
                           type: string
                         type: array
                       queueName:
+                        type: string
+                      queueNames:
                         type: string
                       queueOwnerAWSAccountID:
                         type: string
@@ -6426,7 +6671,6 @@ spec:
                         type: integer
                     required:
                     - awsRegion
-                    - queueName
                     - queueOwnerAWSAccountID
                     type: object
                   transformer:
@@ -6723,6 +6967,27 @@ spec:
                               - name
                               type: object
                             type: array
+                        type: object
+                      retryStrategy:
+                        properties:
+                          backoff:
+                            properties:
+                              cap:
+                                type: string
+                              factor:
+                                type: number
+                              interval:
+                                default: 1ms
+                                type: string
+                              jitter:
+                                type: number
+                              steps:
+                                format: int32
+                                type: integer
+                            type: object
+                          onFailure:
+                            default: retry
+                            type: string
                         type: object
                     type: object
                   udsource:
@@ -7403,6 +7668,27 @@ spec:
                         type: object
                     required:
                     - window
+                    type: object
+                  retryStrategy:
+                    properties:
+                      backoff:
+                        properties:
+                          cap:
+                            type: string
+                          factor:
+                            type: number
+                          interval:
+                            default: 1ms
+                            type: string
+                          jitter:
+                            type: number
+                          steps:
+                            format: int32
+                            type: integer
+                        type: object
+                      onFailure:
+                        default: retry
+                        type: string
                     type: object
                 type: object
               updateStrategy:

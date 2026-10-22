@@ -129,7 +129,7 @@ impl ErrorInjector {
         // First check if we need to skip this write
         let skip = self
             .skip_writes_before_fail
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
                 if c > 0 { Some(c - 1) } else { None }
             })
             .is_ok();
@@ -170,7 +170,7 @@ impl ErrorInjector {
         let count = counter.load(Ordering::Relaxed);
         if count > 0 {
             counter
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
                     if c > 0 { Some(c - 1) } else { None }
                 })
                 .ok();

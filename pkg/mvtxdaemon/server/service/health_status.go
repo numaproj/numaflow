@@ -114,45 +114,30 @@ func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 	hc.currentDataStatus = status
 }
 
-// getMonoVertexDataCriticality is used to provide the data criticality of the MonoVertex
-// They can be of the following types:
-// 1. Healthy: The MonoVertex is working as expected
-// 2. Warning: The MonoVertex is working but there could be a lag in the data movement
-// 3. Critical: The MonoVertex is not working as expected
-// We need to check the following things to determine the data criticality of the MonoVertex:
-// At any given instant of time what is the desired number of replicas required by the MonoVertex
-// to clear out the backlog in the target state time.
-// This logic is similar to our scaling logic.
-// Based on the desired replicas, we decide the data criticality.
+// getMonoVertexDataCriticality reports data health for the MonoVertex daemon /api/v1/status endpoint.
+// When metrics are available it returns:
+//   - Healthy: desiredReplicas <= activePods
+//   - Warning: desiredReplicas > activePods (backlog needs more capacity than currently active)
 //
-// - If the current replicas are equal to the max replicas, and the desired replicas are more than the max replicas,
-// the data criticality is Critical. This means that the MonoVertex is not able to process the data at the rate
-// it is coming in, and the due to the provided specified scale we cannot add more replicas as well.
-// Else we consider the data criticality as healthy.
+// Errors (missing rate/pending) propagate to the caller, which maps them to Unknown.
 //
-// TODO(MonoVertex): Add the logic to determine the warning state based on more conditions.
-func (hc *HealthChecker) getMonoVertexDataCriticality(_ context.Context, mvtxMetrics *mvtxdaemon.MonoVertexMetrics) (*monoVtxState, error) {
-	// Get the desired replicas for the MonoVertex based on the metrics
-	desiredReplicas, err := hc.getDesiredReplica(mvtxMetrics)
+// activePods is the count of HEAD-active pods from the rater pod tracker (DNS discovery + probe).
+func (hc *HealthChecker) getMonoVertexDataCriticality(_ context.Context, mvtxMetrics *mvtxdaemon.MonoVertexMetrics, activePods int) (*monoVtxState, error) {
+	desiredReplicas, err := hc.getDesiredReplica(mvtxMetrics, activePods)
 	if err != nil {
 		return nil, err
 	}
-	maxReplicas := int(hc.monoVertex.Spec.Scale.GetMaxReplicas())
-	// default status is healthy
 	status := v1alpha1.MonoVertexStatusHealthy
-	// If the desired replicas are more than the max replicas,
-	// the data criticality is Critical.
-	if desiredReplicas > maxReplicas {
-		status = v1alpha1.MonoVertexStatusCritical
+	if desiredReplicas > activePods {
+		status = v1alpha1.MonoVertexStatusWarning
 	}
 	return newMonoVtxState(mvtxMetrics.MonoVertex, status), nil
 }
 
-// getDesiredReplica calculates the desired replicas based on the processing rate and pending information
-// of the MonoVertex. This logic is similar to our scaling logic.
-// But unlike the scaling where we change the desired replicas based on the provided scale,
-// here we just calculate the desired replicas and return it.
-func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMetrics) (int, error) {
+// getDesiredReplica estimates replicas needed to clear pending within targetProcessingSeconds.
+// The formula mirrors pkg/reconciler/monovertex/scaling/scaling.go but uses activePods
+// (HEAD-active pods from the rater pod tracker) instead of ReadyReplicas from the live CR.
+func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMetrics, activePods int) (int, error) {
 	totalRate := float64(0)
 	totalPending := int64(0)
 	// Extract the processing rate from the metrics for the default lookback period
@@ -180,18 +165,24 @@ func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMet
 		return 0, nil
 	}
 
-	//TODO(MonoVertex): Something is wrong
-	// MonoVertex is not processing any data even though the pending is still around.
-	// It could be a slow processor, but zero rate isn't ideal
-	// we should mark this up as warning maybe?
+	if activePods == 0 {
+		return 0, fmt.Errorf("cannot check data health, MonoVertex %s has no active pods", mvtxMetrics.MonoVertex)
+	}
+
+	// TODO(MonoVertex): pending > 0 with zero rate may indicate a stalled processor;
+	// consider surfacing Warning instead of treating this as "desired == activePods".
 	if totalRate == 0 {
-		return int(hc.monoVertex.Status.Replicas), nil
+		return activePods, nil
 	}
 
 	// We calculate the time of finishing processing the pending messages,
 	// and then we know how many replicas are needed to get them done in target seconds.
-	desired := int32(math.Round(((float64(totalPending) / totalRate) / float64(hc.monoVertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(hc.monoVertex.Status.Replicas)))
-	return int(desired), nil
+	// Clamp before casting to int32.
+	desiredRaw := math.Round(((float64(totalPending) / totalRate) / float64(hc.monoVertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(activePods))
+	if desiredRaw > math.MaxInt32 {
+		desiredRaw = math.MaxInt32
+	}
+	return int(int32(desiredRaw)), nil
 }
 
 // convertMonoVtxStateToHealthResp is used to generate the data health response from a MonoVtx State

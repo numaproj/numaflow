@@ -21,6 +21,23 @@ use tracing::warn;
 pub(crate) const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
+const DEFAULT_SQS_MAX_RECEIVE_COUNT: i32 = 10;
+
+fn parse_sqs_queue_list(field_name: &str, value: String) -> Result<Vec<String>> {
+    value
+        .split(',')
+        .enumerate()
+        .map(|(idx, name)| {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(Error::Config(format!(
+                    "{field_name} contains empty queue name at position {idx}"
+                )));
+            }
+            Ok(name.to_string())
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SourceConfig {
@@ -86,7 +103,7 @@ pub(crate) enum SourceType {
     UserDefined(UserDefinedConfig),
     Pulsar(PulsarSourceConfig),
     Jetstream(JetstreamSourceConfig),
-    Sqs(SqsSourceConfig),
+    Sqs(Box<SqsSourceConfig>),
     Kafka(Box<KafkaSourceConfig>),
     Http(numaflow_http::HttpSourceConfig),
     Nats(NatsSourceConfig),
@@ -135,6 +152,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
     type Error = Error;
     fn try_from(value: Box<PulsarSource>) -> Result<Self> {
         let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
+        let tls = super::parse_pulsar_tls_config(value.tls)?;
         let pulsar_config = PulsarSourceConfig {
             dead_letter_policy: value.dead_letter_policy.map(|p| {
                 numaflow_pulsar::source::PulsarDeadLetterPolicy {
@@ -149,6 +167,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
             subscription: value.subscription_name,
             max_unack: value.max_unack.unwrap_or(1000) as usize,
             auth,
+            tls,
         };
         Ok(SourceType::Pulsar(pulsar_config))
     }
@@ -157,7 +176,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
 impl TryFrom<Box<SqsSource>> for SourceType {
     type Error = Error;
 
-    fn try_from(value: Box<SqsSource>) -> Result<Self> {
+    fn try_from(mut value: Box<SqsSource>) -> Result<Self> {
         if let Some(timeout) = value.visibility_timeout
             && !(0..=43200).contains(&timeout)
         {
@@ -192,9 +211,112 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             policy_arns: ar.policy_arns,
         });
 
+        if value.aws_region.is_empty() {
+            return Err(Error::Config(
+                "awsRegion must be specified for SQS source".to_string(),
+            ));
+        }
+        if value.queue_owner_aws_account_id.len() != 12
+            || !value
+                .queue_owner_aws_account_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
+        {
+            return Err(Error::Config(
+                "queueOwnerAWSAccountID must be a valid 12-digit AWS account ID for SQS source"
+                    .to_string(),
+            ));
+        }
+
+        // Both API forms collapse to a name list. queueName is a one-element Vec.
+        let queue_names = match (value.queue_name.take(), value.queue_names.take()) {
+            (Some(_), Some(queue_names)) if !queue_names.is_empty() => {
+                return Err(Error::Config(
+                    "'queueNames' is mutually exclusive with 'queueName' for SQS source"
+                        .to_string(),
+                ));
+            }
+            (Some(queue_name), _) if !queue_name.is_empty() => vec![queue_name],
+            (None, Some(queue_names)) if !queue_names.is_empty() => {
+                parse_sqs_queue_list("queueNames", queue_names)?
+            }
+            _ => {
+                return Err(Error::Config(
+                    "either 'queueName' or 'queueNames' must be specified for SQS source"
+                        .to_string(),
+                ));
+            }
+        };
+
+        let mut seen = std::collections::HashSet::with_capacity(queue_names.len());
+        for queue_name in &queue_names {
+            if !seen.insert(queue_name.clone()) {
+                return Err(Error::Config(format!(
+                    "duplicate queue name in SQS source: {queue_name:?}"
+                )));
+            }
+        }
+
+        let dead_letter_queue_names = match value.dead_letter_queues.take() {
+            Some(dead_letter_queues) if !dead_letter_queues.is_empty() => {
+                parse_sqs_queue_list("deadLetterQueues", dead_letter_queues)?
+            }
+            _ => Vec::new(),
+        };
+
+        let max_receive_count = if dead_letter_queue_names.is_empty() {
+            if value.max_receive_count.is_some() {
+                return Err(Error::Config(
+                    "maxReceiveCount requires deadLetterQueues for SQS source".to_string(),
+                ));
+            }
+            None
+        } else {
+            if dead_letter_queue_names.len() != queue_names.len() {
+                return Err(Error::Config(format!(
+                    "deadLetterQueues must contain exactly one queue for each SQS source queue: expected {}, got {}",
+                    queue_names.len(),
+                    dead_letter_queue_names.len()
+                )));
+            }
+
+            for (queue_name, dead_letter_queue_name) in
+                queue_names.iter().zip(&dead_letter_queue_names)
+            {
+                if queue_name == dead_letter_queue_name {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} cannot be its own dead-letter queue"
+                    )));
+                }
+                if queue_name.ends_with(".fifo") != dead_letter_queue_name.ends_with(".fifo") {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} and dead-letter queue {dead_letter_queue_name:?} must both be FIFO queues or both be standard queues"
+                    )));
+                }
+            }
+
+            let max_receive_count = value
+                .max_receive_count
+                .unwrap_or(DEFAULT_SQS_MAX_RECEIVE_COUNT);
+            if !(1..=1000).contains(&max_receive_count) {
+                return Err(Error::Config(format!(
+                    "maxReceiveCount must be between 1 and 1000 for SQS source, got {max_receive_count}"
+                )));
+            }
+            Some(max_receive_count)
+        };
+
         let sqs_source_config = SqsSourceConfig {
-            queue_name: Box::leak(value.queue_name.into_boxed_str()),
             region: Box::leak(value.aws_region.into_boxed_str()),
+            queue_names: queue_names
+                .into_iter()
+                .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
+                .collect(),
+            dead_letter_queue_names: dead_letter_queue_names
+                .into_iter()
+                .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
+                .collect(),
+            max_receive_count,
             queue_owner_aws_account_id: Box::leak(
                 value.queue_owner_aws_account_id.into_boxed_str(),
             ),
@@ -207,7 +329,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             assume_role_config,
         };
 
-        Ok(SourceType::Sqs(sqs_source_config))
+        Ok(SourceType::Sqs(Box::new(sqs_source_config)))
     }
 }
 
@@ -389,6 +511,10 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
             }
         }
 
+        if let Some(endpoint) = value.endpoint {
+            http_config = http_config.endpoint(Box::leak(endpoint.into_boxed_str()));
+        }
+
         if let Some(auth) = value.auth {
             let auth = auth.token.unwrap();
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {
@@ -415,16 +541,6 @@ impl Default for UserDefinedConfig {
             socket_path: DEFAULT_SOURCE_SOCKET.to_string(),
             server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
         }
-    }
-}
-
-impl UserDefinedConfig {
-    pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
-        crate::shared::grpc::GrpcClientConfig::new(
-            self.socket_path.clone(),
-            self.server_info_path.clone(),
-            self.grpc_max_message_size,
-        )
     }
 }
 
@@ -745,6 +861,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source);
@@ -783,6 +900,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
@@ -836,6 +954,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
@@ -884,6 +1003,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -921,6 +1041,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -951,6 +1072,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -987,6 +1109,7 @@ mod pulsar_source_tests {
             topic: "persistent://public/default/test-topic".to_string(),
             max_unack: Some(1000),
             dead_letter_policy: None,
+            tls: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1176,5 +1299,190 @@ mod nats_source_tests {
             err.to_string(),
             "Config Error - Authentication is specified, but auth setting is empty"
         );
+    }
+
+    fn base_sqs_source() -> SqsSource {
+        SqsSource::new("us-east-1".to_string(), "111111111111".to_string())
+    }
+
+    #[test]
+    fn test_sqs_source_legacy_queue_name_normalizes_to_one_name() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.region, "us-east-1");
+        assert_eq!(config.queue_names, vec!["orders-queue"]);
+        assert_eq!(config.queue_owner_aws_account_id, "111111111111");
+    }
+
+    #[test]
+    fn test_sqs_source_queue_names_are_split_and_trimmed() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some(" orders-queue , refunds-queue ".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.queue_names, vec!["orders-queue", "refunds-queue"]);
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queues_are_mapped_and_defaulted() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some(" orders-dlq , refunds-dlq ".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(
+            config.dead_letter_queue_names,
+            vec!["orders-dlq", "refunds-dlq"]
+        );
+        assert_eq!(config.max_receive_count, Some(10));
+    }
+
+    #[test]
+    fn test_sqs_source_legacy_queue_supports_explicit_dead_letter_policy() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+        source.max_receive_count = Some(4);
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.dead_letter_queue_names, vec!["orders-dlq"]);
+        assert_eq!(config.max_receive_count, Some(4));
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queue_count_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("shared-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("exactly one queue"));
+    }
+
+    #[test]
+    fn test_sqs_source_empty_dead_letter_queue_entry_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq,   ".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("deadLetterQueues contains empty queue name")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_cannot_use_itself_as_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot be its own dead-letter queue")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_and_dead_letter_queue_types_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders.fifo".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("must both be FIFO queues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_requires_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.max_receive_count = Some(4);
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("requires deadLetterQueues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_is_bounded() {
+        for invalid in [0, 1001] {
+            let mut source = base_sqs_source();
+            source.queue_name = Some("orders-queue".to_string());
+            source.dead_letter_queues = Some("orders-dlq".to_string());
+            source.max_receive_count = Some(invalid);
+
+            let err = SourceType::try_from(Box::new(source)).unwrap_err();
+            assert!(err.to_string().contains("between 1 and 1000"));
+        }
+    }
+
+    #[test]
+    fn test_sqs_source_queue_selectors_are_mutually_exclusive() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.queue_names = Some("refunds-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn test_sqs_source_empty_queue_name_entry_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,,refunds-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("empty queue name"));
+    }
+
+    #[test]
+    fn test_sqs_source_duplicate_queue_name_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue, orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("duplicate queue name"));
+    }
+
+    #[test]
+    fn test_sqs_source_queue_selector_is_required() {
+        let source = base_sqs_source();
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("must be specified"));
+    }
+
+    #[test]
+    fn test_sqs_source_account_id_is_validated() {
+        let mut source = SqsSource::new("us-east-1".to_string(), "12345".to_string());
+        source.queue_name = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("valid 12-digit AWS account ID"));
+    }
+
+    #[test]
+    fn test_sqs_source_region_is_required() {
+        let mut source = SqsSource::new(String::new(), "111111111111".to_string());
+        source.queue_name = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("awsRegion must be specified"));
     }
 }

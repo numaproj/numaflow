@@ -93,6 +93,7 @@ type TagConditions struct {
 	// +optional
 	Operator *LogicOperator `json:"operator" protobuf:"bytes,1,opt,name=operator"`
 	// Values tag values for conditional forwarding
+	// +kubebuilder:validation:MinItems=1
 	Values []string `json:"values" protobuf:"bytes,2,rep,name=values"`
 }
 

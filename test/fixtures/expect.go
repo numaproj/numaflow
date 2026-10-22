@@ -219,6 +219,21 @@ func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 	return t
 }
 
+func (t *Expect) MonoVertexSizeScaledTo(size int) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	if _, err := t.monoVertexClient.Get(ctx, t.monoVertex.Name, metav1.GetOptions{}); err != nil {
+		t.t.Fatalf("Expected monovertex %q existing: %v", t.monoVertex.Name, err)
+	}
+
+	// check expected number of pods running
+	timeout := 2 * time.Minute
+	if err := WaitForMonoVertexPodScalingTo(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, timeout, size); err != nil {
+		t.t.Fatalf("Expected %d pods running on monovertex %s : %v", size, t.monoVertex.Name, err)
+	}
+	return t
+}
+
 func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()

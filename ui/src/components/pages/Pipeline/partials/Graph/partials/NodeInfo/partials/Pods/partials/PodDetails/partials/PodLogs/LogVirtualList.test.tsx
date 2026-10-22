@@ -1,5 +1,7 @@
+import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
-import { LogVirtualList } from "./LogVirtualList";
+import { LogVirtualList, LogVirtualListHandle } from "./LogVirtualList";
+import { NO_LOGS, NO_LOGS_MATCHING_SEARCH } from "./constants";
 
 const VIEWPORT_HEIGHT = 160;
 
@@ -10,7 +12,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return VIEWPORT_HEIGHT;
       }
-      return 16;
+      return 20;
     },
   });
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -19,7 +21,7 @@ beforeAll(() => {
       if (this.getAttribute("data-testid") === "log-virtual-list") {
         return VIEWPORT_HEIGHT;
       }
-      return 16;
+      return 20;
     },
   });
   Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
@@ -28,7 +30,7 @@ beforeAll(() => {
       const height =
         this.getAttribute("data-testid") === "log-virtual-list"
           ? VIEWPORT_HEIGHT
-          : 16;
+          : 20;
       return {
         x: 0,
         y: 0,
@@ -54,8 +56,9 @@ describe("LogVirtualList", () => {
           logs={logs}
           search=""
           wrapLines={false}
-          colorMode="light"
+          theme="light"
           podName="pod-a"
+          activeIndex={null}
         />
       </div>
     );
@@ -66,6 +69,7 @@ describe("LogVirtualList", () => {
     const rows = screen.getAllByTestId("log-virtual-row");
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThan(logs.length);
+    expect(rows[0].className).toContain("PodLogs-row--light");
     expect(screen.queryByText("log-line-99")).not.toBeInTheDocument();
   });
 
@@ -76,12 +80,127 @@ describe("LogVirtualList", () => {
           logs={["alpha foo", "beta bar"]}
           search="foo"
           wrapLines={false}
-          colorMode="dark"
+          theme="dark"
           podName="pod-a"
+          activeIndex={null}
         />
       </div>
     );
 
     expect(screen.getByText("foo")).toBeInTheDocument();
+  });
+
+  it("marks the active match row and exposes scroll navigation", () => {
+    const ref = createRef<LogVirtualListHandle>();
+
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          ref={ref}
+          logs={["first match", "second match"]}
+          search="match"
+          wrapLines={false}
+          theme="light"
+          podName="pod-a"
+          activeIndex={1}
+        />
+      </div>
+    );
+
+    const activeRow = screen.getAllByTestId("log-virtual-row")[1];
+    expect(activeRow).toHaveAttribute("data-active", "true");
+    expect(activeRow.className).toContain("PodLogs-row--active");
+    expect(ref.current).not.toBeNull();
+    expect(() => ref.current?.scrollToIndex(1)).not.toThrow();
+    expect(typeof ref.current?.getScrollOffset()).toBe("number");
+    expect(() => ref.current?.scrollToOffset(80)).not.toThrow();
+  });
+
+  it("renders the complete raw log line without field trimming", () => {
+    const line = JSON.stringify({
+      timestamp: "2026-08-05T05:54:14.095025Z",
+      level: "INFO",
+      message: "Processed message batch",
+      pipeline: "simple-pipeline",
+    });
+
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          logs={[line]}
+          search=""
+          wrapLines={false}
+          theme="dark"
+          podName="pod-a"
+          activeIndex={null}
+        />
+      </div>
+    );
+
+    const row = screen.getByTestId("log-virtual-row");
+    expect(row).toHaveTextContent(line);
+    expect(row.className).toContain("PodLogs-row--nowrap");
+    expect(row.className).toContain("PodLogs-row--dark");
+    expect(row.querySelector(".PodLogs-col-msg--truncate")).toBeNull();
+  });
+
+  it("preserves full raw text when wrapping", () => {
+    const line =
+      '{"level":"INFO","message":"Processed messages per second","extra":"keep-me"}';
+
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          logs={[line]}
+          search=""
+          wrapLines={true}
+          theme="dark"
+          podName="pod-a"
+          activeIndex={null}
+        />
+      </div>
+    );
+
+    const row = screen.getByTestId("log-virtual-row");
+    expect(row).toHaveTextContent(line);
+    expect(row.className).toContain("PodLogs-row--wrap");
+  });
+
+  it("shows centered empty state copy", () => {
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          logs={[NO_LOGS_MATCHING_SEARCH]}
+          search="xyz"
+          wrapLines={false}
+          theme="dark"
+          podName="pod-a"
+          activeIndex={null}
+        />
+      </div>
+    );
+
+    expect(screen.getByTestId("log-empty-state")).toHaveTextContent(
+      NO_LOGS_MATCHING_SEARCH
+    );
+    expect(screen.queryByTestId("log-virtual-row")).not.toBeInTheDocument();
+  });
+
+  it("shows empty-state copy when there are no log lines", () => {
+    render(
+      <div style={{ height: VIEWPORT_HEIGHT }}>
+        <LogVirtualList
+          logs={[]}
+          search=""
+          wrapLines={false}
+          theme="light"
+          podName="pod-a"
+          activeIndex={null}
+        />
+      </div>
+    );
+
+    expect(screen.getByTestId("log-empty-state")).toHaveTextContent(NO_LOGS);
+    expect(screen.queryByTestId("log-virtual-row")).not.toBeInTheDocument();
   });
 });

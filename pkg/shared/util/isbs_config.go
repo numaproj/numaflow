@@ -59,5 +59,10 @@ func GetIsbSvcEnvVars(isbSvcConfig dfv1.BufferServiceConfig) (dfv1.ISBSvcType, [
 		}
 		isbSvcType = dfv1.ISBSvcTypeJetStream
 	}
+	if isbSvcType != dfv1.ISBSvcTypeUnknown {
+		// dataplane selects its ISB backend from this env var
+		// defaulting to "jetstream" when unset. Emit it explicitly.
+		env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcType, Value: string(isbSvcType)})
+	}
 	return isbSvcType, env
 }

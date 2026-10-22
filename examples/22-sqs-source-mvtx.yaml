@@ -5,6 +5,9 @@ metadata:
 spec:
   source:
     sqs:
+      # Single queue (legacy). For multiple queues in the same AWS account and
+      # region, use queueNames instead of queueName (mutually exclusive):
+      #   queueNames: "orders-queue,refunds-queue,replay-queue"
       queueName: "sqs-numa-test"
       awsRegion: "us-west-2"
       queueOwnerAWSAccountID: "123456789012"

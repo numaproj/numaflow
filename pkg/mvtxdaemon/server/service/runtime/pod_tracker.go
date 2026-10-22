@@ -29,6 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/poddiscovery"
 )
 
 // PodTracker tracks the active pods for a MonoVertex.
@@ -36,14 +37,17 @@ type PodTracker struct {
 	monoVertex          *v1alpha1.MonoVertex
 	log                 *zap.SugaredLogger
 	httpClient          runtimeHTTPClient
+	resolver            poddiscovery.Resolver
 	activePodsCount     int
 	activePodsMutex     sync.RWMutex
 	refreshInterval     time.Duration
 	firstPodsUpdateChan chan struct{} // Channel to signal the first active pods update is done
 }
 
+type PodTrackerOption func(*PodTracker)
+
 // NewPodTracker creates a new pod tracker instance.
-func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
+func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...PodTrackerOption) *PodTracker {
 	pt := &PodTracker{
 		monoVertex: mv,
 		log:        logging.FromContext(ctx).Named("RuntimePodTracker"),
@@ -53,10 +57,23 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
+		resolver:            poddiscovery.NewResolver(),
 		refreshInterval:     30 * time.Second,
 		firstPodsUpdateChan: make(chan struct{}),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(pt)
+		}
+	}
 	return pt
+}
+
+// WithPodResolver sets the resolver used to discover indexed pods.
+func WithPodResolver(resolver poddiscovery.Resolver) PodTrackerOption {
+	return func(pt *PodTracker) {
+		pt.resolver = resolver
+	}
 }
 
 // Start starts the pod tracker to track the active pods for the MonoVertex.
@@ -67,9 +84,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
-	// start updating active pods as soon as called and then after every refreshInterval
-	pt.updateActivePods()
-	// close the channel to signal first update
+	pt.updateActivePods(ctx)
 	close(pt.firstPodsUpdateChan)
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
@@ -79,31 +94,31 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 			pt.log.Infof("Context is cancelled. Stopping tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 			return
 		case <-ticker.C:
-			pt.updateActivePods()
+			pt.updateActivePods(ctx)
 		}
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the count of activePods accordingly.
-func (pt *PodTracker) updateActivePods() {
+// updateActivePods discovers replicas from DNS and verifies which runtime endpoints are active.
+func (pt *PodTracker) updateActivePods(ctx context.Context) {
+	replicaCount, err := pt.resolver.Resolve(ctx, poddiscovery.MonoVertexRequest(pt.monoVertex))
+	if err != nil {
+		pt.log.Warnf("Failed to discover MonoVertex pods: %v; retaining the previous active pod count", err)
+		return
+	}
+
 	var wg sync.WaitGroup
-	// Use atomic operations to safely update the maxActiveIndex across multiple goroutines.
 	var maxActiveIndex atomic.Int32
-	// Initialize maxActiveIndex to -1 to indicate no active pods.
 	maxActiveIndex.Store(int32(-1))
-	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
+	for index := range replicaCount {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
 				for {
-					// Load the current value of maxActiveIndex atomically.
 					currentMax := maxActiveIndex.Load()
-					// checks if the currentMax is less than index.
 					if int32(index) > currentMax {
-						// checks if maxActiveIndex still holds the value currentMax.
-						// atomically updates maxActiveIndex to the new, higher index and returns true.
 						if maxActiveIndex.CompareAndSwap(currentMax, int32(index)) {
 							break
 						}
@@ -112,11 +127,13 @@ func (pt *PodTracker) updateActivePods() {
 					}
 				}
 			}
-		}(i)
+		}(index)
 	}
 	wg.Wait()
-	// Update the active pods count based on the maxActiveIndex.
-	pt.setActivePodsCount(int(maxActiveIndex.Load() + 1))
+
+	count := int(maxActiveIndex.Load() + 1)
+	pt.setActivePodsCount(count)
+	pt.log.Debugf("Finished updating MonoVertex runtime active pod count: %d", count)
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
@@ -133,7 +150,6 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// setActivePodsCount sets the activePodsCount.
 func (pt *PodTracker) setActivePodsCount(count int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()

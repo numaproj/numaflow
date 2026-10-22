@@ -34,6 +34,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
@@ -376,6 +377,8 @@ func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flo
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
+	fullVertexName := pipelineName + "-" + vertexName
+	lastNudge := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -394,6 +397,51 @@ func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flo
 		ok = ok && len(podList.Items) == size
 		if ok {
 			return nil
+		}
+		// Occasionally, a spec change (e.g. an autoscaler patch to
+		// spec.replicas) doesn't trigger a fresh controller reconcile due to
+		// a missed watch event. A harmless label touch is separately watched
+		// (TypedLabelChangedPredicate) and nudges the controller to
+		// re-reconcile without altering the Vertex's actual spec.
+		if len(vertexList.Items) == 1 && time.Since(lastNudge) >= 20*time.Second {
+			patch := fmt.Sprintf(`{"metadata":{"labels":{"numaflow-e2e-scaling-nudge":%q}}}`, fmt.Sprint(time.Now().UnixNano()))
+			_, _ = vertexClient.Patch(ctx, fullVertexName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+			lastNudge = time.Now()
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func WaitForMonoVertexPodScalingTo(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration, size int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	lastNudge := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout after %v waiting for monovertex pod scaling", timeout)
+		default:
+		}
+		if _, err := monoVertexClient.Get(ctx, monoVertexName, metav1.GetOptions{}); err != nil {
+			return fmt.Errorf("error getting the monovertex: %w", err)
+		}
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting monovertex pod list: %w", err)
+		}
+		if len(podList.Items) == size {
+			return nil
+		}
+		// Occasionally, a spec change (e.g. an autoscaler patch to
+		// spec.replicas) doesn't trigger a fresh controller reconcile due to
+		// a missed watch event. A harmless label touch is separately watched
+		// (TypedLabelChangedPredicate) and nudges the controller to
+		// re-reconcile without altering the MonoVertex's actual spec.
+		if time.Since(lastNudge) >= 20*time.Second {
+			patch := fmt.Sprintf(`{"metadata":{"labels":{"numaflow-e2e-scaling-nudge":%q}}}`, fmt.Sprint(time.Now().UnixNano()))
+			_, _ = monoVertexClient.Patch(ctx, monoVertexName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+			lastNudge = time.Now()
 		}
 		time.Sleep(2 * time.Second)
 	}

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 backoff.workspace = true
 async-nats.workspace = true
+numaflow-shared.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

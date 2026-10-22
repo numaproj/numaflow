@@ -265,6 +265,7 @@ func TestGetPodSpec(t *testing.T) {
 			AutomountServiceAccountToken: ptr.To(true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
+			SchedulerName:                "my-scheduler",
 		}
 		testObj.Spec.ContainerTemplate = &ContainerTemplate{
 			Resources: corev1.ResourceRequirements{
@@ -304,6 +305,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.True(t, *s.AutomountServiceAccountToken)
 		assert.Equal(t, corev1.DNSClusterFirstWithHostNet, s.DNSPolicy)
 		assert.Equal(t, s.DNSConfig, testObj.Spec.DNSConfig)
+		assert.Equal(t, "my-scheduler", s.SchedulerName)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
@@ -547,6 +549,39 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
 		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
+	})
+
+	t.Run("test pod spec is not affected by scale min/max changes", func(t *testing.T) {
+		testObj1 := testVertex.DeepCopy()
+		testObj1.Spec.Sink = &Sink{}
+		testObj1.Spec.Scale = Scale{Min: ptr.To[int32](3), Max: ptr.To[int32](5)}
+		originalScale := testObj1.Spec.Scale.DeepCopy()
+
+		testObj2 := testVertex.DeepCopy()
+		testObj2.Spec.Sink = &Sink{}
+		testObj2.Spec.Scale = Scale{Min: ptr.To[int32](1), Max: ptr.To[int32](1)}
+
+		s1, err := testObj1.GetPodSpec(req)
+		assert.NoError(t, err)
+		s2, err := testObj2.GetPodSpec(req)
+		assert.NoError(t, err)
+
+		var env1, env2 string
+		for _, e := range s1.Containers[0].Env {
+			if e.Name == EnvVertexObject {
+				env1 = e.Value
+			}
+		}
+		for _, e := range s2.Containers[0].Env {
+			if e.Name == EnvVertexObject {
+				env2 = e.Value
+			}
+		}
+		assert.NotEmpty(t, env1)
+		assert.Equal(t, env1, env2, "vertex object env var must not change when only scale min/max changes")
+
+		// GetPodSpec must not mutate the receiver's original Scale.
+		assert.Equal(t, *originalScale, testObj1.Spec.Scale)
 	})
 }
 
@@ -1044,4 +1079,44 @@ func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
 	assert.Equal(t, int32(VertexHTTPPort), (&HTTPSource{}).GetHTTPPort())
 	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
 	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
+}
+
+func TestGetPodSpecStartupProbe(t *testing.T) {
+	req := GetVertexPodSpecReq{
+		ISBSvcType: ISBSvcTypeJetStream,
+		Image:      testFlowImage,
+		PullPolicy: corev1.PullIfNotPresent,
+	}
+
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{}
+		spec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Nil(t, spec.Containers[0].StartupProbe)
+	})
+
+	t.Run("numa container gets one from the container template", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			StartupProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](0),
+				PeriodSeconds:       ptr.To[int32](10),
+				FailureThreshold:    ptr.To[int32](60),
+			},
+		}
+		spec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		startup := spec.Containers[0].StartupProbe
+		assert.NotNil(t, startup)
+		assert.Equal(t, "/livez", startup.HTTPGet.Path)
+		assert.Equal(t, int32(0), startup.InitialDelaySeconds)
+		assert.Equal(t, int32(10), startup.PeriodSeconds)
+		assert.Equal(t, int32(60), startup.FailureThreshold)
+		// The liveness probe keeps its own steady-state settings.
+		assert.Equal(t, int32(NumaContainerLivezFailureThreshold), spec.Containers[0].LivenessProbe.FailureThreshold)
+		assert.Equal(t, int32(NumaContainerLivezPeriodSeconds), spec.Containers[0].LivenessProbe.PeriodSeconds)
+	})
+
 }

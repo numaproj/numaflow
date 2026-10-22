@@ -5,11 +5,11 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
-use crate::shared::grpc::UdfReconnectConfig;
 use crate::shared::otel;
+use crate::shared::retry::{RetryController, RetryStep};
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -20,8 +20,8 @@ use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
-    grpc_error_to_redrive, map_redrive_error, reconnect_mapper_client, update_udf_error_metric,
-    update_udf_read_metric, update_udf_write_metric, wait_before_map_redrive,
+    update_udf_drop_metric, update_udf_error_metric, update_udf_read_metric,
+    update_udf_write_metric,
 };
 
 /// Type alias for the response - raw results from the UDF
@@ -77,7 +77,9 @@ impl MapUnaryTask {
         // parent_info contains offset, so we don't need to clone it separately
         let parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let results = {
+        let mut retry = RetryController::new(&self.shared_ctx.retry_config);
+
+        let mut mapped_messages = {
             // RAII map span: ends when this scope exits.
             let _stage_span = otel::inject_stage_span(
                 self.msg_handle.message_mut(),
@@ -94,15 +96,49 @@ impl MapUnaryTask {
                     .unary(request.clone(), self.shared_ctx.hard_shutdown_token.clone())
                     .await
                 {
-                    Ok(results) => break results,
-                    Err(Error::UdfRedrive(status)) => {
-                        warn!(?status, offset = ?parent_info.offset, "redriving unary map message after UDF reconnect");
-                        if wait_before_map_redrive(&self.shared_ctx.hard_shutdown_token)
-                            .await
-                            .is_err()
-                        {
-                            return;
+                    Ok(results) => {
+                        let results_len = results.len();
+                        let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
+                        for (i, result) in results.into_iter().enumerate() {
+                            let mapped_msg: Message =
+                                UserDefinedMessage(result, &parent_info, i as i32).into();
+                            mapped_messages.push(mapped_msg);
                         }
+
+                        if mapped_messages.iter().any(|msg| msg.failed()) {
+                            match retry.next_step(&self.shared_ctx.hard_shutdown_token).await {
+                                // Retry the UDF: after the backoff wait, or immediately when no
+                                // retry config is set (retry forever, no backoff).
+                                RetryStep::Again => continue,
+                                RetryStep::Cancelled => {
+                                    mark_failed!(
+                                        self.msg_handle,
+                                        "map UDF retry wait cancelled",
+                                        None
+                                    );
+                                    return;
+                                }
+                                // Retries exhausted under `onFailure: drop` — drop and ack.
+                                RetryStep::Drop => {
+                                    warn!(
+                                        offset = ?parent_info.offset,
+                                        "Retries exhausted, dropping message."
+                                    );
+                                    update_udf_drop_metric(self.shared_ctx.is_mono_vertex);
+                                    mark_success!(self.msg_handle);
+                                    return;
+                                }
+                                // Retries exhausted under `onFailure: retry` — nack.
+                                RetryStep::Nack => {
+                                    let e = Error::Mapper("Retries exhausted".to_string());
+                                    mark_failed!(self.msg_handle, &e, None);
+                                    let _ = self.shared_ctx.error_tx.send(e).await;
+                                    return;
+                                }
+                            }
+                        }
+
+                        break mapped_messages;
                     }
                     Err(e) => {
                         error!(?e, offset = ?parent_info.offset, "failed to map message");
@@ -114,18 +150,12 @@ impl MapUnaryTask {
             }
         };
 
-        // Convert raw results to Messages using parent info.
-        // The UserDefinedMessage -> Message conversion copies sys_metadata from parent (so
-        // vertex.process context stays in "tracing"). We strip tracing_udf here because the map
-        // stage is done — downstream sink will inject its own tracing_udf. No-op when no key
-        // was injected.
-        let results_len = results.len();
-        let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
-        for (i, result) in results.into_iter().enumerate() {
-            let mut mapped_msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
-            mapped_msg.strip_tracing_udf();
-            mapped_messages.push(mapped_msg);
-        }
+        // Message conversion copies sys_metadata from parent (so vertex.process context stays in
+        // "tracing"). We strip tracing_udf here because the map stage is done — downstream sink
+        // will inject its own tracing_udf. No-op when no key was injected.
+        mapped_messages
+            .iter_mut()
+            .for_each(|msg| msg.strip_tracing_udf());
 
         update_udf_write_metric(
             self.shared_ctx.is_mono_vertex,
@@ -185,13 +215,10 @@ impl MapUnaryTask {
 /// and forwards the responses.
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedUnaryMap {
-    batch_size: usize,
-    connection: Arc<AsyncMutex<UnaryMapConnection>>,
-    reconnect_config: Option<UdfReconnectConfig>,
+    connection: Arc<UnaryMapConnection>,
 }
 
 struct UnaryMapConnection {
-    generation: u64,
     read_tx: mpsc::Sender<MapRequest>,
     senders: Arc<Mutex<UnarySenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
@@ -202,21 +229,17 @@ impl UserDefinedUnaryMap {
     pub(in crate::mapper) async fn new(
         batch_size: usize,
         mut client: MapClient<Channel>,
-        reconnect_config: Option<UdfReconnectConfig>,
     ) -> Result<Self> {
-        let connection = Self::create_connection(batch_size, &mut client, 0).await?;
+        let connection = Self::create_connection(batch_size, &mut client).await?;
 
         Ok(Self {
-            batch_size,
-            connection: Arc::new(AsyncMutex::new(connection)),
-            reconnect_config,
+            connection: Arc::new(connection),
         })
     }
 
     async fn create_connection(
         batch_size: usize,
         client: &mut MapClient<Channel>,
-        generation: u64,
     ) -> Result<UnaryMapConnection> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, client).await?;
@@ -232,7 +255,6 @@ impl UserDefinedUnaryMap {
         });
 
         Ok(UnaryMapConnection {
-            generation,
             read_tx,
             senders: sender_map,
             _handle: Arc::new(AbortOnDropHandle::new(handle)),
@@ -247,7 +269,7 @@ impl UserDefinedUnaryMap {
             std::mem::take(&mut sender_guard.map)
         };
 
-        let error = map_redrive_error(error);
+        let error = Error::Grpc(Box::new(error));
         for (_, sender) in senders {
             let _ = sender.send(Err(error.clone()));
             update_udf_error_metric(is_mono_vertex());
@@ -293,41 +315,10 @@ impl UserDefinedUnaryMap {
         request: MapRequest,
         cln_token: CancellationToken,
     ) -> Result<UnaryMapResponse> {
-        let (generation, result) = self
-            .unary_once_with_generation(request.clone(), cln_token.clone())
-            .await;
-        match result {
-            Err(Error::UdfRedrive(_)) => {
-                self.reconnect(generation).await?;
-                self.unary_once(request, cln_token).await
-            }
-            result => result,
-        }
-    }
-
-    async fn unary_once(
-        &self,
-        request: MapRequest,
-        cln_token: CancellationToken,
-    ) -> Result<UnaryMapResponse> {
-        self.unary_once_with_generation(request, cln_token).await.1
-    }
-
-    async fn unary_once_with_generation(
-        &self,
-        request: MapRequest,
-        cln_token: CancellationToken,
-    ) -> (u64, Result<UnaryMapResponse>) {
         let (tx, rx) = oneshot::channel();
         let key = request.id.clone();
-        let (generation, senders, read_tx) = {
-            let connection = self.connection.lock().await;
-            (
-                connection.generation,
-                Arc::clone(&connection.senders),
-                connection.read_tx.clone(),
-            )
-        };
+        let senders = Arc::clone(&self.connection.senders);
+        let read_tx = self.connection.read_tx.clone();
 
         // Move the senders_guard out of the scope to drop the guard when done
         // Do this before we send the message to the server to avoid the race condition
@@ -338,12 +329,9 @@ impl UserDefinedUnaryMap {
             if !senders_guard.closed {
                 senders_guard.map.insert(key.clone(), tx);
             } else {
-                return (
-                    generation,
-                    Err(map_redrive_error(Status::unavailable(
-                        "unary map stream closed",
-                    ))),
-                );
+                return Err(Error::Grpc(Box::new(Status::unavailable(
+                    "unary map stream closed",
+                ))));
             }
         };
 
@@ -361,15 +349,12 @@ impl UserDefinedUnaryMap {
                     .map
                     .remove(&key);
             };
-            return (
-                generation,
-                Err(map_redrive_error(Status::unavailable(format!(
-                    "failed to send message to unary map server: {e}"
-                )))),
-            );
+            return Err(Error::Grpc(Box::new(Status::unavailable(format!(
+                "failed to send message to unary map server: {e}"
+            )))));
         }
 
-        let result = tokio::select! {
+        tokio::select! {
             result = rx => {
                 // we don't have to remove the sender from the map, because the response handler
                 // will do it.
@@ -382,45 +367,6 @@ impl UserDefinedUnaryMap {
                 senders.lock().expect("failed to acquire poisoned lock").map.remove(&key);
                 Err(Error::Mapper("unary map operation cancelled".to_string()))
             }
-        };
-        (generation, result)
-    }
-
-    async fn reconnect(&self, failed_generation: u64) -> Result<()> {
-        let Some(reconnect_config) = &self.reconnect_config else {
-            return Err(map_redrive_error(Status::unavailable(
-                "unary map reconnect config missing",
-            )));
-        };
-
-        let mut connection = self.connection.lock().await;
-        if connection.generation != failed_generation {
-            return Ok(());
-        }
-        Self::drain_senders(
-            &connection.senders,
-            map_redrive_error(Status::unavailable("unary map reconnecting")),
-        );
-        let next_generation = connection.generation.saturating_add(1);
-
-        let mut client = reconnect_mapper_client(reconnect_config).await?;
-
-        *connection = grpc_error_to_redrive(
-            Self::create_connection(self.batch_size, &mut client, next_generation).await,
-        )?;
-
-        Ok(())
-    }
-
-    fn drain_senders(sender_map: &Arc<Mutex<UnarySenderMapState>>, error: Error) {
-        let senders = {
-            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-            sender_guard.closed = true;
-            std::mem::take(&mut sender_guard.map)
-        };
-
-        for (_, sender) in senders {
-            let _ = sender.send(Err(error.clone()));
         }
     }
 
@@ -461,18 +407,25 @@ impl UserDefinedUnaryMap {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+    use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
     use crate::error::Error as MapError;
     use crate::mapper::map::unary::{UnarySenderMapState, UserDefinedUnaryMap};
-    use crate::shared::grpc::{GrpcClientConfig, UdfReconnectConfig, create_rpc_channel};
+    use crate::mapper::map::{MapUnaryTask, SharedMapTaskContext};
+    use crate::message::{Message, MessageHandle, ReadAck};
+    use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::tracker::Tracker;
     use numaflow::map;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::map::{MapRequest, MapResponse};
     use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
-    use tokio::sync::{mpsc, oneshot};
+    use tokio::sync::{Semaphore, mpsc, oneshot};
     use tokio_util::sync::CancellationToken;
     use tokio_util::task::AbortOnDropHandle;
 
@@ -509,12 +462,9 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = UserDefinedUnaryMap::new(
-            500,
-            MapClient::new(create_rpc_channel(sock_file).await?),
-            None,
-        )
-        .await?;
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
 
         // Create a MapRequest directly instead of a Message
         let request = numaflow_pb::clients::map::MapRequest {
@@ -619,7 +569,7 @@ mod tests {
         for rx in [rx_a, rx_b] {
             let received = rx.await.expect("oneshot sender should have delivered");
             let err = received.expect_err("expected Err variant");
-            assert!(matches!(err, MapError::UdfRedrive(_)));
+            assert!(matches!(err, MapError::Grpc(_)));
         }
     }
 
@@ -659,7 +609,6 @@ mod tests {
         let client = UserDefinedUnaryMap::new(
             500,
             MapClient::new(create_rpc_channel(sock_file).await.unwrap()),
-            None,
         )
         .await
         .unwrap();
@@ -700,6 +649,315 @@ mod tests {
         handle.await.expect("server task should finish cleanly");
     }
 
+    /// Test mapper that fails (via the generic FAIL tag) the first `fail_first_n` calls, then
+    /// succeeds. Used to exercise the "retry then succeed" path.
+    struct RetryThenSucceed {
+        attempts: AtomicUsize,
+        fail_first_n: usize,
+    }
+
+    #[tonic::async_trait]
+    impl map::Mapper for RetryThenSucceed {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
+            let tags = if attempt < self.fail_first_n {
+                vec!["U+005C__FAIL__".to_string()] // must match message.rs FAIL const
+            } else {
+                vec![]
+            };
+            vec![
+                map::Message::new(input.value)
+                    .with_keys(input.keys)
+                    .with_tags(tags),
+            ]
+        }
+    }
+
+    /// Test mapper that always fails (via the generic FAIL tag).
+    struct AlwaysFail;
+
+    #[tonic::async_trait]
+    impl map::Mapper for AlwaysFail {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            vec![
+                map::Message::new(input.value)
+                    .with_keys(input.keys)
+                    .with_tags(vec!["U+005C__FAIL__".to_string()]),
+            ]
+        }
+    }
+
+    fn fast_retry_config(strategy: OnFailureStrategy, max_attempts: u16) -> RetryConfig {
+        RetryConfig {
+            sink_max_retry_attempts: max_attempts,
+            sink_initial_retry_interval_in_ms: 1,
+            sink_retry_factor: 1.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 5,
+            sink_retry_on_fail_strategy: strategy,
+        }
+    }
+
+    /// Spawns a [MapUnaryTask] for `message` against `mapper` with the given retry config, and
+    /// returns the channels needed to observe the outcome: the ack/nak receiver for the input
+    /// message, the mapped-output receiver, and the map-error receiver.
+    async fn spawn_unary_task(
+        mapper: UserDefinedUnaryMap,
+        message: Message,
+        retry_config: Option<RetryConfig>,
+    ) -> (
+        oneshot::Receiver<ReadAck>,
+        mpsc::Receiver<MessageHandle>,
+        mpsc::Receiver<MapError>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let msg_handle = MessageHandle::new(message, ack_tx);
+
+        let (output_tx, output_rx) = mpsc::channel(10);
+        let (error_tx, error_rx) = mpsc::channel(10);
+        let semaphore = Arc::new(Semaphore::new(1));
+        let permit = semaphore.acquire_owned().await.unwrap();
+
+        let shared_ctx = Arc::new(SharedMapTaskContext {
+            output_tx,
+            error_tx,
+            tracker: Tracker::new(None, CancellationToken::new()),
+            bypass_router: None,
+            hard_shutdown_token: CancellationToken::new(),
+            is_mono_vertex: false,
+            retry_config,
+        });
+
+        MapUnaryTask {
+            mapper,
+            permit,
+            msg_handle,
+            shared_ctx,
+        }
+        .spawn();
+
+        (ack_rx, output_rx, error_rx)
+    }
+
+    fn test_message() -> Message {
+        Message {
+            value: b"hello".to_vec().into(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_map_unary_retries_then_succeeds() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            map::Server::new(RetryThenSucceed {
+                attempts: AtomicUsize::new(0),
+                fail_first_n: 2,
+            })
+            .with_socket_file(ss)
+            .with_server_info_file(si)
+            .start_with_shutdown(shutdown_rx)
+            .await
+            .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        let retry_config = fast_retry_config(OnFailureStrategy::Retry, 10);
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_unary_task(client, test_message(), Some(retry_config)).await;
+
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message after retries succeed");
+        assert!(!mapped.message().failed());
+        assert_eq!(mapped.message().value, "hello");
+        // Simulate the downstream sink/ISB writer marking this forwarded copy success;
+        // otherwise the shared ack ref-count never reaches 0 and ack_rx below hangs forever.
+        mapped.mark_success();
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_map_unary_retries_without_retry_config_until_success()
+    -> Result<(), Box<dyn Error>> {
+        // With no retry config, a FAIL-tagged response must still be retried (indefinitely,
+        // with no backoff) rather than passed through as-is.
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            map::Server::new(RetryThenSucceed {
+                attempts: AtomicUsize::new(0),
+                fail_first_n: 3,
+            })
+            .with_socket_file(ss)
+            .with_server_info_file(si)
+            .start_with_shutdown(shutdown_rx)
+            .await
+            .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_unary_task(client, test_message(), None).await;
+
+        let mapped = tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+            .await?
+            .expect("expected a mapped message once the UDF stops failing");
+        assert!(!mapped.message().failed());
+        // Simulate the downstream sink/ISB writer marking this forwarded copy success;
+        // otherwise the shared ack ref-count never reaches 0 and ack_rx below hangs forever.
+        mapped.mark_success();
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), ack_rx).await??,
+            ReadAck::Ack
+        );
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_map_unary_drops_message_on_retries_exhausted() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            map::Server::new(AlwaysFail)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        let drop_count_before = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let retry_config = fast_retry_config(OnFailureStrategy::Drop, 1);
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_unary_task(client, test_message(), Some(retry_config)).await;
+
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx).await??;
+        assert_eq!(ack, ReadAck::Ack, "dropped message must be ACK'd");
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+                .await?
+                .is_none()
+        );
+
+        let drop_count_after = pipeline_metrics()
+            .forwarder
+            .udf_drop_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+        assert_eq!(drop_count_after, drop_count_before + 1);
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_map_unary_retries_exhausted_propagates_error() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+        let (ss, si) = (sock_file.clone(), server_info_file.clone());
+        let handle = tokio::spawn(async move {
+            map::Server::new(AlwaysFail)
+                .with_socket_file(ss)
+                .with_server_info_file(si)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        let retry_config = fast_retry_config(OnFailureStrategy::Retry, 1);
+        let (ack_rx, mut output_rx, mut error_rx) =
+            spawn_unary_task(client, test_message(), Some(retry_config)).await;
+
+        let err = tokio::time::timeout(Duration::from_secs(2), error_rx.recv())
+            .await?
+            .expect("expected an error once retries are exhausted");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(err.to_string().contains("Retries exhausted"));
+
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), output_rx.recv())
+                .await?
+                .is_none(),
+            "no message should be forwarded downstream"
+        );
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx).await??;
+        assert_eq!(ack, ReadAck::Nak(None));
+
+        shutdown_tx.send(()).expect("send shutdown");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        handle.await.expect("server task should finish cleanly");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn unary_method_cleans_up_on_read_tx_send_failure() {
         // Build a UserDefinedUnaryMap whose read_tx receiver has been dropped,
@@ -712,14 +970,11 @@ mod tests {
 
         let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
         let mapper = UserDefinedUnaryMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
-                generation: 0,
+            connection: Arc::new(super::UnaryMapConnection {
                 read_tx,
                 senders: Arc::clone(&senders),
                 _handle: _abort_handle,
-            })),
-            reconnect_config: None,
+            }),
         };
 
         let request = MapRequest {
@@ -736,9 +991,9 @@ mod tests {
             status: None,
         };
 
-        let result = mapper.unary_once(request, CancellationToken::new()).await;
-        let err = result.expect_err("expected UdfRedrive error from unary()");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
+        let result = mapper.unary(request, CancellationToken::new()).await;
+        let err = result.expect_err("expected gRPC error from unary()");
+        assert!(matches!(err, MapError::Grpc(_)));
         assert!(
             err.to_string()
                 .contains("failed to send message to unary map server"),
@@ -750,14 +1005,6 @@ mod tests {
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
         );
-    }
-
-    fn dummy_reconnect_config() -> UdfReconnectConfig {
-        UdfReconnectConfig::new(
-            GrpcClientConfig::new("/tmp/missing-map.sock", "/tmp/missing-server-info", 1024),
-            CancellationToken::new(),
-            Duration::from_millis(1),
-        )
     }
 
     fn test_request(id: &str) -> MapRequest {
@@ -777,7 +1024,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unary_once_returns_redrive_when_sender_map_is_closed() {
+    async fn unary_returns_grpc_error_when_sender_map_is_closed() {
         let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
         let dummy_handle = tokio::spawn(async {});
         let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
@@ -785,77 +1032,18 @@ mod tests {
         let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
         senders.lock().unwrap().closed = true;
         let mapper = UserDefinedUnaryMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
-                generation: 0,
+            connection: Arc::new(super::UnaryMapConnection {
                 read_tx,
                 senders,
                 _handle: abort_handle,
-            })),
-            reconnect_config: None,
+            }),
         };
 
         let err = mapper
-            .unary_once(test_request("closed"), CancellationToken::new())
+            .unary(test_request("closed"), CancellationToken::new())
             .await
-            .expect_err("expected closed sender map to be redrivable");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
+            .expect_err("expected closed sender map to return gRPC error");
+        assert!(matches!(err, MapError::Grpc(_)));
         assert!(err.to_string().contains("unary map stream closed"));
-    }
-
-    #[tokio::test]
-    async fn unary_reconnect_without_config_returns_redrive() {
-        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
-        let dummy_handle = tokio::spawn(async {});
-        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
-
-        let mapper = UserDefinedUnaryMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
-                generation: 0,
-                read_tx,
-                senders: Arc::new(Mutex::new(UnarySenderMapState::default())),
-                _handle: abort_handle,
-            })),
-            reconnect_config: None,
-        };
-
-        let err = mapper
-            .reconnect(0)
-            .await
-            .expect_err("missing reconnect config should be redrivable");
-        assert!(matches!(err, MapError::UdfRedrive(_)));
-        assert!(
-            err.to_string()
-                .contains("unary map reconnect config missing")
-        );
-    }
-
-    #[tokio::test]
-    async fn unary_reconnect_skips_stale_generation() {
-        let (read_tx, _read_rx) = mpsc::channel::<MapRequest>(10);
-        let dummy_handle = tokio::spawn(async {});
-        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
-
-        let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
-        let mapper = UserDefinedUnaryMap {
-            batch_size: 10,
-            connection: Arc::new(tokio::sync::Mutex::new(super::UnaryMapConnection {
-                generation: 2,
-                read_tx,
-                senders: Arc::clone(&senders),
-                _handle: abort_handle,
-            })),
-            reconnect_config: Some(dummy_reconnect_config()),
-        };
-
-        mapper
-            .reconnect(1)
-            .await
-            .expect("stale generation should be a no-op");
-        assert!(
-            !senders.lock().unwrap().closed,
-            "stale reconnect should not drain the current sender map"
-        );
     }
 }

@@ -79,3 +79,17 @@ func TestUniqueStringList_ToString(t *testing.T) {
 	l.PushBack("c")
 	assert.Equal(t, "a,b,c", l.ToString())
 }
+
+func TestUniqueStringList_Replace(t *testing.T) {
+	l := NewUniqueStringList()
+	l.PushBack("a")
+	l.PushBack("b")
+	l.PushBack("c")
+	l.MoveToBack("a")
+
+	l.Replace([]string{"a", "c", "d", "d"})
+
+	assert.Equal(t, "c,a,d", l.ToString())
+	assert.False(t, l.Contains("b"))
+	assert.Equal(t, 3, l.Length())
+}

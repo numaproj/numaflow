@@ -164,4 +164,24 @@ func TestIsVertexHealthy(t *testing.T) {
 		// Refer: pkg/shared/health-status-code
 		assert.Equal(t, "V9", r.Code)
 	})
+
+	t.Run("PodsHealthy false is unhealthy", func(t *testing.T) {
+		pipeline := fakePipeline()
+		vertexName := "test-vertex"
+		vertex := fakeVertex(vertexName, dfv1.VertexPhaseRunning)
+		vertex.Status.InitConditions()
+		vertex.Status.MarkPodNotHealthy("PodUnschedulable", "Pod test-pod: 0/1 nodes are available: 1 Insufficient cpu.")
+
+		h := &handler{
+			kubeClient:     fakeKubeClient,
+			numaflowClient: &fakeNumaClient,
+		}
+		healthy, r, err := isVertexHealthy(h, testNamespace, pipeline.GetName(), vertex, vertexName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.False(t, healthy)
+		assert.Equal(t, "V3", r.Code)
+		assert.Contains(t, r.Message, "Insufficient cpu")
+	})
 }

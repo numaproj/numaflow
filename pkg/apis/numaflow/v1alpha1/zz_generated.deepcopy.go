@@ -597,6 +597,11 @@ func (in *ContainerTemplate) DeepCopyInto(out *ContainerTemplate) {
 		*out = new(Probe)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.StartupProbe != nil {
+		in, out := &in.StartupProbe, &out.StartupProbe
+		*out = new(Probe)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -2287,6 +2292,11 @@ func (in *PulsarSink) DeepCopyInto(out *PulsarSink) {
 		*out = new(PulsarAuth)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.TLS != nil {
+		in, out := &in.TLS, &out.TLS
+		*out = new(TLS)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -2312,6 +2322,11 @@ func (in *PulsarSource) DeepCopyInto(out *PulsarSource) {
 		in, out := &in.DeadLetterPolicy, &out.DeadLetterPolicy
 		*out = new(PulsarDeadLetterPolicy)
 		**out = **in
+	}
+	if in.TLS != nil {
+		in, out := &in.TLS, &out.TLS
+		*out = new(TLS)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }
@@ -3341,6 +3356,11 @@ func (in *SqsSource) DeepCopyInto(out *SqsSource) {
 		*out = new(AWSAssumeRole)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.MaxReceiveCount != nil {
+		in, out := &in.MaxReceiveCount, &out.MaxReceiveCount
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -3483,6 +3503,11 @@ func (in *UDF) DeepCopyInto(out *UDF) {
 		*out = new(GroupBy)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.RetryStrategy != nil {
+		in, out := &in.RetryStrategy, &out.RetryStrategy
+		*out = new(RetryStrategy)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -3544,6 +3569,11 @@ func (in *UDTransformer) DeepCopyInto(out *UDTransformer) {
 	if in.Container != nil {
 		in, out := &in.Container, &out.Container
 		*out = new(Container)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RetryStrategy != nil {
+		in, out := &in.RetryStrategy, &out.RetryStrategy
+		*out = new(RetryStrategy)
 		(*in).DeepCopyInto(*out)
 	}
 	return

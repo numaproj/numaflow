@@ -347,14 +347,10 @@ func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
-	firstRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 1)
-	secondRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 2)
-	thirdRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 3)
-	dropLog := "Retries exhausted, dropping messages."
-	w.Expect().VertexPodLogContains(vertexName, firstRetryLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().VertexPodLogContains(vertexName, secondRetryLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().VertexPodLogContains(vertexName, dropLog, PodLogCheckOptionWithContainer("numa"))
-	w.Expect().VertexPodLogNotContains(vertexName, thirdRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, LogRetryAttempt+`"1"`, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, LogRetryAttempt+`"2"`, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, LogRetriesExhaustedDrop, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogNotContains(vertexName, LogRetryAttempt+`"3"`, PodLogCheckOptionWithContainer("numa"))
 }
 
 func (s *FunctionalSuite) TestPipelineUserMetadataPropagation() {

@@ -10,6 +10,7 @@ To get started with Numaflow, ensure you have the following tools and setups rea
 
 You need a container runtime to run container images. Choose one of the following options:
 
+- [Rancher Desktop](https://rancherdesktop.io/)
 - [Docker Desktop](https://docs.docker.com/get-docker/)
 - [Podman](https://podman.io/)
 

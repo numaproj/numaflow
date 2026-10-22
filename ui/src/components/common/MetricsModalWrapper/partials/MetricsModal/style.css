@@ -2,7 +2,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 3rem;
+    min-height: 3.2rem;
+    gap: 1.2rem;
+}
+
+.metrics-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .metrics-modal-title {
@@ -16,7 +23,7 @@
     display: flex;
     flex-direction: row-reverse;
     text-decoration: underline;
-    color: #0077C5;
+    color: var(--accent-primary);
     cursor: pointer;
     padding: 0.5rem;
     font-family: Avenir Next, sans-serif;

@@ -116,7 +116,7 @@ test-coverage:
 test-e2e:
 test-kafka-e2e:
 test-map-e2e:
-test-redrive-e2e:
+test-forwarder-rebuild-e2e:
 test-reduce-one-e2e:
 test-reduce-two-e2e:
 test-api-e2e:
@@ -283,11 +283,16 @@ api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main
 rustgen:
 	$(MAKE) --directory rust generate
 
+.PHONY: api-v2-codegen
+api-v2-codegen:
+	./hack/generate-api-v2.sh
+
 .PHONY: codegen
 codegen:
 	./hack/generate-proto.sh
 	./hack/update-codegen.sh
 	./hack/openapi-gen.sh
+	$(MAKE) api-v2-codegen
 	$(MAKE) swagger
 	./hack/update-api-docs.sh
 	$(MAKE) manifests
@@ -353,7 +358,7 @@ ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
 	brew install lychee
 else
-	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.19.1/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
+	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | tar xz -C /tmp && sudo install -m 755 /tmp/lychee-$(shell uname -m)-unknown-linux-gnu/lychee /usr/local/bin/lychee && rm -rf /tmp/lychee-$(shell uname -m)-unknown-linux-gnu
 endif
 endif
 

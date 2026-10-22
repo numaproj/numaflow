@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -693,4 +694,73 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 		assert.Equal(t, mv.Name, deployment.OwnerReferences[0].Name)
 		assert.Equal(t, MonoVertexGroupVersionKind.Kind, deployment.OwnerReferences[0].Kind)
 	})
+}
+
+func TestMonoVertexGetPodSpecStartupProbe(t *testing.T) {
+	req := GetMonoVertexPodSpecReq{Image: "my-image", PullPolicy: corev1.PullIfNotPresent}
+
+	t.Run("no startup probe unless asked for", func(t *testing.T) {
+		podSpec, err := testMvtx.DeepCopy().GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Nil(t, podSpec.Containers[0].StartupProbe)
+	})
+
+	t.Run("numa container gets one from the container template", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.ContainerTemplate.StartupProbe = &Probe{
+			PeriodSeconds:    ptr.To[int32](10),
+			FailureThreshold: ptr.To[int32](60),
+		}
+		podSpec, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		startup := podSpec.Containers[0].StartupProbe
+		assert.NotNil(t, startup)
+		assert.Equal(t, "/livez", startup.HTTPGet.Path)
+		assert.Equal(t, int32(10), startup.PeriodSeconds)
+		assert.Equal(t, int32(60), startup.FailureThreshold)
+		// Unset fields come from the liveness probe as the template leaves it.
+		assert.Equal(t, int32(14), startup.InitialDelaySeconds)
+		assert.Equal(t, int32(11), startup.TimeoutSeconds)
+		assert.Equal(t, int32(1), podSpec.Containers[0].LivenessProbe.FailureThreshold)
+	})
+}
+
+func TestMonoVertex_GetDaemonDeploymentObj_lookbackChangeChangesEmbeddedObject(t *testing.T) {
+	mv := MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-vertex",
+			Namespace: "test-namespace",
+		},
+		Spec: MonoVertexSpec{
+			Scale: Scale{
+				Min:             ptr.To[int32](1),
+				Max:             ptr.To[int32](2),
+				LookbackSeconds: ptr.To[uint32](120),
+			},
+		},
+	}
+	req := GetMonoVertexDaemonDeploymentReq{
+		Image:      "test-image:latest",
+		PullPolicy: corev1.PullAlways,
+	}
+
+	deployBefore, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedBefore := daemonEmbeddedMonoVertexObject(deployBefore)
+
+	mv.Spec.Scale.LookbackSeconds = ptr.To[uint32](300)
+	deployAfter, err := mv.GetDaemonDeploymentObj(req)
+	assert.NoError(t, err)
+	embeddedAfter := daemonEmbeddedMonoVertexObject(deployAfter)
+
+	assert.NotEqual(t, embeddedBefore, embeddedAfter)
+}
+
+func daemonEmbeddedMonoVertexObject(deploy *appv1.Deployment) string {
+	for _, env := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == EnvMonoVertexObject {
+			return env.Value
+		}
+	}
+	return ""
 }

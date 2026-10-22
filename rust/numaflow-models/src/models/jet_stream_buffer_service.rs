@@ -26,7 +26,7 @@ pub struct JetStreamBufferService {
         skip_serializing_if = "Option::is_none"
     )]
     pub automount_service_account_token: Option<bool>,
-    /// Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5).
+    /// Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxMsgSize\" (defaults to 33553408, i.e. 32MB - 1KB, which is also the max value allowed), \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5).
     #[serde(rename = "bufferConfig", skip_serializing_if = "Option::is_none")]
     pub buffer_config: Option<String>,
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
@@ -74,12 +74,15 @@ pub struct JetStreamBufferService {
     /// RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
+    /// If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
+    #[serde(rename = "schedulerName", skip_serializing_if = "Option::is_none")]
+    pub scheduler_name: Option<String>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
     pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     /// ServiceAccountName applied to the pod
     #[serde(rename = "serviceAccountName", skip_serializing_if = "Option::is_none")]
     pub service_account_name: Option<String>,
-    /// Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but max_payload can be set up to 67108864 (64MB). For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.
+    /// Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of headroom for platform injected data. For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.
     #[serde(rename = "settings", skip_serializing_if = "Option::is_none")]
     pub settings: Option<String>,
     /// Optional arguments to start nats-server. For example, \"-D\" to enable debugging output, \"-DV\" to enable debugging and tracing. Check https://docs.nats.io/ for all the available arguments.
@@ -117,6 +120,7 @@ impl JetStreamBufferService {
             replicas: None,
             resource_claims: None,
             runtime_class_name: None,
+            scheduler_name: None,
             security_context: None,
             service_account_name: None,
             settings: None,

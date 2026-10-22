@@ -12,6 +12,7 @@ A pipeline can have many Sink vertices, unlike the Source vertex.
 Numaflow currently supports the following Sinks
 
 * [Kafka](./kafka.md)
+* [Pulsar](./pulsar.md)
 * [Log](./log.md)
 * [Black Hole](./blackhole.md)
 * [User-defined Sink](./user-defined-sinks.md)

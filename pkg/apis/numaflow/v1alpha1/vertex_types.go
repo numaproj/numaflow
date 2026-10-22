@@ -253,7 +253,7 @@ func (v Vertex) simpleCopy() Vertex {
 
 func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	vertexCopy := v.simpleCopy()
-	v.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
+	vertexCopy.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
@@ -562,7 +562,6 @@ type VertexSpec struct {
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`
 	// +optional
 	InterStepBufferServiceName string `json:"interStepBufferServiceName" protobuf:"bytes,3,opt,name=interStepBufferServiceName"`
-	// +kubebuilder:default=1
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional

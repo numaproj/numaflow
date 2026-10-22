@@ -20,10 +20,15 @@ limitations under the License.
 pub struct UdTransformer {
     #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
     pub container: Option<Box<crate::models::Container>>,
+    #[serde(rename = "retryStrategy", skip_serializing_if = "Option::is_none")]
+    pub retry_strategy: Option<Box<crate::models::RetryStrategy>>,
 }
 
 impl UdTransformer {
     pub fn new() -> UdTransformer {
-        UdTransformer { container: None }
+        UdTransformer {
+            container: None,
+            retry_strategy: None,
+        }
     }
 }

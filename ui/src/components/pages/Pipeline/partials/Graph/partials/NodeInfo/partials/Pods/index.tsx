@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -29,10 +30,34 @@ import {
   PodSpecificInfoProps,
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
+import { replaceObservabilityState } from "../../../../../../../../../utils/observabilityURLState";
+
+/** API order puts Always-restart init (user/UD) containers first, then main. */
+function getDefaultContainerName(pod: Pod | undefined): string | undefined {
+  return pod?.containers?.[0];
+}
+
+function resolveContainerForPod(
+  pod: Pod | undefined,
+  preferredContainer: string | undefined
+): string | undefined {
+  if (!pod) {
+    return undefined;
+  }
+  if (
+    preferredContainer &&
+    pod.containers?.includes(preferredContainer)
+  ) {
+    return preferredContainer;
+  }
+  return getDefaultContainerName(pod);
+}
 
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
+  const history = useHistory();
+  const location = useLocation();
 
   if (!namespaceId || !pipelineId || !vertexId) {
     return (
@@ -161,14 +186,60 @@ export function Pods(props: PodsProps) {
     if (podsDetailsErr) notifyError(podsDetailsErr);
   }, [podsDetailsErr]);
 
+  useEffect(() => {
+    if (!pods?.length) return;
+    const params = new URLSearchParams(location.search);
+    const requestedPodName = params.get("pod");
+    const requestedContainer = params.get("container");
+    if (!requestedPodName && !requestedContainer) return;
+    const requestedPod = requestedPodName
+      ? pods.find((pod) => pod.name === requestedPodName)
+      : undefined;
+    const pod = requestedPod || selectedPod || pods[0];
+    const container = resolveContainerForPod(pod, requestedContainer || selectedContainer);
+    if (pod?.name !== selectedPod?.name) setSelectedPod(pod);
+    if (container !== selectedContainer) setSelectedContainer(container);
+    replaceObservabilityState(history, location, {
+      pod: pod?.name,
+      container,
+    });
+  }, [pods, location.search, selectedPod, selectedContainer, history, location]);
+
   const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
-    setSelectedPod(p?.data?.pod);
-    setSelectedContainer(p?.data?.pod?.containers[0]);
-  }, []);
+    const nextPod = p?.data?.pod;
+    setSelectedPod(nextPod);
+    const container = getDefaultContainerName(nextPod);
+    setSelectedContainer(container);
+    replaceObservabilityState(history, location, {
+      pod: nextPod?.name,
+      container,
+    });
+  }, [history, location]);
 
   const handleContainerClick = useCallback((containerName: string) => {
     setSelectedContainer(containerName);
-  }, []);
+    replaceObservabilityState(history, location, { container: containerName });
+  }, [history, location]);
+
+  const handleFocusPodChange = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
+      if (!newValue || !pods) {
+        return;
+      }
+      const nextPod = pods.find((pod) => pod.name === newValue);
+      if (!nextPod) {
+        return;
+      }
+      setSelectedPod(nextPod);
+      const container = resolveContainerForPod(nextPod, selectedContainer);
+      setSelectedContainer(container);
+      replaceObservabilityState(history, location, {
+        pod: nextPod.name,
+        container,
+      });
+    },
+    [pods, selectedContainer, history, location]
+  );
 
   const containerSelector = useMemo(() => {
     return (
@@ -185,13 +256,103 @@ export function Pods(props: PodsProps) {
         </Box>
       </Box>
     );
-  }, [selectedPod, selectedContainer]);
+  }, [selectedPod, selectedContainer, handleContainerClick]);
+
+  const podAutocompleteProps = useMemo(() => {
+    return {
+      options: pods?.map((pod) => pod.name) ?? [],
+      getOptionLabel: (option: string) => option,
+    };
+  }, [pods]);
+
+  const focusControls = useMemo(() => {
+    if (!pods || !selectedPod) {
+      return null;
+    }
+    return (
+      <>
+        <Box className="PodLogs-focus-context-pod">
+          <span className="PodLogs-focus-context-label">Pod</span>
+          <Autocomplete
+            {...podAutocompleteProps}
+            disableClearable
+            id="focus-pod-select"
+            data-testid="logs-focus-pod-select"
+            ListboxProps={{
+              sx: {
+                fontSize: "1.2rem",
+                // Cap height so a large pod fleet scrolls instead of filling the dialog.
+                maxHeight: "24rem",
+                overflow: "auto",
+              },
+            }}
+            componentsProps={{
+              popper: {
+                sx: { zIndex: (theme) => theme.zIndex.modal + 4 },
+              },
+            }}
+            sx={{
+              width: "100%",
+              minWidth: 0,
+              "& .MuiOutlinedInput-root": {
+                height: "3.2rem",
+                fontSize: "1.2rem",
+                paddingTop: 0,
+                paddingBottom: 0,
+              },
+              "& .MuiAutocomplete-input": {
+                textOverflow: "ellipsis",
+              },
+            }}
+            autoHighlight
+            onChange={handleFocusPodChange}
+            value={selectedPod.name}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                size="small"
+                title={selectedPod.name}
+                inputProps={{
+                  ...params.inputProps,
+                  "aria-label": "Select pod",
+                  autoComplete: "new-password",
+                  style: { fontSize: "1.2rem" },
+                }}
+              />
+            )}
+          />
+        </Box>
+        <Box className="PodLogs-focus-context-container">
+          <span className="PodLogs-focus-context-label">Container</span>
+          <Box data-testid="logs-focus-containers">
+            <Containers
+              pod={selectedPod}
+              containerName={selectedContainer}
+              handleContainerClick={handleContainerClick}
+            />
+          </Box>
+        </Box>
+      </>
+    );
+  }, [
+    pods,
+    selectedPod,
+    selectedContainer,
+    podAutocompleteProps,
+    handleFocusPodChange,
+    handleContainerClick,
+  ]);
 
   const podDetail = useMemo(() => {
     return (
       <Box
         data-testid={"pods-poddetails"}
-        sx={{ height: "100%", width: "100%", border: "1px solid #E0E0E0" }}
+        sx={{
+          height: "100%",
+          width: "100%",
+          border: "1px solid var(--border-primary)",
+        }}
       >
         <PodDetail
           namespaceId={namespaceId}
@@ -200,28 +361,37 @@ export function Pods(props: PodsProps) {
           containerName={selectedContainer}
           pod={selectedPod}
           vertexId={vertexId}
+          focusControls={focusControls}
         />
       </Box>
     );
-  }, [namespaceId, pipelineId, type, selectedContainer, selectedPod, vertexId]);
+  }, [
+    namespaceId,
+    pipelineId,
+    type,
+    selectedContainer,
+    selectedPod,
+    vertexId,
+    focusControls,
+  ]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
       if (newValue) {
         if (pods) {
-          setSelectedPod(pods?.find((pod) => pod.name === newValue));
+          const pod = pods?.find((pod) => pod.name === newValue);
+          const container = resolveContainerForPod(pod, selectedContainer);
+          setSelectedPod(pod);
+          setSelectedContainer(container);
+          replaceObservabilityState(history, location, {
+            pod: pod?.name,
+            container,
+          });
         }
       }
     },
-    [pods]
+    [pods, selectedContainer, history, location]
   );
-
-  const defaultProps = useMemo(() => {
-    return {
-      options: pods?.map((pod) => pod.name) as string[],
-      getOptionLabel: (option: string) => option,
-    };
-  }, [pods]);
 
   const podSearchDetails = (
     <Box
@@ -238,7 +408,7 @@ export function Pods(props: PodsProps) {
         <Box>
           {pods && selectedPod && (
             <Autocomplete
-              {...defaultProps}
+              {...podAutocompleteProps}
               disablePortal
               disableClearable
               id="pod-select"
@@ -247,7 +417,7 @@ export function Pods(props: PodsProps) {
               }}
               sx={{
                 width: "100%",
-                border: "1px solid #E0E0E0",
+                border: "1px solid var(--border-primary)",
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "0",
                 },
@@ -315,7 +485,7 @@ export function Pods(props: PodsProps) {
             display: "flex",
             flexDirection: "column",
             padding: "1rem",
-            width: "calc(40% - 2rem)",
+            width: "calc(35% - 2rem)",
             height: "calc(100% - 2rem)",
             justifyContent: "space-between",
             gap: "1rem",
@@ -326,7 +496,7 @@ export function Pods(props: PodsProps) {
             sx={{
               display: "flex",
               width: "100%",
-              border: "1px solid #E0E0E0",
+              border: "1px solid var(--border-primary)",
             }}
             data-testid={"pods-searchablePodsHeatMap"}
           >
@@ -355,7 +525,7 @@ export function Pods(props: PodsProps) {
               display: "flex",
               height: "100%",
               width: "100%",
-              border: "1px solid #E0E0E0",
+              border: "1px solid var(--border-primary)",
               overflow: "auto",
             }}
           >
@@ -385,8 +555,8 @@ export function Pods(props: PodsProps) {
         <Box
           sx={{
             display: "flex",
-            padding: "1rem",
-            width: "calc(60% - 2rem)",
+            padding: "1rem 0 1rem 1rem",
+            width: "calc(65% - 1rem)",
             height: "calc(100% - 2rem)",
           }}
         >

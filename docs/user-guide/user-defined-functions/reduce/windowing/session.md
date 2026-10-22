@@ -83,12 +83,130 @@ for the key until the timeout.
 
 Note: Streaming mode is by default enabled for session windows. 
 
-Check the links below to see the UDF examples for different languages. Currently, we have the SDK support for Golang and Java.
+Check out the snippets below to see the UDF examples for different languages. Currently, we have the SDK support for Golang, Java and Rust.
 
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/sessionreducer)
-- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter)
+=== "Go"
 
+    ```go
+    // Counter is a simple session reducer which counts the number of events in a session.
+    type Counter struct {
+        count *atomic.Int32
+    }
 
+    func (c *Counter) SessionReduce(ctx context.Context, keys []string, input <-chan sessionreducer.Datum, outputCh chan<- sessionreducer.Message) {
+        for range input {
+            c.count.Inc()
+        }
+        outputCh <- sessionreducer.NewMessage([]byte(fmt.Sprintf("%d", c.count.Load()))).WithKeys(keys)
+    }
 
+    func (c *Counter) Accumulator(ctx context.Context) []byte {
+        return []byte(strconv.Itoa(int(c.count.Load())))
+    }
 
+    func (c *Counter) MergeAccumulator(ctx context.Context, accumulator []byte) {
+        val, err := strconv.Atoi(string(accumulator))
+        if err != nil {
+            log.Println("unable to convert the accumulator value to int: ", err.Error())
+            return
+        }
+        c.count.Add(int32(val))
+    }
+    ```
+    [View the full example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/1534f10dfc84c1e46bea2e0fbcecdf648f042384/examples/sessionreducer/counter/main.go)
 
+=== "Java"
+
+    ```java
+    /**
+     * CountFunction is a simple session reducer which counts the number of events in a session.
+     */
+    @Slf4j
+    public class CountFunction extends SessionReducer {
+
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        @Override
+        public void processMessage(
+                String[] keys,
+                Datum datum,
+                io.numaproj.numaflow.sessionreducer.model.OutputStreamObserver outputStreamObserver) {
+            this.count.incrementAndGet();
+        }
+
+        @Override
+        public void handleEndOfStream(
+                String[] keys,
+                io.numaproj.numaflow.sessionreducer.model.OutputStreamObserver outputStreamObserver) {
+            outputStreamObserver.send(new Message(String.valueOf(this.count.get()).getBytes()));
+        }
+
+        @Override
+        public byte[] accumulator() {
+            return String.valueOf(this.count.get()).getBytes();
+        }
+
+        @Override
+        public void mergeAccumulator(byte[] accumulator) {
+            int value = 0;
+            try {
+                value = Integer.parseInt(new String(accumulator));
+            } catch (NumberFormatException e) {
+                log.info("error while parsing integer - {}", e.getMessage());
+            }
+            this.count.addAndGet(value);
+        }
+    }
+    ```
+    [View the full example on numaflow-java Github](https://github.com/numaproj/numaflow-java/blob/a312216e5a56d7cc25614b03a13f9ee7960f3c2c/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter/CountFunction.java)
+
+=== "Rust"
+
+    ```rust
+    pub(crate) struct Counter {
+        count: Arc<AtomicU32>,
+    }
+
+    #[async_trait]
+    impl SessionReducer for Counter {
+        async fn session_reduce(
+            &self,
+            keys: Vec<String>,
+            mut input: mpsc::Receiver<SessionReduceRequest>,
+            output: mpsc::Sender<Message>,
+        ) {
+            // Count all incoming messages in this session
+            while input.recv().await.is_some() {
+                self.count.fetch_add(1, Ordering::Relaxed);
+            }
+
+            // Send the current count as the result
+            let count_value = self.count.load(Ordering::Relaxed);
+            let message = Message::new(count_value.to_string().into_bytes()).with_keys(keys);
+
+            if let Err(e) = output.send(message).await {
+                eprintln!("Failed to send message: {}", e);
+            }
+        }
+
+        async fn accumulator(&self) -> Vec<u8> {
+            // Return the current count as bytes for accumulator
+            let count = self.count.load(Ordering::Relaxed);
+            count.to_string().into_bytes()
+        }
+
+        async fn merge_accumulator(&self, accumulator: Vec<u8>) {
+            // Parse the accumulator value and add it to our count
+            if let Ok(accumulator_str) = String::from_utf8(accumulator) {
+                if let Ok(accumulator_count) = accumulator_str.parse::<u32>() {
+                    self.count.fetch_add(accumulator_count, Ordering::Relaxed);
+                } else {
+                    eprintln!("Failed to parse accumulator value: {}", accumulator_str);
+                }
+            } else {
+                eprintln!("Failed to convert accumulator bytes to string");
+            }
+        }
+    }
+    ```
+    [View the full example on numaflow-rs Github](https://github.com/numaproj/numaflow-rs/blob/c36edc2ccdeb1d1baa0b970c7ae0c88db62f0ccf/examples/session-counter/src/main.rs)

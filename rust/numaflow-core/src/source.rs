@@ -9,9 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{MessageHandle, NackOffset, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
-    mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    SOURCE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metrics, pipeline_partition_metric_labels,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
@@ -491,11 +490,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-        pipeline_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            get_vertex_name().to_string(),
-        ));
+        let pipeline_labels =
+            pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(
@@ -535,6 +531,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
                 let mut result = Ok(());
                 loop {
+                    if cln_token.is_cancelled() {
+                        break;
+                    }
+
                     // Acquire the semaphore permit before reading the next batch to make
                     // sure we are not reading ahead and all the inflight messages are acked.
                     let _permit = Arc::clone(&semaphore)
@@ -665,7 +665,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                     ?e,
                                     "Non retryable error while invoking ack, stopping the source forwarder"
                                 );
-                                // This cancels the source forwarder, which will stop the source.
+                                // At the top level, we treat internally cancelled
+                                // attempt as failed and rebuild the forwarder.
                                 cln_token.cancel();
                             }
                         }
@@ -818,6 +819,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let mut result = Ok(());
 
         'outer: loop {
+            if cln_token.is_cancelled() {
+                break 'outer;
+            }
+
             // Apply rate limiting before reading if configured.
             if let Some(ref rate_limiter) = self.rate_limiter
                 && rate_limiter
@@ -928,17 +933,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         )
                         .await;
                         if let Err(e) = result {
-                            if matches!(e, Error::UdfRedrive(_)) {
-                                // The source ack path failed before numa could confirm the ack.
-                                // Do not synthesize a nack here because the original disposition
-                                // may have been Ack after successful downstream processing.
-                                error!(?e, "Redrivable error while invoking ack");
-                                return;
-                            }
-                            error!(
-                                ?e,
-                                "Non retryable error in per-message ack, stopping forwarder"
-                            );
+                            error!(?e, "Error in per-message ack, stopping forwarder");
                             cln_token.cancel();
                         }
                     }
@@ -1186,7 +1181,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Ok(())
     }
 
-    /// Invokes ack with infinite retries until the cancellation token is cancelled.
+    /// Invokes ack with retries until cancellation or a non-retryable error.
     async fn ack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
@@ -1365,11 +1360,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
@@ -1399,11 +1391,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .nack_processing_time
@@ -1427,11 +1416,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels =
+                pipeline_partition_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name());
             pipeline_metrics()
                 .forwarder
                 .e2e_time
@@ -1466,12 +1452,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
     use crate::mark_success;
     use crate::message::{IntOffset as CoreIntOffset, Offset as CoreOffset};
     use crate::shared::grpc::create_rpc_channel;
     use crate::shared::otel::SourceDispatchSpans;
-    use crate::source::user_defined::{ReconnectConfig, new_source};
+    use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
     use chrono::Utc;
@@ -1665,15 +1650,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
@@ -1883,15 +1859,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            crate::source::user_defined::ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .expect("new_source should succeed");
@@ -2140,15 +2107,6 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            ReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
         )
         .await
         .expect("new_source");
@@ -2324,7 +2282,6 @@ mod tests {
     async fn streaming_with_transformer_forwards_messages() {
         use crate::config::components::source::GeneratorConfig;
         use crate::transformer::Transformer;
-        use crate::transformer::user_defined::ReconnectConfig as TransformerReconnectConfig;
         use numaflow::sourcetransform;
         use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
@@ -2356,15 +2313,7 @@ mod tests {
             Duration::from_secs(10),
             client,
             tracker.clone(),
-            TransformerReconnectConfig::new(
-                crate::shared::grpc::GrpcClientConfig::new(
-                    sock_file,
-                    server_info_file,
-                    crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                ),
-                cln_token.clone(),
-                crate::shared::grpc::DEFAULT_RECONNECT_INTERVAL,
-            ),
+            None,
         )
         .await
         .unwrap();

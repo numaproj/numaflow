@@ -1,3 +1,7 @@
 .spec-editor-validation-message-icon {
   width: 5rem;
 }
+
+.spec-editor-linked-line {
+  background-color: rgba(33, 150, 243, 0.18);
+}

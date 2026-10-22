@@ -130,6 +130,7 @@ mod tests {
     use async_nats::jetstream;
     use numaflow_shared::isb::jetstream::config::ClientConfig;
     use numaflow_shared::isb::jetstream::create_js_context;
+    use numaflow_shared::kv::inmemory::SimpleKVStore;
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use std::time::Duration;
     use tempfile::TempDir;
@@ -144,6 +145,22 @@ mod tests {
             .await
             .unwrap_or_else(|_| panic!("Failed to get kv store '{store_name}'"));
         Arc::new(JetstreamKVStore::new(store, store_name))
+    }
+
+    /// Shared assertion for `test_side_input_synchronizer_new`: SideInputSynchronizer's
+    /// constructor stores its fields as given, regardless of backend.
+    fn assert_synchronizer_new(store: Arc<dyn KVStore>, mount_path: &'static str) {
+        let cancellation_token = CancellationToken::new();
+        let synchronizer = SideInputSynchronizer::new(
+            vec!["input1", "input2"],
+            mount_path,
+            store,
+            false,
+            cancellation_token,
+        );
+
+        assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
+        assert_eq!(synchronizer.mount_path, mount_path);
     }
 
     /// Test the basic construction of SideInputSynchronizer
@@ -171,19 +188,64 @@ mod tests {
             .await
             .unwrap();
 
-        let cancellation_token = CancellationToken::new();
         let store = create_store(&js_context, store_name).await;
+        assert_synchronizer_new(store, mount_path);
+
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// In-memory twin of `test_side_input_synchronizer_new`.
+    #[tokio::test]
+    async fn test_side_input_synchronizer_new_inmemory() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store: Arc<dyn KVStore> =
+            Arc::new(SimpleKVStore::new("test-store-synchronizer-new-inmemory"));
+        assert_synchronizer_new(store, mount_path);
+    }
+
+    /// Shared assertions for `test_side_input_synchronizer_integration`: puts initial values,
+    /// runs the synchronizer, then puts an update, all through the abstract `store`.
+    async fn assert_synchronizer_integration(store: Arc<dyn KVStore>, mount_path: &'static str) {
+        // Put some test data in the KV store
+        store.put("input1", "test-value-1".into()).await.unwrap();
+        store.put("input2", "test-value-2".into()).await.unwrap();
+        store
+            .put("other-input", "other-value".into())
+            .await
+            .unwrap(); // Should be ignored
+
+        let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             vec!["input1", "input2"],
             mount_path,
-            store,
+            Arc::clone(&store),
             false,
-            cancellation_token,
+            cancellation_token.clone(),
         );
 
-        assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
-        assert_eq!(synchronizer.mount_path, mount_path);
-        let _ = js_context.delete_key_value(store_name).await;
+        // Start synchronization in a background task
+        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
+
+        // Give some time for synchronization to process initial values
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Put additional values to test real-time synchronization
+        store.put("input1", "updated-value-1".into()).await.unwrap();
+
+        // Give some time for the update to be processed
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Clean up
+        cancellation_token.cancel();
+        let _ = sync_task.await;
     }
 
     /// Integration test for SideInputSynchronizer
@@ -198,21 +260,13 @@ mod tests {
         let store_name = "test-side-input-store";
         let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
 
-        let kv_store = js_context
+        js_context
             .create_key_value(async_nats::jetstream::kv::Config {
                 bucket: store_name.to_string(),
                 ..Default::default()
             })
             .await
             .unwrap();
-
-        // Put some test data in the KV store
-        kv_store.put("input1", "test-value-1".into()).await.unwrap();
-        kv_store.put("input2", "test-value-2".into()).await.unwrap();
-        kv_store
-            .put("other-input", "other-value".into())
-            .await
-            .unwrap(); // Should be ignored
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
@@ -224,39 +278,47 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let cancellation_token = CancellationToken::new();
         let store = create_store(&js_context, store_name).await;
-        let synchronizer = SideInputSynchronizer::new(
-            vec!["input1", "input2"],
-            mount_path,
-            store,
-            false,
-            cancellation_token.clone(),
-        );
+        assert_synchronizer_integration(store, mount_path).await;
 
-        // Start synchronization in a background task
-        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
-
-        // Give some time for synchronization to process initial values
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Put additional values to test real-time synchronization
-        kv_store
-            .put("input1", "updated-value-1".into())
-            .await
-            .unwrap();
-
-        // Give some time for the update to be processed
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Clean up
-        cancellation_token.cancel();
-        let _ = sync_task.await;
         let _ = js_context.delete_key_value(store_name).await;
     }
 
+    /// In-memory twin of `test_side_input_synchronizer_integration`.
+    #[tokio::test]
+    async fn test_side_input_synchronizer_integration_inmemory() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store: Arc<dyn KVStore> =
+            Arc::new(SimpleKVStore::new("test-side-input-store-inmemory"));
+        assert_synchronizer_integration(store, mount_path).await;
+    }
+
+    /// Shared assertion: smoke-checks synchronizer construction against an already-open,
+    /// empty store.
+    fn assert_synchronizer_construction_against_empty_store(
+        store: Arc<dyn KVStore>,
+        mount_path: &'static str,
+    ) {
+        let synchronizer = SideInputSynchronizer::new(
+            vec!["input1"],
+            mount_path,
+            store,
+            true,
+            CancellationToken::new(),
+        );
+        assert_eq!(synchronizer.side_inputs, vec!["input1"]);
+    }
+
     /// Test error handling when watching fails after the store is opened.
-    /// Missing-bucket failures are covered by `create_side_input_kv_store` in lib.rs tests.
+    /// Missing-bucket failures are covered by `test_end_to_end_error_scenarios` in lib.rs tests.
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_side_input_synchronizer_error_handling() {
@@ -297,15 +359,94 @@ mod tests {
             .await
             .unwrap();
         let store = create_store(&js_context, empty_store).await;
+        assert_synchronizer_construction_against_empty_store(store, mount_path);
+        let _ = js_context.delete_key_value(empty_store).await;
+    }
+
+    /// In-memory twin of `test_side_input_synchronizer_error_handling`.
+    ///
+    /// `SimpleKVStore` creates buckets on demand, so there is no "non-existent bucket"
+    /// failure to reproduce here (mirrors the choice made for
+    /// `test_end_to_end_error_scenarios_inmemory` in lib.rs). Beyond the construction
+    /// smoke-check, this also covers the watch-failure error path that
+    /// `SideInputSynchronizer::synchronize()` surfaces -- forced here via `KVErrorInjector`,
+    /// which is how JetStream bucket-watch failures (e.g. after a bucket purge) translate
+    /// for this backend.
+    #[tokio::test]
+    async fn test_side_input_synchronizer_error_handling_inmemory() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store: Arc<dyn KVStore> =
+            Arc::new(SimpleKVStore::new("test-error-handling-empty-inmemory"));
+        assert_synchronizer_construction_against_empty_store(store, mount_path);
+
+        let failing_store = Arc::new(SimpleKVStore::new(
+            "test-error-handling-watch-failure-inmemory",
+        ));
+        failing_store.error_injector().fail_watches(1);
         let synchronizer = SideInputSynchronizer::new(
             vec!["input1"],
             mount_path,
-            store,
+            failing_store as Arc<dyn KVStore>,
             true,
             CancellationToken::new(),
         );
-        assert_eq!(synchronizer.side_inputs, vec!["input1"]);
-        let _ = js_context.delete_key_value(empty_store).await;
+        let result = synchronizer.synchronize().await;
+        assert!(
+            result.is_err(),
+            "synchronize() should fail when watch() fails"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to watch kv bucket"),
+            "error should mention watch failure"
+        );
+    }
+
+    /// Shared assertions for `test_side_input_filtering`: only the `allowed-input` key should
+    /// be synchronized, `disallowed-input` should be ignored.
+    async fn assert_side_input_filtering(store: Arc<dyn KVStore>, mount_path: &'static str) {
+        // Only include "allowed-input" in side_inputs
+        let cancellation_token = CancellationToken::new();
+        let synchronizer = SideInputSynchronizer::new(
+            vec!["allowed-input"],
+            mount_path,
+            Arc::clone(&store),
+            false,
+            cancellation_token.clone(),
+        );
+
+        // Start synchronization in background
+        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
+
+        // Give some time for synchronizer to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Put values for both allowed and disallowed inputs
+        store
+            .put("allowed-input", "allowed-value".into())
+            .await
+            .unwrap();
+        store
+            .put("disallowed-input", "disallowed-value".into())
+            .await
+            .unwrap();
+
+        // Give some time for processing
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Clean up
+        cancellation_token.cancel();
+        let _ = sync_task.await;
     }
 
     /// Test that side input filtering works correctly
@@ -320,7 +461,7 @@ mod tests {
         let store_name = "test-filtering-store";
         let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
 
-        let kv_store = js_context
+        js_context
             .create_key_value(async_nats::jetstream::kv::Config {
                 bucket: store_name.to_string(),
                 ..Default::default()
@@ -338,82 +479,15 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        // Only include "allowed-input" in side_inputs
-        let cancellation_token = CancellationToken::new();
         let store = create_store(&js_context, store_name).await;
-        let synchronizer = SideInputSynchronizer::new(
-            vec!["allowed-input"],
-            mount_path,
-            store,
-            false,
-            cancellation_token.clone(),
-        );
+        assert_side_input_filtering(store, mount_path).await;
 
-        // Start synchronization in background
-        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
-
-        // Give some time for synchronizer to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Put values for both allowed and disallowed inputs
-        kv_store
-            .put("allowed-input", "allowed-value".into())
-            .await
-            .unwrap();
-        kv_store
-            .put("disallowed-input", "disallowed-value".into())
-            .await
-            .unwrap();
-
-        // Give some time for processing
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Clean up
-        cancellation_token.cancel();
-        let _ = sync_task.await;
         let _ = js_context.delete_key_value(store_name).await;
     }
 
-    /// Test run_once functionality - synchronizer should process initial values and then stop
-    ///
-    /// This test verifies that when run_once=true:
-    /// 1. The synchronizer processes all initial side input values
-    /// 2. The synchronizer stops after processing all expected side inputs
-    /// 3. The synchronizer does not continue monitoring for new changes
-    #[cfg(feature = "nats-tests")]
+    /// In-memory twin of `test_side_input_filtering`.
     #[tokio::test]
-    async fn test_side_input_synchronizer_run_once() {
-        // Connect to NATS server
-        let client = async_nats::connect("localhost:4222").await.unwrap();
-        let js_context = jetstream::new(client);
-
-        // Create a test KV store
-        let store_name = "test-run-once-store";
-        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
-
-        let kv_store = js_context
-            .create_key_value(jetstream::kv::Config {
-                bucket: store_name.to_string(),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        // Put initial test data in the KV store before starting synchronizer
-        kv_store
-            .put("input1", "initial-value-1".into())
-            .await
-            .unwrap();
-        kv_store
-            .put("input2", "initial-value-2".into())
-            .await
-            .unwrap();
-        kv_store
-            .put("other-input", "other-value".into())
-            .await
-            .unwrap(); // Should be ignored
-
-        // Use a temporary directory for testing
+    async fn test_side_input_filtering_inmemory() {
         let temp_dir = TempDir::new().unwrap();
         let mount_path = Box::leak(
             temp_dir
@@ -423,14 +497,28 @@ mod tests {
                 .into_boxed_str(),
         );
 
+        let store: Arc<dyn KVStore> = Arc::new(SimpleKVStore::new("test-filtering-store-inmemory"));
+        assert_side_input_filtering(store, mount_path).await;
+    }
+
+    /// Shared assertions for `test_side_input_synchronizer_run_once`: with all expected side
+    /// inputs already present, run_once=true should process them and then complete.
+    async fn assert_synchronizer_run_once(store: Arc<dyn KVStore>, mount_path: &'static str) {
+        // Put initial test data in the KV store before starting synchronizer
+        store.put("input1", "initial-value-1".into()).await.unwrap();
+        store.put("input2", "initial-value-2".into()).await.unwrap();
+        store
+            .put("other-input", "other-value".into())
+            .await
+            .unwrap(); // Should be ignored
+
         let cancellation_token = CancellationToken::new();
-        let store = create_store(&js_context, store_name).await;
         let synchronizer = SideInputSynchronizer::new(
             vec!["input1", "input2"],
             mount_path,
             store,
             true, // run_once = true
-            cancellation_token.clone(),
+            cancellation_token,
         );
 
         // Start synchronization - this should complete after processing initial values
@@ -461,42 +549,32 @@ mod tests {
                 );
             }
         }
-
-        // Clean up
-        let _ = js_context.delete_key_value(store_name).await;
     }
 
-    /// Test run_once functionality with partial side inputs
+    /// Test run_once functionality - synchronizer should process initial values and then stop
     ///
-    /// This test verifies that when run_once=true and only some side inputs are available:
-    /// 1. The synchronizer processes available side input values
-    /// 2. The synchronizer waits for missing side inputs before stopping
-    /// 3. The synchronizer stops after all expected side inputs are received
+    /// This test verifies that when run_once=true:
+    /// 1. The synchronizer processes all initial side input values
+    /// 2. The synchronizer stops after processing all expected side inputs
+    /// 3. The synchronizer does not continue monitoring for new changes
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_side_input_synchronizer_run_once_partial() {
+    async fn test_side_input_synchronizer_run_once() {
         // Connect to NATS server
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
         // Create a test KV store
-        let store_name = "test-run-once-partial-store";
+        let store_name = "test-run-once-store";
         let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
 
-        let kv_store = js_context
-            .create_key_value(async_nats::jetstream::kv::Config {
+        js_context
+            .create_key_value(jetstream::kv::Config {
                 bucket: store_name.to_string(),
                 ..Default::default()
             })
             .await
             .unwrap();
-
-        // Put only one of the expected side inputs initially
-        kv_store
-            .put("input1", "initial-value-1".into())
-            .await
-            .unwrap();
-        // input2 is missing initially
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
@@ -508,14 +586,47 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let cancellation_token = CancellationToken::new();
         let store = create_store(&js_context, store_name).await;
+        assert_synchronizer_run_once(store, mount_path).await;
+
+        // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// In-memory twin of `test_side_input_synchronizer_run_once`.
+    #[tokio::test]
+    async fn test_side_input_synchronizer_run_once_inmemory() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store: Arc<dyn KVStore> = Arc::new(SimpleKVStore::new("test-run-once-store-inmemory"));
+        assert_synchronizer_run_once(store, mount_path).await;
+    }
+
+    /// Shared assertions for `test_side_input_synchronizer_run_once_partial`: with only some
+    /// expected side inputs present, run_once=true should block until the rest arrive, then
+    /// complete.
+    async fn assert_synchronizer_run_once_partial(
+        store: Arc<dyn KVStore>,
+        mount_path: &'static str,
+    ) {
+        // Put only one of the expected side inputs initially
+        store.put("input1", "initial-value-1".into()).await.unwrap();
+        // input2 is missing initially
+
+        let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             vec!["input1", "input2"],
             mount_path,
-            store,
+            Arc::clone(&store),
             true, // run_once = true
-            cancellation_token.clone(),
+            cancellation_token,
         );
 
         // Start synchronization
@@ -531,10 +642,7 @@ mod tests {
         );
 
         // Now add the missing side input
-        kv_store
-            .put("input2", "initial-value-2".into())
-            .await
-            .unwrap();
+        store.put("input2", "initial-value-2".into()).await.unwrap();
 
         // Give some time for synchronization to process the second input and complete
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -560,8 +668,64 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Test run_once functionality with partial side inputs
+    ///
+    /// This test verifies that when run_once=true and only some side inputs are available:
+    /// 1. The synchronizer processes available side input values
+    /// 2. The synchronizer waits for missing side inputs before stopping
+    /// 3. The synchronizer stops after all expected side inputs are received
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_side_input_synchronizer_run_once_partial() {
+        // Connect to NATS server
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-run-once-partial-store";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        js_context
+            .create_key_value(async_nats::jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Use a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store = create_store(&js_context, store_name).await;
+        assert_synchronizer_run_once_partial(store, mount_path).await;
 
         // Clean up
         let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// In-memory twin of `test_side_input_synchronizer_run_once_partial`.
+    #[tokio::test]
+    async fn test_side_input_synchronizer_run_once_partial_inmemory() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let store: Arc<dyn KVStore> =
+            Arc::new(SimpleKVStore::new("test-run-once-partial-store-inmemory"));
+        assert_synchronizer_run_once_partial(store, mount_path).await;
     }
 }

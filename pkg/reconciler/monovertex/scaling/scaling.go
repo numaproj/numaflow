@@ -26,7 +26,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,60 +33,9 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	mvtxdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	scalingutil "github.com/numaproj/numaflow/pkg/reconciler/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
-
-type parsedCronSchedule struct {
-	schedule dfv1.CronSchedule
-	start    cron.Schedule
-	end      cron.Schedule
-}
-
-func (p *parsedCronSchedule) isActiveAt(t time.Time) bool {
-	return p.end.Next(t).Before(p.start.Next(t))
-}
-
-func parseCronSchedules(cronScheduling *dfv1.CronScheduling) ([]parsedCronSchedule, error) {
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	result := make([]parsedCronSchedule, 0, len(cronScheduling.Schedules))
-	for _, schedule := range cronScheduling.Schedules {
-		start, err := parser.Parse(schedule.Start)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cron start expression %q: %w", schedule.Start, err)
-		}
-		end, err := parser.Parse(schedule.End)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cron end expression %q: %w", schedule.End, err)
-		}
-		result = append(result, parsedCronSchedule{schedule: schedule, start: start, end: end})
-	}
-	return result, nil
-}
-
-func effectiveScaleBoundsAt(scale dfv1.Scale, parsed []parsedCronSchedule, at time.Time) (int32, int32, bool) {
-	minReplicas := scale.GetMinReplicas()
-	maxReplicas := scale.GetMaxReplicas()
-	if scale.Cron == nil || len(parsed) == 0 {
-		return minReplicas, maxReplicas, false
-	}
-	location, err := time.LoadLocation(scale.Cron.GetTimezone())
-	if err != nil {
-		return minReplicas, maxReplicas, false
-	}
-	at = at.In(location)
-	for i := range parsed {
-		if parsed[i].isActiveAt(at) {
-			if parsed[i].schedule.Min != nil {
-				minReplicas = *parsed[i].schedule.Min
-			}
-			if parsed[i].schedule.Max != nil {
-				maxReplicas = *parsed[i].schedule.Max
-			}
-			return minReplicas, maxReplicas, true
-		}
-	}
-	return minReplicas, maxReplicas, false
-}
 
 type Scaler struct {
 	client     client.Client
@@ -100,7 +48,7 @@ type Scaler struct {
 	monoVtxMetricsCache    *lru.Cache[string, int64]
 	mvtxDaemonClientsCache *lru.Cache[string, mvtxdaemonclient.MonoVertexDaemonClient]
 	// Cache to store the pre-parsed cron schedules for each MonoVertex
-	cronScheduleCache *lru.Cache[string, []parsedCronSchedule]
+	cronScheduleCache *lru.Cache[string, []scalingutil.ParsedCronSchedule]
 }
 
 // NewScaler returns a Scaler instance.
@@ -124,7 +72,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 	})
 	monoVtxMetricsCache, _ := lru.New[string, int64](10000)
 	s.monoVtxMetricsCache = monoVtxMetricsCache
-	s.cronScheduleCache, _ = lru.New[string, []parsedCronSchedule](1000)
+	s.cronScheduleCache, _ = lru.New[string, []scalingutil.ParsedCronSchedule](1000)
 	return s
 }
 
@@ -181,7 +129,7 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 }
 
 // parsedCronSchedulesFor returns the parsed cron schedules for a MonoVertex.
-func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronSchedule, error) {
+func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]scalingutil.ParsedCronSchedule, error) {
 	if monoVtx.Spec.Scale.Cron == nil {
 		return nil, nil
 	}
@@ -189,7 +137,7 @@ func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronS
 	if parsed, ok := s.cronScheduleCache.Get(key); ok {
 		return parsed, nil
 	}
-	parsed, err := parseCronSchedules(monoVtx.Spec.Scale.Cron)
+	parsed, err := scalingutil.ParseCronSchedules(monoVtx.Spec.Scale.Cron)
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +145,14 @@ func (s *Scaler) parsedCronSchedulesFor(monoVtx *dfv1.MonoVertex) ([]parsedCronS
 	return parsed, nil
 }
 
-// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time.
+// effectiveScaleBoundsFor returns the effective scale bounds for a MonoVertex at a given time,
+// taking any active cron window into account.
 func (s *Scaler) effectiveScaleBoundsFor(monoVtx *dfv1.MonoVertex, at time.Time) (int32, int32, bool, error) {
 	parsed, err := s.parsedCronSchedulesFor(monoVtx)
 	if err != nil {
 		return 0, 0, false, err
 	}
-	minReplicas, maxReplicas, cronActive := effectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
+	minReplicas, maxReplicas, cronActive := scalingutil.EffectiveScaleBoundsAt(monoVtx.Spec.Scale, parsed, at)
 	return minReplicas, maxReplicas, cronActive, nil
 }
 
@@ -288,7 +237,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		// Periodically wake them up from 0 replicas to 1, to peek for the incoming messages
 		if secondsSinceLastScale >= float64(monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds()) {
 			log.Infof("MonoVertex %s has slept %v seconds, scaling up to peek.", monoVtx.Name, secondsSinceLastScale)
-			return s.patchMonoVertexReplicas(ctx, monoVtx, 1)
+			return s.PatchMonoVertexReplicas(ctx, monoVtx, 1)
 		} else {
 			log.Infof("MonoVertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds), skip scaling.", monoVtx.Name, secondsSinceLastScale, monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds())
 			return nil
@@ -366,7 +315,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, minReplicas)
 	}
 	if current > maxReplicas || current < minReplicas { // Someone might have manually scaled up/down the MonoVertex
-		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
+		return s.PatchMonoVertexReplicas(ctx, monoVtx, desired)
 	}
 	if desired < current {
 		return s.scaleDown(ctx, monoVtx, current, desired, secondsSinceLastScale, scaleDownCooldown)
@@ -388,7 +337,7 @@ func (s *Scaler) scaleUp(ctx context.Context, monoVtx *dfv1.MonoVertex, current,
 		log.Infof("Cooldown period for scaling up, skip scaling.")
 		return nil
 	}
-	return s.patchMonoVertexReplicas(ctx, monoVtx, current+diff)
+	return s.PatchMonoVertexReplicas(ctx, monoVtx, current+diff)
 }
 
 func (s *Scaler) scaleDown(ctx context.Context, monoVtx *dfv1.MonoVertex, current, desired int32, secondsSinceLastScale, scaleDownCooldown float64) error {
@@ -402,7 +351,7 @@ func (s *Scaler) scaleDown(ctx context.Context, monoVtx *dfv1.MonoVertex, curren
 		log.Infof("Cooldown period for scaling down, skip scaling.")
 		return nil
 	}
-	return s.patchMonoVertexReplicas(ctx, monoVtx, current-diff)
+	return s.PatchMonoVertexReplicas(ctx, monoVtx, current-diff)
 }
 
 func (s *Scaler) desiredReplicas(_ context.Context, monoVtx *dfv1.MonoVertex, processingRate float64, pending int64) int32 {
@@ -460,15 +409,21 @@ func (s *Scaler) Start(ctx context.Context) error {
 	// Function assign() moves an element in the list from the front to the back,
 	// and send to the channel so that it can be picked up by a worker.
 	assign := func() {
+		// Unlock before sending, so busy workers can't block StartWatching.
 		s.lock.Lock()
-		defer s.lock.Unlock()
-		if s.monoVtxList.Len() == 0 {
+		e := s.monoVtxList.Front()
+		if e != nil {
+			s.monoVtxList.MoveToBack(e)
+		}
+		s.lock.Unlock()
+		if e == nil {
 			return
 		}
-		e := s.monoVtxList.Front()
 		if key, ok := e.Value.(string); ok {
-			s.monoVtxList.MoveToBack(e)
-			keyCh <- key
+			select {
+			case keyCh <- key:
+			case <-ctx.Done():
+			}
 		}
 	}
 
@@ -499,7 +454,12 @@ func (s *Scaler) Start(ctx context.Context) error {
 	}
 }
 
-func (s *Scaler) patchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex, desiredReplicas int32) error {
+// PatchMonoVertexReplicas patches the MonoVertex's spec.replicas - the field backing its CRD scale
+// subresource (specReplicasPath: .spec.replicas) - to the given value via a merge patch. Callers
+// that need their in-memory copy to reflect the new value afterward are responsible for updating
+// monoVtx.Spec.Replicas themselves. Exported so the autoscaler (this file) and the MonoVertex
+// reconciler (pkg/reconciler/monovertex) share this single code path for writing spec.replicas.
+func (s *Scaler) PatchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := monoVtx.Spec.Replicas
 	patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)

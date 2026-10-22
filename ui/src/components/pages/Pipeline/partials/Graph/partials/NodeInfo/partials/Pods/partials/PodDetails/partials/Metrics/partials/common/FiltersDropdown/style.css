@@ -17,21 +17,36 @@
     color: var(--accent-primary) !important;
 }
 
-.filters-dropdown-container {
-    display: flex;
-    align-items: center;
+.filters-dropdown-form {
     min-width: 13rem;
-    width: 100%;
-    border-radius: 0.4rem;
-    height: 5rem;
-    padding: 1rem;
-    gap: 1rem;
-    background-color: transparent;
-    transition: border-color 0.2s ease;
+    width: fit-content;
+    max-width: 100%;
 }
 
-.filters-dropdown-container:hover {
-    border-color: var(--text-primary) !important;
+.filters-dropdown-input.MuiOutlinedInput-root {
+    cursor: pointer;
+    padding-right: 3.2rem;
+}
+
+.filters-dropdown-input .MuiOutlinedInput-input {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    caret-color: transparent;
+}
+
+.filters-dropdown-content {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.filters-dropdown-caret {
+    position: absolute;
+    right: 0.7rem;
+    color: var(--text-tertiary);
+    pointer-events: none;
 }
 
 .filters-dropdown-selected-filters-container {
@@ -56,18 +71,29 @@
 }
 
 .filters-dropdown-add-filter-button {
-    color: var(--accent-primary) !important;
-    width: 11rem !important;
+    color: var(--text-primary) !important;
+    min-width: 0 !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 0.2rem !important;
     font-family: "Avenir Next", sans-serif !important;
-    font-size: 1.1rem !important;
-    font-weight: bold !important;
-    text-transform: capitalize !important;
-    align-items: end !important;
+    font-size: 1.4rem !important;
+    font-weight: 400 !important;
+    line-height: 1.2 !important;
+    text-transform: none !important;
     background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.filters-dropdown-add-filter-button .MuiButton-startIcon {
+    margin-right: 0.4rem;
+    margin-left: 0;
+    color: var(--text-primary);
 }
 
 .filters-dropdown-active-filters-options {
     height: fit-content;
     max-height: 25rem;
-    overflow: scroll;
+    overflow-y: auto;
 }

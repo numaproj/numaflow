@@ -172,7 +172,7 @@ impl KVErrorInjector {
         let count = counter.load(Ordering::Relaxed);
         if count > 0 {
             counter
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
                     if c > 0 { Some(c - 1) } else { None }
                 })
                 .ok();

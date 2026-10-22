@@ -571,6 +571,27 @@ available to those containers which consume them by name.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>schedulerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+If specified, the pod will be dispatched by specified scheduler. If not
+specified, the pod will be dispatched by default scheduler. More info:
+<a href="https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/">https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/</a>
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -2299,6 +2320,28 @@ Kubernetes core/v1.SecurityContext </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>startupProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+StartupProbe runs the same check as the liveness probe, but only until
+the container has started successfully, giving a slow first start its
+own budget. No startup probe is configured unless this is set.
+</p>
+
 </td>
 
 </tr>
@@ -4443,6 +4486,28 @@ plain HTTP, set ports.http explicitly.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>endpoint</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Endpoint customizes the path segment that follows
+<code>/vertices/</code> in the URL where the HTTP source accepts
+messages. If unset, it defaults to <code>vertices/\<vertex-name\></code>
+(or <code>vertices/\<mvtx-name\></code> for a MonoVertex).
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -5166,8 +5231,8 @@ numaflow-controller-config will be used. See
 and
 <a href="https://docs.nats.io/running-a-nats-service/configuration#jetstream">https://docs.nats.io/running-a-nats-service/configuration#jetstream</a>.
 For limits, only “max_payload” is supported for configuration, defaults
-to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but
-max_payload can be set up to 67108864 (64MB). For jetstream, only
+to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of
+headroom for platform injected data. For jetstream, only
 “max_memory_store” and “max_file_store” are supported for configuration,
 do not set “store_dir” as it has been hardcoded.
 </p>
@@ -5216,12 +5281,13 @@ the default configuration in numaflow-controller-config. It accepts a
 YAML format configuration, it may include 4 sections, “stream”,
 “consumer”, “otBucket” and “procBucket”. Available fields under “stream”
 include “retention” (e.g. interest, limits, workerQueue), “maxMsgs”,
-“maxAge” (e.g. 72h), “replicas” (1, 3, 5), “duplicates” (e.g. 5m).
-Available fields under “consumer” include “ackWait” (e.g. 60s) Available
-fields under “otBucket” include “maxValueSize”, “history”, “ttl”
-(e.g. 72h), “maxBytes”, “replicas” (1, 3, 5). Available fields under
-“procBucket” include “maxValueSize”, “history”, “ttl” (e.g. 72h),
-“maxBytes”, “replicas” (1, 3, 5).
+“maxMsgSize” (defaults to 33553408, i.e. 32MB - 1KB, which is also the
+max value allowed), “maxAge” (e.g. 72h), “replicas” (1, 3, 5),
+“duplicates” (e.g. 5m). Available fields under “consumer” include
+“ackWait” (e.g. 60s) Available fields under “otBucket” include
+“maxValueSize”, “history”, “ttl” (e.g. 72h), “maxBytes”, “replicas” (1,
+3, 5). Available fields under “procBucket” include “maxValueSize”,
+“history”, “ttl” (e.g. 72h), “maxBytes”, “replicas” (1, 3, 5).
 </p>
 
 </td>
@@ -9715,6 +9781,30 @@ Auth information
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS configuration for the Pulsar client, e.g. to trust a
+custom/self-signed broker CA. Only server-authentication (one-way TLS)
+is supported today: CACertSecret is honored, but CertSecret/KeySecret
+(mutual TLS) are not, since the underlying pulsar-rs client does not
+currently support presenting a client certificate.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9863,6 +9953,30 @@ PulsarDeadLetterPolicy </a> </em>
 <p>
 
 Consumer level dead letter policy.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS configuration for the Pulsar client, e.g. to trust a
+custom/self-signed broker CA. Only server-authentication (one-way TLS)
+is supported today: CACertSecret is honored, but CertSecret/KeySecret
+(mutual TLS) are not, since the underlying pulsar-rs client does not
+currently support presenting a client certificate.
 </p>
 
 </td>
@@ -10931,7 +11045,9 @@ RetryStrategy
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
 </p>
 
 <p>
@@ -13405,9 +13521,11 @@ AWSRegion is the AWS Region where the SQS queue is located
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
-QueueName is the name of the SQS queue
+QueueName is the name of the SQS queue. Mutually exclusive with
+queueNames.
 </p>
 
 </td>
@@ -13586,6 +13704,68 @@ authentication.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>queueNames</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+QueueNames is a comma-separated list of SQS queue names to consume from.
+All queues must live in the configured awsRegion and
+queueOwnerAWSAccountID. Mutually exclusive with queueName.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>deadLetterQueues</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DeadLetterQueues is a comma-separated list of SQS dead-letter queue
+names. Entries correspond positionally to the configured source queues.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxReceiveCount</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MaxReceiveCount is the maximum number of receives before SQS moves a
+message to its configured dead-letter queue. Valid values: 1-1000.
+Defaults to 10 when deadLetterQueues is configured.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -13674,6 +13854,8 @@ TLS
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink">PulsarSink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">RedisSentinelConfig</a>)
 </p>
 
@@ -14058,6 +14240,22 @@ Description
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>retryStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -14220,6 +14418,28 @@ Description
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>retryStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures.
+</p>
+
 </td>
 
 </tr>

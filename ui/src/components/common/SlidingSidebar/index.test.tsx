@@ -1,10 +1,14 @@
 import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render as renderBase, screen, waitFor, fireEvent } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
 import { SidebarType, SlidingSidebar } from "./index";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 
 import "@testing-library/jest-dom";
+
+const render = (ui: React.ReactElement) =>
+  renderBase(ui, { wrapper: BrowserRouter });
 
 const mockSetSidebarProps = jest.fn();
 

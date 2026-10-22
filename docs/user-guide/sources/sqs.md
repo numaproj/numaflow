@@ -31,6 +31,17 @@ For more details, refer to the AWS documentation: https://docs.aws.amazon.com/ek
 
 Create a file named `sqs-pl.yaml` with either of the following content.
 
+| YAML / key | Where | Meaning |
+|---|---|---|
+| `queueName` | source spec | **Read** this one queue |
+| `queueNames` | source spec | **Read** these queues (XOR with `queueName`) |
+| `deadLetterQueues` | source spec | Native SQS DLQs, positionally mapped to source queues |
+| `maxReceiveCount` | source spec | Receives before SQS moves a message to its DLQ (default `10`) |
+| `queue_name` | **system** metadata, group `sqs` | **Origin** of this message (single- or multi-queue) |
+| `queueName` | sink spec | **Write** dest (builtin SQS sink; unchanged by origin) |
+
+User metadata group `sqs` is producer or UDF attributes, not origin. See [Source Queue Origin](#source-queue-origin).
+
 ### MonoVertex Specification
 
 ```yaml
@@ -53,7 +64,7 @@ spec:
           messageAttributeNames:             # Message attributes to retrieve
             - All
     sink:
-        log: {}                             # Simple log sink for testing
+        log: {}                             # Prints payload/headers, not system metadata
     limits:
         readBatchSize: 10
         bufferSize: 100
@@ -97,6 +108,106 @@ spec:
       to: out
 ```
 
+### Multiple Queues
+
+A single SQS source can consume from multiple queues in the same AWS account
+and region by using `queueNames` instead of `queueName`. `queueNames` is a
+comma-separated list; the two queue selector fields are mutually exclusive.
+
+```yaml
+source:
+  sqs:
+    queueNames: "orders-queue,refunds-queue,replay-queue"
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+    visibilityTimeout: 30
+    maxNumberOfMessages: 10
+    waitTimeSeconds: 20
+```
+
+Every listed queue uses the same:
+
+- AWS account and region;
+- pod credentials or `assumeRole`;
+- `endpointUrl`;
+- visibility and polling settings; and
+- system and message attribute selections.
+
+The IAM identity must have access to every queue. If queues require different
+accounts, regions, credentials, or tuning, configure separate source vertices.
+
+Messages from all configured queues are merged without a cross-queue ordering
+guarantee. Origin is on every SQS message; see [Source Queue Origin](#source-queue-origin).
+
+### Native Dead-Letter Queues
+
+Set `deadLetterQueues` to have Numaflow validate each source queue's native AWS
+SQS `RedrivePolicy` during source startup. The queue owner must create each DLQ
+and configure the source queue's redrive policy before starting the MonoVertex.
+Numaflow only reads the existing policy; it does not create queues or change
+queue attributes. SQS itself moves a message to the corresponding DLQ after it
+has been received more than `maxReceiveCount` times. Numaflow does not copy
+failed messages or maintain a separate receive counter.
+
+For a single source queue, the existing `queueName` form remains supported:
+
+```yaml
+source:
+  sqs:
+    queueName: "orders-queue"
+    deadLetterQueues: "orders-dlq"
+    maxReceiveCount: 5
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+```
+
+For multiple queues, entries map by position. In this example, `orders-queue`
+uses `orders-dlq`, `refunds-queue` uses `refunds-dlq`, and `replay-queue` uses
+`replay-dlq`:
+
+```yaml
+source:
+  sqs:
+    queueNames: "orders-queue,refunds-queue,replay-queue"
+    deadLetterQueues: "orders-dlq,refunds-dlq,replay-dlq"
+    maxReceiveCount: 10
+    awsRegion: "us-east-1"
+    queueOwnerAWSAccountID: "111111111111"
+```
+
+`maxReceiveCount` defaults to `10` when `deadLetterQueues` is present and must
+be from `1` through `1000`. The number of DLQs must exactly match the number of
+source queues. A source cannot name itself as its DLQ, although several sources
+may share the same DLQ. Each source/DLQ pair must have the same queue type:
+standard with standard, or FIFO with FIFO. Because queue names are resolved
+using the source's configured AWS account and region, the DLQs must be in that
+same account and region.
+
+In addition to the permissions used for normal message consumption, the pod or
+assumed IAM role needs:
+
+- `sqs:GetQueueUrl` for every configured source and DLQ
+- `sqs:GetQueueAttributes` for every configured source and DLQ
+
+Startup fails before actors begin polling if a source or DLQ cannot be resolved,
+if a DLQ has no `QueueArn`, or if a source queue's `RedrivePolicy` is missing,
+malformed, or does not contain the expected DLQ ARN and `maxReceiveCount`.
+Attribute-read failures identify the required `sqs:GetQueueAttributes`
+permission. All source/DLQ pairs are validated before any source actor starts.
+
+#### Read and Failure Behavior
+
+Every queue is polled concurrently, and a read returns as soon as any queue has
+messages. A slow or empty queue never holds back messages already received from
+the others. If a queue answers after the read has returned, its messages are held
+and served on the next read rather than waiting out their visibility timeout.
+
+Receive failures are handled per queue. A failing queue does not discard messages
+already received from healthy queues, and a transient error (a throttle, for
+example) is retried on subsequent reads. Only when one queue fails ten consecutive
+receives does the source stop, so the pod restarts and every queue URL is resolved
+again. Until then, the remaining queues keep flowing.
+
 ## Apply the Configuration
 
 Apply the pipeline specification:
@@ -125,9 +236,32 @@ When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp
 
 ### Custom Attributes
 
-When `messageAttributeNames` is configured, user-defined message attributes are propagated as **message metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+When `messageAttributeNames` is configured, user-defined message attributes are propagated as **user metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+
+### Source Queue Origin
+
+Every message from an SQS source includes the queue it was read from as **system
+metadata** (not headers, not user metadata). This is stamped for both
+`queueName` and `queueNames`:
+
+- Group: `sqs`
+- Key: `queue_name`
+
+Transformers and map UDFs copy parent system metadata, so origin survives
+downstream. The builtin `log` sink does not print system metadata; use a UDF or
+UDSink to see it. The builtin SQS sink destination is still that vertex's YAML
+`queueName`.
+
+```python
+origin = datum.system_metadata.value("sqs", "queue_name")
+```
+
+The exact accessor depends on the SDK; the value lives in the `Datum`/request
+system metadata under group `sqs`, key `queue_name`.
 
 ### Example: Accessing SQS Attributes in a UDF
+
+Headers below; origin is system metadata (see [Source Queue Origin](#source-queue-origin)).
 
 **Go SDK:**
 ```go
