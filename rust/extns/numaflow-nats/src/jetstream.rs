@@ -219,7 +219,7 @@ impl JetstreamActor {
         let client = async_nats::connect_with_options(config.addr.expose_url().as_str(), conn_opts)
             .await
             .map_err(|err| Error::Connection {
-                server: config.addr.clone(),
+                server: vec![config.addr.clone()],
                 error: err.to_string(),
             })?;
 

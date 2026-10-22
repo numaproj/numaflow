@@ -15,6 +15,7 @@ use numaflow_nats::NatsAuth;
 use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
 use numaflow_nats::nats::NatsSourceConfig;
 use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
+use numaflow_shared::redacted_url::RedactedUrl;
 use numaflow_sqs::source::SqsSourceConfig;
 use tracing::warn;
 
@@ -382,10 +383,8 @@ impl TryFrom<Box<numaflow_models::models::NatsSource>> for SourceType {
         let auth = parse_nats_auth(value.auth)?;
         let tls = parse_tls_config(value.tls)?;
         let nats_config = NatsSourceConfig {
-            addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
-                &value.url, "nats",
-            )
-            .map_err(|e| Error::Config(format!("Invalid NATS URL: {e}")))?,
+            addr: RedactedUrl::comma_separated_with_default_scheme(&value.url, "nats")
+                .map_err(|e| Error::Config(format!("Invalid NATS URL: {e}")))?,
             subject: value.subject,
             queue: value.queue,
             auth,
