@@ -1,0 +1,55 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: runtime-error-reduce-pipeline
+spec:
+  watermark:
+    maxDelay: 5s
+  limits:
+    readTimeout: 50ms
+    readBatchSize: 10
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      scale:
+        min: 1
+      source:
+        http:
+          service: true
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Keys messages as even/odd so the reduce window receives keyed input.
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: IfNotPresent
+    - name: r
+      scale:
+        min: 1
+      partitions: 1
+      udf:
+        container:
+          # reduce-panic fails on the first datum in a window, exercising forwarder rebuild.
+          image: quay.io/numaio/numaflow-go/reduce-panic:stable
+          imagePullPolicy: IfNotPresent
+        groupBy:
+          window:
+            fixed:
+              length: 5s
+          keyed: true
+          storage:
+            emptyDir: {}
+    - name: out
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: r
+    - from: r
+      to: out
