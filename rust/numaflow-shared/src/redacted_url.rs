@@ -34,10 +34,27 @@ impl RedactedUrl {
         }
     }
 
+    pub fn comma_separated_with_default_scheme(
+        input: &str,
+        scheme: &str,
+    ) -> Result<Vec<Self>, ParseError> {
+        input
+            .split(',')
+            .map(|url| Self::with_default_scheme(url, scheme))
+            .collect()
+    }
+
     /// Expose the unredacted URL only at serialization or connection boundaries.
     pub fn expose_url(&self) -> &Url {
         &self.0
     }
+}
+
+pub fn join_comma_separated_urls(urls: &[RedactedUrl]) -> String {
+    urls.iter()
+        .map(|url| url.expose_url().as_str())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 impl FromStr for RedactedUrl {
@@ -104,5 +121,38 @@ mod tests {
             serde_json::from_str::<RedactedUrl>(&serialized).unwrap(),
             url
         );
+    }
+
+    #[test]
+    fn comma_separated_urls_with_scheme_split_correctly() {
+        let test = "nats://a:4222,nats://b:4222";
+
+        let expected = vec![
+            RedactedUrl::parse("nats://a:4222").unwrap(),
+            RedactedUrl::parse("nats://b:4222").unwrap(),
+        ];
+        let actual = RedactedUrl::comma_separated_with_default_scheme(test, "nats").unwrap();
+        assert_eq!(actual, expected);
+    }
+    #[test]
+    fn comma_separated_urls_without_uniform_scheme_split_correctly() {
+        let test = "nats://a:4222,b:4222";
+        let expected = vec![
+            RedactedUrl::parse("nats://a:4222").unwrap(),
+            RedactedUrl::with_default_scheme("b:4222", "nats").unwrap(),
+        ];
+        let actual = RedactedUrl::comma_separated_with_default_scheme(test, "nats").unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn comma_separated_urls_with_user_and_pass_split_correctly() {
+        let test = "u:p@a,nats://u:p@b:4222";
+        let expected = vec![
+            RedactedUrl::with_default_scheme("u:p@a", "nats").unwrap(),
+            RedactedUrl::with_default_scheme("u:p@b:4222", "nats").unwrap(),
+        ];
+        let actual = RedactedUrl::comma_separated_with_default_scheme(test, "nats").unwrap();
+        assert_eq!(actual, expected);
     }
 }

@@ -11,7 +11,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Connecting to NATS {server:?} - {error}")]
-    Connection { server: RedactedUrl, error: String },
+    Connection {
+        server: Vec<RedactedUrl>,
+        error: String,
+    },
 
     #[error("Subscribing to NATS {subject} - {queue} - {error}")]
     Subscription {
@@ -76,7 +79,11 @@ mod tests {
     #[test]
     fn derived_debug_redacts_nested_secrets() {
         let config = nats::NatsSourceConfig {
-            addr: "nats://url-user:secret-url@host:4222".parse().unwrap(),
+            addr: RedactedUrl::comma_separated_with_default_scheme(
+                "nats://url-user:secret-url@host:4222",
+                "nats",
+            )
+            .expect("single valid url"),
             subject: "subject".into(),
             queue: "queue".into(),
             auth: Some(NatsAuth::Basic {
@@ -129,7 +136,7 @@ mod tests {
     #[test]
     fn connection_error_redacts_both_formats() {
         let error = Error::Connection {
-            server: "nats://user:secret-password@host:4222".parse().unwrap(),
+            server: vec!["nats://user:secret-password@host:4222".parse().unwrap()],
             error: "connection refused".into(),
         };
         assert!(!error.to_string().contains("secret-password"));

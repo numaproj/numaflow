@@ -3,7 +3,7 @@ use std::time::Duration;
 use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
-use numaflow_shared::redacted_url::RedactedUrl;
+use numaflow_shared::redacted_url::{RedactedUrl, join_comma_separated_urls};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -16,7 +16,7 @@ use secrecy::ExposeSecret;
 
 #[derive(Debug, Clone)]
 pub struct NatsSourceConfig {
-    pub addr: RedactedUrl,
+    pub addr: Vec<RedactedUrl>,
     pub subject: String,
     pub queue: String,
     pub auth: Option<NatsAuth>,
@@ -86,12 +86,13 @@ impl NatsActor {
         if let Some(tls_config) = config.tls {
             conn_opts = tls::configure_tls(conn_opts, tls_config)?;
         }
-        let client = async_nats::connect_with_options(config.addr.expose_url().as_str(), conn_opts)
-            .await
-            .map_err(|err| Error::Connection {
-                server: config.addr.clone(),
-                error: err.to_string(),
-            })?;
+        let client =
+            async_nats::connect_with_options(join_comma_separated_urls(&config.addr), conn_opts)
+                .await
+                .map_err(|err| Error::Connection {
+                    server: config.addr.clone(),
+                    error: err.to_string(),
+                })?;
 
         // Wait for the subscription to be ready
         let sub = client
@@ -212,7 +213,7 @@ mod tests {
         let msg_count = 5;
 
         let config = NatsSourceConfig {
-            addr: RedactedUrl::with_default_scheme("localhost", "nats").unwrap(),
+            addr: RedactedUrl::comma_separated_with_default_scheme("localhost", "nats").unwrap(),
             subject: subject.to_string(),
             queue: queue.to_string(),
             auth: None,
