@@ -1,4 +1,10 @@
-import React, { useCallback, useContext, useMemo, createContext } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  createContext,
+} from "react";
 import { useLocation } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
@@ -20,6 +26,7 @@ import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { GetConsolidatedHealthStatus, UNKNOWN } from "../../../utils";
 import { SidebarType } from "../../common/SlidingSidebar";
+import { ViewType } from "../../common/SpecEditor";
 
 import "./style.css";
 
@@ -37,7 +44,8 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
   const pipelineId = query.get("pipeline") || "";
   const nsIdParam = query.get("namespace") || "";
   const namespaceId = nsIdProp || nsIdParam;
-  const { addError, setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { addError, setSidebarProps, sidebarProps } =
+    useContext<AppContextProps>(AppContext);
   const {
     data,
     loading: summaryLoading,
@@ -90,6 +98,39 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
       },
     });
   }, [namespaceId, pipelineId, setSidebarProps, vertices]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isbId = params.get("isb");
+    const isbData = data?.isbData;
+    if (!isbId || !namespaceId || !setSidebarProps || isbData?.name !== isbId) {
+      return;
+    }
+
+    const requestedTab = params.get("isbTab");
+    const updated = {
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `ISB Service Details: ${isbId}`,
+        initialYaml: isbData.isbService,
+        namespaceId,
+        isbId,
+        viewType: ViewType.READ_ONLY,
+        initialTab: requestedTab === "spec" ? "spec" : "jetstream",
+      },
+    };
+
+    if (JSON.stringify(sidebarProps) === JSON.stringify(updated)) {
+      return;
+    }
+    setSidebarProps(updated);
+  }, [
+    data?.isbData,
+    namespaceId,
+    location.search,
+    setSidebarProps,
+    sidebarProps,
+  ]);
 
   const getHealth = useCallback(
     (pipelineStatus: string) => {
