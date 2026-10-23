@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useContext } from "react";
+import React, { useState, useCallback, useContext, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -38,6 +38,7 @@ import {
 import "./style.css";
 import { PipelineListing } from "./PipelineListing";
 import { ISBListing } from "./ISBListing";
+import { useLocation } from "react-router-dom";
 
 export const MAX_PAGE_SIZE = 4;
 export const HEALTH = [
@@ -117,8 +118,9 @@ export function NamespaceListingWrapper({
   monoVertexData,
   refresh,
 }: NamespacePipelineListingProps) {
-  const { setSidebarProps, isReadOnly } =
+  const { setSidebarProps, isReadOnly, sidebarProps } =
     useContext<AppContextProps>(AppContext);
+  const location = useLocation();
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(ALL);
   const [status, setStatus] = useState(ALL);
@@ -214,6 +216,36 @@ export function NamespaceListingWrapper({
     setTabValue(newValue);
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isbId = params.get("isb");
+    if (!isbId || !setSidebarProps || !isbData?.[isbId]) {
+      return;
+    }
+
+    setTabValue((current) =>
+      current === ISB_SERVICES ? current : ISB_SERVICES
+    );
+
+    const requestedTab = params.get("isbTab");
+    const updated = {
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `View ISB Service: ${isbId}`,
+        initialYaml: isbData[isbId].isbService,
+        namespaceId: namespace,
+        isbId,
+        viewType: ViewType.READ_ONLY,
+        initialTab: requestedTab === "spec" ? "spec" : "jetstream",
+      },
+    };
+
+    if (JSON.stringify(sidebarProps) === JSON.stringify(updated)) {
+      return;
+    }
+    setSidebarProps(updated);
+  }, [location.search, setSidebarProps, sidebarProps, isbData, namespace]);
+
   return (
     <Box
       sx={{
@@ -254,7 +286,9 @@ export function NamespaceListingWrapper({
               marginLeft: "1.6rem",
             }}
           >
-            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
+            <label
+              style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}
+            >
               Health
             </label>
             <Select
@@ -293,7 +327,9 @@ export function NamespaceListingWrapper({
               marginRight: "32rem",
             }}
           >
-            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
+            <label
+              style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}
+            >
               Status
             </label>
             <Select

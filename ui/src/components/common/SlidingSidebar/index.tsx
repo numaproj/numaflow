@@ -73,6 +73,7 @@ export interface SpecEditorSidebarProps {
   viewType?: ViewType;
   onUpdateComplete?: () => void;
   titleOverride?: string;
+  initialTab?: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
 }
 
@@ -173,7 +174,10 @@ export function SlidingSidebar({
     }
     // Close sidebar
     setSidebarProps && setSidebarProps(undefined);
-    if (type === SidebarType.VERTEX_DETAILS) {
+    if (
+      type === SidebarType.VERTEX_DETAILS ||
+      type === SidebarType.ISB_UPDATE
+    ) {
       const search = clearObservabilitySearch(location.search);
       if (search !== location.search) {
         history.replace({ pathname: location.pathname, search });
@@ -186,7 +190,10 @@ export function SlidingSidebar({
   const handleCloseConfirm = useCallback(() => {
     // Modal close confirmed
     setSidebarProps && setSidebarProps(undefined);
-    if (type === SidebarType.VERTEX_DETAILS) {
+    if (
+      type === SidebarType.VERTEX_DETAILS ||
+      type === SidebarType.ISB_UPDATE
+    ) {
       const search = clearObservabilitySearch(location.search);
       if (search !== location.search) {
         history.replace({ pathname: location.pathname, search });

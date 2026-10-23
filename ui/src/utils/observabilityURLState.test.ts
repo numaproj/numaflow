@@ -22,16 +22,16 @@ describe("observability URL state", () => {
 
   it("removes empty values and clears only observability state", () => {
     const search = clearObservabilitySearch(
-      "?namespace=default&pipeline=demo&vertex=input&pod=demo-input-0&logsSearch=error"
+      "?namespace=default&pipeline=demo&isb=default&isbTab=spec&vertex=input&pod=demo-input-0&logsSearch=error"
     );
 
     expect(search).toBe("?namespace=default&pipeline=demo");
   });
 
   it("parses booleans with a caller supplied default", () => {
-    expect(parseBooleanParam(new URLSearchParams("logsFocus=1"), "logsFocus")).toBe(
-      true
-    );
+    expect(
+      parseBooleanParam(new URLSearchParams("logsFocus=1"), "logsFocus")
+    ).toBe(true);
     expect(parseBooleanParam(new URLSearchParams(), "logsWrap", true)).toBe(
       true
     );

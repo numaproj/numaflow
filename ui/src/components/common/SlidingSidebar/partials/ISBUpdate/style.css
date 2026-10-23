@@ -3,3 +3,9 @@
   font-style: normal;
   font-weight: 500;
 }
+
+.isb-service-tabs-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
