@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { BrowserRouter } from "react-router-dom";
 
 import { SummaryPageLayout } from "./index";
 import { NamespaceListingWrapper } from "../../pages/Namespace/partials/NamespaceListingWrapper";
@@ -116,11 +117,13 @@ describe("SummaryPageLayout", () => {
       <SummaryPageLayout
         summarySections={[]}
         contentComponent={
-          <NamespaceListingWrapper
-            namespace={""}
-            data={mockComponentData}
-            refresh={mockRefresh}
-          />
+          <BrowserRouter>
+            <NamespaceListingWrapper
+              namespace={""}
+              data={mockComponentData}
+              refresh={mockRefresh}
+            />
+          </BrowserRouter>
         }
       />
     );
