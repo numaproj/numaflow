@@ -114,9 +114,9 @@ mod tests {
         #[test]
         fn test_client_config_default() {
             let config = ClientConfig::default();
-            assert_eq!(config.url, "localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, None);
-            assert_eq!(config.password, None);
+            assert!(config.password.is_none());
         }
 
         #[test]
@@ -140,9 +140,15 @@ mod tests {
             );
 
             let config = ClientConfig::load(env_vars).unwrap();
-            assert_eq!(config.url, "nats://localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, Some("testuser".to_string()));
-            assert_eq!(config.password, Some("testpass".to_string()));
+            assert_eq!(
+                config
+                    .password
+                    .as_ref()
+                    .map(secrecy::ExposeSecret::expose_secret),
+                Some("testpass")
+            );
         }
 
         #[test]
@@ -154,9 +160,9 @@ mod tests {
             );
 
             let config = ClientConfig::load(env_vars).unwrap();
-            assert_eq!(config.url, "nats://localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, None);
-            assert_eq!(config.password, None);
+            assert!(config.password.is_none());
         }
 
         #[test]
@@ -191,9 +197,9 @@ mod tests {
             env_vars.insert("ANOTHER_VAR".to_string(), "also_ignored".to_string());
 
             let config = ClientConfig::load(env_vars).unwrap();
-            assert_eq!(config.url, "nats://localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, None);
-            assert_eq!(config.password, None);
+            assert!(config.password.is_none());
         }
     }
 }

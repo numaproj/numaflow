@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
+use numaflow_shared::redacted_url::RedactedUrl;
 use rdkafka::Offset;
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -15,9 +16,9 @@ use tokio_util::sync::CancellationToken;
 
 use tracing::{error, info, warn};
 
-use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
+use crate::{Error, KafkaSaslAuth, Result, TlsConfigWithClientAuth};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct KafkaSourceConfig {
     /// The list of Kafka brokers to connect to.
     pub brokers: Vec<String>,
@@ -28,7 +29,7 @@ pub struct KafkaSourceConfig {
     /// The authentication mechanism to use for the Kafka consumer.
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
     /// Any supported kafka client configuration options from
     /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
     pub kafka_raw_config: HashMap<String, String>,
@@ -153,15 +154,6 @@ impl KafkaActor {
             .set("heartbeat.interval.ms", "15000")
             .set("auto.offset.reset", "earliest");
         if !config.kafka_raw_config.is_empty() {
-            info!(
-                "Applying user-specified kafka config: {}",
-                config
-                    .kafka_raw_config
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
             for (key, value) in config.kafka_raw_config {
                 client_config.set(key, value);
             }
@@ -178,7 +170,7 @@ impl KafkaActor {
         let consumer: Arc<NumaflowConsumer> =
             Arc::new(client_config.create_with_context(context).map_err(|err| {
                 Error::Connection {
-                    server: config.brokers.join(","),
+                    server: config.brokers,
                     error: err.to_string(),
                 }
             })?);

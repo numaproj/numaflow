@@ -169,7 +169,7 @@ mod tests {
         timeout: Duration,
     ) -> PulsarSource {
         let cfg = PulsarSourceConfig {
-            pulsar_server_addr: PULSAR_ADDR.into(),
+            pulsar_server_addr: PULSAR_ADDR.parse().unwrap(),
             topic: topic.into(),
             consumer_name: "test".into(),
             subscription: subscription.into(),
@@ -378,7 +378,7 @@ mod tests {
         let subscription = format!("sub-{}", get_rand_str());
 
         let cfg = PulsarSourceConfig {
-            pulsar_server_addr: PULSAR_ADDR.into(),
+            pulsar_server_addr: PULSAR_ADDR.parse().unwrap(),
             topic: topic.clone(),
             consumer_name: "test".into(),
             subscription,

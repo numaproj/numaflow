@@ -196,7 +196,7 @@ mod tests {
 
         // Configure JetstreamSource
         let config = numaflow_nats::jetstream::JetstreamSourceConfig {
-            addr: "localhost".to_string(),
+            addr: "nats://localhost".parse().unwrap(),
             stream: stream_name.to_string(),
             consumer,
             filter_subjects: vec![],
