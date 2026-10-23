@@ -6,7 +6,6 @@ import { HealthCard, VertexHealth } from "../../../../../../../types/declaration
 const cards: HealthCard[] = [
   {
     id: "latency",
-    index: "01",
     title: "Latency",
     value: "P99 4.29 s",
     detail: "slowest: sink P99 3.1 s",
@@ -21,7 +20,6 @@ const cards: HealthCard[] = [
   },
   {
     id: "traffic",
-    index: "02",
     title: "Traffic",
     value: "15 msg/s",
     detail: "5m avg 15",
@@ -30,7 +28,6 @@ const cards: HealthCard[] = [
   },
   {
     id: "backlog",
-    index: "03",
     title: "Backlog",
     value: "Pending not reported",
     detail: "Source does not report pending messages",
@@ -38,46 +35,52 @@ const cards: HealthCard[] = [
   },
   {
     id: "loss",
-    index: "04",
     title: "Message outcomes",
     value: "2 drops/s",
     detail: "2 active outcome types · hover for details",
     tone: "warn",
-    outcomes: [
-      {
-        name: "Duplicate-message drops",
-        value: "2/s",
-        description: "Duplicate source messages discarded by MonoVertex.",
-        available: true,
-      },
-      {
-        name: "Nacks / redeliveries",
-        value: "1/s",
-        description: "Messages negatively acknowledged for redelivery. A nack is not a confirmed drop.",
-        available: true,
-      },
-      {
-        name: "Fallback deliveries",
-        value: "0/s",
-        description: "Messages delivered to the fallback sink instead of the primary sink.",
-        available: true,
-      },
-      {
-        name: "Critical runtime errors",
-        value: "Unavailable",
-        description: "Severe runtime errors that can interrupt processing.",
-        available: false,
-      },
-    ],
+    breakdown: {
+      title: "Message outcomes",
+      items: [
+        {
+          name: "Duplicate-message drops",
+          value: "2/s",
+          description: "Duplicate source messages discarded by MonoVertex.",
+          available: true,
+        },
+        {
+          name: "Nacks / redeliveries",
+          value: "1/s",
+          description: "Messages negatively acknowledged for redelivery. A nack is not a confirmed drop.",
+          available: true,
+        },
+        {
+          name: "Fallback deliveries",
+          value: "0/s",
+          description: "Messages delivered to the fallback sink instead of the primary sink.",
+          available: true,
+        },
+      ],
+    },
     inspect: { kind: "metrics", metric: "monovtx_dropped_total" },
   },
   {
     id: "errors",
-    index: "05",
     title: "Errors",
     value: "1 unhealthy pod",
     detail: "4 restarts · 0 errors (24h)",
     tone: "critical",
+    breakdown: {
+      title: "Error diagnostics",
+      items: [
+        {
+          name: "Critical runtime errors",
+          value: "3/s",
+          description: "Severe runtime errors that can interrupt message processing.",
+          available: true,
+        },
+      ],
+    },
     inspect: { kind: "critical-pods" },
   },
 ];
@@ -91,7 +94,7 @@ const health: VertexHealth = {
 };
 
 describe("VertexHealthStrip", () => {
-  it("renders the header and five cards with Figma labels and lucide icons", () => {
+  it("renders the header and five cards without numeric prefixes", () => {
     render(<VertexHealthStrip health={health} onInspect={jest.fn()} />);
 
     expect(screen.getByText("Vertex health")).toBeInTheDocument();
@@ -99,8 +102,9 @@ describe("VertexHealthStrip", () => {
     expect(screen.getByTestId("vertex-health-verdict")).toHaveTextContent("Data flow unknown (D4)");
     expect(screen.getByTestId("vertex-health-replicas")).toHaveTextContent("3/3 ready");
     expect(screen.getByText("trends over the last 30 minutes")).toBeInTheDocument();
-    expect(screen.getByText("01 · LATENCY")).toBeInTheDocument();
-    expect(screen.getByText("05 · ERRORS")).toBeInTheDocument();
+    expect(screen.getByText("LATENCY")).toBeInTheDocument();
+    expect(screen.getByText("ERRORS")).toBeInTheDocument();
+    expect(screen.queryByText("01 · LATENCY")).not.toBeInTheDocument();
     cards.forEach((entry) =>
       expect(
         screen.getByTestId(`vertex-health-card-${entry.id}`).querySelector("svg.lucide")
@@ -140,15 +144,24 @@ describe("VertexHealthStrip", () => {
     render(<VertexHealthStrip health={health} onInspect={jest.fn()} />);
 
     fireEvent.mouseOver(screen.getByTestId("vertex-health-card-loss"));
-    const outcomes = await screen.findByTestId("vertex-health-outcomes");
+    const outcomes = await screen.findByTestId("vertex-health-breakdown-loss");
     expect(outcomes).toHaveTextContent("Message outcomes");
     expect(outcomes).toHaveTextContent("Duplicate-message drops");
     expect(outcomes).toHaveTextContent("2/s");
     expect(outcomes).toHaveTextContent("A nack is not a confirmed drop");
     expect(outcomes).toHaveTextContent("Fallback deliveries");
     expect(outcomes).toHaveTextContent("0/s");
-    expect(outcomes).toHaveTextContent("Critical runtime errors");
-    expect(outcomes).toHaveTextContent("Unavailable");
+    expect(outcomes).not.toHaveTextContent("Critical runtime errors");
+  });
+
+  it("shows critical runtime errors in the Errors breakdown", async () => {
+    render(<VertexHealthStrip health={health} onInspect={jest.fn()} />);
+
+    fireEvent.mouseOver(screen.getByTestId("vertex-health-card-errors"));
+    const errors = await screen.findByTestId("vertex-health-breakdown-errors");
+    expect(errors).toHaveTextContent("Error diagnostics");
+    expect(errors).toHaveTextContent("Critical runtime errors");
+    expect(errors).toHaveTextContent("3/s");
   });
 
   it("reports each card's inspect target", () => {

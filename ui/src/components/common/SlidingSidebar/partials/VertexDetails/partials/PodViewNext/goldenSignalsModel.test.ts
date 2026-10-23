@@ -27,6 +27,7 @@ function fleetItem(overrides: Partial<PodFleetItem> = {}): PodFleetItem {
     pod: { name: "pod-0", containers: ["numa"], containerSpecMap: new Map() },
     runtime: { name: "pod-0", status: "Running", containerDetailsMap: {} },
     severity: "healthy",
+    containerResources: [],
     restartCount: 0,
     ...overrides,
   };
@@ -337,19 +338,19 @@ describe("buildVertexHealth", () => {
     ).toBe("critical");
   });
 
-  it("marks drops and critical errors critical, nacks and fallback writes warn", () => {
+  it("marks drops critical and nacks or fallback writes warn", () => {
     const loss = (series: VertexHealthInput["series"]) =>
       card(buildVertexHealth(input({ series: { p99: [1], ...series } })), "loss");
     expect(loss({ drops: [0, 2.5], nacks: [], fallback: [], critical: [] })).toEqual(
       expect.objectContaining({ value: "2.5 drops/s", tone: "critical" })
     );
-    expect(loss({ drops: [], nacks: [], fallback: [], critical: [1] }).tone).toBe("critical");
+    expect(loss({ drops: [], nacks: [], fallback: [], critical: [1] }).tone).toBe("ok");
     expect(loss({ drops: [], nacks: [0.2], fallback: [], critical: [] }).tone).toBe("warn");
     expect(loss({ drops: [], nacks: [], fallback: [1.4], critical: [] }).tone).toBe("warn");
     expect(loss({ drops: [], nacks: [], fallback: [], critical: [] }).sparkline).toEqual(
       Array(8).fill(8)
     );
-    expect(loss({ drops: null, nacks: null, fallback: null, critical: null }).value).toBe("No data");
+    expect(loss({ drops: null, nacks: null, fallback: null }).value).toBe("No data");
     expect(loss({}).value).toBe("Loading…");
   });
 
@@ -357,25 +358,25 @@ describe("buildVertexHealth", () => {
     const loss = (series: VertexHealthInput["series"]) =>
       card(buildVertexHealth(input({ series: { p99: [1], ...series } })), "loss");
 
-    expect(loss({ drops: [], nacks: undefined, critical: [], fallback: [] })).toEqual(
+    expect(loss({ drops: [], nacks: undefined, fallback: [] })).toEqual(
       expect.objectContaining({ value: "Loading…", tone: "neutral" })
     );
-    expect(loss({ drops: [], nacks: null, critical: [], fallback: [] })).toEqual(
+    expect(loss({ drops: [], nacks: null, fallback: [] })).toEqual(
       expect.objectContaining({
         value: "Outcome metrics unavailable",
         detail: expect.stringContaining("1 outcome metrics unavailable"),
         tone: "neutral",
       })
     );
-    expect(loss({ drops: [], nacks: [], critical: [], fallback: null })).toEqual(
+    expect(loss({ drops: [], nacks: [], fallback: null })).toEqual(
       expect.objectContaining({ value: "Outcome metrics unavailable", tone: "neutral" })
     );
-    expect(loss({ drops: [2], nacks: null, critical: [], fallback: [] })).toEqual(
+    expect(loss({ drops: [2], nacks: null, fallback: [] })).toEqual(
       expect.objectContaining({ value: "2 drops/s", tone: "critical" })
     );
   });
 
-  it("labels every fetched MonoVertex outcome with an explanation", () => {
+  it("labels every message outcome with an explanation", () => {
     const health = buildVertexHealth(
       input({
         series: {
@@ -386,14 +387,16 @@ describe("buildVertexHealth", () => {
         },
       })
     );
-    const outcomes = card(health, "loss").outcomes;
+    const outcomes = card(health, "loss").breakdown?.items;
     expect(outcomes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "Duplicate-message drops", value: "1/s", available: true }),
         expect.objectContaining({ name: "Nacks / redeliveries", value: "2/s" }),
         expect.objectContaining({ name: "Fallback deliveries", value: "3/s" }),
-        expect.objectContaining({ name: "Critical runtime errors", value: "4/s" }),
       ])
+    );
+    expect(outcomes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Critical runtime errors" })])
     );
   });
 
@@ -418,6 +421,23 @@ describe("buildVertexHealth", () => {
     );
     expect(errors({ recentErrorCount: 1 })).toEqual(
       expect.objectContaining({ tone: "warn", inspect: { kind: "tab", tab: "errors" } })
+    );
+    expect(errors({ series: { critical: [2] } })).toEqual(
+      expect.objectContaining({
+        value: "2 critical errors/s",
+        tone: "critical",
+        inspect: expect.objectContaining({
+          kind: "metrics",
+          metric: "monovtx_critical_error_total",
+        }),
+      })
+    );
+    expect(
+      errors({ series: { critical: [2] } }).breakdown?.items
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Critical runtime errors", value: "2/s" }),
+      ])
     );
   });
 

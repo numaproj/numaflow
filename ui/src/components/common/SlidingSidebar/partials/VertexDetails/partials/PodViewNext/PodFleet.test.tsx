@@ -7,9 +7,10 @@ import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/decla
 
 const alpha: Pod = {
   name: "pipeline-vertex-alpha",
-  containers: ["main"],
+  containers: ["main", "numa"],
   containerSpecMap: new Map([
     ["main", { name: "main", cpuParsed: 10, memoryParsed: 10 }],
+    ["numa", { name: "numa", cpuParsed: 1, memoryParsed: 10 }],
   ]),
 };
 const bravo: Pod = {
@@ -27,6 +28,7 @@ const details = new Map<string, PodDetail>([
       name: alpha.name,
       containerMap: new Map([
         ["main", { name: "main", cpuParsed: 1, memoryParsed: 1 }],
+        ["numa", { name: "numa", cpuParsed: 2, memoryParsed: 1 }],
       ]),
     },
   ],
@@ -135,5 +137,18 @@ describe("PodFleet", () => {
     expect(screen.queryByTestId(`pod-fleet-cell-${alpha.name}`)).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("pods-filter-all"));
     expect(onFilterChange).toHaveBeenCalledWith("all");
+  });
+
+  it("shows every container and highlights elevated resource usage", async () => {
+    render(<StatefulFleet />);
+
+    fireEvent.mouseOver(screen.getByTestId(`pod-fleet-cell-${alpha.name}`));
+    const tooltip = await screen.findByTestId(`pod-fleet-tooltip-${alpha.name}`);
+    expect(tooltip).toHaveTextContent("Usage as % of request");
+    expect(tooltip).toHaveTextContent("main");
+    expect(tooltip).toHaveTextContent("numa");
+    expect(tooltip).toHaveTextContent("numa CPU 200% of request");
+    expect(screen.getByText("200%").closest("td")).toHaveClass("is-hot");
+    expect(screen.getAllByText("10%").length).toBeGreaterThan(0);
   });
 });

@@ -735,7 +735,7 @@ export function VertexDetails({
         </div>
         {showBuffersTab && (
           <div
-            className="vertex-details-tab-panel"
+            className="vertex-details-tab-panel vertex-details-buffers-panel"
             role="tabpanel"
             hidden={tabValue !== BUFFERS_TAB_INDEX}
           >

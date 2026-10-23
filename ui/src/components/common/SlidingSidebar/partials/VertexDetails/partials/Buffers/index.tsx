@@ -255,8 +255,10 @@ export function Buffers({
     <Box
       sx={{
         display: "flex",
+        flex: 1,
         flexDirection: "column",
         height: "100%",
+        minHeight: 0,
         overflow: "hidden",
       }}
     >
@@ -312,54 +314,59 @@ export function Buffers({
           </TableBody>
         </Table>
       </TableContainer>
-      <Accordion
-        expanded={advancedDetailsExpanded}
-        onChange={handleAdvancedDetailsChange}
+      <Box
+        data-testid="advanced-isb-scroll-container"
         sx={{
-          backgroundColor: "#FFF",
-          border: "0.1rem solid #DADCE0",
-          borderRadius: "0.8rem",
-          boxShadow: "none",
           flex: advancedDetailsExpanded ? "1 1 auto" : "0 0 auto",
           marginTop: "2.4rem",
           minHeight: 0,
-          overflow: "hidden",
           overflowY: advancedDetailsExpanded ? "auto" : "visible",
-          "&:before": { display: "none" },
         }}
       >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
+        <Accordion
+          expanded={advancedDetailsExpanded}
+          onChange={handleAdvancedDetailsChange}
           sx={{
-            backgroundColor: "#FAFBFC",
-            borderBottom: advancedDetailsExpanded
-              ? "0.1rem solid #E0E0E0"
-              : "none",
-            "& .MuiAccordionSummary-content": {
-              alignItems: "center",
-              margin: "1.2rem 0",
-            },
-            left: 0,
-            minHeight: "5.6rem",
-            padding: "0 1.6rem",
-            position: "sticky",
-            right: 0,
-            top: 0,
-            zIndex: 10,
+            backgroundColor: "#FFF",
+            border: "0.1rem solid #DADCE0",
+            borderRadius: "0.8rem",
+            boxShadow: "none",
+            "&:before": { display: "none" },
           }}
         >
-          <Box>Advanced ISB Diagnostics</Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{ padding: "1.6rem" }}>
-          <PipelineISBDebugInfo
-            streams={isbDebugData?.streams}
-            consumers={isbDebugData?.consumers}
-            kvStores={isbDebugData?.kvStores}
-            loading={isbDebugLoading}
-            error={isbDebugError}
-          />
-        </AccordionDetails>
-      </Accordion>
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            sx={{
+              backgroundColor: "#FAFBFC",
+              borderBottom: advancedDetailsExpanded
+                ? "0.1rem solid #E0E0E0"
+                : "none",
+              "& .MuiAccordionSummary-content": {
+                alignItems: "center",
+                margin: "1.2rem 0",
+              },
+              left: 0,
+              minHeight: "5.6rem",
+              padding: "0 1.6rem",
+              position: "sticky",
+              right: 0,
+              top: 0,
+              zIndex: 10,
+            }}
+          >
+            <Box>Advanced ISB Diagnostics</Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ padding: "1.6rem" }}>
+            <PipelineISBDebugInfo
+              streams={isbDebugData?.streams}
+              consumers={isbDebugData?.consumers}
+              kvStores={isbDebugData?.kvStores}
+              loading={isbDebugLoading}
+              error={isbDebugError}
+            />
+          </AccordionDetails>
+        </Accordion>
+      </Box>
     </Box>
   );
 }
