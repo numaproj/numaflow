@@ -338,7 +338,7 @@ function metricsTarget(
 }
 
 function latencyCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "latency" as const, index: "01", title: "Latency" };
+  const base = { id: "latency" as const, title: "Latency" };
   if (!input.metricsEnabled) {
     return { ...base, value: UNAVAILABLE, detail: UNAVAILABLE_DETAIL, tone: "neutral" };
   }
@@ -388,7 +388,7 @@ function latencyCard(input: VertexHealthInput): HealthCard {
 }
 
 function trafficCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "traffic" as const, index: "02", title: "Traffic" };
+  const base = { id: "traffic" as const, title: "Traffic" };
   const { rate1m, rate5m, rate15m, pending } = input.daemon;
   const sparkline = input.metricsEnabled ? toSparkline(input.series.readRate) : undefined;
   const inspect: InspectTarget = { kind: "tab", tab: "processingRates" };
@@ -448,7 +448,7 @@ export function bufferPercentFull(buffer: BufferInfo): number {
 }
 
 function backlogCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "backlog" as const, index: "03", title: "Backlog" };
+  const base = { id: "backlog" as const, title: "Backlog" };
   const { pending, rate1m } = input.daemon;
   const buffers = input.buffers || [];
   const fullest = buffers.reduce<BufferInfo | undefined>(
@@ -515,17 +515,16 @@ function backlogCard(input: VertexHealthInput): HealthCard {
 }
 
 function lossCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "loss" as const, index: "04", title: "Message outcomes" };
+  const base = { id: "loss" as const, title: "Message outcomes" };
   if (!input.metricsEnabled) {
     return { ...base, value: UNAVAILABLE, detail: UNAVAILABLE_DETAIL, tone: "neutral" };
   }
   const isMono = input.type === MONO_VERTEX;
-  const { drops, nacks, fallback, critical } = input.series;
+  const { drops, nacks, fallback } = input.series;
   const inspect = metricsTarget(input.queries, "drops");
   const requestedKeys = [
     "drops",
     "nacks",
-    "critical",
     ...(isMono ? ["fallback" as const] : []),
   ] as SignalQueryKey[];
   const requested = requestedKeys.map((key) => input.series[key]);
@@ -546,7 +545,6 @@ function lossCard(input: VertexHealthInput): HealthCard {
   const dropRate = rate(drops);
   const nackRate = rate(nacks);
   const fallbackRate = rate(fallback);
-  const criticalRate = rate(critical);
   const partiallyUnavailable = requested.some((series) => series === null);
   const outcomes = [
     {
@@ -571,11 +569,6 @@ function lossCard(input: VertexHealthInput): HealthCard {
           },
         ]
       : []),
-    {
-      key: "critical" as const,
-      name: "Critical runtime errors",
-      description: "Severe runtime errors that can interrupt processing. They also contribute to the Errors card.",
-    },
   ].map(({ key, name, description }) => {
     const series = input.series[key];
     return {
@@ -593,7 +586,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ? `${activeOutcomes} active outcome ${activeOutcomes === 1 ? "type" : "types"} · hover for details`
     : "No active outcomes · hover for details";
   const tone: SignalTone =
-    criticalRate > 0 || dropRate > 0
+    dropRate > 0
       ? "critical"
       : nackRate > 0 || fallbackRate > 0
       ? "warn"
@@ -609,7 +602,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
       : "No drops",
     detail,
     tone,
-    outcomes,
+    breakdown: { title: "Message outcomes", items: outcomes },
     // Runtime drop counters only appear after the first drop, so no samples mean a flat zero line.
     sparkline: toSparkline(drops && !drops.length ? [0] : drops),
     inspect,
@@ -622,24 +615,77 @@ export function isUnhealthyPod(item: PodFleetItem): boolean {
 }
 
 function errorsCard(input: VertexHealthInput): HealthCard {
-  const base = { id: "errors" as const, index: "05", title: "Errors" };
+  const base = { id: "errors" as const, title: "Errors" };
   const items = input.fleetItems;
   const unhealthy = items.filter(isUnhealthyPod).length;
   const restarts = items.reduce((sum, item) => sum + item.restartCount, 0);
   const errors = input.recentErrorCount || 0;
-  const value = !items.length
-    ? "No pods"
-    : unhealthy
+  const criticalSeries = input.series.critical;
+  const criticalRate = Array.isArray(criticalSeries) ? latest(criticalSeries) ?? 0 : 0;
+  const criticalMetricValue = !input.metricsEnabled
+    ? UNAVAILABLE
+    : criticalSeries === undefined
+    ? LOADING
+    : criticalSeries === null
+    ? "Unavailable"
+    : `${formatCompact(criticalRate)}/s`;
+  const value = unhealthy
     ? `${unhealthy} unhealthy ${unhealthy === 1 ? "pod" : "pods"}`
+    : criticalRate > 0
+    ? `${formatCompact(criticalRate)} critical errors/s`
+    : !items.length
+    ? "No pods"
     : `All ${items.length} ${items.length === 1 ? "pod" : "pods"} healthy`;
+  const detail = `${restarts} ${restarts === 1 ? "restart" : "restarts"} · ${errors} ${
+    errors === 1 ? "error" : "errors"
+  } (24h)`;
+  const inspect = unhealthy
+    ? ({ kind: "critical-pods" } as const)
+    : criticalRate > 0
+    ? metricsTarget(input.queries, "critical")
+    : ({ kind: "tab", tab: "errors" } as const);
   return {
     ...base,
     value,
-    detail: `${restarts} ${restarts === 1 ? "restart" : "restarts"} · ${errors} ${
-      errors === 1 ? "error" : "errors"
-    } (24h)`,
-    tone: unhealthy ? "critical" : restarts || errors ? "warn" : items.length ? "ok" : "neutral",
-    inspect: unhealthy ? { kind: "critical-pods" } : { kind: "tab", tab: "errors" },
+    detail,
+    tone:
+      unhealthy || criticalRate > 0
+        ? "critical"
+        : restarts || errors
+        ? "warn"
+        : items.length
+        ? "ok"
+        : "neutral",
+    breakdown: {
+      title: "Error diagnostics",
+      items: [
+        {
+          name: "Unhealthy pods",
+          value: String(unhealthy),
+          description: "Pods with a container that is not running or has terminated unexpectedly.",
+          available: true,
+        },
+        {
+          name: "Container restarts",
+          value: String(restarts),
+          description: "Total container restart count across the current pod fleet.",
+          available: true,
+        },
+        {
+          name: "Container errors",
+          value: `${errors} (24h)`,
+          description: "Container errors reported by the Errors API during the last 24 hours.",
+          available: true,
+        },
+        {
+          name: "Critical runtime errors",
+          value: criticalMetricValue,
+          description: "Severe runtime errors that can interrupt message processing.",
+          available: input.metricsEnabled && criticalSeries !== null,
+        },
+      ],
+    },
+    inspect,
   };
 }
 

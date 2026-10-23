@@ -7,15 +7,21 @@ import { signalQueries } from "./goldenSignalsModel";
 import { PodFleetItem } from "../../../../../../../types/declarations/pods";
 
 const mockFleetProps = jest.fn();
+const mockUseVertexHealthData = jest.fn(() => ({
+  queries: jest
+    .requireActual("./goldenSignalsModel")
+    .signalQueries({
+      namespaceId: "default",
+      pipelineId: "pipeline",
+      vertexId: "vertex",
+      type: "udf",
+    }),
+  series: { p99: [1000, 2000] } as any,
+  metricsEnabled: true,
+  now: Date.now(),
+}));
 jest.mock("./useVertexHealthData", () => ({
-  useVertexHealthData: jest.fn(() => ({
-    queries: jest
-      .requireActual("./goldenSignalsModel")
-      .signalQueries({ namespaceId: "default", pipelineId: "pipeline", vertexId: "vertex", type: "udf" }),
-    series: { p99: [1000, 2000] },
-    metricsEnabled: true,
-    now: Date.now(),
-  })),
+  useVertexHealthData: () => mockUseVertexHealthData(),
 }));
 jest.mock(
   "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState",
@@ -68,6 +74,17 @@ function renderPodView() {
 
 describe("PodViewNext", () => {
   beforeEach(() => {
+    mockUseVertexHealthData.mockReturnValue({
+      queries: signalQueries({
+        namespaceId: "default",
+        pipelineId: "pipeline",
+        vertexId: "vertex",
+        type: "udf",
+      }),
+      series: { p99: [1000, 2000] },
+      metricsEnabled: true,
+      now: Date.now(),
+    });
     mockedUsePodViewState.mockReturnValue({
       pods: [selectedPod],
       podsDetails: new Map(),
@@ -233,6 +250,33 @@ describe("PodViewNext", () => {
     expect(mockFleetProps).toHaveBeenLastCalledWith(
       expect.objectContaining({ filter: "critical" })
     );
+  });
+
+  it("opens critical runtime metrics from the Errors card", () => {
+    const openMetrics = jest.fn();
+    mockUseVertexHealthData.mockReturnValueOnce({
+      queries: signalQueries({
+        namespaceId: "default",
+        pipelineId: "pipeline",
+        vertexId: "vertex",
+        type: "udf",
+      }),
+      series: { p99: [1000], critical: [3] },
+      metricsEnabled: true,
+      now: Date.now(),
+    });
+
+    render(
+      <VertexDetailsContext.Provider value={{ openMetrics, openVertexTab: jest.fn() } as any}>
+        <PodViewNext namespaceId="default" pipelineId="pipeline" vertexId="vertex" type="udf" />
+      </VertexDetailsContext.Provider>
+    );
+
+    fireEvent.click(screen.getByTestId("vertex-health-card-errors"));
+    expect(openMetrics).toHaveBeenCalledWith({
+      panelId: "forwarder_critical_error_total-panel",
+      presets: undefined,
+    });
   });
 });
 

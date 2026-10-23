@@ -146,6 +146,13 @@ export type PodSeverity = "critical" | "warning" | "healthy" | "unknown";
 
 export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
 
+/** PodContainerResourceUsage attributes request-relative usage to one container. */
+export interface PodContainerResourceUsage {
+  name: string;
+  cpuPercent?: number;
+  memoryPercent?: number;
+}
+
 /** PodFleetItem joins pod specification, live usage, and runtime status for Beta presentation. */
 export interface PodFleetItem {
   pod: Pod;
@@ -154,9 +161,11 @@ export interface PodFleetItem {
   severity: PodSeverity;
   /** Human-readable cause of the severity, shown in the chip tooltip. */
   reason?: string;
-  /** Usage percentages cover user-defined containers only (`numa` is excluded). */
+  /** Highest usage percentage across every container, relative to its request. */
   maxCPUPercent?: number;
   maxMemoryPercent?: number;
+  /** Per-container values used to explain aggregate Fleet Health warnings. */
+  containerResources: PodContainerResourceUsage[];
   restartCount: number;
 }
 
@@ -172,7 +181,6 @@ export type InspectTarget =
 
 export interface HealthCard {
   id: SignalId;
-  index: string;
   title: string;
   value: string;
   detail: string;
@@ -182,13 +190,16 @@ export interface HealthCard {
   sparkline?: number[];
   stages?: { name: string; value: string }[];
   stagesNote?: string;
-  /** Outcome metrics and their semantics, rendered in the Message outcomes card tooltip. */
-  outcomes?: {
-    name: string;
-    value: string;
-    description: string;
-    available: boolean;
-  }[];
+  /** Detailed signal rows rendered in a card tooltip. */
+  breakdown?: {
+    title: string;
+    items: {
+      name: string;
+      value: string;
+      description: string;
+      available: boolean;
+    }[];
+  };
   inspect?: InspectTarget;
 }
 

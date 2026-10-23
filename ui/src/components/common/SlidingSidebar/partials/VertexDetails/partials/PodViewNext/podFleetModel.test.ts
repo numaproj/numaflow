@@ -73,7 +73,7 @@ describe("podFleetModel helpers", () => {
     expect(podStatusTone("OOMKilled")).toBe("failed");
   });
 
-  it("excludes numa from usage", () => {
+  it("attributes usage to every container, including numa", () => {
     const hotNuma = pod("hot-numa");
     const hotUdf = pod("hot-udf");
     const quiet = pod("quiet");
@@ -89,11 +89,44 @@ describe("podFleetModel helpers", () => {
     const items = buildPodFleetItems([hotNuma, hotUdf, quiet], details, runtime);
 
     expect(items.map((item) => [item.pod.name, item.severity])).toEqual([
-      ["hot-numa", "healthy"],
+      ["hot-numa", "warning"],
       ["hot-udf", "warning"],
       ["quiet", "healthy"],
     ]);
-    expect(items[0].maxCPUPercent).toBe(20);
+    expect(items[0].maxCPUPercent).toBe(500);
+    expect(items[0].reason).toBe("numa CPU 500% of request");
+    expect(items[0].containerResources).toEqual([
+      { name: "numa", cpuPercent: 500, memoryPercent: 10 },
+      { name: "udf", cpuPercent: 20, memoryPercent: 10 },
+    ]);
+  });
+
+  it("falls back to pods-info quantities and leaves missing requests unknown", () => {
+    const runtime = new Map<string, PodRuntimeInfo>([
+      [
+        "runtime-only",
+        {
+          ...running({
+            numa: container({
+              totalCPU: "100m",
+              requestedCPU: "10m",
+              totalMemory: "100Mi",
+              requestedMemory: "50Mi",
+            }),
+            udf: container({ totalCPU: "1", requestedCPU: "" }),
+          }),
+          name: "runtime-only",
+        },
+      ],
+    ]);
+
+    const [item] = buildPodFleetItems([pod("runtime-only")], undefined, runtime);
+    expect(item.maxCPUPercent).toBeCloseTo(1000);
+    expect(item.maxMemoryPercent).toBeCloseTo(200);
+    expect(item.containerResources).toEqual([
+      expect.objectContaining({ name: "numa", cpuPercent: 1000, memoryPercent: 200 }),
+      expect.objectContaining({ name: "udf", cpuPercent: undefined }),
+    ]);
   });
 
   it("filters by severity and sorts red, yellow, green", () => {

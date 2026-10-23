@@ -156,6 +156,10 @@ describe("Buffers", () => {
       ).not.toBeInTheDocument();
       expect(screen.getByText("Stream Information")).toBeInTheDocument();
     });
+    expect(screen.getByTestId("advanced-isb-scroll-container")).toHaveStyle({
+      minHeight: 0,
+      overflowY: "auto",
+    });
 
     const lastFetchProps =
       mockUsePipelineISBDebugFetch.mock.calls[
