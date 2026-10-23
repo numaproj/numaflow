@@ -44,17 +44,26 @@ function StageBreakdown({
   );
 }
 
-function OutcomeBreakdown({ outcomes }: { outcomes: NonNullable<HealthCard["outcomes"]> }) {
+function SignalBreakdown({
+  cardId,
+  breakdown,
+}: {
+  cardId: SignalId;
+  breakdown: NonNullable<HealthCard["breakdown"]>;
+}) {
   return (
-    <div className="vertex-health-stages vertex-health-outcomes" data-testid="vertex-health-outcomes">
-      <span className="vertex-health-stages-title">Message outcomes</span>
-      {outcomes.map((outcome) => (
-        <div key={outcome.name} className="vertex-health-outcome">
+    <div
+      className="vertex-health-stages vertex-health-outcomes"
+      data-testid={`vertex-health-breakdown-${cardId}`}
+    >
+      <span className="vertex-health-stages-title">{breakdown.title}</span>
+      {breakdown.items.map((item) => (
+        <div key={item.name} className="vertex-health-outcome">
           <div>
-            <span>{outcome.name}</span>
-            <span className="vertex-health-outcome-description">{outcome.description}</span>
+            <span>{item.name}</span>
+            <span className="vertex-health-outcome-description">{item.description}</span>
           </div>
-          <strong>{outcome.value}</strong>
+          <strong>{item.value}</strong>
         </div>
       ))}
     </div>
@@ -79,9 +88,7 @@ function HealthCardButton({
       onClick={() => inspect && onInspect(inspect)}
     >
       <div className="vertex-health-card-head">
-        <span className="vertex-health-card-label">
-          {card.index} · {card.title.toUpperCase()}
-        </span>
+        <span className="vertex-health-card-label">{card.title.toUpperCase()}</span>
         <span className="vertex-health-card-icon">{ICONS[card.id]}</span>
       </div>
       <div className="vertex-health-card-value">{card.value}</div>
@@ -118,9 +125,14 @@ function HealthCardButton({
       </Tooltip>
     );
   }
-  if (card.outcomes?.length) {
+  if (card.breakdown?.items.length) {
     return (
-      <Tooltip title={<OutcomeBreakdown outcomes={card.outcomes} />} arrow describeChild placement="bottom">
+      <Tooltip
+        title={<SignalBreakdown cardId={card.id} breakdown={card.breakdown} />}
+        arrow
+        describeChild
+        placement="bottom"
+      >
         {button}
       </Tooltip>
     );

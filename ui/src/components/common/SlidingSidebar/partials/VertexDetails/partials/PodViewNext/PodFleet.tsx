@@ -39,14 +39,46 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "unknown", label: "Unknown" },
 ];
 
+function resourceValue(value?: number): string {
+  return value === undefined ? "—" : `${Math.round(value)}%`;
+}
+
 function chipTooltip(item: PodFleetItem, status: string) {
   return (
-    <span className="pod-fleet-tooltip" data-testid={`pod-fleet-tooltip-${item.pod.name}`}>
-      <strong>
+    <div className="pod-fleet-tooltip" data-testid={`pod-fleet-tooltip-${item.pod.name}`}>
+      <strong className="pod-fleet-tooltip-title">
         {item.pod.name} · {status}
       </strong>
       {item.reason && <span>{item.reason}</span>}
-    </span>
+      <span className="pod-fleet-tooltip-basis">Usage as % of request</span>
+      <table className="pod-fleet-resource-table">
+        <thead>
+          <tr>
+            <th>Container</th>
+            <th>CPU</th>
+            <th>Memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          {item.containerResources.map((container) => (
+            <tr key={container.name}>
+              <td>{container.name}</td>
+              <td className={container.cpuPercent !== undefined && container.cpuPercent > 80 ? "is-hot" : ""}>
+                {resourceValue(container.cpuPercent)}
+              </td>
+              <td
+                className={
+                  container.memoryPercent !== undefined && container.memoryPercent > 80 ? "is-hot" : ""
+                }
+              >
+                {resourceValue(container.memoryPercent)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!item.containerResources.length && <span>Per-container metrics unavailable</span>}
+    </div>
   );
 }
 

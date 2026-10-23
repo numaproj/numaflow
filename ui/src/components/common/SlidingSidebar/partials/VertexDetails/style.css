@@ -75,6 +75,18 @@
   height: 100%;
 }
 
+.vertex-details-buffers-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vertex-details-buffers-panel[hidden] {
+  display: none;
+}
+
 .vertex-details-pod-view-panel {
   display: flex;
   flex-direction: column;
