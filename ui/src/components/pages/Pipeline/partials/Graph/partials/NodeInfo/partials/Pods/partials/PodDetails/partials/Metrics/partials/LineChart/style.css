@@ -63,6 +63,7 @@
   align-items: center;
   font-size: 1.4rem;
   font-family: Avenir Next, sans-serif;
+  color: var(--text-secondary);
 }
 
 .line-chart-filters,
