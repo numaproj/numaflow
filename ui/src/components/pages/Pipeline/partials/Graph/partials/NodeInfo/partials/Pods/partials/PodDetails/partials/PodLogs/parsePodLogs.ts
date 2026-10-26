@@ -69,7 +69,11 @@ export function parsePodLogs(
       const level = (obj as { level: string }).level;
       // logger log
       msg += `${level.toUpperCase()} `;
-      if (levelFilter !== "all" && level !== levelFilter) return "";
+      if (
+        levelFilter !== "all" &&
+        level.toLowerCase() !== levelFilter.toLowerCase()
+      )
+        return "";
     }
     return `${msg}${logWithoutTimestamp}`;
   });
