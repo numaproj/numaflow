@@ -21,6 +21,7 @@ const modalStyle = {
   height: "60%",
   width: "80%",
   backgroundColor: "background.paper",
+  color: "var(--text-primary)",
   boxShadow: 24,
   borderRadius: "1rem",
   p: "3rem",
@@ -87,7 +88,11 @@ export function MetricsModal({
           <Box className={"metrics-modal-title"}>{metricDisplayName}</Box>
           <Box className="metrics-modal-actions">
             <CopyViewLinkButton url={shareUrl} disabled={!shareUrl} />
-            <IconButton onClick={handleCloseModal} aria-label="close">
+            <IconButton
+              onClick={handleCloseModal}
+              aria-label="close"
+              sx={{ color: "var(--text-primary)" }}
+            >
               <CloseIcon fontSize="medium" />
             </IconButton>
           </Box>
