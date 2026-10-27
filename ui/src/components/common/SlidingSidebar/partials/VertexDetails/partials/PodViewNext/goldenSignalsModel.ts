@@ -835,6 +835,9 @@ function verdict(health: DataHealth | undefined, isMono: boolean): VertexHealth[
   return { label: `${isMono ? "Data flow" : "Pipeline data flow"} ${status}`, tone };
 }
 
+/** Unset scale.max uses the controller default of 50. */
+const DEFAULT_MAX_REPLICAS = 50;
+
 function replicas(input: VertexHealthInput): VertexHealth["replicas"] {
   if (input.type === MONO_VERTEX) {
     const { readyReplicas, desiredReplicas, lastScaledAt } = input.monoStatus || {};
@@ -850,8 +853,14 @@ function replicas(input: VertexHealthInput): VertexHealth["replicas"] {
   const running = input.fleetItems.filter((item) => item.runtime?.status === "Running").length;
   const { min, max } = input.scale || {};
   let range = "";
-  if (min !== undefined && min === max) range = ` · scale ${min}`;
-  else if (min !== undefined || max !== undefined) range = ` · scale ${min ?? 0}–${max ?? "∞"}`;
+  if (min !== undefined || max !== undefined) {
+    const minReplicas = min ?? 0;
+    const maxReplicas = max ?? DEFAULT_MAX_REPLICAS;
+    range =
+      minReplicas === maxReplicas
+        ? ` · scale ${minReplicas}`
+        : ` · scale ${minReplicas}–${maxReplicas}`;
+  }
   return {
     label: `${running} ${running === 1 ? "pod" : "pods"} running${range}`,
     tone: running < input.fleetItems.length ? "warn" : "ok",

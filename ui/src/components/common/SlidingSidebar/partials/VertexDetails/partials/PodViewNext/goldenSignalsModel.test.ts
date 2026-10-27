@@ -599,6 +599,11 @@ describe("buildVertexHealth", () => {
         input({ type: "udf", vertexId: "cat", queries: signalQueries(pipelineIds), scale: { min: 2, max: 2 } })
       ).replicas?.label
     ).toBe("1 pod running · scale 2");
+    expect(
+      buildVertexHealth(
+        input({ type: "udf", vertexId: "cat", queries: signalQueries(pipelineIds), scale: { min: 1 } })
+      ).replicas?.label
+    ).toBe("1 pod running · scale 1–50");
   });
 
   it("falls back to live values when Prometheus is off", () => {
