@@ -1,5 +1,4 @@
 import React from "react";
-import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
 import circleCheck from "../../src/images/checkmark-circle.png";
 import circleDash from "../../src/images/circle-dash.png";
 import heartFill from "../../src/images/heart-fill.png";
@@ -194,40 +193,22 @@ export function quantityToScalar(quantity: string): number | bigint {
   }
 }
 
-export function getPodContainerUsePercentages(
-  pod: Pod,
-  podDetails: PodDetail,
-  containerName: string
-): ResourceUsage {
-  if (
-    podDetails?.containerMap instanceof Map &&
-    pod.containerSpecMap instanceof Map
-  ) {
-    const usedCPUParsed: number | undefined =
-      podDetails?.containerMap?.get(containerName)?.cpuParsed;
-    const specCPUParsed: number | undefined =
-      pod.containerSpecMap?.get(containerName)?.cpuParsed;
-    let cpuPercent: number | undefined;
-    if (usedCPUParsed && specCPUParsed) {
-      cpuPercent = (usedCPUParsed / specCPUParsed) * 100;
+/** resourceRequestPercent is usage relative to the request, from pods-info quantity strings. */
+export function resourceRequestPercent(
+  usage?: string,
+  request?: string
+): number | undefined {
+  if (!usage || !request) return undefined;
+  try {
+    const used = Number(quantityToScalar(usage));
+    const requested = Number(quantityToScalar(request));
+    if (!Number.isFinite(used) || !Number.isFinite(requested) || requested <= 0) {
+      return undefined;
     }
-    const usedMemParsed: number | undefined =
-      podDetails?.containerMap?.get(containerName)?.memoryParsed;
-    const specMemParsed: number | undefined =
-      pod.containerSpecMap?.get(containerName)?.memoryParsed;
-    let memoryPercent: number | undefined;
-    if (usedMemParsed && specMemParsed) {
-      memoryPercent = (usedMemParsed / specMemParsed) * 100;
-    }
-    return {
-      cpuPercent,
-      memoryPercent,
-    };
+    return (used / requested) * 100;
+  } catch {
+    return undefined;
   }
-  return {
-    cpuPercent: undefined,
-    memoryPercent: undefined,
-  };
 }
 
 export function a11yProps(index: number) {

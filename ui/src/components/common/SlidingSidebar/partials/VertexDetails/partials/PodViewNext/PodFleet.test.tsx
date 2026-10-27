@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { PodFleet } from "./PodFleet";
 import { buildPodFleetItems, PodFleetFilter } from "./podFleetModel";
-import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
+import { Pod, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
 
 const alpha: Pod = {
   name: "pipeline-vertex-alpha",
@@ -21,30 +21,34 @@ const bravo: Pod = {
   ]),
 };
 
-const details = new Map<string, PodDetail>([
+const runtime = new Map<string, PodRuntimeInfo>([
   [
     alpha.name,
     {
       name: alpha.name,
-      containerMap: new Map([
-        ["main", { name: "main", cpuParsed: 1, memoryParsed: 1 }],
-        ["numa", { name: "numa", cpuParsed: 2, memoryParsed: 1 }],
-      ]),
+      status: "Running",
+      containerDetailsMap: {
+        main: {
+          state: "Running",
+          restartCount: 0,
+          lastStartedAt: "",
+          totalCPU: "1m",
+          requestedCPU: "10m",
+          totalMemory: "1Mi",
+          requestedMemory: "10Mi",
+        },
+        numa: {
+          state: "Running",
+          restartCount: 0,
+          lastStartedAt: "",
+          totalCPU: "2m",
+          requestedCPU: "1m",
+          totalMemory: "1Mi",
+          requestedMemory: "10Mi",
+        },
+      },
     },
   ],
-  [
-    bravo.name,
-    {
-      name: bravo.name,
-      containerMap: new Map([
-        ["main", { name: "main", cpuParsed: 9, memoryParsed: 1 }],
-      ]),
-    },
-  ],
-]);
-
-const runtime = new Map<string, PodRuntimeInfo>([
-  [alpha.name, { name: alpha.name, status: "Running", containerDetailsMap: {} }],
   [
     bravo.name,
     {
@@ -57,7 +61,7 @@ const runtime = new Map<string, PodRuntimeInfo>([
   ],
 ]);
 
-const items = buildPodFleetItems([alpha, bravo], details, runtime);
+const items = buildPodFleetItems([alpha, bravo], runtime);
 
 function StatefulFleet({
   selectedPod,

@@ -56,9 +56,7 @@ describe("usePodViewState", () => {
     }) as jest.Mock;
     mockedUsePodsViewFetch.mockReturnValue({
       pods: [withNuma, withoutNuma],
-      podsDetails: new Map(),
       podsErr: undefined,
-      podsDetailsErr: undefined,
       loading: false,
     });
   });

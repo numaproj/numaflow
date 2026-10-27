@@ -8,11 +8,7 @@ import {
 import { getBaseHref, quantityToScalar } from "../index";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
-import {
-  Pod,
-  PodContainerSpec,
-  PodDetail,
-} from "../../types/declarations/pods";
+import { Pod, PodContainerSpec } from "../../types/declarations/pods";
 
 export const usePodsViewFetch = (
   namespaceId: string | undefined,
@@ -28,17 +24,10 @@ export const usePodsViewFetch = (
   }: { autoSelectFirstPod?: boolean; active?: boolean } = {}
 ) => {
   const [pods, setPods] = useState<Pod[] | undefined>(undefined);
-  const [podsDetails, setPodsDetails] = useState<
-    Map<string, PodDetail> | undefined
-  >(undefined);
   const [podsErr, setPodsErr] = useState<any[] | undefined>(undefined);
-  const [podsDetailsErr, setPodsDetailsErr] = useState<any[] | undefined>(
-    undefined
-  );
   const [requestKey, setRequestKey] = useState(`${Date.now()}`);
   const [loading, setLoading] = useState(true);
   const { host } = useContext<AppContextProps>(AppContext);
-  const [lastRetryTime, setLastRetryTime] = useState(0);
 
   // call to get pods for a given vertex
   const fetchPods = async () => {
@@ -170,93 +159,8 @@ export const usePodsViewFetch = (
     }
   }, [pods]);
 
-  // call to get pods details (metrics)
-  // TODO: deprecate this and gather all metrics from pods-info
-  const fetchPodDetails = async () => {
-    try {
-      const response = await fetch(
-        `${host}${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
-      );
-      if (response.ok) {
-        const json = await response.json();
-        if (json?.data) {
-          const data = json?.data;
-          const podsMap = new Map<string, PodDetail>();
-          data?.forEach((pod: any) => {
-            const containerMap = new Map<string, PodContainerSpec>();
-            pod?.containers?.forEach((c: any) => {
-              const cpu = c?.usage?.cpu;
-              let cpuParsed: undefined | number;
-              if (cpu) {
-                try {
-                  cpuParsed = Number(quantityToScalar(cpu));
-                } catch (e) {
-                  cpuParsed = undefined;
-                }
-              }
-              const memory = c?.usage?.memory;
-              let memoryParsed: undefined | number;
-              if (memory) {
-                try {
-                  memoryParsed = Number(quantityToScalar(memory));
-                } catch (e) {
-                  memoryParsed = undefined;
-                }
-              }
-              const container = {
-                name: c?.name,
-                cpu,
-                cpuParsed,
-                memory,
-                memoryParsed,
-              };
-              containerMap.set(container.name, container);
-            });
-            const podDetail = {
-              name: pod?.metadata?.name,
-              containerMap,
-            };
-            podsMap.set(podDetail.name, podDetail);
-          });
-          setPodsDetails(podsMap);
-          setPodsDetailsErr(undefined);
-        } else if (json?.errMsg) {
-          setPodsDetailsErr([
-            {
-              error: json.errMsg,
-              options: {
-                toastId: `${vertexId}-pod-fetch-error`,
-                autoClose: 5000,
-              },
-            },
-          ]);
-        }
-      } else {
-        setPodsDetailsErr([
-          {
-            error: `Failed to get pods details for ${vertexId} vertex`,
-            options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
-          },
-        ]);
-      }
-    } catch {
-      setPodsDetailsErr([
-        {
-          error: `Failed to get pods details for ${vertexId} vertex`,
-          options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
-        },
-      ]);
-    }
-  };
-
-  // Fetch pod details whenever requestKey (after every 20 sec) or host changes.
-  // A hidden Pods tab does not poll.
-  useEffect(() => {
-    if (!active) return;
-    fetchPodDetails();
-  }, [requestKey, host, active]);
-
-  // Refresh requestKey every 20 sec while the Pods tab is visible.
+  // Refresh the pod list every 20 sec while the Pods tab is visible.
+  // Container CPU and memory come from pods-info, not this list.
   useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
@@ -267,34 +171,13 @@ export const usePodsViewFetch = (
     };
   }, [active]);
 
-  // Retry fetching pods details if there is an error
   useEffect(() => {
-    if (!active) return;
-    const currentTime = Date.now();
-    if (podsDetailsErr && currentTime - lastRetryTime > 5000) {
-      const retryFetch = setTimeout(() => {
-        fetchPodDetails();
-        setLastRetryTime(currentTime);
-      }, 5000);
-
-      return () => clearTimeout(retryFetch);
-    }
-  }, [active, podsDetailsErr, lastRetryTime]);
-
-  // A failed metrics call must not end loading before the pod list exists.
-  useEffect(() => {
-    const podsReady = pods !== undefined;
-    const nextLoading = podsErr
-      ? false
-      : !podsReady || !(podsDetails || podsDetailsErr);
-    setLoading(nextLoading);
-  }, [pods, podsDetails, podsErr, podsDetailsErr]);
+    setLoading(podsErr ? false : pods === undefined);
+  }, [pods, podsErr]);
 
   return {
     pods,
-    podsDetails,
     podsErr,
-    podsDetailsErr,
     loading,
   };
 };

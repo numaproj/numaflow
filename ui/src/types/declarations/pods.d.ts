@@ -39,14 +39,14 @@ export interface PodDetail {
 
 export interface SearchablePodsHeatMapProps {
   pods: Pod[];
-  podsDetailsMap: Map<string, PodDetail>;
+  podRuntimeByName?: Map<string, PodRuntimeInfo>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
 }
 
 export interface PodsHeatMapProps {
   pods: Pod[];
-  podsDetailsMap: Map<string, PodDetail>;
+  podRuntimeByName?: Map<string, PodRuntimeInfo>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
 }
@@ -54,7 +54,6 @@ export interface PodsHeatMapProps {
 export interface PodHealth {
   name: string;
   pod: Pod;
-  details: PodDetail;
   maxCPUPerc: number;
   maxMemPerc: number;
   container: ContainerHealth[];
@@ -218,7 +217,6 @@ export interface PodInfoProps {
   vertexId: string;
   type: string;
   pod: Pod;
-  podDetails: PodDetail;
   containerName: string;
   containerInfo: ContainerInfoProps;
   podSpecificInfo: PodSpecificInfoProps;

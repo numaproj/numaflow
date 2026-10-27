@@ -31,13 +31,12 @@ export function Pods(props: PodsProps) {
 
   const {
     pods,
-    podsDetails,
     podsErr,
     loading,
+    podRuntimeByName,
     podRuntimeError,
     selectedPod,
     selectedContainer,
-    selectedPodDetails,
     containerInfo,
     podSpecificInfo,
     selectPodFromFleet,
@@ -227,7 +226,7 @@ export function Pods(props: PodsProps) {
           data-testid="pod-runtime-error"
           sx={{ mx: 2, mt: 2, color: "#8A5A00" }}
         >
-          Pod runtime details are temporarily unavailable. Logs and resource usage remain available.
+          Pod runtime details are temporarily unavailable. Logs remain available.
         </Box>
       )}
       <Box sx={{ display: "flex", height: "100%" }}>
@@ -264,7 +263,7 @@ export function Pods(props: PodsProps) {
               {podSearchDetails}
               <SearchablePodsHeatMap
                 pods={pods}
-                podsDetailsMap={podsDetails}
+                podRuntimeByName={podRuntimeByName}
                 onPodClick={handlePodClick}
                 selectedPod={selectedPod}
               />
@@ -295,7 +294,6 @@ export function Pods(props: PodsProps) {
                 vertexId={vertexId}
                 type={type}
                 pod={selectedPod}
-                podDetails={selectedPodDetails}
                 containerName={selectedContainer}
                 containerInfo={containerInfo}
                 podSpecificInfo={podSpecificInfo}

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { AppContext } from "../../../../../../../App";
 import { PodInspector } from "./PodInspector";
-import { Pod, PodDetail, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
+import { Pod, PodRuntimeInfo } from "../../../../../../../types/declarations/pods";
 
 jest.mock("../../../../../MetricsModalWrapper", () => ({
   MetricsModalWrapper: ({ value }: { value: string }) => <span>{value}</span>,
@@ -17,13 +17,6 @@ const pod: Pod = {
   ]),
 };
 
-const podDetails: PodDetail = {
-  name: "demo-input-0",
-  containerMap: new Map([
-    ["main", { name: "main", cpu: "5m", memory: "32Mi", cpuParsed: 5, memoryParsed: 32 }],
-  ]),
-};
-
 const runtime: PodRuntimeInfo = {
   name: "demo-input-0",
   status: "Running",
@@ -34,6 +27,10 @@ const runtime: PodRuntimeInfo = {
       state: "Terminated",
       restartCount: 2,
       lastStartedAt: "",
+      totalCPU: "5m",
+      requestedCPU: "10m",
+      totalMemory: "32Mi",
+      requestedMemory: "64Mi",
       lastTerminationReason: "OOMKilled",
       lastTerminationMessage: "Memory limit exceeded",
       lastTerminationExitCode: 137,
@@ -42,12 +39,14 @@ const runtime: PodRuntimeInfo = {
       state: "Waiting",
       restartCount: 3,
       lastStartedAt: "",
+      requestedCPU: "100m",
+      requestedMemory: "128Mi",
       waitingReason: "CrashLoopBackOff",
     },
   },
 };
 
-function renderInspector(containerName: string, details: PodDetail | undefined = podDetails) {
+function renderInspector(containerName: string) {
   render(
     <AppContext.Provider value={{ disableMetricsCharts: true } as any}>
       <PodInspector
@@ -56,7 +55,6 @@ function renderInspector(containerName: string, details: PodDetail | undefined =
         vertexId="input"
         type="source"
         pod={pod}
-        podDetails={details}
         containerName={containerName}
         runtime={runtime}
       />
@@ -90,7 +88,7 @@ describe("PodInspector", () => {
   });
 
   it("omits the percent when usage is unavailable and shows waiting details", () => {
-    const { containerCard } = renderInspector("sidecar", undefined);
+    const { containerCard } = renderInspector("sidecar");
 
     expect(rowValue(containerCard, "CPU")).toHaveTextContent("— / 100m");
     expect(rowValue(containerCard, "CPU")).not.toHaveTextContent("%");

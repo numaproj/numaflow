@@ -9,7 +9,6 @@ import {
 import {
   ContainerInfoProps,
   Pod,
-  PodDetail,
   PodRuntimeInfo,
 } from "../../../../../../../types/declarations/pods";
 
@@ -33,14 +32,6 @@ const running = (containerDetailsMap: Record<string, ContainerInfoProps> = {}): 
   name: "pod",
   status: "Running",
   containerDetailsMap,
-});
-
-const usage = (numa: number, udf: number): PodDetail => ({
-  name: "pod",
-  containerMap: new Map([
-    ["numa", { name: "numa", cpuParsed: numa, memoryParsed: 1 }],
-    ["udf", { name: "udf", cpuParsed: udf, memoryParsed: 1 }],
-  ]),
 });
 
 describe("classifyPod", () => {
@@ -77,16 +68,34 @@ describe("podFleetModel helpers", () => {
     const hotNuma = pod("hot-numa");
     const hotUdf = pod("hot-udf");
     const quiet = pod("quiet");
-    const details = new Map<string, PodDetail>([
-      ["hot-numa", usage(50, 2)],
-      ["hot-udf", usage(1, 15)],
-      ["quiet", usage(1, 1)],
+    const withUsage = (
+      name: string,
+      numaCPU: string,
+      udfCPU: string
+    ): PodRuntimeInfo => ({
+      ...running({
+        numa: container({
+          totalCPU: numaCPU,
+          requestedCPU: "10m",
+          totalMemory: "1Mi",
+          requestedMemory: "10Mi",
+        }),
+        udf: container({
+          totalCPU: udfCPU,
+          requestedCPU: "10m",
+          totalMemory: "1Mi",
+          requestedMemory: "10Mi",
+        }),
+      }),
+      name,
+    });
+    const runtime = new Map<string, PodRuntimeInfo>([
+      ["hot-numa", withUsage("hot-numa", "50m", "2m")],
+      ["hot-udf", withUsage("hot-udf", "1m", "15m")],
+      ["quiet", withUsage("quiet", "1m", "1m")],
     ]);
-    const runtime = new Map<string, PodRuntimeInfo>(
-      ["hot-numa", "hot-udf", "quiet"].map((name) => [name, { ...running(), name }])
-    );
 
-    const items = buildPodFleetItems([hotNuma, hotUdf, quiet], details, runtime);
+    const items = buildPodFleetItems([hotNuma, hotUdf, quiet], runtime);
 
     expect(items.map((item) => [item.pod.name, item.severity])).toEqual([
       ["hot-numa", "warning"],
@@ -101,7 +110,7 @@ describe("podFleetModel helpers", () => {
     ]);
   });
 
-  it("falls back to pods-info quantities and leaves missing requests unknown", () => {
+  it("reads pods-info quantities and leaves missing requests unknown", () => {
     const runtime = new Map<string, PodRuntimeInfo>([
       [
         "runtime-only",
@@ -120,7 +129,7 @@ describe("podFleetModel helpers", () => {
       ],
     ]);
 
-    const [item] = buildPodFleetItems([pod("runtime-only")], undefined, runtime);
+    const [item] = buildPodFleetItems([pod("runtime-only")], runtime);
     expect(item.maxCPUPercent).toBeCloseTo(1000);
     expect(item.maxMemoryPercent).toBeCloseTo(200);
     expect(item.containerResources).toEqual([
@@ -132,10 +141,17 @@ describe("podFleetModel helpers", () => {
   it("filters by severity and sorts red, yellow, green", () => {
     const items = buildPodFleetItems(
       [pod("a"), pod("b"), pod("d")],
-      new Map([["b", usage(1, 20)]]),
       new Map<string, PodRuntimeInfo>([
         ["a", { ...running(), name: "a" }],
-        ["b", { ...running(), name: "b" }],
+        [
+          "b",
+          {
+            ...running({
+              udf: container({ totalCPU: "20m", requestedCPU: "10m" }),
+            }),
+            name: "b",
+          },
+        ],
         ["d", { name: "d", status: "Failed", containerDetailsMap: {} }],
       ])
     );

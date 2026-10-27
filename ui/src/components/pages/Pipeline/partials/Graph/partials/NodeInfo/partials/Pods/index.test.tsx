@@ -6,7 +6,7 @@ import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/
 import {
   Pod,
   PodContainerSpec,
-  PodDetail,
+  PodRuntimeInfo,
 } from "../../../../../../../../../types/declarations/pods";
 import { TextEncoder, TextDecoder } from "util";
 import "@testing-library/jest-dom";
@@ -31,27 +31,37 @@ const pod = {
   containers: ["numa", "udf"],
   containerSpecMap: containerSpecMap,
 };
-const podDetail = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containerMap: containerSpecMap,
-};
-
 const pod1 = {
   name: "simple-pipeline-infer-1-xah5w",
   containers: ["numa", "udf"],
   containerSpecMap: containerSpecMap,
 };
-const podDetail1 = {
-  name: "simple-pipeline-infer-1-xah5w",
-  containerMap: containerSpecMap,
-};
-
 const pods: Pod[] = [pod, pod1];
 
-const podsDetails = new Map<string, PodDetail>([
-  ["simple-pipeline-infer-0-xah5w", podDetail],
-  ["simple-pipeline-infer-1-xah5w", podDetail1],
-]);
+const podRuntime = (name: string): PodRuntimeInfo => ({
+  name,
+  status: "Running",
+  containerDetailsMap: {
+    numa: {
+      state: "Running",
+      restartCount: 0,
+      lastStartedAt: "",
+      totalCPU: "10m",
+      requestedCPU: "100m",
+      totalMemory: "10Mi",
+      requestedMemory: "100Mi",
+    },
+    udf: {
+      state: "Running",
+      restartCount: 0,
+      lastStartedAt: "",
+      totalCPU: "10m",
+      requestedCPU: "100m",
+      totalMemory: "10Mi",
+      requestedMemory: "100Mi",
+    },
+  },
+});
 
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
@@ -81,9 +91,7 @@ describe("Pods", () => {
   it("loads pods view", async () => {
     mockedUsePodsViewFetch.mockReturnValue({
       pods: pods,
-      podsDetails: podsDetails,
       podsErr: undefined,
-      podsDetailsErr: undefined,
       loading: false,
     });
     const mRes = {
@@ -99,7 +107,18 @@ describe("Pods", () => {
       }),
       ok: true,
     };
-    const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
+    const mockedFetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes("pods-info")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              data: pods.map((item) => podRuntime(item.name)),
+            }),
+        });
+      }
+      return Promise.resolve(mRes);
+    });
     (global as any).fetch = mockedFetch;
     await act(async () => {
       render(
@@ -165,9 +184,7 @@ describe("Pods", () => {
         }, [setSelectedPod, setSelectedContainer]);
         return {
           pods,
-          podsDetails,
           podsErr: undefined,
-          podsDetailsErr: undefined,
           loading: false,
         };
       }
@@ -266,9 +283,7 @@ describe("Pods", () => {
   it("pods error screen - api errors", async () => {
     mockedUsePodsViewFetch.mockReturnValue({
       pods: pods,
-      podsDetails: podsDetails,
       podsErr: ["some error"],
-      podsDetailsErr: ["some error"],
       loading: false,
     });
     render(

@@ -6,7 +6,7 @@ import "./style.css";
 
 export const SearchablePodsHeatMap = ({
   pods,
-  podsDetailsMap,
+  podRuntimeByName,
   onPodClick,
   selectedPod,
 }: SearchablePodsHeatMapProps) => {
@@ -19,7 +19,7 @@ export const SearchablePodsHeatMap = ({
         <Box sx={{ width: "75%" }}>
           <PodsHeatMap
             pods={pods}
-            podsDetailsMap={podsDetailsMap}
+            podRuntimeByName={podRuntimeByName}
             onPodClick={onPodClick}
             selectedPod={selectedPod}
           />

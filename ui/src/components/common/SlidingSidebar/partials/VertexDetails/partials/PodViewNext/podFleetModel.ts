@@ -1,10 +1,6 @@
-import {
-  getPodContainerUsePercentages,
-  quantityToScalar,
-} from "../../../../../../../utils";
+import { resourceRequestPercent } from "../../../../../../../utils";
 import {
   Pod,
-  PodDetail,
   PodFleetItem,
   PodFleetSort,
   PodRuntimeInfo,
@@ -102,26 +98,12 @@ export function classifyPod({
   return { severity: "healthy" };
 }
 
-function requestPercentage(usage?: string, request?: string): number | undefined {
-  if (!usage || !request) return undefined;
-  try {
-    const used = Number(quantityToScalar(usage));
-    const requested = Number(quantityToScalar(request));
-    if (!Number.isFinite(used) || !Number.isFinite(requested) || requested <= 0) return undefined;
-    return (used / requested) * 100;
-  } catch {
-    return undefined;
-  }
-}
-
-/** buildPodFleetItems derives display data without mutating the v1 fetch results. */
+/** buildPodFleetItems derives display data from the pods-info runtime payload. */
 export function buildPodFleetItems(
   pods: Pod[] = [],
-  detailsByName?: Map<string, PodDetail>,
   runtimeByName: Map<string, PodRuntimeInfo> = new Map()
 ): PodFleetItem[] {
   return pods.map((pod) => {
-    const details = detailsByName?.get(pod.name);
     const runtime = runtimeByName.get(pod.name);
     let maxCPUPercent: number | undefined;
     let maxMemoryPercent: number | undefined;
@@ -130,20 +112,18 @@ export function buildPodFleetItems(
     const containerNames = new Set([
       ...pod.containers,
       ...Array.from(pod.containerSpecMap?.keys?.() || []),
-      ...Array.from(details?.containerMap?.keys?.() || []),
       ...Object.keys(runtime?.containerDetailsMap || {}),
     ]);
     const containerResources = Array.from(containerNames).map((name) => {
-      const metricsUsage = details
-        ? getPodContainerUsePercentages(pod, details, name)
-        : { cpuPercent: undefined, memoryPercent: undefined };
       const runtimeContainer = runtime?.containerDetailsMap?.[name];
-      const cpuPercent =
-        metricsUsage.cpuPercent ??
-        requestPercentage(runtimeContainer?.totalCPU, runtimeContainer?.requestedCPU);
-      const memoryPercent =
-        metricsUsage.memoryPercent ??
-        requestPercentage(runtimeContainer?.totalMemory, runtimeContainer?.requestedMemory);
+      const cpuPercent = resourceRequestPercent(
+        runtimeContainer?.totalCPU,
+        runtimeContainer?.requestedCPU
+      );
+      const memoryPercent = resourceRequestPercent(
+        runtimeContainer?.totalMemory,
+        runtimeContainer?.requestedMemory
+      );
       if (cpuPercent !== undefined && (maxCPUPercent === undefined || cpuPercent > maxCPUPercent)) {
         maxCPUPercent = cpuPercent;
         maxCPUContainer = name;
@@ -170,7 +150,6 @@ export function buildPodFleetItems(
     });
     return {
       pod,
-      details,
       runtime,
       maxCPUPercent,
       maxMemoryPercent,

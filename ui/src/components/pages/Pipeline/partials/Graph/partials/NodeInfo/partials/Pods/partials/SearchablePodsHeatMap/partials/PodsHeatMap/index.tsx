@@ -5,7 +5,7 @@ import {
   fill,
   imageForStatus,
 } from "../../../../../../../../../../../../../utils/gradients";
-import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
+import { resourceRequestPercent } from "../../../../../../../../../../../../../utils";
 import {
   ContainerHealth,
   Hexagon,
@@ -17,7 +17,7 @@ import "./style.css";
 
 export const PodsHeatMap = ({
   pods,
-  podsDetailsMap,
+  podRuntimeByName,
   onPodClick,
   selectedPod,
 }: PodsHeatMapProps) => {
@@ -59,49 +59,43 @@ export const PodsHeatMap = ({
 
   const podsHealth: PodHealth[] = [];
 
-  if (pods && podsDetailsMap) {
+  if (pods && podRuntimeByName) {
     pods?.forEach((pod) => {
-      if (podsDetailsMap.has(pod.name)) {
-        const details = podsDetailsMap.get(pod.name);
-        if (details) {
-          const podObj: PodHealth = {
-            name: pod.name,
-            pod,
-            details,
-            maxCPUPerc: 0,
-            maxMemPerc: 0,
-            container: [],
-          };
-          // check if details?.containerMap is an array
-          details?.containerMap &&
-            details?.containerMap?.forEach((value, key) => {
-              const resourceUsage = getPodContainerUsePercentages(
-                pod,
-                details,
-                key
-              );
-              if (resourceUsage?.cpuPercent) {
-                podObj.maxCPUPerc = Math.max(
-                  podObj.maxCPUPerc,
-                  resourceUsage.cpuPercent
-                );
-              }
-              if (resourceUsage?.memoryPercent) {
-                podObj.maxMemPerc = Math.max(
-                  podObj.maxMemPerc,
-                  resourceUsage.memoryPercent
-                );
-              }
-              podObj.container.push({
-                name: key,
-                cpu: value.cpu,
-                mem: value.memory,
-                ...resourceUsage,
-              });
-            });
-          podsHealth.push(podObj);
+      const runtime = podRuntimeByName.get(pod.name);
+      if (!runtime) return;
+      const podObj: PodHealth = {
+        name: pod.name,
+        pod,
+        maxCPUPerc: 0,
+        maxMemPerc: 0,
+        container: [],
+      };
+      Object.entries(runtime.containerDetailsMap || {}).forEach(
+        ([name, container]) => {
+          const cpuPercent = resourceRequestPercent(
+            container?.totalCPU,
+            container?.requestedCPU
+          );
+          const memoryPercent = resourceRequestPercent(
+            container?.totalMemory,
+            container?.requestedMemory
+          );
+          if (cpuPercent) {
+            podObj.maxCPUPerc = Math.max(podObj.maxCPUPerc, cpuPercent);
+          }
+          if (memoryPercent) {
+            podObj.maxMemPerc = Math.max(podObj.maxMemPerc, memoryPercent);
+          }
+          podObj.container.push({
+            name,
+            cpu: container?.totalCPU,
+            mem: container?.totalMemory,
+            cpuPercent,
+            memoryPercent,
+          });
         }
-      }
+      );
+      podsHealth.push(podObj);
     });
   }
 

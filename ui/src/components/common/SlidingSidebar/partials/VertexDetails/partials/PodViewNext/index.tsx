@@ -58,7 +58,6 @@ export function PodViewNext(props: PodViewNextProps) {
   const active = props.active !== false;
   const {
     pods,
-    podsDetails,
     podsErr,
     loading,
     podRuntimeByName,
@@ -66,7 +65,6 @@ export function PodViewNext(props: PodViewNextProps) {
     selectedPod,
     selectedContainer,
     selectedRuntime,
-    selectedPodDetails,
     selectPodFromFleet,
     selectPodFromSearch,
     selectPodWithContainer,
@@ -80,8 +78,8 @@ export function PodViewNext(props: PodViewNextProps) {
     useVertexHealthData({ namespaceId, pipelineId, vertexId, type, active });
 
   const fleetItems = useMemo(
-    () => buildPodFleetItems(pods, podsDetails, podRuntimeByName),
-    [pods, podsDetails, podRuntimeByName]
+    () => buildPodFleetItems(pods, podRuntimeByName),
+    [pods, podRuntimeByName]
   );
   const vertexHealth = useMemo(
     () =>
@@ -206,7 +204,7 @@ export function PodViewNext(props: PodViewNextProps) {
         />
         {podRuntimeError && (
           <p className="pod-view-next-runtime-warning" role="status">
-            Pod runtime details are temporarily unavailable. Logs and resource usage remain available.
+            Pod runtime details are temporarily unavailable. Logs remain available.
           </p>
         )}
         {selectedPod ? (
@@ -238,7 +236,6 @@ export function PodViewNext(props: PodViewNextProps) {
               vertexId={props.vertexId}
               type={props.type}
               pod={selectedPod}
-              podDetails={selectedPodDetails}
               containerName={activeContainer}
               runtime={selectedRuntime}
             />

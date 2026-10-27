@@ -25,10 +25,6 @@ const pod = {
   containers: ["numa", "udf"],
   containerSpecMap: containerSpecMap,
 };
-const podDetails = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containerMap: containerSpecMap,
-};
 const containerName = "numa";
 
 describe("ContainerInfo screen", () => {
@@ -40,9 +36,15 @@ describe("ContainerInfo screen", () => {
         vertexId={"infer"}
         type={"udf"}
         pod={pod}
-        podDetails={podDetails}
         containerName={containerName}
-        containerInfo={{} as ContainerInfoProps}
+        containerInfo={
+          {
+            totalCPU: "5m",
+            requestedCPU: "100m",
+            totalMemory: "10Mi",
+            requestedMemory: "100Mi",
+          } as ContainerInfoProps
+        }
         podSpecificInfo={{} as PodSpecificInfoProps}
       />
     );

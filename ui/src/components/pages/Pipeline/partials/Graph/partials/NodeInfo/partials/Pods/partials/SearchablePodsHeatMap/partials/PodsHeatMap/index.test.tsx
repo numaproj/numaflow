@@ -6,22 +6,12 @@ import { fill } from "../../../../../../../../../../../../../utils/gradients";
 import {
   Pod,
   PodContainerSpec,
-  PodDetail,
+  PodRuntimeInfo,
 } from "../../../../../../../../../../../../../types/declarations/pods";
 
-const NumaContainerSpec: PodContainerSpec = {
-  name: "numa",
-  cpuParsed: 100,
-  memoryParsed: 0,
-};
-const UDFContainerSpec: PodContainerSpec = {
-  name: "numa",
-  cpuParsed: 0,
-  memoryParsed: 100,
-};
 const containerSpecMap = new Map<string, PodContainerSpec>([
-  ["numa", NumaContainerSpec],
-  ["udf", UDFContainerSpec],
+  ["numa", { name: "numa" }],
+  ["udf", { name: "udf" }],
 ]);
 
 const pod = {
@@ -29,15 +19,28 @@ const pod = {
   containers: ["numa", "udf"],
   containerSpecMap: containerSpecMap,
 };
-const podDetail = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containerMap: containerSpecMap,
-};
 
 const pods: Pod[] = [pod];
 
-const podDetailsMap = new Map<string, PodDetail>([
-  ["simple-pipeline-infer-0-xah5w", podDetail],
+const podRuntimeByName = new Map<string, PodRuntimeInfo>([
+  [
+    pod.name,
+    {
+      name: pod.name,
+      status: "Running",
+      containerDetailsMap: {
+        numa: {
+          state: "Running",
+          restartCount: 0,
+          lastStartedAt: "",
+          totalCPU: "50m",
+          requestedCPU: "100m",
+          totalMemory: "10Mi",
+          requestedMemory: "100Mi",
+        },
+      },
+    },
+  ],
 ]);
 
 const onPodClick = jest.fn();
@@ -52,7 +55,7 @@ describe("PodsHeatMap", () => {
       <PodsHeatMap
         pods={pods}
         selectedPod={pod}
-        podsDetailsMap={podDetailsMap}
+        podRuntimeByName={podRuntimeByName}
         onPodClick={onPodClick}
       />
     );
@@ -67,7 +70,7 @@ describe("PodsHeatMap", () => {
       <PodsHeatMap
         pods={undefined}
         selectedPod={pod}
-        podsDetailsMap={undefined}
+        podRuntimeByName={undefined}
         onPodClick={onPodClick}
       />
     );
@@ -79,7 +82,7 @@ describe("PodsHeatMap", () => {
       <PodsHeatMap
         pods={pods}
         selectedPod={pod}
-        podsDetailsMap={new Map()}
+        podRuntimeByName={new Map()}
         onPodClick={onPodClick}
       />
     );

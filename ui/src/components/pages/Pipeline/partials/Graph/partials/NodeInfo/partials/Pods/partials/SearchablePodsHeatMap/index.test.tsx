@@ -4,7 +4,7 @@ import { fill } from "../../../../../../../../../../../utils/gradients";
 import {
   Pod,
   PodContainerSpec,
-  PodDetail,
+  PodRuntimeInfo,
 } from "../../../../../../../../../../../types/declarations/pods";
 
 import "@testing-library/jest-dom";
@@ -21,15 +21,25 @@ const pod = {
   containers: ["numa", "udf"],
   containerSpecMap: containerSpecMap,
 };
-const podDetail = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containerMap: containerSpecMap,
-};
-
 const pods: Pod[] = [pod];
 
-const podDetailMap = new Map<string, PodDetail>([
-  ["simple-pipeline-infer-0-xah5w", podDetail],
+const podRuntimeByName = new Map<string, PodRuntimeInfo>([
+  [
+    pod.name,
+    {
+      name: pod.name,
+      status: "Running",
+      containerDetailsMap: {
+        numa: {
+          state: "Running",
+          restartCount: 0,
+          lastStartedAt: "",
+          totalCPU: "10m",
+          requestedCPU: "100m",
+        },
+      },
+    },
+  ],
 ]);
 
 const onPodClick = jest.fn();
@@ -44,7 +54,7 @@ describe("SearchablePodsHeatMap", () => {
       <SearchablePodsHeatMap
         pods={pods}
         selectedPod={pod}
-        podsDetailsMap={podDetailMap}
+        podRuntimeByName={podRuntimeByName}
         onPodClick={onPodClick}
       />
     );

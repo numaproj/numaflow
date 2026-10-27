@@ -1,14 +1,10 @@
 import { ReactNode, useContext } from "react";
 import { AppContext } from "../../../../../../../App";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
-import {
-  ago,
-  getPodContainerUsePercentages,
-} from "../../../../../../../utils";
+import { ago, resourceRequestPercent } from "../../../../../../../utils";
 import {
   ContainerInfoProps,
   Pod,
-  PodDetail,
   PodRuntimeInfo,
 } from "../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../types/declarations/app";
@@ -29,18 +25,11 @@ interface PodInspectorProps {
   vertexId: string;
   type: string;
   pod: Pod;
-  podDetails?: PodDetail;
   containerName?: string;
   runtime?: PodRuntimeInfo;
 }
 
 const EMPTY = "—";
-
-const normalizeCPU = (value?: string) =>
-  value?.endsWith("n") ? `${(parseFloat(value) / 1e6).toFixed(2)}m` : value;
-
-const normalizeMemory = (value?: string) =>
-  value?.endsWith("Ki") ? `${(parseFloat(value) / 1024).toFixed(2)}Mi` : value;
 
 /** formatUsage renders `usage / request (percent)`, omitting the percent when either side is unknown. */
 const formatUsage = (used?: string, requested?: string, percent?: number) => {
@@ -90,7 +79,6 @@ export function PodInspector({
   vertexId,
   type,
   pod,
-  podDetails,
   containerName,
   runtime,
 }: PodInspectorProps) {
@@ -106,16 +94,17 @@ export function PodInspector({
   const containerInfo: ContainerInfoProps | undefined = containerName
     ? runtime?.containerDetailsMap?.[containerName]
     : undefined;
-  const usage =
-    containerName && podDetails
-      ? getPodContainerUsePercentages(pod, podDetails, containerName)
-      : {};
   const containerUsage = containerName
-    ? podDetails?.containerMap.get(containerName)
+    ? runtime?.containerDetailsMap?.[containerName]
     : undefined;
-  const containerSpec = containerName
-    ? pod.containerSpecMap.get(containerName)
-    : undefined;
+  const cpuPercent = resourceRequestPercent(
+    containerUsage?.totalCPU,
+    containerUsage?.requestedCPU
+  );
+  const memoryPercent = resourceRequestPercent(
+    containerUsage?.totalMemory,
+    containerUsage?.requestedMemory
+  );
   const podRestarts = Object.values(runtime?.containerDetailsMap || {}).reduce(
     (count, item) => count + (item?.restartCount || 0),
     0
@@ -183,9 +172,9 @@ export function PodInspector({
               {...metricsProps}
               metricDisplayName={CONTAINER_CPU_UTILIZATION}
               value={formatUsage(
-                normalizeCPU(containerUsage?.cpu),
-                containerSpec?.cpu,
-                usage.cpuPercent
+                containerUsage?.totalCPU,
+                containerUsage?.requestedCPU,
+                cpuPercent
               )}
             />
           </InspectorRow>
@@ -194,9 +183,9 @@ export function PodInspector({
               {...metricsProps}
               metricDisplayName={CONTAINER_MEMORY_UTILIZATION}
               value={formatUsage(
-                normalizeMemory(containerUsage?.memory),
-                containerSpec?.memory,
-                usage.memoryPercent
+                containerUsage?.totalMemory,
+                containerUsage?.requestedMemory,
+                memoryPercent
               )}
             />
           </InspectorRow>

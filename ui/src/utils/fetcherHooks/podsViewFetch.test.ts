@@ -34,29 +34,7 @@ describe("Custom Pods hook", () => {
       ]),
       ok: true,
     };
-    const mRes2 = {
-      json: jest.fn().mockResolvedValueOnce([
-        {
-          metadata: {
-            name: "simple-pipeline-in-0-puff4",
-          },
-          containers: [
-            {
-              name: "numa",
-              usage: {
-                cpu: "24579500n",
-                memory: "93188Ki",
-              },
-            },
-          ],
-        },
-      ]),
-      ok: true,
-    };
-    const mockedFetch = jest
-      .fn()
-      .mockResolvedValueOnce(mRes1 as any)
-      .mockResolvedValueOnce(mRes2 as any);
+    const mockedFetch = jest.fn().mockResolvedValueOnce(mRes1 as any);
     (global as any).fetch = mockedFetch;
     await act(async () => {
       renderHook(() =>
@@ -71,9 +49,9 @@ describe("Custom Pods hook", () => {
         )
       );
     });
-    expect(mockedFetch).toBeCalledTimes(2);
+    expect(mockedFetch).toBeCalledTimes(1);
+    expect(String(mockedFetch.mock.calls[0][0])).not.toContain("/metrics/");
     expect(mRes1.json).toBeCalledTimes(1);
-    expect(mRes2.json).toBeCalledTimes(1);
   });
   it("should fail", async () => {
     const mRes = {
@@ -95,7 +73,7 @@ describe("Custom Pods hook", () => {
         )
       );
     });
-    expect(mockedFetch).toBeCalledTimes(2);
+    expect(mockedFetch).toBeCalledTimes(1);
   });
   it.each([
     [true, 1],
@@ -167,7 +145,7 @@ describe("Custom Pods hook", () => {
         )
       );
     });
-    expect(mockedFetch).toBeCalledTimes(2);
+    expect(mockedFetch).toBeCalledTimes(1);
   });
 
   it("does not fetch while the Pods tab is hidden", async () => {

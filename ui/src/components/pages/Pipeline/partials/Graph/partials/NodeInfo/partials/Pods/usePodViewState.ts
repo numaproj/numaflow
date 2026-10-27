@@ -71,7 +71,7 @@ export function usePodViewState(
   const runtimeRequestRef = useRef(0);
   const runtimeAbortRef = useRef<AbortController | undefined>(undefined);
 
-  const { pods, podsDetails, podsErr, podsDetailsErr, loading } =
+  const { pods, podsErr, loading } =
     usePodsViewFetch(
       namespaceId,
       pipelineId,
@@ -140,10 +140,6 @@ export function usePodViewState(
   useEffect(() => {
     if (podsErr) notifyError(podsErr);
   }, [podsErr]);
-
-  useEffect(() => {
-    if (podsDetailsErr) notifyError(podsDetailsErr);
-  }, [podsDetailsErr]);
 
   useEffect(() => {
     if (!pods?.length) return;
@@ -234,16 +230,13 @@ export function usePodViewState(
 
   return {
     pods,
-    podsDetails,
     podsErr,
-    podsDetailsErr,
     loading,
     podRuntimeByName,
     podRuntimeError,
     selectedPod,
     selectedContainer,
     selectedRuntime,
-    selectedPodDetails: podsDetails?.get(selectedPod?.name || ""),
     containerInfo: containerInfo as ContainerInfoProps | undefined,
     podSpecificInfo,
     selectPodFromFleet: (pod: Pod) => selectPod(pod, false),
