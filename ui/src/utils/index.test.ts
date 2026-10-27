@@ -27,6 +27,8 @@ describe("index", () => {
     expect(quantityToScalar("10n")).toEqual(1e-8);
     expect(quantityToScalar("10u")).toEqual(0.00001);
     expect(quantityToScalar("10m")).toEqual(0.01);
+    expect(quantityToScalar("1.2m")).toEqual(0.0012);
+    expect(quantityToScalar("4.25Mi")).toEqual(4.25 * 1024 * 1024);
     // @ts-ignore
     expect(quantityToScalar("10k")).toEqual(10000n);
     // @ts-ignore
@@ -57,6 +59,8 @@ describe("index", () => {
     expect(resourceRequestPercent(undefined, "100m")).toBeUndefined();
     expect(resourceRequestPercent("6991490n", "100m")).toBeCloseTo(6.99149);
     expect(resourceRequestPercent("33724Ki", "128Mi")).toBeCloseTo(25.7293701171875);
+    expect(resourceRequestPercent("1.2m", "100m")).toBeCloseTo(1.2);
+    expect(resourceRequestPercent("4.25Mi", "128Mi")).toBeCloseTo(3.3203125);
   });
   it("timeAgo", () => {
     // Use fake timers to eliminate flakiness and make tests deterministic

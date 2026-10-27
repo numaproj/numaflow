@@ -118,6 +118,11 @@ export function quantityToScalar(quantity: string): number | bigint {
     }
     return num;
   }
+  const scaled = (suffixLength: number, factor: number): number | bigint => {
+    const raw = quantity.substr(0, quantity.length - suffixLength);
+    if (raw.includes(".")) return Number(raw) * factor;
+    return BigInt(raw) * BigInt(factor);
+  };
   switch (suffix) {
     case "n":
       return (
@@ -131,63 +136,29 @@ export function quantityToScalar(quantity: string): number | bigint {
     case "m":
       return Number(quantity.substr(0, quantity.length - 1)).valueOf() / 1000.0;
     case "k":
-      return BigInt(quantity.substr(0, quantity.length - 1)) * BigInt(1000);
+      return scaled(1, 1000);
     case "M":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) * BigInt(1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000);
     case "G":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000);
     case "T":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000);
     case "P":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000 * 1000);
     case "E":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000 * 1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000 * 1000 * 1000);
     case "Ki":
-      return BigInt(quantity.substr(0, quantity.length - 2)) * BigInt(1024);
+      return scaled(2, 1024);
     case "Mi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) * BigInt(1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024);
     case "Gi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024);
     case "Ti":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024);
     case "Pi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024 * 1024);
     case "Ei":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024 * 1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024 * 1024 * 1024);
     default:
       throw new Error(`Unknown suffix: ${suffix}`);
   }

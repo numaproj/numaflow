@@ -37,7 +37,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -1747,6 +1746,25 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
+// truncateUsage keeps two decimal places and drops the rest. It does not round up.
+func truncateUsage(value float64) float64 {
+	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	return math.Floor(value*100+1e-6) / 100
+}
+
+// formatUsage prints a truncated usage. Whole numbers stay bare, so 100 stays "100".
+func formatUsage(value float64) string {
+	text := strconv.FormatFloat(truncateUsage(value), 'f', 2, 64)
+	text = strings.TrimRight(text, "0")
+	text = strings.TrimRight(text, ".")
+	if text == "" {
+		return "0"
+	}
+	return text
+}
+
 // podDetailsConcurrency caps parallel metrics-server reads for one fleet view.
 // 32 keeps a 100-pod view to a few round trips without an unbounded stampede.
 const podDetailsConcurrency = 32
@@ -1793,8 +1811,8 @@ func (h *handler) getPodDetails(ctx context.Context, pod corev1.Pod) (PodDetails
 		return podDetails, err
 	}
 	{
-		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
-		totalMemory := resource.NewQuantity(0, resource.BinarySI)
+		var cpuMillis float64
+		var memMi float64
 		for _, container := range podMetrics.Containers {
 			containerName := container.Name
 			cpuQuantity := container.Usage.Cpu()
@@ -1804,22 +1822,19 @@ func (h *handler) getPodDetails(ctx context.Context, pod corev1.Pod) (PodDetails
 				details = ContainerDetails{Name: container.Name} // Initialize if not found
 			}
 			if cpuQuantity != nil {
-				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
-				totalCPU.Add(*cpuQuantity)
+				millis := truncateUsage(cpuQuantity.AsApproximateFloat64() * 1000)
+				details.TotalCPU = formatUsage(millis) + "m"
+				cpuMillis += millis
 			}
 			if memQuantity != nil {
-				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
-				totalMemory.Add(*memQuantity)
+				mi := truncateUsage(memQuantity.AsApproximateFloat64() / (1024 * 1024))
+				details.TotalMemory = formatUsage(mi) + "Mi"
+				memMi += mi
 			}
 			containerDetails[containerName] = details
 		}
-		if totalCPU != nil {
-			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
-		}
-
-		if totalMemory != nil {
-			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
-		}
+		podDetails.TotalCPU = formatUsage(cpuMillis) + "m"
+		podDetails.TotalMemory = formatUsage(memMi) + "Mi"
 	}
 	return podDetails, nil
 }

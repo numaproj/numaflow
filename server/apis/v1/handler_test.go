@@ -825,6 +825,43 @@ func TestHandler_GetPodDetails(t *testing.T) {
 	}
 }
 
+func TestGetPodDetailsSumsRoundedContainerUsage(t *testing.T) {
+	// 1.2m and 0.2m stay fractional. Ceil would show 2m and 1m, then hide 0.2m in a 2m pod total.
+	h := handler{metricsClient: &MockMetricsClient{podMetrics: &metricsv1beta1.PodMetrics{
+		ObjectMeta: metav1.ObjectMeta{Name: "simple-pipeline-cat-0", Namespace: "default"},
+		Containers: []metricsv1beta1.ContainerMetrics{
+			{Name: "numa", Usage: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1200u"),
+				corev1.ResourceMemory: resource.MustParse("4.259Mi"),
+			}},
+			{Name: "udf", Usage: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("200u"),
+				corev1.ResourceMemory: resource.MustParse("8Mi"),
+			}},
+		},
+	}}}
+	pod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "simple-pipeline-cat-0", Namespace: "default"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{Name: "numa"},
+				{Name: "udf"},
+			},
+		},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "numa"}, {Name: "udf"}}},
+	}
+
+	details, err := h.getPodDetails(context.Background(), pod)
+	assert.NoError(t, err)
+	assert.Equal(t, "1.2m", details.ContainerDetailsMap["numa"].TotalCPU)
+	assert.Equal(t, "0.2m", details.ContainerDetailsMap["udf"].TotalCPU)
+	assert.Equal(t, "1.4m", details.TotalCPU)
+	assert.Equal(t, "4.25Mi", details.ContainerDetailsMap["numa"].TotalMemory)
+	assert.Equal(t, "8Mi", details.ContainerDetailsMap["udf"].TotalMemory)
+	assert.Equal(t, "12.25Mi", details.TotalMemory)
+}
+
 func TestCollectPodDetailsKeepsContainerStatusWhenMetricsFail(t *testing.T) {
 	h := handler{metricsClient: &MockMetricsClient{}}
 	pods := []corev1.Pod{{

@@ -806,7 +806,7 @@ function errorsCard(input: VertexHealthInput): HealthCard {
         {
           name: "Container errors",
           value: `${errors} (24h)`,
-          description: "Container errors reported by the Errors API during the last 24 hours.",
+          description: "Container errors during the last 24 hours.",
           available: true,
         },
         {
