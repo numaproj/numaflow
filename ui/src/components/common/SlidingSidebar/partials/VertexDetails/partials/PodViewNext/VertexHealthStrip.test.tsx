@@ -75,7 +75,7 @@ const cards: HealthCard[] = [
       items: [
         {
           name: "Critical runtime errors",
-          value: "3/s",
+          value: "3 / 5m",
           description: "Severe runtime errors that can interrupt message processing.",
           available: true,
         },
@@ -161,7 +161,7 @@ describe("VertexHealthStrip", () => {
     const errors = await screen.findByTestId("vertex-health-breakdown-errors");
     expect(errors).toHaveTextContent("Error diagnostics");
     expect(errors).toHaveTextContent("Critical runtime errors");
-    expect(errors).toHaveTextContent("3/s");
+    expect(errors).toHaveTextContent("3 / 5m");
   });
 
   it("reports each card's inspect target", () => {

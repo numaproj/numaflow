@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import LineChartComponent from "./index";
+import LineChartComponent, { metricSeriesLabels } from "./index";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 
 import "@testing-library/jest-dom";
@@ -68,6 +68,14 @@ const renderChart = (search: string) =>
       </AppContext.Provider>
     </MemoryRouter>
   );
+
+describe("metricSeriesLabels", () => {
+  it("keeps each vertex drop reason on its own line", () => {
+    expect(metricSeriesLabels("vertex", "Vertex Drop Rate")).toEqual(["vertex", "reason"]);
+    expect(metricSeriesLabels("pod", "Vertex Drop Rate")).toEqual(["pod", "reason"]);
+    expect(metricSeriesLabels("vertex", "Vertex Read Processing Rate")).toEqual(["vertex"]);
+  });
+});
 
 describe("LineChart URL restore", () => {
   beforeEach(() => {

@@ -62,7 +62,41 @@ describe("PodsHeatMap", () => {
     expect(screen.getByText("CPU")).toBeVisible();
     expect(container.getElementsByClassName("visx-polygon")[0]).toBeVisible();
     fireEvent.mouseMove(container.getElementsByClassName("visx-polygon")[0]);
+    expect(screen.getByText("50.00%")).toBeVisible();
+    expect(screen.getByText("10.00%")).toBeVisible();
     fireEvent.mouseLeave(container.getElementsByClassName("visx-polygon")[0]);
+  });
+  it("shows n/a instead of a negative percent when usage is missing", () => {
+    mockedFill.mockReturnValue("test");
+    const missingUsage = new Map<string, PodRuntimeInfo>([
+      [
+        pod.name,
+        {
+          name: pod.name,
+          status: "Running",
+          containerDetailsMap: {
+            numa: {
+              state: "Running",
+              restartCount: 0,
+              lastStartedAt: "",
+              requestedCPU: "100m",
+              requestedMemory: "128Mi",
+            },
+          },
+        },
+      ],
+    ]);
+    const { container } = render(
+      <PodsHeatMap
+        pods={pods}
+        selectedPod={pod}
+        podRuntimeByName={missingUsage}
+        onPodClick={onPodClick}
+      />
+    );
+    fireEvent.mouseMove(container.getElementsByClassName("visx-polygon")[0]);
+    expect(screen.getAllByText("n/a").length).toBeGreaterThan(0);
+    expect(screen.queryByText("-1%")).not.toBeInTheDocument();
   });
   it("no heatmap returned", async () => {
     mockedFill.mockReturnValue("test");

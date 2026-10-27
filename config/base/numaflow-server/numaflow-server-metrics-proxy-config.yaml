@@ -315,14 +315,17 @@ data:
                   required: false
         - metric_name: forwarder_drop_total
           display_name: Vertex Drop Rate
-          metric_description: This metric represents the number of messages dropped by a vertex per second.
+          metric_description: This metric represents the number of messages dropped by a vertex per second. The reason label separates duplicate drops from other runtime drops.
           required_filters:
             - namespace
             - pipeline
             - vertex
           dimensions:
             - name: vertex
+              # Keep reason so duplicate drops are not added into other runtime drops.
+              expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension, reason)
             - name: pod
+              expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension, reason)
               filters:
                 - name: pod
                   required: false
@@ -339,9 +342,24 @@ data:
               filters:
                 - name: pod
                   required: false
+
+    - name: vertex_critical_errors
+      objects:
+        - vertex
+      title: Vertex Critical Errors
+      description: Critical runtime errors over the selected duration, such as a forwarder failure or a UDF failure.
+      expr: round(sum(increase($metric_name{$filters}[$duration])) by ($dimension))
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
         - metric_name: forwarder_critical_error_total
-          display_name: Vertex Critical Error Rate
-          metric_description: This metric represents the number of critical errors, such as UDF crashes, per second.
+          display_name: Vertex Critical Errors
+          metric_description: Critical runtime errors during the selected duration, such as a forwarder failure or a UDF failure.
           required_filters:
             - namespace
             - pipeline
@@ -451,9 +469,24 @@ data:
               filters:
                 - name: pod
                   required: false
+
+    - name: mono_vertex_critical_errors
+      objects:
+        - mono-vertex
+      title: MonoVertex Critical Errors
+      description: Critical runtime errors over the selected duration, such as a forwarder failure or a UDF failure.
+      expr: round(sum(increase($metric_name{$filters}[$duration])) by ($dimension))
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
         - metric_name: monovtx_critical_error_total
-          display_name: MonoVertex Critical Error Rate
-          metric_description: This metric represents the number of critical errors, such as UDF crashes, per second.
+          display_name: MonoVertex Critical Errors
+          metric_description: Critical runtime errors during the selected duration, such as a forwarder failure or a UDF failure.
           required_filters:
             - namespace
             - mvtx_name

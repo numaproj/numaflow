@@ -15,6 +15,11 @@ import {
 
 import "./style.css";
 
+/** usagePercentLabel prints request-relative usage. Missing usage stays blank instead of the grey-cell sentinel. */
+function usagePercentLabel(percent?: number): string {
+  return percent == null ? "n/a" : `${percent.toFixed(2)}%`;
+}
+
 export const PodsHeatMap = ({
   pods,
   podRuntimeByName,
@@ -103,21 +108,27 @@ export const PodsHeatMap = ({
   const memData: Hexagon[] = [];
 
   podsHealth.forEach((pod) => {
+    const cpuReported = pod.container.some((container) => container.cpuPercent != null);
+    const memoryReported = pod.container.some(
+      (container) => container.memoryPercent != null
+    );
+    const cpuHealth = cpuReported ? pod.maxCPUPerc : -1;
+    const memoryHealth = memoryReported ? pod.maxMemPerc : -1;
     cpuData.push({
       name: pod.name,
       data: pod,
       type: "cpu",
-      healthPercent: pod.maxCPUPerc,
-      fill: fill(cpuColors, pod.maxCPUPerc, 1, 100),
-      image: imageForStatus(cpuColors, pod.maxCPUPerc, 100),
+      healthPercent: cpuHealth,
+      fill: fill(cpuColors, cpuHealth, 1, 100),
+      image: imageForStatus(cpuColors, cpuHealth, 100),
     });
     memData.push({
       name: pod.name,
       data: pod,
       type: "mem",
-      healthPercent: pod.maxMemPerc,
-      fill: fill(memColors, pod.maxMemPerc, 1, 100),
-      image: imageForStatus(memColors, pod.maxMemPerc, 100),
+      healthPercent: memoryHealth,
+      fill: fill(memColors, memoryHealth, 1, 100),
+      image: imageForStatus(memColors, memoryHealth, 100),
     });
   });
 
@@ -148,32 +159,26 @@ export const PodsHeatMap = ({
                     style={{
                       backgroundColor: fill(
                         cpuColors,
-                        container.cpuPercent || -1,
+                        container.cpuPercent ?? -1,
                         1
                       ),
                       color: "#ffffff",
                     }}
                   >
-                    {container.cpuPercent
-                      ? container.cpuPercent.toFixed(2)
-                      : -1}
-                    %
+                    {usagePercentLabel(container.cpuPercent)}
                   </td>
                   <td
                     className="hexagon-table-td"
                     style={{
                       backgroundColor: fill(
                         memColors,
-                        container.memoryPercent || -1,
+                        container.memoryPercent ?? -1,
                         1
                       ),
                       color: "#ffffff",
                     }}
                   >
-                    {container.memoryPercent
-                      ? container.memoryPercent.toFixed(2)
-                      : -1}
-                    %
+                    {usagePercentLabel(container.memoryPercent)}
                   </td>
                 </tr>
               )

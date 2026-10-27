@@ -57,7 +57,7 @@ describe("useVertexHealthData", () => {
     await waitFor(() => expect(result.current.monoStatus).toEqual({ readyReplicas: 3, desiredReplicas: 3 }));
     await waitFor(() => expect(result.current.series.p99).toEqual([2]));
     const bodies = proxyBodies();
-    expect(bodies).toHaveLength(13);
+    expect(bodies).toHaveLength(10);
     const p99 = bodies.find((body) => body.metric_name === "monovtx_processing_time_bucket");
     expect(p99).toEqual(
       expect.objectContaining({
@@ -88,7 +88,7 @@ describe("useVertexHealthData", () => {
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls).toContain("/api/v1/namespaces/ns/pipelines/p/health");
     expect(urls.some((url) => url.includes("/mono-vertices/"))).toBe(false);
-    await waitFor(() => expect(proxyBodies()).toHaveLength(11));
+    await waitFor(() => expect(proxyBodies()).toHaveLength(8));
     expect(proxyBodies().every((body) => body.filters.pipeline === "p")).toBe(true);
   });
 

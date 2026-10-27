@@ -13,6 +13,7 @@ import {
   WatermarkEdge,
   seriesValues,
   signalQueries,
+  splitDropSeries,
 } from "./goldenSignalsModel";
 
 export const HEALTH_REFRESH_MS = 60_000;
@@ -70,6 +71,39 @@ function useSeries(
   return error ? null : values;
 }
 
+/** useDropRates keeps duplicate drops separate from other runtime drop reasons. */
+function useDropRates(
+  query: SignalQuery | undefined,
+  range: { start: string; end: string },
+  enabled: boolean,
+  isMono: boolean
+): { loss: number[] | null | undefined; duplicate: number[] | null | undefined } {
+  const metricReq = useMemo(
+    () =>
+      query && enabled
+        ? {
+            metric_name: query.metric_name,
+            pattern_name: query.pattern_name,
+            dimension: query.dimension,
+            quantile: query.quantile,
+            duration: query.duration,
+            start_time: range.start,
+            end_time: range.end,
+          }
+        : undefined,
+    [query, enabled, range]
+  );
+  const filters = query && enabled ? query.filters : NO_FILTERS;
+  const { chartData, error } = useMetricsFetch({ metricReq, filters });
+  const split = useMemo(
+    () => (chartData === null ? undefined : splitDropSeries(chartData, isMono)),
+    [chartData, isMono]
+  );
+  if (!metricReq) return { loss: undefined, duplicate: undefined };
+  if (error) return { loss: null, duplicate: null };
+  return { loss: split?.loss, duplicate: split?.duplicate };
+}
+
 async function fetchData<T>(url: string, signal: AbortSignal): Promise<T | undefined> {
   const response = await fetch(url, { signal });
   if (!response.ok) return undefined;
@@ -120,10 +154,7 @@ export function useVertexHealthData({
   const stageSink = useSeries(queries.stageSink, range, fetchMetrics);
   const stageWrite = useSeries(queries.stageWrite, range, fetchMetrics);
   const stageAck = useSeries(queries.stageAck, range, fetchMetrics);
-  const readRate = useSeries(queries.readRate, range, fetchMetrics);
-  const outRate = useSeries(queries.outRate, range, fetchMetrics);
-  const pending = useSeries(queries.pending, range, fetchMetrics);
-  const drops = useSeries(queries.drops, range, fetchMetrics);
+  const dropRates = useDropRates(queries.drops, range, fetchMetrics, isMono);
   const nacks = useSeries(queries.nacks, range, fetchMetrics);
   const fallback = useSeries(queries.fallback, range, fetchMetrics);
   const critical = useSeries(queries.critical, range, fetchMetrics);
@@ -136,10 +167,8 @@ export function useVertexHealthData({
       stageSink,
       stageWrite,
       stageAck,
-      readRate,
-      outRate,
-      pending,
-      drops,
+      drops: dropRates.loss,
+      duplicateDrops: dropRates.duplicate,
       nacks,
       fallback,
       critical,
@@ -152,10 +181,7 @@ export function useVertexHealthData({
       stageSink,
       stageWrite,
       stageAck,
-      readRate,
-      outRate,
-      pending,
-      drops,
+      dropRates,
       nacks,
       fallback,
       critical,

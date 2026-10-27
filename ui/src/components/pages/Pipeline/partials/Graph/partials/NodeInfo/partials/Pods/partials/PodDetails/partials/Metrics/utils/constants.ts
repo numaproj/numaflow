@@ -39,6 +39,7 @@ export const MONO_VERTEX_PENDING_MESSAGES = "MonoVertex Pending Messages";
 
 // Pipeline Counters(rate)
 export const VERTEX_PROCESSING_RATE = "Vertex Read Processing Rate";
+export const VERTEX_DROP_RATE = "Vertex Drop Rate";
 export const UDF_READ_PROCESSING_RATE = "UDF Read Processing Rate";
 export const UDF_WRITE_PROCESSING_RATE = "UDF Write Processing Rate";
 

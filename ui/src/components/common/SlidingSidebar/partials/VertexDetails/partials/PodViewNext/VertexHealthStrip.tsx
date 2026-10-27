@@ -94,7 +94,7 @@ function HealthCardButton({
       <div className="vertex-health-card-value">{card.value}</div>
       <p
         className={`vertex-health-card-detail vertex-health-tone--${card.tone}`}
-        title={card.detail}
+        title={card.breakdown ? undefined : card.detail}
       >
         {card.detail}
       </p>

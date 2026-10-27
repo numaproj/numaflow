@@ -1,4 +1,4 @@
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -17,7 +17,13 @@ import {
   usePodViewState,
 } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
 import { VertexDetailsContext } from "../../index";
-import { buildVertexHealth, isUnhealthyPod, readDaemonRates } from "./goldenSignalsModel";
+import {
+  appendDaemonSample,
+  buildVertexHealth,
+  DaemonSample,
+  isUnhealthyPod,
+  readDaemonRates,
+} from "./goldenSignalsModel";
 import { PodFleet } from "./PodFleet";
 import { buildPodFleetItems, PodFleetFilter } from "./podFleetModel";
 import { PodInspector } from "./PodInspector";
@@ -81,6 +87,25 @@ export function PodViewNext(props: PodViewNextProps) {
     () => buildPodFleetItems(pods, podRuntimeByName),
     [pods, podRuntimeByName]
   );
+  const daemon = useMemo(
+    () => readDaemonRates(vertexMetrics, type, vertexId),
+    [vertexMetrics, type, vertexId]
+  );
+  const vertexKey = `${namespaceId}:${pipelineId}:${vertexId}:${type}`;
+  const [daemonHistory, setDaemonHistory] = useState<DaemonSample[]>([]);
+  useEffect(() => {
+    if (!active) return;
+    setDaemonHistory((history) => {
+      const sameVertex = history.length === 0 || history[0]?.vertexKey === vertexKey;
+      const current = sameVertex ? history : [];
+      const next = appendDaemonSample(
+        current,
+        { at: now, vertexKey, rate1m: daemon.rate1m, pending: daemon.pending },
+        now
+      );
+      return next === current ? history : next;
+    });
+  }, [active, daemon.pending, daemon.rate1m, now, vertexKey]);
   const vertexHealth = useMemo(
     () =>
       buildVertexHealth({
@@ -88,7 +113,8 @@ export function PodViewNext(props: PodViewNextProps) {
         vertexId,
         metricsEnabled,
         now,
-        daemon: readDaemonRates(vertexMetrics, type, vertexId),
+        daemon,
+        daemonHistory,
         series,
         queries,
         buffers,
@@ -101,6 +127,8 @@ export function PodViewNext(props: PodViewNextProps) {
       }),
     [
       buffers,
+      daemon,
+      daemonHistory,
       fleetItems,
       health,
       metricsEnabled,
@@ -111,7 +139,6 @@ export function PodViewNext(props: PodViewNextProps) {
       series,
       type,
       vertexId,
-      vertexMetrics,
       vertexSpec,
       watermarkEdges,
     ]

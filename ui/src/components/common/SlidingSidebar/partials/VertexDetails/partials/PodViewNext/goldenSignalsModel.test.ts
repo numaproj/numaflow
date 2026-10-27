@@ -6,8 +6,11 @@ import {
   formatCompact,
   formatDrain,
   formatMicros,
+  appendDaemonSample,
+  daemonSeries,
   readDaemonRates,
   seriesValues,
+  splitDropSeries,
   signalQueries,
   slowestStage,
   toSparkline,
@@ -43,6 +46,7 @@ function input(overrides: Partial<VertexHealthInput> = {}): VertexHealthInput {
     series: {
       p99: [1000, 1000, 1000],
       drops: [],
+      duplicateDrops: [],
       nacks: [],
       fallback: [],
       critical: [],
@@ -69,16 +73,30 @@ describe("signalQueries", () => {
         filters: { namespace: "ns", mvtx_name: "mv" },
       })
     );
-    expect(queries.pending?.filters).toEqual({ namespace: "ns", mvtx_name: "mv", period: "default" });
+    expect(queries.drops?.metric_name).toBe("monovtx_dropped_total");
     expect(queries.fallback?.metric_name).toBe("monovtx_fallback_sink_write_total");
+    expect(queries.critical).toEqual(
+      expect.objectContaining({
+        pattern_name: "mono_vertex_critical_errors",
+        metric_name: "monovtx_critical_error_total",
+        duration: "5m",
+      })
+    );
     expect(queries.stageWrite).toBeUndefined();
   });
 
   it("uses pipeline vertex patterns without fallback or transformer stages", () => {
     const queries = signalQueries(pipelineIds);
     expect(queries.p99?.pattern_name).toBe("vertex_histogram");
-    expect(queries.readRate?.metric_name).toBe("forwarder_data_read_total");
+    expect(queries.drops?.metric_name).toBe("forwarder_drop_total");
     expect(queries.drops?.filters).toEqual({ namespace: "ns", pipeline: "p", vertex: "cat" });
+    expect(queries.critical).toEqual(
+      expect.objectContaining({
+        pattern_name: "vertex_critical_errors",
+        metric_name: "forwarder_critical_error_total",
+        duration: "5m",
+      })
+    );
     expect(queries.fallback).toBeUndefined();
     expect(queries.stageTransformer).toBeUndefined();
   });
@@ -94,6 +112,22 @@ describe("series math and formatting", () => {
     ).toEqual([5, 1]);
     expect(seriesValues(null)).toBeNull();
     expect(seriesValues([])).toEqual([]);
+  });
+
+  it("keeps duplicate drops out of the loss series", () => {
+    expect(
+      splitDropSeries(
+        [
+          { metric: { reason: "duplicate" }, values: [[1, "1"], [2, "2"]] },
+          { metric: { reason: "buffer full" }, values: [[1, "3"], [2, "4"]] },
+          { metric: { reason: "duplicate" }, values: [[1, "1"]] },
+        ],
+        false
+      )
+    ).toEqual({ loss: [3, 4], duplicate: [2, 2] });
+    expect(
+      splitDropSeries([{ metric: { mvtx_name: "mv" }, values: [[1, "4"]] }], true)
+    ).toEqual({ loss: [], duplicate: [4] });
   });
 
   it("compares the latest point with the earlier average", () => {
@@ -175,6 +209,28 @@ describe("derived signals", () => {
       )
     ).toEqual(expect.objectContaining({ rate1m: 4, pending: 6 }));
   });
+
+  it("keeps a 30 minute daemon history and ignores an empty snapshot", () => {
+    const now = 40 * 60_000;
+    const kept = appendDaemonSample(
+      [
+        { at: now - 31 * 60_000, rate1m: 1 },
+        { at: now - 60_000, rate1m: 4, pending: 2 },
+      ],
+      { at: now, rate1m: 5, pending: 3 },
+      now
+    );
+    expect(kept.map((sample) => sample.rate1m)).toEqual([4, 5]);
+    expect(daemonSeries(kept, "pending")).toEqual([2, 3]);
+    expect(appendDaemonSample(kept, { at: now }, now)).toEqual([
+      { at: now - 60_000, rate1m: 4, pending: 2 },
+    ]);
+    const stable = [{ at: now - 1000, rate1m: 1 }];
+    expect(appendDaemonSample(stable, { at: now }, now)).toBe(stable);
+    expect(appendDaemonSample([{ at: now, rate1m: 1 }], { at: now, rate1m: 9 }, now)).toEqual([
+      { at: now, rate1m: 9 },
+    ]);
+  });
 });
 
 describe("buildVertexHealth", () => {
@@ -187,8 +243,8 @@ describe("buildVertexHealth", () => {
           p99: [1000, 1000, 1000],
           stageRead: [10],
           stageSink: [900],
-          outRate: [14.8],
           drops: [],
+          duplicateDrops: [],
           nacks: [],
           fallback: [],
           critical: [],
@@ -210,7 +266,7 @@ describe("buildVertexHealth", () => {
       })
     );
     expect(card(health, "traffic")).toEqual(
-      expect.objectContaining({ value: "15 msg/s", detail: "5m avg 15 · 15m avg 15 · out 15/s" })
+      expect.objectContaining({ value: "15 msg/s", detail: "5m avg 15 · 15m avg 15" })
     );
     expect(card(health, "backlog").value).toBe("No backlog");
     expect(card(health, "loss")).toEqual(
@@ -253,6 +309,22 @@ describe("buildVertexHealth", () => {
     expect(idle).toEqual(expect.objectContaining({ value: "Idle", tone: "neutral" }));
     const slowing = card(buildVertexHealth(input({ daemon: { rate1m: 4, rate15m: 10 } })), "traffic");
     expect(slowing.tone).toBe("warn");
+    const history = [
+      { at: 1, rate1m: 10 },
+      { at: 2, rate1m: 20 },
+    ];
+    const traced = card(
+      buildVertexHealth(
+        input({
+          metricsEnabled: false,
+          daemonHistory: history,
+          series: { readRate: [1, 2, 3] } as VertexHealthInput["series"],
+        })
+      ),
+      "traffic"
+    );
+    expect(traced.sparkline).toEqual(toSparkline(daemonSeries(history, "rate1m")));
+    expect(traced.detail).toBe("5m avg 15 · 15m avg 15");
   });
 
   it("measures buffer fullness against the usage limit", () => {
@@ -286,9 +358,28 @@ describe("buildVertexHealth", () => {
     expect(backlog({ daemon: { rate1m: 15 } })).toEqual(
       expect.objectContaining({ value: "Pending not reported", tone: "neutral" })
     );
-    expect(backlog({ daemon: { rate1m: 1, pending: 3 }, series: { pending: [1, 1, 3] } }).detail).toBe(
-      "3 pending · ↑200% / 30m"
-    );
+    expect(
+      backlog({
+        daemon: { rate1m: 1, pending: 3 },
+        daemonHistory: [
+          { at: 1, pending: 1 },
+          { at: 2, pending: 1 },
+          { at: 3, pending: 3 },
+        ],
+        series: {},
+      }).detail
+    ).toBe("3 pending · ↑200% vs 30m avg");
+    expect(
+      backlog({
+        daemon: { rate1m: 1, pending: 3 },
+        daemonHistory: [
+          { at: 1, pending: 1 },
+          { at: 2, pending: 1 },
+          { at: 3, pending: 3 },
+        ],
+        series: {},
+      }).breakdown?.items.find((item) => item.name === "Pending change")?.description
+    ).toContain("last 30 minutes");
 
     const buffer = {
       bufferName: "b",
@@ -314,11 +405,16 @@ describe("buildVertexHealth", () => {
     expect(withBuffer).toEqual(
       expect.objectContaining({
         value: "<1 min to drain",
-        detail: "3 pending · buffer 15% full · WM lag 2.1 s",
+        detail: "3 pending · buffer 15% full · watermark lag 2.1 s",
         tone: "ok",
         inspect: { kind: "tab", tab: "buffers" },
       })
     );
+    expect(withBuffer.breakdown?.items.map((item) => item.name)).toEqual([
+      "Pending messages",
+      "Buffer fullness",
+      "Watermark lag",
+    ]);
     expect(backlog({ ...pipeline, daemon: { rate1m: 10 }, buffers: [buffer] })).toEqual(
       expect.objectContaining({ value: "buffer 15% full", detail: "Source does not report pending messages" })
     );
@@ -338,19 +434,46 @@ describe("buildVertexHealth", () => {
     ).toBe("critical");
   });
 
-  it("marks drops critical and nacks or fallback writes warn", () => {
+  it("marks non-duplicate drops critical and duplicate, nack, or fallback writes warn", () => {
     const loss = (series: VertexHealthInput["series"]) =>
-      card(buildVertexHealth(input({ series: { p99: [1], ...series } })), "loss");
-    expect(loss({ drops: [0, 2.5], nacks: [], fallback: [], critical: [] })).toEqual(
-      expect.objectContaining({ value: "2.5 drops/s", tone: "critical" })
+      card(
+        buildVertexHealth(
+          input({ type: "udf", queries: signalQueries(pipelineIds), series: { p99: [1], ...series } })
+        ),
+        "loss"
+      );
+    const mixed = loss({
+      drops: [0, 2.5],
+      duplicateDrops: [1],
+      nacks: [],
+      fallback: [],
+      critical: [],
+    });
+    expect(mixed).toEqual(expect.objectContaining({ value: "2.5 drops/s", tone: "critical" }));
+    expect(mixed.breakdown?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Duplicate-message drops", value: "1/s" }),
+        expect.objectContaining({ name: "Other runtime drops", value: "2.5/s" }),
+      ])
     );
-    expect(loss({ drops: [], nacks: [], fallback: [], critical: [1] }).tone).toBe("ok");
-    expect(loss({ drops: [], nacks: [0.2], fallback: [], critical: [] }).tone).toBe("warn");
-    expect(loss({ drops: [], nacks: [], fallback: [1.4], critical: [] }).tone).toBe("warn");
-    expect(loss({ drops: [], nacks: [], fallback: [], critical: [] }).sparkline).toEqual(
+    expect(
+      loss({ drops: [], duplicateDrops: [2], nacks: [], fallback: [], critical: [] })
+    ).toEqual(expect.objectContaining({ value: "2 duplicate drops/s", tone: "warn" }));
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: [], critical: [1] }).tone).toBe(
+      "ok"
+    );
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [0.2], fallback: [], critical: [] }).tone).toBe(
+      "warn"
+    );
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: [1.4], critical: [] }).tone).toBe(
+      "warn"
+    );
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: [], critical: [] }).sparkline).toEqual(
       Array(8).fill(8)
     );
-    expect(loss({ drops: null, nacks: null, fallback: null }).value).toBe("No data");
+    expect(loss({ drops: null, duplicateDrops: null, nacks: null, fallback: null }).value).toBe(
+      "No data"
+    );
     expect(loss({}).value).toBe("Loading…");
   });
 
@@ -358,20 +481,20 @@ describe("buildVertexHealth", () => {
     const loss = (series: VertexHealthInput["series"]) =>
       card(buildVertexHealth(input({ series: { p99: [1], ...series } })), "loss");
 
-    expect(loss({ drops: [], nacks: undefined, fallback: [] })).toEqual(
+    expect(loss({ drops: [], duplicateDrops: [], nacks: undefined, fallback: [] })).toEqual(
       expect.objectContaining({ value: "Loading…", tone: "neutral" })
     );
-    expect(loss({ drops: [], nacks: null, fallback: [] })).toEqual(
+    expect(loss({ drops: [], duplicateDrops: [], nacks: null, fallback: [] })).toEqual(
       expect.objectContaining({
         value: "Outcome metrics unavailable",
         detail: expect.stringContaining("1 outcome metrics unavailable"),
         tone: "neutral",
       })
     );
-    expect(loss({ drops: [], nacks: [], fallback: null })).toEqual(
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: null })).toEqual(
       expect.objectContaining({ value: "Outcome metrics unavailable", tone: "neutral" })
     );
-    expect(loss({ drops: [2], nacks: null, fallback: [] })).toEqual(
+    expect(loss({ drops: [2], duplicateDrops: [], nacks: null, fallback: [] })).toEqual(
       expect.objectContaining({ value: "2 drops/s", tone: "critical" })
     );
   });
@@ -380,7 +503,8 @@ describe("buildVertexHealth", () => {
     const health = buildVertexHealth(
       input({
         series: {
-          drops: [1],
+          drops: [],
+          duplicateDrops: [1],
           nacks: [2],
           fallback: [3],
           critical: [4],
@@ -424,19 +548,21 @@ describe("buildVertexHealth", () => {
     );
     expect(errors({ series: { critical: [2] } })).toEqual(
       expect.objectContaining({
-        value: "2 critical errors/s",
+        value: "2 critical errors / 5m",
         tone: "critical",
         inspect: expect.objectContaining({
           kind: "metrics",
           metric: "monovtx_critical_error_total",
+          presets: { duration: "5m" },
         }),
       })
     );
+    expect(errors({ series: { critical: [1.2] } }).value).toBe("1 critical error / 5m");
     expect(
       errors({ series: { critical: [2] } }).breakdown?.items
     ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "Critical runtime errors", value: "2/s" }),
+        expect.objectContaining({ name: "Critical runtime errors", value: "2 / 5m" }),
       ])
     );
   });

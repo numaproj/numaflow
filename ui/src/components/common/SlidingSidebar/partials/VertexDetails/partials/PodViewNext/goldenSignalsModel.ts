@@ -18,9 +18,6 @@ export const SIGNAL_QUERY_KEYS = [
   "stageSink",
   "stageWrite",
   "stageAck",
-  "readRate",
-  "outRate",
-  "pending",
   "drops",
   "nacks",
   "fallback",
@@ -41,7 +38,16 @@ export interface SignalQuery {
 export type SignalQueries = Partial<Record<SignalQueryKey, SignalQuery>>;
 
 /** SignalSeries holds one value per step; `null` means the request failed, `[]` means no samples. */
-export type SignalSeries = Partial<Record<SignalQueryKey, number[] | null>>;
+export type SignalSeries = Partial<Record<SignalQueryKey, number[] | null>> & {
+  /** Drops labeled reason="duplicate". MonoVertex has no reason label; its drop counter is stored here. */
+  duplicateDrops?: number[] | null;
+};
+
+/** Pipeline drop counter reason for source messages discarded as duplicates. */
+export const DUPLICATE_DROP_REASON = "duplicate";
+
+/** Critical runtime errors are rare, so the card counts them over this trailing window. */
+export const CRITICAL_ERROR_WINDOW = "5m";
 
 const STAGE_LABELS: Partial<Record<SignalQueryKey, string>> = {
   stageRead: "read",
@@ -86,13 +92,13 @@ export function signalQueries({
     duration: "1m",
     filters,
   });
-  const pending: SignalQuery = {
-    metric_name: isMono ? "monovtx_pending" : "vertex_pending_messages",
-    pattern_name: isMono ? "mono_vertex_gauge" : "vertex_gauge",
+  const criticalErrors = (metric_name: string): SignalQuery => ({
+    metric_name,
+    pattern_name: isMono ? "mono_vertex_critical_errors" : "vertex_critical_errors",
     dimension,
-    filters: { ...filters, period: "default" },
-  };
-
+    duration: CRITICAL_ERROR_WINDOW,
+    filters,
+  });
   if (isMono) {
     return {
       p99: histogram("monovtx_processing_time_bucket"),
@@ -101,13 +107,10 @@ export function signalQueries({
       stageUdf: histogram("monovtx_udf_time_bucket"),
       stageSink: histogram("monovtx_sink_time_bucket"),
       stageAck: histogram("monovtx_ack_time_bucket"),
-      readRate: rate("monovtx_read_total"),
-      outRate: rate("monovtx_sink_write_total"),
-      pending,
       drops: rate("monovtx_dropped_total"),
       nacks: rate("monovtx_nack_total"),
       fallback: rate("monovtx_fallback_sink_write_total"),
-      critical: rate("monovtx_critical_error_total"),
+      critical: criticalErrors("monovtx_critical_error_total"),
     };
   }
   return {
@@ -116,16 +119,37 @@ export function signalQueries({
     stageUdf: histogram("forwarder_udf_processing_time_bucket"),
     stageWrite: histogram("forwarder_write_processing_time_bucket"),
     stageAck: histogram("forwarder_ack_processing_time_bucket"),
-    readRate: rate("forwarder_data_read_total"),
-    outRate: rate("forwarder_write_total"),
-    pending,
     drops: rate("forwarder_drop_total"),
     nacks: rate("forwarder_nack_total"),
-    critical: rate("forwarder_critical_error_total"),
+    critical: criticalErrors("forwarder_critical_error_total"),
   };
 }
 
-/** seriesValues sums all returned series per timestamp, so per-reason or per-partition series collapse to one line. */
+/**
+ * splitDropSeries keeps duplicate drops out of the loss rate.
+ * MonoVertex dropped_total has no reason label and counts only duplicate source messages.
+ * A pipeline query grouped by reason returns one series per reason.
+ */
+export function splitDropSeries(
+  chartData: any[] | null | undefined,
+  isMono: boolean
+): { loss: number[]; duplicate: number[] } {
+  if (isMono) {
+    return { loss: [], duplicate: seriesValues(chartData) ?? [] };
+  }
+  const duplicateSeries: any[] = [];
+  const lossSeries: any[] = [];
+  (chartData || []).forEach((series) => {
+    if (series?.metric?.reason === DUPLICATE_DROP_REASON) duplicateSeries.push(series);
+    else lossSeries.push(series);
+  });
+  return {
+    loss: seriesValues(lossSeries) ?? [],
+    duplicate: seriesValues(duplicateSeries) ?? [],
+  };
+}
+
+/** seriesValues sums all returned series per timestamp, so per-partition series collapse to one line. */
 export function seriesValues(chartData: any[] | null | undefined): number[] | null {
   if (!chartData) return null;
   const byTimestamp = new Map<number, number>();
@@ -267,6 +291,45 @@ export interface DaemonRates {
   pending?: number;
 }
 
+/** One daemon snapshot. Traffic and backlog history are built only from these. */
+export interface DaemonSample {
+  at: number;
+  vertexKey?: string;
+  rate1m?: number;
+  pending?: number;
+}
+
+export const DAEMON_HISTORY_WINDOW_MS = 30 * 60_000;
+
+/** appendDaemonSample keeps at most one snapshot per timestamp inside the trailing window. */
+export function appendDaemonSample(
+  history: DaemonSample[],
+  sample: DaemonSample,
+  now: number,
+  windowMs = DAEMON_HISTORY_WINDOW_MS
+): DaemonSample[] {
+  const cutoff = now - windowMs;
+  const recent = history.filter((entry) => entry.at >= cutoff && entry.at !== sample.at);
+  const next =
+    sample.rate1m === undefined && sample.pending === undefined
+      ? recent
+      : [...recent, sample].sort((left, right) => left.at - right.at);
+  if (next.length === history.length && next.every((entry, index) => entry === history[index])) {
+    return history;
+  }
+  return next;
+}
+
+/** daemonSeries is the recorded daemon field, with unreported samples left out. */
+export function daemonSeries(
+  history: DaemonSample[] | undefined,
+  field: "rate1m" | "pending"
+): number[] {
+  return (history || [])
+    .map((entry) => entry[field])
+    .filter((value): value is number => value !== undefined);
+}
+
 function sumDefined(values: (number | undefined)[]): number | undefined {
   const known = values.filter((value): value is number => value !== undefined);
   return known.length ? known.reduce((sum, value) => sum + value, 0) : undefined;
@@ -313,6 +376,8 @@ export interface VertexHealthInput {
   metricsEnabled: boolean;
   now: number;
   daemon: DaemonRates;
+  /** Daemon snapshots recorded by the strip. Sparklines and the backlog trend read this, not Prometheus. */
+  daemonHistory?: DaemonSample[];
   series: SignalSeries;
   queries: SignalQueries;
   buffers?: BufferInfo[];
@@ -390,7 +455,8 @@ function latencyCard(input: VertexHealthInput): HealthCard {
 function trafficCard(input: VertexHealthInput): HealthCard {
   const base = { id: "traffic" as const, title: "Traffic" };
   const { rate1m, rate5m, rate15m, pending } = input.daemon;
-  const sparkline = input.metricsEnabled ? toSparkline(input.series.readRate) : undefined;
+  const rateHistory = daemonSeries(input.daemonHistory, "rate1m");
+  const sparkline = rateHistory.length > 1 ? toSparkline(rateHistory) : undefined;
   const inspect: InspectTarget = { kind: "tab", tab: "processingRates" };
   if (rate1m === undefined) {
     return {
@@ -402,11 +468,9 @@ function trafficCard(input: VertexHealthInput): HealthCard {
       inspect,
     };
   }
-  const out = input.metricsEnabled ? latest(input.series.outRate) : undefined;
   const averages = [
     rate5m !== undefined ? `5m avg ${formatCompact(rate5m)}` : undefined,
     rate15m !== undefined ? `15m avg ${formatCompact(rate15m)}` : undefined,
-    out !== undefined ? `out ${formatCompact(out)}/s` : undefined,
   ];
   if (rate1m === 0 && pending !== undefined && pending > 0) {
     return {
@@ -457,14 +521,10 @@ function backlogCard(input: VertexHealthInput): HealthCard {
   );
   const percentFull = fullest ? bufferPercentFull(fullest) : undefined;
   const lag = watermarkLag(input.watermarkEdges, input.vertexId, input.now);
-  const pendingSeries = input.metricsEnabled ? input.series.pending : undefined;
-  const trend = trendVsAverage(pendingSeries);
+  const pendingSeries = daemonSeries(input.daemonHistory, "pending");
+  const trend = pendingSeries.length > 1 ? trendVsAverage(pendingSeries) : undefined;
   const drain = drainTime(pending, rate1m);
-  const inspect: InspectTarget | undefined = buffers.length
-    ? { kind: "tab", tab: "buffers" }
-    : input.metricsEnabled
-    ? metricsTarget(input.queries, "pending")
-    : undefined;
+  const inspect: InspectTarget | undefined = buffers.length ? { kind: "tab", tab: "buffers" } : undefined;
 
   let value: string;
   if (pending === undefined) {
@@ -477,14 +537,50 @@ function backlogCard(input: VertexHealthInput): HealthCard {
     value = `${formatDrain(drain as number)} to drain`;
   }
 
+  const trendLabel = formatTrend(trend, "vs 30m avg");
   const detail = [
     pending !== undefined ? `${formatCompact(pending)} pending` : undefined,
-    formatTrend(trend, "/ 30m"),
+    trendLabel,
     percentFull !== undefined && pending !== undefined ? `buffer ${percentFull}% full` : undefined,
-    lag !== undefined ? `WM lag ${formatElapsed(lag)}` : undefined,
+    lag !== undefined ? `watermark lag ${formatElapsed(lag)}` : undefined,
   ]
     .filter(Boolean)
     .join(" · ");
+  const breakdownItems = [
+    pending !== undefined
+      ? {
+          name: "Pending messages",
+          value: formatCompact(pending),
+          description: "Messages waiting to be processed, reported by the vertex daemon.",
+          available: true,
+        }
+      : undefined,
+    trendLabel
+      ? {
+          name: "Pending change",
+          value: trendLabel,
+          description:
+            "Latest pending count compared with the average of earlier samples from the last 30 minutes.",
+          available: true,
+        }
+      : undefined,
+    percentFull !== undefined && pending !== undefined
+      ? {
+          name: "Buffer fullness",
+          value: `${percentFull}%`,
+          description: "Fullest buffer compared with its usage limit. 100% means writers are blocked.",
+          available: true,
+        }
+      : undefined,
+    lag !== undefined
+      ? {
+          name: "Watermark lag",
+          value: formatElapsed(lag),
+          description: "How far the newest watermark is behind the current time.",
+          available: true,
+        }
+      : undefined,
+  ].filter((item): item is NonNullable<typeof item> => item !== undefined);
 
   const atLimit = !!fullest && (fullest.isFull || fullest.bufferUsage >= fullest.bufferUsageLimit);
   const nearLimit = !!fullest && fullest.bufferUsage >= fullest.bufferUsageLimit * 0.75;
@@ -508,8 +604,11 @@ function backlogCard(input: VertexHealthInput): HealthCard {
     ...base,
     value,
     detail: detail || "Source does not report pending messages",
+    breakdown: breakdownItems.length
+      ? { title: "Backlog", items: breakdownItems }
+      : undefined,
     tone,
-    sparkline: toSparkline(pendingSeries),
+    sparkline: pendingSeries.length > 1 ? toSparkline(pendingSeries) : undefined,
     inspect,
   };
 }
@@ -520,7 +619,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
     return { ...base, value: UNAVAILABLE, detail: UNAVAILABLE_DETAIL, tone: "neutral" };
   }
   const isMono = input.type === MONO_VERTEX;
-  const { drops, nacks, fallback } = input.series;
+  const { drops, duplicateDrops, nacks, fallback } = input.series;
   const inspect = metricsTarget(input.queries, "drops");
   const requestedKeys = [
     "drops",
@@ -528,10 +627,10 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ...(isMono ? ["fallback" as const] : []),
   ] as SignalQueryKey[];
   const requested = requestedKeys.map((key) => input.series[key]);
-  if (requested.some((series) => series === undefined)) {
+  if (requested.some((series) => series === undefined) || duplicateDrops === undefined) {
     return { ...base, value: LOADING, detail: "Fetching message outcome rates", tone: "neutral", inspect };
   }
-  if (requested.every((series) => series === null)) {
+  if (requested.every((series) => series === null) && duplicateDrops === null) {
     return {
       ...base,
       value: "No data",
@@ -542,42 +641,53 @@ function lossCard(input: VertexHealthInput): HealthCard {
   }
   const rate = (series: number[] | null | undefined) =>
     Array.isArray(series) ? latest(series) ?? 0 : 0;
-  const dropRate = rate(drops);
+  const lossRate = rate(drops);
+  const duplicateRate = rate(duplicateDrops);
   const nackRate = rate(nacks);
   const fallbackRate = rate(fallback);
-  const partiallyUnavailable = requested.some((series) => series === null);
-  const outcomes = [
+  const partiallyUnavailable =
+    requested.some((series) => series === null) || duplicateDrops === null;
+  const outcomeSeries = [
     {
-      key: "drops" as const,
-      name: isMono ? "Duplicate-message drops" : "Other runtime drops",
+      name: "Duplicate-message drops",
       description: isMono
-        ? "Duplicate source messages discarded by MonoVertex."
-        : "Messages discarded by vertex runtime paths, such as a full buffer, unmatched forwarding rule, duplicate, write failure, or exhausted sink handling.",
+        ? "Duplicate source messages discarded by MonoVertex. A duplicate drop is not message loss."
+        : "Source messages discarded because they were already seen. A duplicate drop is not message loss.",
+      series: duplicateDrops,
     },
+    ...(!isMono
+      ? [
+          {
+            name: "Other runtime drops",
+            description:
+              "Messages discarded by vertex runtime paths other than duplicates, such as a full buffer, an unmatched forwarding rule, a write failure, or exhausted sink handling.",
+            series: drops,
+          },
+        ]
+      : []),
     {
-      key: "nacks" as const,
       name: "Nacks / redeliveries",
-      description: "Messages negatively acknowledged for redelivery. A nack is a retry signal, not a confirmed message drop.",
+      description:
+        "Messages negatively acknowledged for redelivery. A nack is a retry signal, not a confirmed message drop.",
+      series: nacks,
     },
     ...(isMono
       ? [
           {
-            key: "fallback" as const,
             name: "Fallback deliveries",
             description:
               "Messages delivered to the configured fallback sink or DLQ instead of the primary sink; this is alternate delivery, not loss.",
+            series: fallback,
           },
         ]
       : []),
-  ].map(({ key, name, description }) => {
-    const series = input.series[key];
-    return {
-      name,
-      value: series === null ? "Unavailable" : `${formatCompact(rate(series))}/s`,
-      description,
-      available: series !== null,
-    };
-  });
+  ];
+  const outcomes = outcomeSeries.map(({ name, description, series }) => ({
+    name,
+    value: series === null ? "Unavailable" : `${formatCompact(rate(series))}/s`,
+    description,
+    available: series !== null,
+  }));
   const activeOutcomes = outcomes.filter((outcome) => outcome.available && outcome.value !== "0/s").length;
   const unavailableOutcomes = outcomes.filter((outcome) => !outcome.available).length;
   const detail = unavailableOutcomes
@@ -586,25 +696,29 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ? `${activeOutcomes} active outcome ${activeOutcomes === 1 ? "type" : "types"} · hover for details`
     : "No active outcomes · hover for details";
   const tone: SignalTone =
-    dropRate > 0
+    lossRate > 0
       ? "critical"
-      : nackRate > 0 || fallbackRate > 0
+      : duplicateRate > 0 || nackRate > 0 || fallbackRate > 0
       ? "warn"
       : partiallyUnavailable
       ? "neutral"
       : "ok";
+  const headlineSeries = lossRate > 0 ? drops : duplicateRate > 0 ? duplicateDrops : drops;
   return {
     ...base,
-    value: dropRate > 0
-      ? `${formatCompact(dropRate)} drops/s`
-      : partiallyUnavailable
-      ? "Outcome metrics unavailable"
-      : "No drops",
+    value:
+      lossRate > 0
+        ? `${formatCompact(lossRate)} drops/s`
+        : duplicateRate > 0
+        ? `${formatCompact(duplicateRate)} duplicate drops/s`
+        : partiallyUnavailable
+        ? "Outcome metrics unavailable"
+        : "No drops",
     detail,
     tone,
     breakdown: { title: "Message outcomes", items: outcomes },
-    // Runtime drop counters only appear after the first drop, so no samples mean a flat zero line.
-    sparkline: toSparkline(drops && !drops.length ? [0] : drops),
+    // Drop counters only appear after the first drop, so no samples mean a flat zero line.
+    sparkline: toSparkline(headlineSeries && !headlineSeries.length ? [0] : headlineSeries),
     inspect,
   };
 }
@@ -621,18 +735,22 @@ function errorsCard(input: VertexHealthInput): HealthCard {
   const restarts = items.reduce((sum, item) => sum + item.restartCount, 0);
   const errors = input.recentErrorCount || 0;
   const criticalSeries = input.series.critical;
-  const criticalRate = Array.isArray(criticalSeries) ? latest(criticalSeries) ?? 0 : 0;
+  const criticalCount = Array.isArray(criticalSeries)
+    ? Math.round(latest(criticalSeries) ?? 0)
+    : 0;
   const criticalMetricValue = !input.metricsEnabled
     ? UNAVAILABLE
     : criticalSeries === undefined
     ? LOADING
     : criticalSeries === null
     ? "Unavailable"
-    : `${formatCompact(criticalRate)}/s`;
+    : `${formatCompact(criticalCount)} / ${CRITICAL_ERROR_WINDOW}`;
   const value = unhealthy
     ? `${unhealthy} unhealthy ${unhealthy === 1 ? "pod" : "pods"}`
-    : criticalRate > 0
-    ? `${formatCompact(criticalRate)} critical errors/s`
+    : criticalCount > 0
+    ? `${formatCompact(criticalCount)} critical ${
+        criticalCount === 1 ? "error" : "errors"
+      } / ${CRITICAL_ERROR_WINDOW}`
     : !items.length
     ? "No pods"
     : `All ${items.length} ${items.length === 1 ? "pod" : "pods"} healthy`;
@@ -641,15 +759,15 @@ function errorsCard(input: VertexHealthInput): HealthCard {
   } (24h)`;
   const inspect = unhealthy
     ? ({ kind: "critical-pods" } as const)
-    : criticalRate > 0
-    ? metricsTarget(input.queries, "critical")
+    : criticalCount > 0
+    ? metricsTarget(input.queries, "critical", { duration: CRITICAL_ERROR_WINDOW })
     : ({ kind: "tab", tab: "errors" } as const);
   return {
     ...base,
     value,
     detail,
     tone:
-      unhealthy || criticalRate > 0
+      unhealthy || criticalCount > 0
         ? "critical"
         : restarts || errors
         ? "warn"
@@ -680,7 +798,7 @@ function errorsCard(input: VertexHealthInput): HealthCard {
         {
           name: "Critical runtime errors",
           value: criticalMetricValue,
-          description: "Severe runtime errors that can interrupt message processing.",
+          description: `Critical runtime errors in the last ${CRITICAL_ERROR_WINDOW}, such as a forwarder failure or a UDF failure.`,
           available: input.metricsEnabled && criticalSeries !== null,
         },
       ],

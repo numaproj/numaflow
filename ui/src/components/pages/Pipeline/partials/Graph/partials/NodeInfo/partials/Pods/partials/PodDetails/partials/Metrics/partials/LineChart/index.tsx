@@ -38,6 +38,7 @@ import {
   UDF_PROCESSING_TIME_LATENCY,
   VERTEX_ACK_PROCESSING_TIME_LATENCY,
   VERTEX_PENDING_MESSAGES,
+  VERTEX_DROP_RATE,
   VERTEX_READ_PROCESSING_TIME_LATENCY,
   VERTEX_WRITE_PROCESSING_TIME_LATENCY,
   VERTEX_PROCESSING_TIME_LATENCY,
@@ -257,6 +258,30 @@ const getTickFormatter = (displayName: string) => {
     return getDefaultFormatter(value, displayName);
   };
 };
+
+/** metricSeriesLabels names the Prometheus labels that become one chart line. */
+export function metricSeriesLabels(dimension: string, displayName: string): string[] {
+  switch (displayName) {
+    case POD_CPU_UTILIZATION:
+    case POD_MEMORY_UTILIZATION:
+      return ["pod"];
+    case CONTAINER_CPU_UTILIZATION:
+    case CONTAINER_MEMORY_UTILIZATION:
+      return ["container"];
+    case VERTEX_PENDING_MESSAGES:
+    case MONO_VERTEX_PENDING_MESSAGES:
+      return dimension === "pod" ? ["pod", "period"] : ["period"];
+    case VERTEX_DROP_RATE:
+      // The drop query is grouped by reason, so each reason keeps its own line.
+      return [dimension, "reason"];
+  }
+  switch (dimension) {
+    case "mono-vertex":
+      return ["mvtx_name"];
+    default:
+      return [dimension];
+  }
+}
 
 interface LineChartComponentProps {
   namespaceId: string;
@@ -501,25 +526,10 @@ const LineChartComponent = ({
     }
   }, [error, addError]);
 
-  const groupByLabel = useCallback((dimension: string, displayName: string) => {
-    switch (displayName) {
-      case POD_CPU_UTILIZATION:
-      case POD_MEMORY_UTILIZATION:
-        return ["pod"];
-      case CONTAINER_CPU_UTILIZATION:
-      case CONTAINER_MEMORY_UTILIZATION:
-        return ["container"];
-      case VERTEX_PENDING_MESSAGES:
-      case MONO_VERTEX_PENDING_MESSAGES:
-        return dimension === "pod" ? ["pod", "period"] : ["period"];
-    }
-    switch (dimension) {
-      case "mono-vertex":
-        return ["mvtx_name"];
-      default:
-        return [dimension];
-    }
-  }, []);
+  const groupByLabel = useCallback(
+    (dimension: string, displayName: string) => metricSeriesLabels(dimension, displayName),
+    []
+  );
 
   const formatTime = (timestamp: number): string => {
     const date = new Date(timestamp * 1000);
