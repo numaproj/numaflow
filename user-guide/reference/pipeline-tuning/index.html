@@ -5470,7 +5470,7 @@ processing the data, and writing to the next Inter-Step Buffers (or sinks). Ther
 processing cycle.</p>
 <ul>
 <li><code>readBatchSize</code> - The number of messages to read in each cycle, with a default value of <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first. <strong><code>readBatchSize</code> controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use <code>concurrency</code> for that).</strong></li>
-<li><code>readTimeout</code> - Read timeout from the source or Inter-Step Buffer, defaults to <code>1s</code>. It works in conjunction with <code>readBatchSize</code>.</li>
+<li><code>readTimeout</code> - Read timeout from the source or Inter-Step Buffer, defaults to <code>100ms</code>. It works in conjunction with <code>readBatchSize</code>.</li>
 <li><code>bufferMaxLength</code> - How many unprocessed messages can be existing in the Inter-Step Buffer, defaults to <code>30000</code>.</li>
 <li><code>bufferUsageLimit</code> - The percentage of the buffer usage limit, a valid number should be less than 100. Default value is <code>80</code>, which means <code>80%</code>.</li>
 <li><code>concurrency</code> - Maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. Defaults to the value of <code>readBatchSize</code>. See <a href="#concurrency-and-read-ahead">Concurrency and read-ahead</a> below.</li>

@@ -5368,7 +5368,7 @@
 processing the data, and writing to a sink. There are some parameters can be adjusted for this cycle.</p>
 <ul>
 <li><code>readBatchSize</code> - How many messages to read for each cycle, defaults to <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first. <strong><code>readBatchSize</code> controls only how many messages are fetched in a single read call; it is not a cap on how many messages may be in-flight (use <code>concurrency</code> for that).</strong></li>
-<li><code>readTimeout</code> - Read timeout from the source, defaults to <code>1s</code>.</li>
+<li><code>readTimeout</code> - Read timeout from the source, defaults to <code>100ms</code>.</li>
 <li><code>concurrency</code> - Maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. Defaults to the value of <code>readBatchSize</code>. See <a href="#concurrency-and-read-ahead">Concurrency and read-ahead</a> below.</li>
 </ul>
 <p>These parameters can be customized under <code>spec.limits</code> as below.</p>
