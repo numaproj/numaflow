@@ -443,7 +443,7 @@ func Test_GetPipelineLimits(t *testing.T) {
 	assert.Equal(t, int64(DefaultBufferLength), int64(*l.BufferMaxLength))
 	assert.Equal(t, float64(DefaultBufferUsageLimit), float64(*l.BufferUsageLimit)/100)
 	assert.Equal(t, int64(DefaultReadBatchSize), int64(*l.ReadBatchSize))
-	assert.Equal(t, "1s", l.ReadTimeout.Duration.String())
+	assert.Equal(t, "100ms", l.ReadTimeout.Duration.String())
 
 	length := uint64(2000)
 	usuageLimit := uint32(40)
