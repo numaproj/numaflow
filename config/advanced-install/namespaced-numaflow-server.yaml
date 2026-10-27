@@ -293,26 +293,26 @@ data:
     name: vertex\n        - name: pod\n          filters:\n            - name: pod\n
     \             required: false\n\n- name: vertex_critical_errors\n  objects:\n
     \   - vertex\n  title: Vertex Critical Errors\n  description: Critical runtime
-    errors over the selected duration. These are forwarder failures and unexpected
-    end-of-stream from a user-defined sink or transformer.\n  expr: round(sum(increase($metric_name{$filters}[$duration]))
-    by ($dimension))\n  params:\n    - name: duration\n      required: true\n    -
-    name: start_time\n      required: false\n    - name: end_time\n      required:
-    false\n  metrics:\n    - metric_name: forwarder_critical_error_total\n      display_name:
-    Vertex Critical Errors\n      metric_description: Critical runtime errors during
-    the selected duration, such as a forwarder failure or an unexpected end of stream
-    from a user-defined sink or transformer.\n      required_filters:\n        - namespace\n
-    \       - pipeline\n        - vertex\n      dimensions:\n        - name: vertex\n
-    \       - name: pod\n          filters:\n            - name: pod\n              required:
-    false\n\n- name: mono_vertex_throughput\n  objects: \n    - mono-vertex\n  title:
-    MonoVertex Throughput and Message Rates\n  description: This pattern measures
-    the throughput of a MonoVertex in messages per second across different dimensions.\n
-    \ expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)\n  params:\n
-    \   - name: duration\n      required: true\n    - name: start_time\n      required:
-    false\n    - name: end_time\n      required: false\n  metrics:\n    - metric_name:
-    monovtx_read_total\n      display_name: MonoVertex Read Processing Rate\n      metric_description:
-    This metric represents the total number of data messages read per second.\n      required_filters:\n
-    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
-    \       - name: pod\n          filters:\n            - name: pod\n              required:
+    errors over the selected duration, such as a forwarder failure or a UDF failure.\n
+    \ expr: round(sum(increase($metric_name{$filters}[$duration])) by ($dimension))\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:\n
+    \   - metric_name: forwarder_critical_error_total\n      display_name: Vertex
+    Critical Errors\n      metric_description: Critical runtime errors during the
+    selected duration, such as a forwarder failure or a UDF failure.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n\n- name: mono_vertex_throughput\n  objects:
+    \n    - mono-vertex\n  title: MonoVertex Throughput and Message Rates\n  description:
+    This pattern measures the throughput of a MonoVertex in messages per second across
+    different dimensions.\n  expr: sum(rate($metric_name{$filters}[$duration])) by
+    ($dimension)\n  params:\n    - name: duration\n      required: true\n    - name:
+    start_time\n      required: false\n    - name: end_time\n      required: false\n
+    \ metrics:\n    - metric_name: monovtx_read_total\n      display_name: MonoVertex
+    Read Processing Rate\n      metric_description: This metric represents the total
+    number of data messages read per second.\n      required_filters:\n        - namespace\n
+    \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
+    name: pod\n          filters:\n            - name: pod\n              required:
     false\n    - metric_name: monovtx_sink_write_total\n      display_name: MonoVertex
     Sink Write Processing Rate\n      metric_description: This metric represents the
     total number of data messages written by sink per second.\n      required_filters:\n
@@ -345,15 +345,14 @@ data:
     \       - name: pod\n          filters:\n            - name: pod\n              required:
     false\n\n- name: mono_vertex_critical_errors\n  objects:\n    - mono-vertex\n
     \ title: MonoVertex Critical Errors\n  description: Critical runtime errors over
-    the selected duration. These are forwarder failures and unexpected end-of-stream
-    from a user-defined sink or transformer.\n  expr: round(sum(increase($metric_name{$filters}[$duration]))
-    by ($dimension))\n  params:\n    - name: duration\n      required: true\n    -
-    name: start_time\n      required: false\n    - name: end_time\n      required:
-    false\n  metrics:\n    - metric_name: monovtx_critical_error_total\n      display_name:
-    MonoVertex Critical Errors\n      metric_description: Critical runtime errors
-    during the selected duration, such as a forwarder failure or an unexpected end
-    of stream from a user-defined sink or transformer.\n      required_filters:\n
-    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
+    the selected duration, such as a forwarder failure or a UDF failure.\n  expr:
+    round(sum(increase($metric_name{$filters}[$duration])) by ($dimension))\n  params:\n
+    \   - name: duration\n      required: true\n    - name: start_time\n      required:
+    false\n    - name: end_time\n      required: false\n  metrics:\n    - metric_name:
+    monovtx_critical_error_total\n      display_name: MonoVertex Critical Errors\n
+    \     metric_description: Critical runtime errors during the selected duration,
+    such as a forwarder failure or a UDF failure.\n      required_filters:\n        -
+    namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
     \       - name: pod\n          filters:\n            - name: pod\n              required:
     false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
     \   - vertex\n  title: CPU and Memory Utilisation by Pod\n  description: This
