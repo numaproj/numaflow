@@ -551,7 +551,7 @@ function backlogCard(input: VertexHealthInput): HealthCard {
       ? {
           name: "Pending messages",
           value: formatCompact(pending),
-          description: "Messages waiting to be processed, reported by the vertex daemon.",
+          description: "Messages waiting to be processed.",
           available: true,
         }
       : undefined,
@@ -818,8 +818,7 @@ function verdict(health: DataHealth | undefined, isMono: boolean): VertexHealth[
       : status === "critical" || status === "unhealthy"
       ? "critical"
       : "neutral";
-  const code = health?.dataHealthCode ? ` (${health.dataHealthCode})` : "";
-  return { label: `${isMono ? "Data flow" : "Pipeline data flow"} ${status}${code}`, tone };
+  return { label: `${isMono ? "Data flow" : "Pipeline data flow"} ${status}`, tone };
 }
 
 function replicas(input: VertexHealthInput): VertexHealth["replicas"] {

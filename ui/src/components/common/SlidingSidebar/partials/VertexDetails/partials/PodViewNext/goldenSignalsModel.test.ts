@@ -252,7 +252,7 @@ describe("buildVertexHealth", () => {
       })
     );
     expect(health.tone).toBe("ok");
-    expect(health.verdict).toEqual({ label: "Data flow healthy (D1)", tone: "ok" });
+    expect(health.verdict).toEqual({ label: "Data flow healthy", tone: "ok" });
     expect(health.replicas).toEqual({ label: "3/3 ready · scaled 12d ago", tone: "ok" });
     expect(card(health, "latency")).toEqual(
       expect.objectContaining({
@@ -578,7 +578,7 @@ describe("buildVertexHealth", () => {
         fleetItems: [fleetItem(), fleetItem({ runtime: { name: "p", status: "Pending", containerDetailsMap: {} } })],
       })
     );
-    expect(pipeline.verdict).toEqual({ label: "Pipeline data flow critical (D3)", tone: "critical" });
+    expect(pipeline.verdict).toEqual({ label: "Pipeline data flow critical", tone: "critical" });
     expect(pipeline.replicas).toEqual({ label: "1 pod running · scale 1–5", tone: "warn" });
     expect(pipeline.tone).toBe("critical");
     expect(buildVertexHealth(input({ health: { dataHealthStatus: "unknown" } })).verdict?.tone).toBe(

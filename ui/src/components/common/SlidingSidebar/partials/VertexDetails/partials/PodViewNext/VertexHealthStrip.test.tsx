@@ -87,7 +87,7 @@ const cards: HealthCard[] = [
 
 const health: VertexHealth = {
   tone: "critical",
-  verdict: { label: "Data flow unknown (D4)", tone: "neutral" },
+  verdict: { label: "Data flow unknown", tone: "neutral" },
   replicas: { label: "3/3 ready · scaled 12d ago", tone: "ok" },
   meta: "trends over the last 30 minutes",
   cards,
@@ -99,7 +99,7 @@ describe("VertexHealthStrip", () => {
 
     expect(screen.getByText("Vertex health")).toBeInTheDocument();
     expect(screen.getByTestId("vertex-health-dot")).toHaveAttribute("data-tone", "critical");
-    expect(screen.getByTestId("vertex-health-verdict")).toHaveTextContent("Data flow unknown (D4)");
+    expect(screen.getByTestId("vertex-health-verdict")).toHaveTextContent("Data flow unknown");
     expect(screen.getByTestId("vertex-health-replicas")).toHaveTextContent("3/3 ready");
     expect(screen.getByText("trends over the last 30 minutes")).toBeInTheDocument();
     expect(screen.getByText("LATENCY")).toBeInTheDocument();
