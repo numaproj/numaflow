@@ -188,10 +188,10 @@ describe("derived signals", () => {
     expect(worstTone(["neutral", undefined])).toBe("neutral");
   });
 
-  it("reads daemon rates for MonoVertex and sums pipeline partitions, ignoring -1", () => {
+  it("reads daemon rates for MonoVertex and sums the newest pending, ignoring the lookback average", () => {
     expect(
       readDaemonRates(
-        { processingRates: { "1m": "15", "5m": "14", "15m": "13" }, pendings: { default: "-1" } },
+        { processingRates: { "1m": "15", "5m": "14", "15m": "13" }, pendings: { default: "99", latest: "-1" } },
         "monoVertex",
         "mv"
       )
@@ -200,14 +200,21 @@ describe("derived signals", () => {
       readDaemonRates(
         {
           cat: [
-            { processingRates: { "1m": 1 }, pendings: { default: 2 } },
-            { processingRates: { "1m": 3 }, pendings: { default: 4 } },
+            { processingRates: { "1m": 1 }, pendings: { default: 100, latest: 2 } },
+            { processingRates: { "1m": 3 }, pendings: { default: 100, latest: 4 } },
           ],
         },
         "udf",
         "cat"
       )
     ).toEqual(expect.objectContaining({ rate1m: 4, pending: 6 }));
+    expect(
+      readDaemonRates(
+        { processingRates: { "1m": 8 }, pendings: { default: 7 } },
+        "monoVertex",
+        "mv"
+      ).pending
+    ).toBe(7);
   });
 
   it("keeps a 30 minute daemon history and ignores an empty snapshot", () => {

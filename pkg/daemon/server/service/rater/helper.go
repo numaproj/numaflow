@@ -82,6 +82,29 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	return sum / num
 }
 
+// LatestPending returns the pending count from the newest snapshot. CalculatePending averages
+// snapshots across the lookback window, which is what autoscaling uses.
+func LatestPending(q *sharedqueue.OverflowQueue[*TimestampedCounts], partitionName string) int64 {
+	counts := q.Items()
+	if len(counts) == 0 {
+		return v1alpha1.PendingNotAvailable
+	}
+	sum := int64(0)
+	found := false
+	for _, pendingCount := range counts[len(counts)-1].PodPartitionCountSnapshot() {
+		val, ok := pendingCount[partitionName]
+		if !ok {
+			continue
+		}
+		sum += int64(val)
+		found = true
+	}
+	if !found {
+		return v1alpha1.PendingNotAvailable
+	}
+	return sum
+}
+
 // CalculateRate calculates the rate of the vertex partition in the last lookback seconds
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
 	counts := q.Items()

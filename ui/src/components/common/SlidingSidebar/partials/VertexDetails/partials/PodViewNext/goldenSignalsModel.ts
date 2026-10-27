@@ -340,7 +340,21 @@ function parseDaemonNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-/** readDaemonRates sums daemon rates and pendings across partitions; `-1` (not reported) is dropped. */
+/**
+ * pendingCount prefers the newest scrape (`pendings.latest`). Daemons from before that field
+ * only publish the lookback average under `pendings.default`, so that average is the fallback.
+ * A present `latest` of `-1` stays unreported and does not fall back.
+ */
+function pendingCount(partition: any): number | undefined {
+  const pendings = partition?.pendings;
+  if (!pendings || typeof pendings !== "object") return undefined;
+  if (Object.prototype.hasOwnProperty.call(pendings, "latest")) {
+    return parseDaemonNumber(pendings.latest);
+  }
+  return parseDaemonNumber(pendings.default);
+}
+
+/** readDaemonRates sums daemon rates and pending across partitions. `-1` (not reported) is dropped. */
 export function readDaemonRates(vertexMetrics: any, type: string, vertexId: string): DaemonRates {
   const partitions: any[] =
     type === MONO_VERTEX
@@ -348,13 +362,13 @@ export function readDaemonRates(vertexMetrics: any, type: string, vertexId: stri
         ? [vertexMetrics]
         : []
       : (vertexMetrics && vertexMetrics[vertexId]) || [];
-  const pick = (field: "processingRates" | "pendings", period: string) =>
-    sumDefined(partitions.map((partition) => parseDaemonNumber(partition?.[field]?.[period])));
+  const pick = (period: string) =>
+    sumDefined(partitions.map((partition) => parseDaemonNumber(partition?.processingRates?.[period])));
   return {
-    rate1m: pick("processingRates", "1m"),
-    rate5m: pick("processingRates", "5m"),
-    rate15m: pick("processingRates", "15m"),
-    pending: pick("pendings", "default"),
+    rate1m: pick("1m"),
+    rate5m: pick("5m"),
+    rate15m: pick("15m"),
+    pending: sumDefined(partitions.map(pendingCount)),
   };
 }
 
@@ -551,7 +565,7 @@ function backlogCard(input: VertexHealthInput): HealthCard {
       ? {
           name: "Pending messages",
           value: formatCompact(pending),
-          description: "Messages waiting to be processed.",
+          description: "Current messages waiting, from the newest daemon scrape.",
           available: true,
         }
       : undefined,

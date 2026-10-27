@@ -312,6 +312,8 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, windowLabel).Set(float64(pending))
 		}
 	}
+	// latest is the newest scrape. It is not published as the averaged pending gauge.
+	result["latest"] = wrapperspb.Int64(LatestPending(r.timestampedPendingCount))
 	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }

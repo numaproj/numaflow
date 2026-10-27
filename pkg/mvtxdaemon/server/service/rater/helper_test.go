@@ -66,6 +66,8 @@ func TestCalculatePending(t *testing.T) {
 		assert.Equal(t, int64(11), CalculatePending(q, 25))
 		// tc1 and tc2 are used to calculate the pending
 		assert.Equal(t, int64(11), CalculatePending(q, 100))
+		// the newest snapshot is 10, not the lookback average
+		assert.Equal(t, int64(10), LatestPending(q))
 	})
 }
 
