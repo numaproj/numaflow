@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import { MetricsModalWrapper } from "../../../../../../../../../../../../common/MetricsModalWrapper";
 import {
   ago,
-  getPodContainerUsePercentages,
+  resourceRequestPercent,
 } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import {
@@ -23,61 +23,30 @@ export function ContainerInfo({
   vertexId,
   type,
   pod,
-  podDetails,
   containerName,
   containerInfo,
   podSpecificInfo,
 }: PodInfoProps) {
   const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
 
-  const resourceUsage = getPodContainerUsePercentages(
-    pod,
-    podDetails,
-    containerName
+  const cpuPercentValue = resourceRequestPercent(
+    containerInfo?.totalCPU,
+    containerInfo?.requestedCPU
   );
-
-  // CPU
-  let usedCPU: string | undefined =
-    podDetails?.containerMap instanceof Map
-      ? podDetails?.containerMap?.get(containerName)?.cpu
-      : undefined;
-  let specCPU: string | undefined =
-    pod?.containerSpecMap instanceof Map
-      ? pod?.containerSpecMap?.get(containerName)?.cpu
-      : undefined;
-  if (!usedCPU) {
-    usedCPU = "?";
-  } else if (usedCPU.endsWith("n")) {
-    usedCPU = `${(parseFloat(usedCPU) / 1e6).toFixed(2)}m`;
-  }
-  if (!specCPU) {
-    specCPU = "?";
-  }
-  let cpuPercent = "unavailable";
-  if (resourceUsage?.cpuPercent) {
-    cpuPercent = `${resourceUsage.cpuPercent?.toFixed(2)}%`;
-  }
-  // Memory
-  let usedMem: string | undefined =
-    podDetails?.containerMap instanceof Map
-      ? podDetails?.containerMap?.get(containerName)?.memory
-      : undefined;
-  let specMem: string | undefined =
-    pod?.containerSpecMap instanceof Map
-      ? pod?.containerSpecMap?.get(containerName)?.memory
-      : undefined;
-  if (!usedMem) {
-    usedMem = "?";
-  } else if (usedMem.endsWith("Ki")) {
-    usedMem = `${(parseFloat(usedMem) / 1024).toFixed(2)}Mi`;
-  }
-  if (!specMem) {
-    specMem = "?";
-  }
-  let memPercent = "unavailable";
-  if (resourceUsage?.memoryPercent) {
-    memPercent = `${resourceUsage.memoryPercent.toFixed(2)}%`;
-  }
+  const memoryPercentValue = resourceRequestPercent(
+    containerInfo?.totalMemory,
+    containerInfo?.requestedMemory
+  );
+  const usedCPU = containerInfo?.totalCPU || "?";
+  const specCPU = containerInfo?.requestedCPU || "?";
+  const cpuPercent =
+    cpuPercentValue === undefined ? "unavailable" : `${cpuPercentValue.toFixed(2)}%`;
+  const usedMem = containerInfo?.totalMemory || "?";
+  const specMem = containerInfo?.requestedMemory || "?";
+  const memPercent =
+    memoryPercentValue === undefined
+      ? "unavailable"
+      : `${memoryPercentValue.toFixed(2)}%`;
 
   return (
     <Box

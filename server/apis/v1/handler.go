@@ -33,9 +33,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -49,6 +50,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
@@ -1021,9 +1023,8 @@ func isNumaflowManagedPod(pod *corev1.Pod) bool {
 }
 
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
-	var response = make([]PodDetails, 0)
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
-	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c.Request.Context(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
 	})
 	if err != nil {
@@ -1035,22 +1036,12 @@ func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
 		return
 	}
-	for _, pod := range pods.Items {
-		podDetails, err := h.getPodDetails(pod)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get the pod details: %v", err))
-			return
-		} else {
-			response = append(response, podDetails)
-		}
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(c.Request.Context(), pods.Items)))
 }
 
 func (h *handler) GetVertexPodsInfo(c *gin.Context) {
-	var response = make([]PodDetails, 0)
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
-	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c.Request.Context(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
 	})
 	if err != nil {
@@ -1062,17 +1053,7 @@ func (h *handler) GetVertexPodsInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
 		return
 	}
-	for _, pod := range pods.Items {
-		podDetails, err := h.getPodDetails(pod)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get the pod details: %v", err))
-			return
-		} else {
-			response = append(response, podDetails)
-		}
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
-
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, h.collectPodDetails(c.Request.Context(), pods.Items)))
 }
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
@@ -1765,7 +1746,51 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
-func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
+// truncateUsage keeps two decimal places and drops the rest. It does not round up.
+func truncateUsage(value float64) float64 {
+	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	return math.Floor(value*100+1e-6) / 100
+}
+
+// formatUsage prints a truncated usage. Whole numbers stay bare, so 100 stays "100".
+func formatUsage(value float64) string {
+	text := strconv.FormatFloat(truncateUsage(value), 'f', 2, 64)
+	text = strings.TrimRight(text, "0")
+	text = strings.TrimRight(text, ".")
+	if text == "" {
+		return "0"
+	}
+	return text
+}
+
+// podDetailsConcurrency caps parallel metrics-server reads for one fleet view.
+// 32 keeps a 100-pod view to a few round trips without an unbounded stampede.
+const podDetailsConcurrency = 32
+
+// collectPodDetails reads pod details concurrently, preserving pod order.
+// A metrics-server failure keeps container status (restart count, waiting reason)
+// already collected from the Pod; only CPU and memory usage are missing.
+func (h *handler) collectPodDetails(ctx context.Context, pods []corev1.Pod) []PodDetails {
+	response := make([]PodDetails, len(pods))
+	var group errgroup.Group
+	group.SetLimit(podDetailsConcurrency)
+	for i, pod := range pods {
+		group.Go(func() error {
+			details, err := h.getPodDetails(ctx, pod)
+			if err != nil {
+				logging.FromContext(ctx).Warnw("Failed to get pod metrics", "pod", pod.Name, zap.Error(err))
+			}
+			response[i] = details
+			return nil
+		})
+	}
+	_ = group.Wait()
+	return response
+}
+
+func (h *handler) getPodDetails(ctx context.Context, pod corev1.Pod) (PodDetails, error) {
 	podDetails := PodDetails{
 		Name:    pod.Name,
 		Status:  string(pod.Status.Phase),
@@ -1780,10 +1805,14 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 	podDetails.ContainerDetailsMap = containerDetails
 
 	// cpu/memory details of a pod
-	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
-	if err == nil {
-		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
-		totalMemory := resource.NewQuantity(0, resource.BinarySI)
+	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+	if err != nil {
+		logging.FromContext(ctx).Debugw("Failed to get pod metrics", "pod", pod.Name, zap.Error(err))
+		return podDetails, err
+	}
+	{
+		var cpuMillis float64
+		var memMi float64
 		for _, container := range podMetrics.Containers {
 			containerName := container.Name
 			cpuQuantity := container.Usage.Cpu()
@@ -1793,22 +1822,19 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 				details = ContainerDetails{Name: container.Name} // Initialize if not found
 			}
 			if cpuQuantity != nil {
-				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
-				totalCPU.Add(*cpuQuantity)
+				millis := truncateUsage(cpuQuantity.AsApproximateFloat64() * 1000)
+				details.TotalCPU = formatUsage(millis) + "m"
+				cpuMillis += millis
 			}
 			if memQuantity != nil {
-				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
-				totalMemory.Add(*memQuantity)
+				mi := truncateUsage(memQuantity.AsApproximateFloat64() / (1024 * 1024))
+				details.TotalMemory = formatUsage(mi) + "Mi"
+				memMi += mi
 			}
 			containerDetails[containerName] = details
 		}
-		if totalCPU != nil {
-			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
-		}
-
-		if totalMemory != nil {
-			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
-		}
+		podDetails.TotalCPU = formatUsage(cpuMillis) + "m"
+		podDetails.TotalMemory = formatUsage(memMi) + "Mi"
 	}
 	return podDetails, nil
 }

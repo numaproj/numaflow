@@ -14,6 +14,13 @@ import "@testing-library/jest-dom";
 
 const mockBuffersComponent = jest.fn();
 const mockMetricsComponent = jest.fn();
+const mockPodsComponent = jest.fn();
+const mockUseErrorsFetch = jest.fn();
+let mockBetaPodViewInstance = 0;
+
+jest.mock("../../../../../utils/fetchWrappers/errorsFetch", () => ({
+  useErrorsFetch: (props: any) => mockUseErrorsFetch(props),
+}));
 
 jest.mock("./partials/VertexUpdate", () => {
   const originalModule = jest.requireActual("./partials/VertexUpdate");
@@ -77,10 +84,26 @@ jest.mock(
       __esModule: true,
       ...originalModule,
       // Named export mocks
-      Pods: () => <div>Mocked pods</div>,
+      Pods: (props) => {
+        mockPodsComponent(props);
+        return <div>Mocked pods</div>;
+      },
     };
   }
 );
+jest.mock("./partials/PodViewNext", () => ({
+  PodViewNext: ({ recentErrorCount }: { recentErrorCount?: number }) => {
+    const ReactModule = jest.requireActual("react");
+    const [instance] = ReactModule.useState(() => ++mockBetaPodViewInstance);
+    return (
+      <div
+        data-testid="pod-view-beta"
+        data-instance={instance}
+        data-recent-errors={recentErrorCount}
+      />
+    );
+  },
+}));
 jest.mock(
   "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics",
   () => {
@@ -123,6 +146,14 @@ const SearchProbe = () => {
 describe("VertexDetails", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
+    mockBetaPodViewInstance = 0;
+    mockUseErrorsFetch.mockReturnValue({
+      data: undefined,
+      loading: false,
+      error: undefined,
+      refresh: jest.fn(),
+    });
   });
 
   it("SOURCE vertex", async () => {
@@ -211,6 +242,128 @@ describe("VertexDetails", () => {
       expect(screen.getByText("Sink Vertex")).toBeInTheDocument();
       expect(screen.getByText("Mocked pods")).toBeInTheDocument();
     });
+  });
+
+  it("uses the shared Beta mode and mounts only the Beta Pod View seam", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/?vertex=test-vertex&vertexTab=pods&podViewVersion=beta&pod=shared-pod",
+        ]}
+      >
+        <SearchProbe />
+        <VertexDetails
+          namespaceId="test-namespace"
+          pipelineId="test-pipeline"
+          vertexId="test-vertex"
+          vertexSpecs={{}}
+          vertexMetrics={{}}
+          buffers={[]}
+          type="sink"
+          setModalOnClose={jest.fn()}
+          refresh={jest.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByTestId("pod-view-beta")).toBeInTheDocument();
+    expect(screen.getByTestId("pod-view-mode-beta")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByTestId("location-search")).toHaveTextContent(
+      "pod=shared-pod"
+    );
+  });
+
+  it("does not pass a previous vertex's error count to the Beta Pod View", async () => {
+    const timestamp = new Date().toISOString();
+    const firstErrors = [
+      {
+        replica: "first-0",
+        containerErrors: [{ container: "udf", timestamp, code: "E1", message: "failed" }],
+      },
+    ];
+    const refresh = jest.fn();
+    mockUseErrorsFetch.mockImplementation(({ vertexId }: { vertexId: string }) => ({
+      data: vertexId === "first" ? firstErrors : undefined,
+      loading: false,
+      error: undefined,
+      refresh,
+    }));
+    const props = {
+      namespaceId: "test-namespace",
+      pipelineId: "test-pipeline",
+      vertexSpecs: {},
+      vertexMetrics: {},
+      buffers: [],
+      type: "udf",
+      refresh: jest.fn(),
+    };
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/?vertex=first&vertexTab=pods&podViewVersion=beta"]}>
+        <VertexDetails {...props} vertexId="first" />
+      </MemoryRouter>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-recent-errors", "1")
+    );
+    expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-instance", "1");
+
+    rerender(
+      <MemoryRouter initialEntries={["/?vertex=first&vertexTab=pods&podViewVersion=beta"]}>
+        <VertexDetails {...props} vertexId="second" />
+      </MemoryRouter>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-recent-errors", "0")
+    );
+    expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-instance", "2");
+  });
+
+  it("switches pod view modes without clearing observability state", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/?vertex=test-vertex&vertexTab=pods&podViewVersion=classic&pod=shared-pod&logsSearch=error",
+        ]}
+      >
+        <SearchProbe />
+        <VertexDetails
+          namespaceId="test-namespace"
+          pipelineId="test-pipeline"
+          vertexId="test-vertex"
+          vertexSpecs={{}}
+          vertexMetrics={{}}
+          buffers={[]}
+          type="sink"
+          setModalOnClose={jest.fn()}
+          refresh={jest.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Mocked pods")).toBeInTheDocument();
+    expect(screen.queryByTestId("pod-view-beta")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("pod-view-mode-beta"));
+    await waitFor(() => {
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "podViewVersion=beta"
+      );
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "pod=shared-pod"
+      );
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "logsSearch=error"
+      );
+    });
+    expect(window.localStorage.getItem("numaflow-pod-view-version")).toBe(
+      "beta"
+    );
   });
 
   it("renders Metrics immediately after Pods View", async () => {
@@ -325,6 +478,30 @@ describe("VertexDetails", () => {
       expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
       expect(screen.getByText("Mocked pods")).toBeInTheDocument();
     });
+  });
+
+  it("stops Pod View polling props when another tab is selected", async () => {
+    render(
+      <VertexDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        vertexId="test-vertex"
+        vertexSpecs={{}}
+        vertexMetrics={{}}
+        buffers={[]}
+        type="sink"
+        setModalOnClose={jest.fn()}
+        refresh={jest.fn()}
+      />,
+      { wrapper: BrowserRouter }
+    );
+    await waitFor(() => expect(mockPodsComponent).toHaveBeenCalled());
+    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(true);
+
+    fireEvent.click(screen.getByTestId("spec-tab"));
+    await waitFor(() => expect(screen.getByText("Mocked vertexupdate")).toBeInTheDocument());
+    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(false);
+    expect(screen.getByText("Mocked pods")).toBeInTheDocument();
   });
 
   it("Click through tabs", async () => {
@@ -610,6 +787,12 @@ describe("VertexDetails", () => {
     expect(header).toBeInTheDocument();
     expect(actions).toBeInTheDocument();
     expect(actions).toContainElement(screen.getByTestId("copy-view-link"));
+    expect(actions).not.toContainElement(
+      screen.getByTestId("pod-view-mode-classic")
+    );
+    expect(
+      document.querySelector(".vertex-details-pod-view-banner")
+    ).toContainElement(screen.getByTestId("pod-view-mode-classic"));
     expect(screen.getByTestId("copy-view-link")).toHaveTextContent("Copy View");
   });
 
@@ -639,6 +822,9 @@ describe("VertexDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("Mocked metrics")).toBeInTheDocument();
       expect(screen.queryByTestId("copy-view-link")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("pod-view-mode-classic")
+      ).not.toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId("spec-tab"));
     await waitFor(() => {

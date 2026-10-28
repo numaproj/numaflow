@@ -5,7 +5,7 @@ import {
   fill,
   imageForStatus,
 } from "../../../../../../../../../../../../../utils/gradients";
-import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
+import { resourceRequestPercent } from "../../../../../../../../../../../../../utils";
 import {
   ContainerHealth,
   Hexagon,
@@ -15,9 +15,14 @@ import {
 
 import "./style.css";
 
+/** usagePercentLabel prints request-relative usage. Missing usage stays blank instead of the grey-cell sentinel. */
+function usagePercentLabel(percent?: number): string {
+  return percent == null ? "n/a" : `${percent.toFixed(2)}%`;
+}
+
 export const PodsHeatMap = ({
   pods,
-  podsDetailsMap,
+  podRuntimeByName,
   onPodClick,
   selectedPod,
 }: PodsHeatMapProps) => {
@@ -59,49 +64,43 @@ export const PodsHeatMap = ({
 
   const podsHealth: PodHealth[] = [];
 
-  if (pods && podsDetailsMap) {
+  if (pods && podRuntimeByName) {
     pods?.forEach((pod) => {
-      if (podsDetailsMap.has(pod.name)) {
-        const details = podsDetailsMap.get(pod.name);
-        if (details) {
-          const podObj: PodHealth = {
-            name: pod.name,
-            pod,
-            details,
-            maxCPUPerc: 0,
-            maxMemPerc: 0,
-            container: [],
-          };
-          // check if details?.containerMap is an array
-          details?.containerMap &&
-            details?.containerMap?.forEach((value, key) => {
-              const resourceUsage = getPodContainerUsePercentages(
-                pod,
-                details,
-                key
-              );
-              if (resourceUsage?.cpuPercent) {
-                podObj.maxCPUPerc = Math.max(
-                  podObj.maxCPUPerc,
-                  resourceUsage.cpuPercent
-                );
-              }
-              if (resourceUsage?.memoryPercent) {
-                podObj.maxMemPerc = Math.max(
-                  podObj.maxMemPerc,
-                  resourceUsage.memoryPercent
-                );
-              }
-              podObj.container.push({
-                name: key,
-                cpu: value.cpu,
-                mem: value.memory,
-                ...resourceUsage,
-              });
-            });
-          podsHealth.push(podObj);
+      const runtime = podRuntimeByName.get(pod.name);
+      if (!runtime) return;
+      const podObj: PodHealth = {
+        name: pod.name,
+        pod,
+        maxCPUPerc: 0,
+        maxMemPerc: 0,
+        container: [],
+      };
+      Object.entries(runtime.containerDetailsMap || {}).forEach(
+        ([name, container]) => {
+          const cpuPercent = resourceRequestPercent(
+            container?.totalCPU,
+            container?.requestedCPU
+          );
+          const memoryPercent = resourceRequestPercent(
+            container?.totalMemory,
+            container?.requestedMemory
+          );
+          if (cpuPercent) {
+            podObj.maxCPUPerc = Math.max(podObj.maxCPUPerc, cpuPercent);
+          }
+          if (memoryPercent) {
+            podObj.maxMemPerc = Math.max(podObj.maxMemPerc, memoryPercent);
+          }
+          podObj.container.push({
+            name,
+            cpu: container?.totalCPU,
+            mem: container?.totalMemory,
+            cpuPercent,
+            memoryPercent,
+          });
         }
-      }
+      );
+      podsHealth.push(podObj);
     });
   }
 
@@ -109,21 +108,27 @@ export const PodsHeatMap = ({
   const memData: Hexagon[] = [];
 
   podsHealth.forEach((pod) => {
+    const cpuReported = pod.container.some((container) => container.cpuPercent != null);
+    const memoryReported = pod.container.some(
+      (container) => container.memoryPercent != null
+    );
+    const cpuHealth = cpuReported ? pod.maxCPUPerc : -1;
+    const memoryHealth = memoryReported ? pod.maxMemPerc : -1;
     cpuData.push({
       name: pod.name,
       data: pod,
       type: "cpu",
-      healthPercent: pod.maxCPUPerc,
-      fill: fill(cpuColors, pod.maxCPUPerc, 1, 100),
-      image: imageForStatus(cpuColors, pod.maxCPUPerc, 100),
+      healthPercent: cpuHealth,
+      fill: fill(cpuColors, cpuHealth, 1, 100),
+      image: imageForStatus(cpuColors, cpuHealth, 100),
     });
     memData.push({
       name: pod.name,
       data: pod,
       type: "mem",
-      healthPercent: pod.maxMemPerc,
-      fill: fill(memColors, pod.maxMemPerc, 1, 100),
-      image: imageForStatus(memColors, pod.maxMemPerc, 100),
+      healthPercent: memoryHealth,
+      fill: fill(memColors, memoryHealth, 1, 100),
+      image: imageForStatus(memColors, memoryHealth, 100),
     });
   });
 
@@ -154,32 +159,26 @@ export const PodsHeatMap = ({
                     style={{
                       backgroundColor: fill(
                         cpuColors,
-                        container.cpuPercent || -1,
+                        container.cpuPercent ?? -1,
                         1
                       ),
                       color: "#ffffff",
                     }}
                   >
-                    {container.cpuPercent
-                      ? container.cpuPercent.toFixed(2)
-                      : -1}
-                    %
+                    {usagePercentLabel(container.cpuPercent)}
                   </td>
                   <td
                     className="hexagon-table-td"
                     style={{
                       backgroundColor: fill(
                         memColors,
-                        container.memoryPercent || -1,
+                        container.memoryPercent ?? -1,
                         1
                       ),
                       color: "#ffffff",
                     }}
                   >
-                    {container.memoryPercent
-                      ? container.memoryPercent.toFixed(2)
-                      : -1}
-                    %
+                    {usagePercentLabel(container.memoryPercent)}
                   </td>
                 </tr>
               )

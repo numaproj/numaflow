@@ -1,5 +1,4 @@
 import React from "react";
-import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
 import circleCheck from "../../src/images/checkmark-circle.png";
 import circleDash from "../../src/images/circle-dash.png";
 import heartFill from "../../src/images/heart-fill.png";
@@ -119,6 +118,11 @@ export function quantityToScalar(quantity: string): number | bigint {
     }
     return num;
   }
+  const scaled = (suffixLength: number, factor: number): number | bigint => {
+    const raw = quantity.substr(0, quantity.length - suffixLength);
+    if (raw.includes(".")) return Number(raw) * factor;
+    return BigInt(raw) * BigInt(factor);
+  };
   switch (suffix) {
     case "n":
       return (
@@ -132,102 +136,50 @@ export function quantityToScalar(quantity: string): number | bigint {
     case "m":
       return Number(quantity.substr(0, quantity.length - 1)).valueOf() / 1000.0;
     case "k":
-      return BigInt(quantity.substr(0, quantity.length - 1)) * BigInt(1000);
+      return scaled(1, 1000);
     case "M":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) * BigInt(1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000);
     case "G":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000);
     case "T":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000);
     case "P":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000 * 1000);
     case "E":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 1)) *
-        BigInt(1000 * 1000 * 1000) *
-        BigInt(1000 * 1000 * 1000)
-      );
+      return scaled(1, 1000 * 1000 * 1000 * 1000 * 1000 * 1000);
     case "Ki":
-      return BigInt(quantity.substr(0, quantity.length - 2)) * BigInt(1024);
+      return scaled(2, 1024);
     case "Mi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) * BigInt(1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024);
     case "Gi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024);
     case "Ti":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024);
     case "Pi":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024 * 1024);
     case "Ei":
-      return (
-        BigInt(quantity.substr(0, quantity.length - 2)) *
-        BigInt(1024 * 1024 * 1024) *
-        BigInt(1024 * 1024 * 1024)
-      );
+      return scaled(2, 1024 * 1024 * 1024 * 1024 * 1024 * 1024);
     default:
       throw new Error(`Unknown suffix: ${suffix}`);
   }
 }
 
-export function getPodContainerUsePercentages(
-  pod: Pod,
-  podDetails: PodDetail,
-  containerName: string
-): ResourceUsage {
-  if (
-    podDetails?.containerMap instanceof Map &&
-    pod.containerSpecMap instanceof Map
-  ) {
-    const usedCPUParsed: number | undefined =
-      podDetails?.containerMap?.get(containerName)?.cpuParsed;
-    const specCPUParsed: number | undefined =
-      pod.containerSpecMap?.get(containerName)?.cpuParsed;
-    let cpuPercent: number | undefined;
-    if (usedCPUParsed && specCPUParsed) {
-      cpuPercent = (usedCPUParsed / specCPUParsed) * 100;
+/** resourceRequestPercent is usage relative to the request, from pods-info quantity strings. */
+export function resourceRequestPercent(
+  usage?: string,
+  request?: string
+): number | undefined {
+  if (!usage || !request) return undefined;
+  try {
+    const used = Number(quantityToScalar(usage));
+    const requested = Number(quantityToScalar(request));
+    if (!Number.isFinite(used) || !Number.isFinite(requested) || requested <= 0) {
+      return undefined;
     }
-    const usedMemParsed: number | undefined =
-      podDetails?.containerMap?.get(containerName)?.memoryParsed;
-    const specMemParsed: number | undefined =
-      pod.containerSpecMap?.get(containerName)?.memoryParsed;
-    let memoryPercent: number | undefined;
-    if (usedMemParsed && specMemParsed) {
-      memoryPercent = (usedMemParsed / specMemParsed) * 100;
-    }
-    return {
-      cpuPercent,
-      memoryPercent,
-    };
+    return (used / requested) * 100;
+  } catch {
+    return undefined;
   }
-  return {
-    cpuPercent: undefined,
-    memoryPercent: undefined,
-  };
 }
 
 export function a11yProps(index: number) {

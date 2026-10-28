@@ -5,6 +5,8 @@ export interface Pod {
   name: string;
   containers: string[];
   containerSpecMap: Map<string, PodContainerSpec>;
+  /** RFC3339 creation time. */
+  createdAt?: string;
 }
 
 export interface PodsProps {
@@ -12,6 +14,8 @@ export interface PodsProps {
   pipelineId: string;
   vertexId: string;
   type: string;
+  /** When false the view stays mounted but does not poll or open a log stream. */
+  active?: boolean;
 }
 
 export interface PodContainerSpec {
@@ -35,14 +39,14 @@ export interface PodDetail {
 
 export interface SearchablePodsHeatMapProps {
   pods: Pod[];
-  podsDetailsMap: Map<string, PodDetail>;
+  podRuntimeByName?: Map<string, PodRuntimeInfo>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
 }
 
 export interface PodsHeatMapProps {
   pods: Pod[];
-  podsDetailsMap: Map<string, PodDetail>;
+  podRuntimeByName?: Map<string, PodRuntimeInfo>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
 }
@@ -50,7 +54,6 @@ export interface PodsHeatMapProps {
 export interface PodHealth {
   name: string;
   pod: Pod;
-  details: PodDetail;
   maxCPUPerc: number;
   maxMemPerc: number;
   container: ContainerHealth[];
@@ -126,13 +129,96 @@ export interface PodSpecificInfoProps {
   totalCPU: string;
   totalMemory: string;
 }
+
+/** PodRuntimeInfo is the v1 pods-info response normalized for Pod View presenters. */
+export interface PodRuntimeInfo {
+  name: string;
+  status?: string;
+  message?: string;
+  reason?: string;
+  totalCPU?: string;
+  totalMemory?: string;
+  containerDetailsMap: Record<string, ContainerInfoProps>;
+}
+
+export type PodSeverity = "critical" | "warning" | "healthy" | "unknown";
+
+export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
+
+/** PodContainerResourceUsage attributes current usage and request-relative usage to one container. */
+export interface PodContainerResourceUsage {
+  name: string;
+  cpu?: string;
+  memory?: string;
+  cpuPercent?: number;
+  memoryPercent?: number;
+}
+
+/** PodFleetItem joins pod specification, live usage, and runtime status for Beta presentation. */
+export interface PodFleetItem {
+  pod: Pod;
+  details?: PodDetail;
+  runtime?: PodRuntimeInfo;
+  severity: PodSeverity;
+  /** Human-readable cause of the severity, shown in the chip tooltip. */
+  reason?: string;
+  /** Highest usage percentage across every container, relative to its request. */
+  maxCPUPercent?: number;
+  maxMemoryPercent?: number;
+  /** Per-container values used to explain aggregate Fleet Health warnings. */
+  containerResources: PodContainerResourceUsage[];
+  restartCount: number;
+}
+
+export type SignalTone = "ok" | "warn" | "critical" | "neutral";
+
+export type SignalId = "latency" | "traffic" | "backlog" | "loss" | "errors";
+
+/** InspectTarget is where a vertex health card navigates when inspected. */
+export type InspectTarget =
+  | { kind: "metrics"; metric: string; presets?: Record<string, string> }
+  | { kind: "tab"; tab: "processingRates" | "errors" | "buffers" }
+  | { kind: "critical-pods" };
+
+export interface HealthCard {
+  id: SignalId;
+  title: string;
+  value: string;
+  detail: string;
+  /** Status of the signal; cards keep identity colors and only tint the detail. */
+  tone: SignalTone;
+  /** Bar heights as percentages of the largest bucket; omitted without a series. */
+  sparkline?: number[];
+  stages?: { name: string; value: string }[];
+  stagesNote?: string;
+  /** Detailed signal rows rendered in a card tooltip. */
+  breakdown?: {
+    title: string;
+    items: {
+      name: string;
+      value: string;
+      description: string;
+      available: boolean;
+    }[];
+  };
+  inspect?: InspectTarget;
+}
+
+/** VertexHealth is the presentation model for the Beta Pod View vertex health strip. */
+export interface VertexHealth {
+  tone: SignalTone;
+  verdict?: { label: string; tone: SignalTone };
+  replicas?: { label: string; tone: SignalTone };
+  meta: string;
+  cards: HealthCard[];
+}
+
 export interface PodInfoProps {
   namespaceId: string;
   pipelineId: string;
   vertexId: string;
   type: string;
   pod: Pod;
-  podDetails: PodDetail;
   containerName: string;
   containerInfo: ContainerInfoProps;
   podSpecificInfo: PodSpecificInfoProps;

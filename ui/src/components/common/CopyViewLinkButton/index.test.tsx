@@ -33,6 +33,24 @@ describe("CopyViewLinkButton", () => {
     });
   });
 
+  it("preserves the selected Beta Pod View in copied links", async () => {
+    writeText.mockResolvedValue(undefined);
+    render(
+      <MemoryRouter
+        initialEntries={["/?namespace=default&vertex=in&podViewVersion=beta"]}
+      >
+        <CopyViewLinkButton />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByTestId("copy-view-link"));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.origin}/?namespace=default&vertex=in&podViewVersion=beta`
+      );
+    });
+  });
+
   it("copies an explicit metrics-modal URL override", async () => {
     writeText.mockResolvedValue(undefined);
     render(
