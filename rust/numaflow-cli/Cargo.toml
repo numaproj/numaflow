@@ -1,0 +1,32 @@
+[package]
+name = "numaflow-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "nfcli"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# The CLI embeds the production engine through the local-runner facade.
+numaflow-core = { path = "../numaflow-core", features = ["local-runner"] }
+numaflow-pb.workspace = true        # side-input / ready unary clients only
+tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true              # side-input / ready channel
+tower.workspace = true              # UDS connector service_fn
+hyper-util = "0.1.6"                # tokio<->hyper IO adapter for the UDS channel
+clap = { version = "4", features = ["derive"] }
+serde.workspace = true
+serde_yaml = "0.9"
+serde_json.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+humantime = "2"
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
