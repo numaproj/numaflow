@@ -59,6 +59,13 @@ var (
 		Name:      "pending",
 		Help:      "A Gauge to keep track of the total number of pending messages for the monovtx",
 	}, []string{LabelMonoVertexName, LabelPeriod})
+
+	// MonoVertexDataProcessingHealth reports the MonoVertex data processing health status.
+	MonoVertexDataProcessingHealth = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "monovtx",
+		Name:      "data_processing_health",
+		Help:      "MonoVertex data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical",
+	}, []string{LabelMonoVertexName})
 )
 
 var (

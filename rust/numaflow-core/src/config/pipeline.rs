@@ -33,7 +33,7 @@ use crate::error::Error;
 use numaflow_shared::isb::ENV_NUMAFLOW_ISBSVC_TYPE;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
-const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_TIMEOUT_IN_MS: u32 = 100;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
 const ENV_NUMAFLOW_ISBSVC_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";

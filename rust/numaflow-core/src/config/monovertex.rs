@@ -25,7 +25,7 @@ use numaflow_models::models::{ForwardConditions, MonoVertex, MonoVertexBypassCon
 use serde_json::from_slice;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
-const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_TIMEOUT_IN_MS: u32 = 100;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";

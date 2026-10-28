@@ -243,6 +243,7 @@ These metrics are emitted by the pipeline daemon and MonoVertex daemon services,
 |--------------------------------------|-------------|----------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
 | `monovtx_pending`                    | Gauge       | `mvtx_name=<mvtx-name>` <br> `period=<duration>`  | Pending messages for a MonoVertex (aggregated from `monovtx_pending_raw`)                                     |
 | `monovtx_lookback_window_seconds`    | Gauge       | `mvtx_name=<mvtx-name>`                           | Lookback window for a MonoVertex in seconds                                                                    |
+| `monovtx_data_processing_health`     | Gauge       | `mvtx_name=<mvtx-name>`                           | MonoVertex data processing health. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical                         |
 
 ## SDK Info Metrics
 
