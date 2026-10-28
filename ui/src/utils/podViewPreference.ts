@@ -2,18 +2,24 @@ export type PodViewVersion = "classic" | "beta";
 
 export const POD_VIEW_VERSION_STORAGE_KEY = "numaflow-pod-view-version";
 
+/** New Pod View is the default. Classic remains available from the banner toggle. */
+const DEFAULT_POD_VIEW_VERSION: PodViewVersion = "beta";
+
 export const parsePodViewVersion = (
   value: string | null | undefined
 ): PodViewVersion | undefined =>
   value === "classic" || value === "beta" ? value : undefined;
 
 export const readStoredPodViewVersion = (): PodViewVersion => {
-  if (typeof window === "undefined") return "classic";
+  if (typeof window === "undefined") return DEFAULT_POD_VIEW_VERSION;
 
   try {
-    return parsePodViewVersion(window.localStorage.getItem(POD_VIEW_VERSION_STORAGE_KEY)) || "classic";
+    return (
+      parsePodViewVersion(window.localStorage.getItem(POD_VIEW_VERSION_STORAGE_KEY)) ||
+      DEFAULT_POD_VIEW_VERSION
+    );
   } catch {
-    return "classic";
+    return DEFAULT_POD_VIEW_VERSION;
   }
 };
 

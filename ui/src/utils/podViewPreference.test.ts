@@ -18,16 +18,18 @@ describe("pod view preference", () => {
     expect(parsePodViewVersion(null)).toBeUndefined();
   });
 
-  it("defaults to Classic when storage is missing or invalid", () => {
-    expect(readStoredPodViewVersion()).toBe("classic");
+  it("defaults to the new Pod View when storage is missing or invalid", () => {
+    expect(readStoredPodViewVersion()).toBe("beta");
     window.localStorage.setItem(POD_VIEW_VERSION_STORAGE_KEY, "preview");
-    expect(readStoredPodViewVersion()).toBe("classic");
+    expect(readStoredPodViewVersion()).toBe("beta");
+    expect(resolvePodViewVersion("")).toBe("beta");
   });
 
   it("uses an explicit URL version over the stored preference", () => {
-    window.localStorage.setItem(POD_VIEW_VERSION_STORAGE_KEY, "beta");
+    window.localStorage.setItem(POD_VIEW_VERSION_STORAGE_KEY, "classic");
+    expect(resolvePodViewVersion("?podViewVersion=beta")).toBe("beta");
     expect(resolvePodViewVersion("?podViewVersion=classic")).toBe("classic");
-    expect(resolvePodViewVersion("?podViewVersion=preview")).toBe("beta");
+    expect(resolvePodViewVersion("?podViewVersion=preview")).toBe("classic");
   });
 
   it("stores the selected version", () => {

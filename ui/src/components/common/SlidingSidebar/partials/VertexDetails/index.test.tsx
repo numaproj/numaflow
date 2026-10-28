@@ -174,7 +174,14 @@ describe("VertexDetails", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Input Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
+      expect(screen.getByText("New Pod View")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Default workspace. Switch to Classic for the previous layout."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Beta")).not.toBeInTheDocument();
     });
   });
 
@@ -196,7 +203,7 @@ describe("VertexDetails", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Processor Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
   });
 
@@ -218,7 +225,7 @@ describe("VertexDetails", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Processor Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
   });
 
@@ -240,7 +247,7 @@ describe("VertexDetails", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Sink Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
   });
 
@@ -347,10 +354,17 @@ describe("VertexDetails", () => {
 
     expect(await screen.findByText("Mocked pods")).toBeInTheDocument();
     expect(screen.queryByTestId("pod-view-beta")).not.toBeInTheDocument();
+    expect(screen.getByText("Classic Pod View")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Previous layout. Switch to New UI to return to the default workspace."
+      )
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("pod-view-mode-beta"));
     await waitFor(() => {
       expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
+      expect(screen.getByText("New Pod View")).toBeInTheDocument();
       expect(screen.getByTestId("location-search")).toHaveTextContent(
         "podViewVersion=beta"
       );
@@ -476,11 +490,12 @@ describe("VertexDetails", () => {
     fireEvent.click(screen.getByTestId("disable-metrics"));
     await waitFor(() => {
       expect(screen.queryByTestId("metrics-tab")).not.toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
   });
 
   it("stops Pod View polling props when another tab is selected", async () => {
+    window.localStorage.setItem("numaflow-pod-view-version", "classic");
     render(
       <VertexDetails
         namespaceId="test-namespace"
@@ -521,7 +536,7 @@ describe("VertexDetails", () => {
     );
     await waitFor(() => {
       expect(screen.getByText("Sink Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
     act(() => {
       const tab = screen.getByTestId("spec-tab");
@@ -612,7 +627,7 @@ describe("VertexDetails", () => {
     );
     await waitFor(() => {
       expect(screen.getByText("Sink Vertex")).toBeInTheDocument();
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
     });
     // go to spec tab
     act(() => {
@@ -758,7 +773,7 @@ describe("VertexDetails", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
       expect(screen.queryByTestId("buffers-tab")).not.toBeInTheDocument();
       expect(screen.getByTestId("location-search")).toHaveTextContent(
         "vertexTab=pods"

@@ -41,17 +41,6 @@
   white-space: nowrap;
 }
 
-.vertex-details-pod-view-banner-beta {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid rgba(255, 255, 255, 0.48);
-  border-radius: 1rem;
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
 .vertex-details-pod-view-banner-description {
   overflow: hidden;
   color: rgba(255, 255, 255, 0.82);

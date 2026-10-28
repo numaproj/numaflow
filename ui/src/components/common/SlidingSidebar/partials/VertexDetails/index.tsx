@@ -499,11 +499,12 @@ export function VertexDetails({
           <div className="vertex-details-pod-view-banner">
             <div className="vertex-details-pod-view-banner-copy">
               <span className="vertex-details-pod-view-banner-title">
-                New Pod View
+                {podViewVersion === "beta" ? "New Pod View" : "Classic Pod View"}
               </span>
-              <span className="vertex-details-pod-view-banner-beta">Beta</span>
               <span className="vertex-details-pod-view-banner-description">
-                Try the redesigned workspace
+                {podViewVersion === "beta"
+                  ? "Default workspace. Switch to Classic for the previous layout."
+                  : "Previous layout. Switch to New UI to return to the default workspace."}
               </span>
             </div>
             <PodViewModeToggle

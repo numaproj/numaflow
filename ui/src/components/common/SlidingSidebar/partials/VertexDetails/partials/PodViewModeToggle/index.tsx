@@ -10,14 +10,14 @@ interface PodViewModeToggleProps {
   onChange: (value: PodViewVersion) => void;
 }
 
-/** PodViewModeToggle lets users opt into the redesigned Pod View presentation. */
+/** PodViewModeToggle switches between the default Pod View and the classic layout. */
 export function PodViewModeToggle({
   value,
   onChange,
 }: PodViewModeToggleProps) {
   return (
     <Tooltip
-      title="Beta changes the Pod View presentation while keeping the same live data."
+      title="Switch between the new Pod View and the classic Pod View. Both use the same live data."
       arrow
     >
       <ToggleButtonGroup
@@ -31,18 +31,18 @@ export function PodViewModeToggle({
         size="small"
       >
         <ToggleButton
+          aria-label="Use New Pod View"
+          data-testid="pod-view-mode-beta"
+          value="beta"
+        >
+          New UI
+        </ToggleButton>
+        <ToggleButton
           aria-label="Use Classic Pod View"
           data-testid="pod-view-mode-classic"
           value="classic"
         >
           Classic
-        </ToggleButton>
-        <ToggleButton
-          aria-label="Use New Beta Pod View"
-          data-testid="pod-view-mode-beta"
-          value="beta"
-        >
-          New UI
         </ToggleButton>
       </ToggleButtonGroup>
     </Tooltip>
