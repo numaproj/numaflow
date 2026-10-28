@@ -47,7 +47,10 @@ export type SignalSeries = Partial<Record<SignalQueryKey, number[] | null>> & {
 export const DUPLICATE_DROP_REASON = "duplicate";
 
 /** Critical runtime errors are rare, so the card counts them over this trailing window. */
-export const CRITICAL_ERROR_WINDOW = "5m";
+export const CRITICAL_ERROR_WINDOW = "10m";
+
+/** Drops, nacks, and fallback writes are rare events, so the card counts them over this window. */
+export const MESSAGE_OUTCOME_WINDOW = "10m";
 
 const STAGE_LABELS: Partial<Record<SignalQueryKey, string>> = {
   stageRead: "read",
@@ -85,11 +88,11 @@ export function signalQueries({
     duration: "5m",
     filters,
   });
-  const rate = (metric_name: string): SignalQuery => ({
+  const messageOutcomes = (metric_name: string): SignalQuery => ({
     metric_name,
-    pattern_name: isMono ? "mono_vertex_throughput" : "vertex_throughput",
+    pattern_name: isMono ? "mono_vertex_message_outcomes" : "vertex_message_outcomes",
     dimension,
-    duration: "1m",
+    duration: MESSAGE_OUTCOME_WINDOW,
     filters,
   });
   const criticalErrors = (metric_name: string): SignalQuery => ({
@@ -107,9 +110,9 @@ export function signalQueries({
       stageUdf: histogram("monovtx_udf_time_bucket"),
       stageSink: histogram("monovtx_sink_time_bucket"),
       stageAck: histogram("monovtx_ack_time_bucket"),
-      drops: rate("monovtx_dropped_total"),
-      nacks: rate("monovtx_nack_total"),
-      fallback: rate("monovtx_fallback_sink_write_total"),
+      drops: messageOutcomes("monovtx_dropped_total"),
+      nacks: messageOutcomes("monovtx_nack_total"),
+      fallback: messageOutcomes("monovtx_fallback_sink_write_total"),
       critical: criticalErrors("monovtx_critical_error_total"),
     };
   }
@@ -119,14 +122,14 @@ export function signalQueries({
     stageUdf: histogram("forwarder_udf_processing_time_bucket"),
     stageWrite: histogram("forwarder_write_processing_time_bucket"),
     stageAck: histogram("forwarder_ack_processing_time_bucket"),
-    drops: rate("forwarder_drop_total"),
-    nacks: rate("forwarder_nack_total"),
+    drops: messageOutcomes("forwarder_drop_total"),
+    nacks: messageOutcomes("forwarder_nack_total"),
     critical: criticalErrors("forwarder_critical_error_total"),
   };
 }
 
 /**
- * splitDropSeries keeps duplicate drops out of the loss rate.
+ * splitDropSeries keeps duplicate drops out of the loss count.
  * MonoVertex dropped_total has no reason label and counts only duplicate source messages.
  * A pipeline query grouped by reason returns one series per reason.
  */
@@ -634,7 +637,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
   }
   const isMono = input.type === MONO_VERTEX;
   const { drops, duplicateDrops, nacks, fallback } = input.series;
-  const inspect = metricsTarget(input.queries, "drops");
+  const inspect = metricsTarget(input.queries, "drops", { duration: MESSAGE_OUTCOME_WINDOW });
   const requestedKeys = [
     "drops",
     "nacks",
@@ -642,7 +645,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
   ] as SignalQueryKey[];
   const requested = requestedKeys.map((key) => input.series[key]);
   if (requested.some((series) => series === undefined) || duplicateDrops === undefined) {
-    return { ...base, value: LOADING, detail: "Fetching message outcome rates", tone: "neutral", inspect };
+    return { ...base, value: LOADING, detail: "Fetching message outcome counts", tone: "neutral", inspect };
   }
   if (requested.every((series) => series === null) && duplicateDrops === null) {
     return {
@@ -653,12 +656,14 @@ function lossCard(input: VertexHealthInput): HealthCard {
       inspect,
     };
   }
-  const rate = (series: number[] | null | undefined) =>
-    Array.isArray(series) ? latest(series) ?? 0 : 0;
-  const lossRate = rate(drops);
-  const duplicateRate = rate(duplicateDrops);
-  const nackRate = rate(nacks);
-  const fallbackRate = rate(fallback);
+  const count = (series: number[] | null | undefined) =>
+    Array.isArray(series) ? Math.round(latest(series) ?? 0) : 0;
+  const lossCount = count(drops);
+  const duplicateCount = count(duplicateDrops);
+  const nackCount = count(nacks);
+  const fallbackCount = count(fallback);
+  const countLabel = (value: number, noun: string) =>
+    `${formatCompact(value)} ${value === 1 ? noun : `${noun}s`} / ${MESSAGE_OUTCOME_WINDOW}`;
   const partiallyUnavailable =
     requested.some((series) => series === null) || duplicateDrops === null;
   const outcomeSeries = [
@@ -698,11 +703,13 @@ function lossCard(input: VertexHealthInput): HealthCard {
   ];
   const outcomes = outcomeSeries.map(({ name, description, series }) => ({
     name,
-    value: series === null ? "Unavailable" : `${formatCompact(rate(series))}/s`,
+    value: series === null ? "Unavailable" : `${formatCompact(count(series))} / ${MESSAGE_OUTCOME_WINDOW}`,
     description,
     available: series !== null,
   }));
-  const activeOutcomes = outcomes.filter((outcome) => outcome.available && outcome.value !== "0/s").length;
+  const activeOutcomes = outcomes.filter(
+    (outcome) => outcome.available && outcome.value !== `0 / ${MESSAGE_OUTCOME_WINDOW}`
+  ).length;
   const unavailableOutcomes = outcomes.filter((outcome) => !outcome.available).length;
   const detail = unavailableOutcomes
     ? `${unavailableOutcomes} outcome metrics unavailable · hover for details`
@@ -710,21 +717,21 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ? `${activeOutcomes} active outcome ${activeOutcomes === 1 ? "type" : "types"} · hover for details`
     : "No active outcomes · hover for details";
   const tone: SignalTone =
-    lossRate > 0
+    lossCount > 0
       ? "critical"
-      : duplicateRate > 0 || nackRate > 0 || fallbackRate > 0
+      : duplicateCount > 0 || nackCount > 0 || fallbackCount > 0
       ? "warn"
       : partiallyUnavailable
       ? "neutral"
       : "ok";
-  const headlineSeries = lossRate > 0 ? drops : duplicateRate > 0 ? duplicateDrops : drops;
+  const headlineSeries = lossCount > 0 ? drops : duplicateCount > 0 ? duplicateDrops : drops;
   return {
     ...base,
     value:
-      lossRate > 0
-        ? `${formatCompact(lossRate)} drops/s`
-        : duplicateRate > 0
-        ? `${formatCompact(duplicateRate)} duplicate drops/s`
+      lossCount > 0
+        ? countLabel(lossCount, "drop")
+        : duplicateCount > 0
+        ? countLabel(duplicateCount, "duplicate drop")
         : partiallyUnavailable
         ? "Outcome metrics unavailable"
         : "No drops",

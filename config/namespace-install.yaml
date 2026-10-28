@@ -48213,29 +48213,33 @@ data:
     Processing Rate\n      metric_description: This metric represents the message
     write rate of UDF.\n      required_filters:\n        - namespace\n        - pipeline\n
     \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
-    \         filters:\n            - name: pod\n              required: false\n    -
-    metric_name: forwarder_drop_total\n      display_name: Vertex Drop Rate\n      metric_description:
-    This metric represents the number of messages dropped by a vertex per second.
-    The reason label separates duplicate drops from other runtime drops.\n      required_filters:\n
-    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
-    \       - name: vertex\n          # Keep reason so duplicate drops are not added
-    into other runtime drops.\n          expr: sum(rate($metric_name{$filters}[$duration]))
-    by ($dimension, reason)\n        - name: pod\n          expr: sum(rate($metric_name{$filters}[$duration]))
-    by ($dimension, reason)\n          filters:\n            - name: pod\n              required:
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: vertex_message_outcomes\n  objects:\n    - vertex\n  title: Vertex Message
+    Outcomes\n  description: Messages dropped or negatively acknowledged during the
+    selected duration.\n  expr: round(sum(increase($metric_name{$filters}[$duration]))
+    by ($dimension))\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: forwarder_drop_total\n      display_name:
+    Vertex Drop Rate\n      metric_description: Messages dropped by a vertex during
+    the selected duration. The reason label separates duplicate drops from other runtime
+    drops.\n      required_filters:\n        - namespace\n        - pipeline\n        -
+    vertex\n      dimensions:\n        - name: vertex\n          # Keep reason so
+    duplicate drops are not added into other runtime drops.\n          expr: round(sum(increase($metric_name{$filters}[$duration]))
+    by ($dimension, reason))\n        - name: pod\n          expr: round(sum(increase($metric_name{$filters}[$duration]))
+    by ($dimension, reason))\n          filters:\n            - name: pod\n              required:
     false\n    - metric_name: forwarder_nack_total\n      display_name: Vertex Nack
-    Rate\n      metric_description: This metric represents the number of messages
-    negatively acknowledged by a vertex per second.\n      required_filters:\n        -
-    namespace\n        - pipeline\n        - vertex\n      dimensions:\n        -
-    name: vertex\n        - name: pod\n          filters:\n            - name: pod\n
-    \             required: false\n\n- name: vertex_critical_errors\n  objects:\n
-    \   - vertex\n  title: Vertex Critical Errors\n  description: Critical runtime
-    errors over the selected duration, such as a forwarder failure or a UDF failure.\n
-    \ expr: round(sum(increase($metric_name{$filters}[$duration])) by ($dimension))\n
-    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
-    \     required: false\n    - name: end_time\n      required: false\n  metrics:\n
-    \   - metric_name: forwarder_critical_error_total\n      display_name: Vertex
-    Critical Errors\n      metric_description: Critical runtime errors during the
-    selected duration, such as a forwarder failure or a UDF failure.\n      required_filters:\n
+    Rate\n      metric_description: Messages negatively acknowledged by a vertex during
+    the selected duration.\n      required_filters:\n        - namespace\n        -
+    pipeline\n        - vertex\n      dimensions:\n        - name: vertex\n        -
+    name: pod\n          filters:\n            - name: pod\n              required:
+    false\n\n- name: vertex_critical_errors\n  objects:\n    - vertex\n  title: Vertex
+    Critical Errors\n  description: Critical runtime errors over the selected duration,
+    such as a forwarder failure or a UDF failure.\n  expr: round(sum(increase($metric_name{$filters}[$duration]))
+    by ($dimension))\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: forwarder_critical_error_total\n      display_name:
+    Vertex Critical Errors\n      metric_description: Critical runtime errors during
+    the selected duration, such as a forwarder failure or a UDF failure.\n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n\n- name: mono_vertex_throughput\n  objects:
@@ -48263,22 +48267,27 @@ data:
     \     metric_description: This metric represents the total number of messages
     dropped by UDF per second.\n      required_filters:\n        - namespace\n        -
     mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
-    \         filters:\n            - name: pod\n              required: false\n    -
-    metric_name: monovtx_dropped_total\n      display_name: MonoVertex Drop Rate\n
-    \     metric_description: This metric represents the number of messages dropped
-    by the MonoVertex per second.\n      required_filters:\n        - namespace\n
-    \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
-    name: pod\n          filters:\n            - name: pod\n              required:
-    false\n    - metric_name: monovtx_nack_total\n      display_name: MonoVertex Nack
-    Rate\n      metric_description: This metric represents the number of messages
-    negatively acknowledged by the sink per second.\n      required_filters:\n        -
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: mono_vertex_message_outcomes\n  objects:\n    - mono-vertex\n  title: MonoVertex
+    Message Outcomes\n  description: Messages dropped, negatively acknowledged, or
+    written to the fallback sink during the selected duration.\n  expr: round(sum(increase($metric_name{$filters}[$duration]))
+    by ($dimension))\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: monovtx_dropped_total\n      display_name:
+    MonoVertex Drop Rate\n      metric_description: Duplicate source messages discarded
+    by the MonoVertex during the selected duration.\n      required_filters:\n        -
     namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
     \       - name: pod\n          filters:\n            - name: pod\n              required:
-    false\n    - metric_name: monovtx_fallback_sink_write_total\n      display_name:
-    MonoVertex Fallback Sink Write Rate\n      metric_description: This metric represents
-    the number of messages written to the fallback sink per second.\n      required_filters:\n
-    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
-    \       - name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_nack_total\n      display_name: MonoVertex Nack
+    Rate\n      metric_description: Messages negatively acknowledged by the sink during
+    the selected duration.\n      required_filters:\n        - namespace\n        -
+    mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n    -
+    metric_name: monovtx_fallback_sink_write_total\n      display_name: MonoVertex
+    Fallback Sink Write Rate\n      metric_description: Messages written to the fallback
+    sink during the selected duration.\n      required_filters:\n        - namespace\n
+    \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
+    name: pod\n          filters:\n            - name: pod\n              required:
     false\n\n- name: mono_vertex_critical_errors\n  objects:\n    - mono-vertex\n
     \ title: MonoVertex Critical Errors\n  description: Critical runtime errors over
     the selected duration, such as a forwarder failure or a UDF failure.\n  expr:

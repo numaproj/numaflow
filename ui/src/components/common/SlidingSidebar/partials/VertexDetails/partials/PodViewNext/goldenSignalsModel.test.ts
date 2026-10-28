@@ -73,13 +73,20 @@ describe("signalQueries", () => {
         filters: { namespace: "ns", mvtx_name: "mv" },
       })
     );
-    expect(queries.drops?.metric_name).toBe("monovtx_dropped_total");
+    expect(queries.drops).toEqual(
+      expect.objectContaining({
+        pattern_name: "mono_vertex_message_outcomes",
+        metric_name: "monovtx_dropped_total",
+        duration: "10m",
+      })
+    );
     expect(queries.fallback?.metric_name).toBe("monovtx_fallback_sink_write_total");
+    expect(queries.nacks?.pattern_name).toBe("mono_vertex_message_outcomes");
     expect(queries.critical).toEqual(
       expect.objectContaining({
         pattern_name: "mono_vertex_critical_errors",
         metric_name: "monovtx_critical_error_total",
-        duration: "5m",
+        duration: "10m",
       })
     );
     expect(queries.stageWrite).toBeUndefined();
@@ -88,13 +95,20 @@ describe("signalQueries", () => {
   it("uses pipeline vertex patterns without fallback or transformer stages", () => {
     const queries = signalQueries(pipelineIds);
     expect(queries.p99?.pattern_name).toBe("vertex_histogram");
-    expect(queries.drops?.metric_name).toBe("forwarder_drop_total");
-    expect(queries.drops?.filters).toEqual({ namespace: "ns", pipeline: "p", vertex: "cat" });
+    expect(queries.drops).toEqual(
+      expect.objectContaining({
+        pattern_name: "vertex_message_outcomes",
+        metric_name: "forwarder_drop_total",
+        duration: "10m",
+        filters: { namespace: "ns", pipeline: "p", vertex: "cat" },
+      })
+    );
+    expect(queries.nacks?.pattern_name).toBe("vertex_message_outcomes");
     expect(queries.critical).toEqual(
       expect.objectContaining({
         pattern_name: "vertex_critical_errors",
         metric_name: "forwarder_critical_error_total",
-        duration: "5m",
+        duration: "10m",
       })
     );
     expect(queries.fallback).toBeUndefined();
@@ -450,26 +464,35 @@ describe("buildVertexHealth", () => {
         "loss"
       );
     const mixed = loss({
-      drops: [0, 2.5],
+      drops: [0, 2],
       duplicateDrops: [1],
       nacks: [],
       fallback: [],
       critical: [],
     });
-    expect(mixed).toEqual(expect.objectContaining({ value: "2.5 drops/s", tone: "critical" }));
+    expect(mixed).toEqual(expect.objectContaining({ value: "2 drops / 10m", tone: "critical" }));
+    expect(mixed.inspect).toEqual(
+      expect.objectContaining({ kind: "metrics", presets: { duration: "10m" } })
+    );
     expect(mixed.breakdown?.items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "Duplicate-message drops", value: "1/s" }),
-        expect.objectContaining({ name: "Other runtime drops", value: "2.5/s" }),
+        expect.objectContaining({ name: "Duplicate-message drops", value: "1 / 10m" }),
+        expect.objectContaining({ name: "Other runtime drops", value: "2 / 10m" }),
       ])
     );
     expect(
       loss({ drops: [], duplicateDrops: [2], nacks: [], fallback: [], critical: [] })
-    ).toEqual(expect.objectContaining({ value: "2 duplicate drops/s", tone: "warn" }));
+    ).toEqual(expect.objectContaining({ value: "2 duplicate drops / 10m", tone: "warn" }));
+    expect(
+      loss({ drops: [], duplicateDrops: [1], nacks: [], fallback: [], critical: [] }).value
+    ).toBe("1 duplicate drop / 10m");
     expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: [], critical: [1] }).tone).toBe(
       "ok"
     );
-    expect(loss({ drops: [], duplicateDrops: [], nacks: [0.2], fallback: [], critical: [] }).tone).toBe(
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [0.4], fallback: [], critical: [] }).tone).toBe(
+      "ok"
+    );
+    expect(loss({ drops: [], duplicateDrops: [], nacks: [1], fallback: [], critical: [] }).tone).toBe(
       "warn"
     );
     expect(loss({ drops: [], duplicateDrops: [], nacks: [], fallback: [1.4], critical: [] }).tone).toBe(
@@ -502,7 +525,7 @@ describe("buildVertexHealth", () => {
       expect.objectContaining({ value: "Outcome metrics unavailable", tone: "neutral" })
     );
     expect(loss({ drops: [2], duplicateDrops: [], nacks: null, fallback: [] })).toEqual(
-      expect.objectContaining({ value: "2 drops/s", tone: "critical" })
+      expect.objectContaining({ value: "2 drops / 10m", tone: "critical" })
     );
   });
 
@@ -521,9 +544,9 @@ describe("buildVertexHealth", () => {
     const outcomes = card(health, "loss").breakdown?.items;
     expect(outcomes).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "Duplicate-message drops", value: "1/s", available: true }),
-        expect.objectContaining({ name: "Nacks / redeliveries", value: "2/s" }),
-        expect.objectContaining({ name: "Fallback deliveries", value: "3/s" }),
+        expect.objectContaining({ name: "Duplicate-message drops", value: "1 / 10m", available: true }),
+        expect.objectContaining({ name: "Nacks / redeliveries", value: "2 / 10m" }),
+        expect.objectContaining({ name: "Fallback deliveries", value: "3 / 10m" }),
       ])
     );
     expect(outcomes).not.toEqual(
@@ -555,21 +578,21 @@ describe("buildVertexHealth", () => {
     );
     expect(errors({ series: { critical: [2] } })).toEqual(
       expect.objectContaining({
-        value: "2 critical errors / 5m",
+        value: "2 critical errors / 10m",
         tone: "critical",
         inspect: expect.objectContaining({
           kind: "metrics",
           metric: "monovtx_critical_error_total",
-          presets: { duration: "5m" },
+          presets: { duration: "10m" },
         }),
       })
     );
-    expect(errors({ series: { critical: [1.2] } }).value).toBe("1 critical error / 5m");
+    expect(errors({ series: { critical: [1.2] } }).value).toBe("1 critical error / 10m");
     expect(
       errors({ series: { critical: [2] } }).breakdown?.items
     ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "Critical runtime errors", value: "2 / 5m" }),
+        expect.objectContaining({ name: "Critical runtime errors", value: "2 / 10m" }),
       ])
     );
   });

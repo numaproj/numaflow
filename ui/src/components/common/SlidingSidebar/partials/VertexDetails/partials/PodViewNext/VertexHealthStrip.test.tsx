@@ -36,7 +36,7 @@ const cards: HealthCard[] = [
   {
     id: "loss",
     title: "Message outcomes",
-    value: "2 drops/s",
+    value: "2 drops / 10m",
     detail: "2 active outcome types · hover for details",
     tone: "warn",
     breakdown: {
@@ -44,19 +44,19 @@ const cards: HealthCard[] = [
       items: [
         {
           name: "Duplicate-message drops",
-          value: "2/s",
+          value: "2 / 10m",
           description: "Duplicate source messages discarded by MonoVertex.",
           available: true,
         },
         {
           name: "Nacks / redeliveries",
-          value: "1/s",
+          value: "1 / 10m",
           description: "Messages negatively acknowledged for redelivery. A nack is not a confirmed drop.",
           available: true,
         },
         {
           name: "Fallback deliveries",
-          value: "0/s",
+          value: "0 / 10m",
           description: "Messages delivered to the fallback sink instead of the primary sink.",
           available: true,
         },
@@ -75,7 +75,7 @@ const cards: HealthCard[] = [
       items: [
         {
           name: "Critical runtime errors",
-          value: "3 / 5m",
+          value: "3 / 10m",
           description: "Severe runtime errors that can interrupt message processing.",
           available: true,
         },
@@ -147,10 +147,10 @@ describe("VertexHealthStrip", () => {
     const outcomes = await screen.findByTestId("vertex-health-breakdown-loss");
     expect(outcomes).toHaveTextContent("Message outcomes");
     expect(outcomes).toHaveTextContent("Duplicate-message drops");
-    expect(outcomes).toHaveTextContent("2/s");
+    expect(outcomes).toHaveTextContent("2 / 10m");
     expect(outcomes).toHaveTextContent("A nack is not a confirmed drop");
     expect(outcomes).toHaveTextContent("Fallback deliveries");
-    expect(outcomes).toHaveTextContent("0/s");
+    expect(outcomes).toHaveTextContent("0 / 10m");
     expect(outcomes).not.toHaveTextContent("Critical runtime errors");
   });
 
@@ -161,7 +161,7 @@ describe("VertexHealthStrip", () => {
     const errors = await screen.findByTestId("vertex-health-breakdown-errors");
     expect(errors).toHaveTextContent("Error diagnostics");
     expect(errors).toHaveTextContent("Critical runtime errors");
-    expect(errors).toHaveTextContent("3 / 5m");
+    expect(errors).toHaveTextContent("3 / 10m");
   });
 
   it("reports each card's inspect target", () => {

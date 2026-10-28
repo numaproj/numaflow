@@ -275,7 +275,7 @@ describe("PodViewNext", () => {
     fireEvent.click(screen.getByTestId("vertex-health-card-errors"));
     expect(openMetrics).toHaveBeenCalledWith({
       panelId: "forwarder_critical_error_total-panel",
-      presets: { duration: "5m" },
+      presets: { duration: "10m" },
     });
   });
 });
