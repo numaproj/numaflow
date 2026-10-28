@@ -756,6 +756,7 @@ mod tests {
     use numaflow_models::models::{Container, Udf};
     use numaflow_nats::jetstream::ConsumerDeliverPolicy;
     use numaflow_pulsar::source::PulsarSourceConfig;
+    use numaflow_shared::redacted_url::RedactedUrl;
 
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, RetryConfig, SinkType};
@@ -1153,7 +1154,11 @@ mod tests {
                 read_ahead: false,
                 source_type: SourceType::Jetstream(
                     numaflow_nats::jetstream::JetstreamSourceConfig {
-                        addr: "nats://jetstream-server.internal".parse().unwrap(),
+                        addr: RedactedUrl::comma_separated_with_default_scheme(
+                            "nats://jetstream-server.internal",
+                            "nats",
+                        )
+                        .unwrap(),
                         stream: "testing-numaflow".to_string(),
                         consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
                         filter_subjects: vec![],

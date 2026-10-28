@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
-use numaflow_shared::redacted_url::RedactedUrl;
 use rdkafka::Offset;
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};

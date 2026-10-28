@@ -115,9 +115,11 @@ mod tests {
     #[test]
     fn test_jetstream_source_config_debug_redacts_addr_credentials() {
         let config = jetstream::JetstreamSourceConfig {
-            addr: "nats://nats-user:secret-url-password@nats-host:4222"
-                .parse()
-                .unwrap(),
+            addr: RedactedUrl::comma_separated_with_default_scheme(
+                "nats://nats-user:secret-url-password@nats-host:4222",
+                "nats",
+            )
+            .unwrap(),
             stream: "my-stream".to_string(),
             consumer: "my-consumer".to_string(),
             deliver_policy: jetstream::ConsumerDeliverPolicy::ALL,

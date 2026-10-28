@@ -157,6 +157,8 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
+        use numaflow_shared::redacted_url::RedactedUrl;
+
         use crate::reader::LagReader;
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -196,7 +198,8 @@ mod tests {
 
         // Configure JetstreamSource
         let config = numaflow_nats::jetstream::JetstreamSourceConfig {
-            addr: "nats://localhost".parse().unwrap(),
+            addr: RedactedUrl::comma_separated_with_default_scheme("nats://localhost", "nats")
+                .unwrap(),
             stream: stream_name.to_string(),
             consumer,
             filter_subjects: vec![],

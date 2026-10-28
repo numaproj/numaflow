@@ -305,6 +305,7 @@ mod tests {
 
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
+    use numaflow_shared::redacted_url::RedactedUrl;
 
     use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::config::components::sink::SinkType;
@@ -659,7 +660,11 @@ mod tests {
         let expected_source_config = crate::config::components::source::SourceConfig {
             read_ahead: false,
             source_type: SourceType::Jetstream(numaflow_nats::jetstream::JetstreamSourceConfig {
-                addr: "nats://jetstream-server.internal".parse().unwrap(),
+                addr: RedactedUrl::comma_separated_with_default_scheme(
+                    "nats://jetstream-server.internal",
+                    "nats",
+                )
+                .unwrap(),
                 stream: "mystream".to_string(),
                 consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
                 deliver_policy: ConsumerDeliverPolicy::by_start_time(

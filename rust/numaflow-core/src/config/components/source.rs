@@ -359,7 +359,7 @@ impl TryFrom<JetstreamSourceSpec> for SourceType {
         }
 
         let js_config = JetstreamSourceConfig {
-            addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+            addr: numaflow_shared::redacted_url::RedactedUrl::comma_separated_with_default_scheme(
                 &value.spec.url,
                 "nats",
             )
@@ -673,6 +673,7 @@ mod jetstream_tests {
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
     use numaflow_nats::{NatsAuth, jetstream::ConsumerDeliverPolicy};
+    use numaflow_shared::redacted_url::join_comma_separated_urls;
 
     use crate::config::components::source::JetstreamSourceSpec;
 
@@ -739,7 +740,10 @@ mod jetstream_tests {
             assert_eq!(username, "test-user");
             assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
             assert_eq!(config.consumer, "numaflow-test-stream");
-            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(
                 config.deliver_policy,
                 ConsumerDeliverPolicy::by_start_sequence(10)
@@ -1160,6 +1164,7 @@ mod nats_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::NatsSource;
     use numaflow_models::models::{BasicAuth, NatsAuth};
+    use numaflow_shared::redacted_url::join_comma_separated_urls;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 
@@ -1204,7 +1209,10 @@ mod nats_source_tests {
             };
             assert_eq!(username, "test-user");
             assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
-            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
         } else {
@@ -1229,7 +1237,10 @@ mod nats_source_tests {
 
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
-            assert_eq!(config.addr.expose_url().as_str(), "nats://localhost:4222");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
             assert!(config.auth.is_none());
