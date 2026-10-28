@@ -565,7 +565,7 @@ function backlogCard(input: VertexHealthInput): HealthCard {
       ? {
           name: "Pending messages",
           value: formatCompact(pending),
-          description: "Current messages waiting, from the newest daemon scrape.",
+          description: "Current messages waiting",
           available: true,
         }
       : undefined,
