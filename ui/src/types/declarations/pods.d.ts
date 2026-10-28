@@ -145,9 +145,11 @@ export type PodSeverity = "critical" | "warning" | "healthy" | "unknown";
 
 export type PodFleetSort = "severity" | "cpu" | "memory" | "restarts" | "name";
 
-/** PodContainerResourceUsage attributes request-relative usage to one container. */
+/** PodContainerResourceUsage attributes current usage and request-relative usage to one container. */
 export interface PodContainerResourceUsage {
   name: string;
+  cpu?: string;
+  memory?: string;
   cpuPercent?: number;
   memoryPercent?: number;
 }

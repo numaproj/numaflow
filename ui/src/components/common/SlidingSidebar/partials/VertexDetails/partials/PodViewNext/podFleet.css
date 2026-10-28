@@ -181,6 +181,7 @@
   padding: 0.3rem 0.5rem;
   border-top: 1px solid rgb(255 255 255 / 18%);
   text-align: right;
+  white-space: nowrap;
 }
 
 .pod-fleet-resource-table th:first-child,

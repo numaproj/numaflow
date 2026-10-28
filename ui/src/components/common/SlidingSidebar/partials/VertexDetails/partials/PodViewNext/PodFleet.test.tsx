@@ -148,11 +148,63 @@ describe("PodFleet", () => {
 
     fireEvent.mouseOver(screen.getByTestId(`pod-fleet-cell-${alpha.name}`));
     const tooltip = await screen.findByTestId(`pod-fleet-tooltip-${alpha.name}`);
-    expect(tooltip).toHaveTextContent("Usage as % of request");
+    expect(tooltip).toHaveTextContent("Current usage / % of request");
     expect(tooltip).toHaveTextContent("main");
     expect(tooltip).toHaveTextContent("numa");
     expect(tooltip).toHaveTextContent("numa CPU 200% of request");
-    expect(screen.getByText("200%").closest("td")).toHaveClass("is-hot");
-    expect(screen.getAllByText("10%").length).toBeGreaterThan(0);
+    expect(screen.getByText("2m/200%").closest("td")).toHaveClass("is-hot");
+    expect(screen.getAllByText("1m/10%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1Mi/10%").length).toBeGreaterThan(0);
+  });
+
+  it("shows usage with a dash when the container has no request", async () => {
+    const pod: Pod = {
+      name: "simple-mono-vertex-mv-0",
+      containers: ["numa", "udf"],
+      containerSpecMap: new Map(),
+    };
+    const podRuntime = new Map<string, PodRuntimeInfo>([
+      [
+        pod.name,
+        {
+          name: pod.name,
+          status: "Running",
+          containerDetailsMap: {
+            numa: {
+              state: "Running",
+              restartCount: 0,
+              lastStartedAt: "",
+              totalCPU: "4m",
+              requestedCPU: "20m",
+              totalMemory: "9Mi",
+              requestedMemory: "128Mi",
+            },
+            udf: {
+              state: "Running",
+              restartCount: 0,
+              lastStartedAt: "",
+              totalCPU: "8m",
+              totalMemory: "5Mi",
+            },
+          },
+        },
+      ],
+    ]);
+    render(
+      <PodFleet
+        items={buildPodFleetItems([pod], podRuntime)}
+        filter="all"
+        onFilterChange={jest.fn()}
+        runtimeByName={podRuntime}
+        onPodSelect={jest.fn()}
+      />
+    );
+
+    fireEvent.mouseOver(screen.getByTestId(`pod-fleet-cell-${pod.name}`));
+    const tooltip = await screen.findByTestId(`pod-fleet-tooltip-${pod.name}`);
+    expect(tooltip).toHaveTextContent("4m/20%");
+    expect(tooltip).toHaveTextContent("9Mi/7%");
+    expect(tooltip).toHaveTextContent("8m/ -");
+    expect(tooltip).toHaveTextContent("5Mi/ -");
   });
 });

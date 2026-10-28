@@ -39,8 +39,10 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "unknown", label: "Unknown" },
 ];
 
-function resourceValue(value?: number): string {
-  return value === undefined ? "—" : `${Math.round(value)}%`;
+/** resourceUsageLabel prints current usage, then the percent of request. No request stays a dash. */
+function resourceUsageLabel(usage?: string, percent?: number): string {
+  const used = usage || "—";
+  return percent === undefined ? `${used}/ -` : `${used}/${Math.round(percent)}%`;
 }
 
 function chipTooltip(item: PodFleetItem, status: string) {
@@ -50,7 +52,7 @@ function chipTooltip(item: PodFleetItem, status: string) {
         {item.pod.name} · {status}
       </strong>
       {item.reason && <span>{item.reason}</span>}
-      <span className="pod-fleet-tooltip-basis">Usage as % of request</span>
+      <span className="pod-fleet-tooltip-basis">Current usage / % of request</span>
       <table className="pod-fleet-resource-table">
         <thead>
           <tr>
@@ -64,14 +66,14 @@ function chipTooltip(item: PodFleetItem, status: string) {
             <tr key={container.name}>
               <td>{container.name}</td>
               <td className={container.cpuPercent !== undefined && container.cpuPercent > 80 ? "is-hot" : ""}>
-                {resourceValue(container.cpuPercent)}
+                {resourceUsageLabel(container.cpu, container.cpuPercent)}
               </td>
               <td
                 className={
                   container.memoryPercent !== undefined && container.memoryPercent > 80 ? "is-hot" : ""
                 }
               >
-                {resourceValue(container.memoryPercent)}
+                {resourceUsageLabel(container.memory, container.memoryPercent)}
               </td>
             </tr>
           ))}

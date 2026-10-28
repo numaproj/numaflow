@@ -105,8 +105,8 @@ describe("podFleetModel helpers", () => {
     expect(items[0].maxCPUPercent).toBe(500);
     expect(items[0].reason).toBe("numa CPU 500% of request");
     expect(items[0].containerResources).toEqual([
-      { name: "numa", cpuPercent: 500, memoryPercent: 10 },
-      { name: "udf", cpuPercent: 20, memoryPercent: 10 },
+      { name: "numa", cpu: "50m", memory: "1Mi", cpuPercent: 500, memoryPercent: 10 },
+      { name: "udf", cpu: "2m", memory: "1Mi", cpuPercent: 20, memoryPercent: 10 },
     ]);
   });
 
@@ -133,8 +133,8 @@ describe("podFleetModel helpers", () => {
     expect(item.maxCPUPercent).toBeCloseTo(1000);
     expect(item.maxMemoryPercent).toBeCloseTo(200);
     expect(item.containerResources).toEqual([
-      expect.objectContaining({ name: "numa", cpuPercent: 1000, memoryPercent: 200 }),
-      expect.objectContaining({ name: "udf", cpuPercent: undefined }),
+      expect.objectContaining({ name: "numa", cpu: "100m", memory: "100Mi", cpuPercent: 1000, memoryPercent: 200 }),
+      expect.objectContaining({ name: "udf", cpu: "1", memory: undefined, cpuPercent: undefined }),
     ]);
   });
 

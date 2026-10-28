@@ -135,7 +135,13 @@ export function buildPodFleetItems(
         maxMemoryPercent = memoryPercent;
         maxMemoryContainer = name;
       }
-      return { name, cpuPercent, memoryPercent };
+      return {
+        name,
+        cpu: runtimeContainer?.totalCPU || undefined,
+        memory: runtimeContainer?.totalMemory || undefined,
+        cpuPercent,
+        memoryPercent,
+      };
     });
     const restartCount = Object.values(runtime?.containerDetailsMap || {}).reduce(
       (count, container) => count + (container?.restartCount || 0),
