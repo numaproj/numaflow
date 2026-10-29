@@ -39,10 +39,13 @@ const filters: { value: PodFleetFilter; label: string }[] = [
   { value: "unknown", label: "Unknown" },
 ];
 
-/** resourceUsageLabel prints current usage, then the percent of request. No request stays a dash. */
+const MISSING = "—";
+
+/** resourceUsageLabel prints current usage, then the percent of request. */
 function resourceUsageLabel(usage?: string, percent?: number): string {
-  const used = usage || "—";
-  return percent === undefined ? `${used}/ -` : `${used}/${Math.round(percent)}%`;
+  const used = usage || MISSING;
+  const share = percent === undefined ? MISSING : `${Math.round(percent)}%`;
+  return `${used} / ${share}`;
 }
 
 function chipTooltip(item: PodFleetItem, status: string) {

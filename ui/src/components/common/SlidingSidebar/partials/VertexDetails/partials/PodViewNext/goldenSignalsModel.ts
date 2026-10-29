@@ -568,7 +568,7 @@ function backlogCard(input: VertexHealthInput): HealthCard {
       ? {
           name: "Pending messages",
           value: formatCompact(pending),
-          description: "Current messages waiting",
+          description: "Current messages waiting to be processed.",
           available: true,
         }
       : undefined,
@@ -585,7 +585,7 @@ function backlogCard(input: VertexHealthInput): HealthCard {
       ? {
           name: "Buffer fullness",
           value: `${percentFull}%`,
-          description: "Fullest buffer compared with its usage limit. 100% means writers are blocked.",
+          description: "How full the busiest buffer is. At 100%, new messages have to wait.",
           available: true,
         }
       : undefined,

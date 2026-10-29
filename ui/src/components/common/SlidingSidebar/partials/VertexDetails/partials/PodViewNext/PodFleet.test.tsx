@@ -152,9 +152,9 @@ describe("PodFleet", () => {
     expect(tooltip).toHaveTextContent("main");
     expect(tooltip).toHaveTextContent("numa");
     expect(tooltip).toHaveTextContent("numa CPU 200% of request");
-    expect(screen.getByText("2m/200%").closest("td")).toHaveClass("is-hot");
-    expect(screen.getAllByText("1m/10%").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("1Mi/10%").length).toBeGreaterThan(0);
+    expect(screen.getByText("2m / 200%").closest("td")).toHaveClass("is-hot");
+    expect(screen.getAllByText("1m / 10%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1Mi / 10%").length).toBeGreaterThan(0);
   });
 
   it("shows usage with a dash when the container has no request", async () => {
@@ -202,9 +202,9 @@ describe("PodFleet", () => {
 
     fireEvent.mouseOver(screen.getByTestId(`pod-fleet-cell-${pod.name}`));
     const tooltip = await screen.findByTestId(`pod-fleet-tooltip-${pod.name}`);
-    expect(tooltip).toHaveTextContent("4m/20%");
-    expect(tooltip).toHaveTextContent("9Mi/7%");
-    expect(tooltip).toHaveTextContent("8m/ -");
-    expect(tooltip).toHaveTextContent("5Mi/ -");
+    expect(tooltip).toHaveTextContent("4m / 20%");
+    expect(tooltip).toHaveTextContent("9Mi / 7%");
+    expect(tooltip).toHaveTextContent("8m / —");
+    expect(tooltip).toHaveTextContent("5Mi / —");
   });
 });

@@ -440,6 +440,9 @@ describe("buildVertexHealth", () => {
       "Buffer fullness",
       "Watermark lag",
     ]);
+    expect(withBuffer.breakdown?.items.find((item) => item.name === "Buffer fullness")?.description).toBe(
+      "How full the busiest buffer is. At 100%, new messages have to wait."
+    );
     expect(backlog({ ...pipeline, daemon: { rate1m: 10 }, buffers: [buffer] })).toEqual(
       expect.objectContaining({ value: "buffer 15% full", detail: "Source does not report pending messages" })
     );
