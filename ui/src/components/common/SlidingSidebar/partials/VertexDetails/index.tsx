@@ -17,7 +17,6 @@ import { ProcessingRates } from "./partials/ProcessingRates";
 import { Errors } from "./partials/Errors";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
-import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { Metrics } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
@@ -40,13 +39,6 @@ import {
   ObservabilityPatch,
   replaceObservabilityState,
 } from "../../../../../utils/observabilityURLState";
-import {
-  parsePodViewVersion,
-  PodViewVersion,
-  resolvePodViewVersion,
-  writeStoredPodViewVersion,
-} from "../../../../../utils/podViewPreference";
-import { PodViewModeToggle } from "./partials/PodViewModeToggle";
 import { PodViewNext } from "./partials/PodViewNext";
 
 import "./style.css";
@@ -165,10 +157,6 @@ export function VertexDetails({
   const [constructedDetails, setConstructedDetails] = useState<
     (ContainerError & { pod: string })[]
   >([]);
-  const [podViewVersion, setPodViewVersion] = useState<PodViewVersion>(() =>
-    resolvePodViewVersion(location.search)
-  );
-
   // Find the vertex spec by id
   useEffect(() => {
     if (type === "source") {
@@ -260,39 +248,10 @@ export function VertexDetails({
   const showBuffersTab = !!buffers || type === "source";
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const requestedVersion = parsePodViewVersion(
-      params.get("podViewVersion")
-    );
-    const resolvedVersion = resolvePodViewVersion(location.search);
-
-    if (resolvedVersion !== podViewVersion) {
-      setPodViewVersion(resolvedVersion);
-    }
-    if (isDeepLinkedVertex && !requestedVersion) {
-      replaceObservabilityState(history, location, {
-        podViewVersion: resolvedVersion,
-      });
-    }
-  }, [
-    history,
-    isDeepLinkedVertex,
-    location,
-    podViewVersion,
-  ]);
-
-  const handlePodViewVersionChange = useCallback(
-    (nextVersion: PodViewVersion) => {
-      setPodViewVersion(nextVersion);
-      writeStoredPodViewVersion(nextVersion);
-      if (isDeepLinkedVertex) {
-        replaceObservabilityState(history, location, {
-          podViewVersion: nextVersion,
-        });
-      }
-    },
-    [history, isDeepLinkedVertex, location]
-  );
+    if (!isDeepLinkedVertex) return;
+    if (!new URLSearchParams(location.search).has("podViewVersion")) return;
+    replaceObservabilityState(history, location, { podViewVersion: null });
+  }, [history, isDeepLinkedVertex, location]);
 
   const syncVertexTabToUrl = useCallback(
     (newValue: number) => {
@@ -486,43 +445,19 @@ export function VertexDetails({
       }}
     >
       <Box
-        className={
-          podViewVersion === "beta" ? "vertex-details--pod-beta" : undefined
-        }
+        className="vertex-details--pod-beta"
         sx={{
           display: "flex",
           flexDirection: "column",
           height: "100%",
         }}
       >
-        {tabValue === PODS_VIEW_TAB_INDEX && (
-          <div className="vertex-details-pod-view-banner">
-            <div className="vertex-details-pod-view-banner-copy">
-              <span className="vertex-details-pod-view-banner-title">
-                {podViewVersion === "beta" ? "New Pod View" : "Classic Pod View"}
-              </span>
-              <span className="vertex-details-pod-view-banner-description">
-                {podViewVersion === "beta"
-                  ? "Default workspace. Switch to Classic for the previous layout."
-                  : "Previous layout. Switch to New UI to return to the default workspace."}
-              </span>
-            </div>
-            <PodViewModeToggle
-              value={podViewVersion}
-              onChange={handlePodViewVersionChange}
-            />
-          </div>
-        )}
         <Box className="vertex-details-header">
-          {podViewVersion === "beta" ? (
-            <Box className="vertex-details-beta-title">
-              {header}
-              <span className="vertex-details-beta-title-separator">:</span>
-              <span className="vertex-details-beta-title-name">{vertexId}</span>
-            </Box>
-          ) : (
-            header
-          )}
+          <Box className="vertex-details-beta-title">
+            {header}
+            <span className="vertex-details-beta-title-separator">:</span>
+            <span className="vertex-details-beta-title-name">{vertexId}</span>
+          </Box>
           {tabValue !== METRICS_TAB_INDEX && (
             <Box className="vertex-details-header-actions">
               <CopyViewLinkButton />
@@ -626,28 +561,18 @@ export function VertexDetails({
           hidden={tabValue !== PODS_VIEW_TAB_INDEX}
         >
           <div className="vertex-details-pod-view-content">
-              {podViewVersion === "beta" ? (
-                <PodViewNext
-                  key={vertexIdentity}
-                  namespaceId={namespaceId}
-                  pipelineId={pipelineId}
-                  vertexId={vertexId}
-                  type={type}
-                  active={tabValue === PODS_VIEW_TAB_INDEX}
-                  vertexMetrics={vertexMetrics}
-                  buffers={buffers || undefined}
-                  recentErrorCount={errorsIdentity === vertexIdentity ? errorsCount : 0}
-                  vertexSpec={vertexSpec}
-                />
-              ) : (
-                <Pods
-                  namespaceId={namespaceId}
-                  pipelineId={pipelineId}
-                  vertexId={vertexId}
-                  type={type}
-                  active={tabValue === PODS_VIEW_TAB_INDEX}
-                />
-              )}
+            <PodViewNext
+              key={vertexIdentity}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              vertexId={vertexId}
+              type={type}
+              active={tabValue === PODS_VIEW_TAB_INDEX}
+              vertexMetrics={vertexMetrics}
+              buffers={buffers || undefined}
+              recentErrorCount={errorsIdentity === vertexIdentity ? errorsCount : 0}
+              vertexSpec={vertexSpec}
+            />
           </div>
         </div>
         {!disableMetricsCharts && (

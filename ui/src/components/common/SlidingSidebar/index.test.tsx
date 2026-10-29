@@ -356,9 +356,9 @@ describe("SlidingSidebar", () => {
     });
   });
 
-  it("marks a Beta vertex sidebar without changing the VertexDetails contract", async () => {
+  it("uses the pod view sidebar layout for vertex details", async () => {
     renderBase(
-      <MemoryRouter initialEntries={["/?vertex=test-vertex&podViewVersion=beta"]}>
+      <MemoryRouter initialEntries={["/?vertex=test-vertex"]}>
         <AppContext.Provider value={mockContext}>
           <SlidingSidebar
             pageWidth={1440}

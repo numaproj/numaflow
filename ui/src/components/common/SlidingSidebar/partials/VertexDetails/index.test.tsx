@@ -14,7 +14,6 @@ import "@testing-library/jest-dom";
 
 const mockBuffersComponent = jest.fn();
 const mockMetricsComponent = jest.fn();
-const mockPodsComponent = jest.fn();
 const mockUseErrorsFetch = jest.fn();
 let mockBetaPodViewInstance = 0;
 
@@ -73,26 +72,14 @@ jest.mock("./partials/Buffers", () => {
     },
   };
 });
-jest.mock(
-  "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods",
-  () => {
-    const originalModule = jest.requireActual(
-      "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods"
-    );
-    // Mock any module exports here
-    return {
-      __esModule: true,
-      ...originalModule,
-      // Named export mocks
-      Pods: (props) => {
-        mockPodsComponent(props);
-        return <div>Mocked pods</div>;
-      },
-    };
-  }
-);
 jest.mock("./partials/PodViewNext", () => ({
-  PodViewNext: ({ recentErrorCount }: { recentErrorCount?: number }) => {
+  PodViewNext: ({
+    recentErrorCount,
+    active,
+  }: {
+    recentErrorCount?: number;
+    active?: boolean;
+  }) => {
     const ReactModule = jest.requireActual("react");
     const [instance] = ReactModule.useState(() => ++mockBetaPodViewInstance);
     return (
@@ -100,6 +87,7 @@ jest.mock("./partials/PodViewNext", () => ({
         data-testid="pod-view-beta"
         data-instance={instance}
         data-recent-errors={recentErrorCount}
+        data-active={String(!!active)}
       />
     );
   },
@@ -146,7 +134,6 @@ const SearchProbe = () => {
 describe("VertexDetails", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    window.localStorage.clear();
     mockBetaPodViewInstance = 0;
     mockUseErrorsFetch.mockReturnValue({
       data: undefined,
@@ -175,13 +162,8 @@ describe("VertexDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("Input Vertex")).toBeInTheDocument();
       expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
-      expect(screen.getByText("New Pod View")).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          "Default workspace. Switch to Classic for the previous layout."
-        )
-      ).toBeInTheDocument();
-      expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+      expect(screen.queryByText("New Pod View")).not.toBeInTheDocument();
+      expect(screen.queryByText("Classic Pod View")).not.toBeInTheDocument();
     });
   });
 
@@ -274,10 +256,8 @@ describe("VertexDetails", () => {
     );
 
     expect(await screen.findByTestId("pod-view-beta")).toBeInTheDocument();
-    expect(screen.getByTestId("pod-view-mode-beta")).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(screen.queryByTestId("pod-view-mode-classic")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pod-view-mode-beta")).not.toBeInTheDocument();
     expect(screen.getByTestId("location-search")).toHaveTextContent(
       "pod=shared-pod"
     );
@@ -330,7 +310,7 @@ describe("VertexDetails", () => {
     expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-instance", "2");
   });
 
-  it("switches pod view modes without clearing observability state", async () => {
+  it("keeps the new pod view when a classic link is opened", async () => {
     render(
       <MemoryRouter
         initialEntries={[
@@ -352,21 +332,14 @@ describe("VertexDetails", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText("Mocked pods")).toBeInTheDocument();
-    expect(screen.queryByTestId("pod-view-beta")).not.toBeInTheDocument();
-    expect(screen.getByText("Classic Pod View")).toBeInTheDocument();
+    expect(await screen.findByTestId("pod-view-beta")).toBeInTheDocument();
+    expect(screen.queryByText("Classic Pod View")).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Previous layout. Switch to New UI to return to the default workspace."
-      )
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("pod-view-mode-beta"));
+      document.querySelector(".vertex-details-pod-view-banner")
+    ).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByTestId("pod-view-beta")).toBeInTheDocument();
-      expect(screen.getByText("New Pod View")).toBeInTheDocument();
-      expect(screen.getByTestId("location-search")).toHaveTextContent(
-        "podViewVersion=beta"
+      expect(screen.getByTestId("location-search")).not.toHaveTextContent(
+        "podViewVersion"
       );
       expect(screen.getByTestId("location-search")).toHaveTextContent(
         "pod=shared-pod"
@@ -375,9 +348,6 @@ describe("VertexDetails", () => {
         "logsSearch=error"
       );
     });
-    expect(window.localStorage.getItem("numaflow-pod-view-version")).toBe(
-      "beta"
-    );
   });
 
   it("renders Metrics immediately after Pods View", async () => {
@@ -495,7 +465,6 @@ describe("VertexDetails", () => {
   });
 
   it("stops Pod View polling props when another tab is selected", async () => {
-    window.localStorage.setItem("numaflow-pod-view-version", "classic");
     render(
       <VertexDetails
         namespaceId="test-namespace"
@@ -510,13 +479,13 @@ describe("VertexDetails", () => {
       />,
       { wrapper: BrowserRouter }
     );
-    await waitFor(() => expect(mockPodsComponent).toHaveBeenCalled());
-    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-active", "true")
+    );
 
     fireEvent.click(screen.getByTestId("spec-tab"));
     await waitFor(() => expect(screen.getByText("Mocked vertexupdate")).toBeInTheDocument());
-    expect(mockPodsComponent.mock.calls.at(-1)?.[0].active).toBe(false);
-    expect(screen.getByText("Mocked pods")).toBeInTheDocument();
+    expect(screen.getByTestId("pod-view-beta")).toHaveAttribute("data-active", "false");
   });
 
   it("Click through tabs", async () => {
@@ -802,12 +771,10 @@ describe("VertexDetails", () => {
     expect(header).toBeInTheDocument();
     expect(actions).toBeInTheDocument();
     expect(actions).toContainElement(screen.getByTestId("copy-view-link"));
-    expect(actions).not.toContainElement(
-      screen.getByTestId("pod-view-mode-classic")
-    );
     expect(
       document.querySelector(".vertex-details-pod-view-banner")
-    ).toContainElement(screen.getByTestId("pod-view-mode-classic"));
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pod-view-mode-classic")).not.toBeInTheDocument();
     expect(screen.getByTestId("copy-view-link")).toHaveTextContent("Copy View");
   });
 
@@ -837,9 +804,6 @@ describe("VertexDetails", () => {
     await waitFor(() => {
       expect(screen.getByText("Mocked metrics")).toBeInTheDocument();
       expect(screen.queryByTestId("copy-view-link")).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("pod-view-mode-classic")
-      ).not.toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId("spec-tab"));
     await waitFor(() => {
