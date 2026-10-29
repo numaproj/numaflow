@@ -8,6 +8,11 @@ data:
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
     # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    #
+    # signal is an optional per-metric field that tells the Pods View health strip which card the metric backs.
+    # Allowed values: p99, stageRead, stageTransformer, stageUdf, stageSink, stageWrite, stageAck, drops, nacks,
+    # fallback, critical. Tag at most one metric per signal for each object type. If you rename a metric, move
+    # the signal tag with it; a signal with no tagged metric shows as "not configured" in the strip.
     patterns:
     - name: vertex_gauge
       objects: 
@@ -92,6 +97,7 @@ data:
           required: false
       metrics:
         - metric_name: monovtx_processing_time_bucket
+          signal: p99
           display_name: MonoVertex Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to forward a chunk of messages.
           required_filters:
@@ -104,6 +110,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_sink_time_bucket
+          signal: stageSink
           display_name: MonoVertex Sink Write Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to write to the Sink.
           required_filters:
@@ -116,6 +123,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_read_time_bucket
+          signal: stageRead
           display_name: MonoVertex Read Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to read message.
           required_filters:
@@ -128,6 +136,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_ack_time_bucket
+          signal: stageAck
           display_name: MonoVertex Ack Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to ack message.
           required_filters:
@@ -140,6 +149,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_transformer_time_bucket
+          signal: stageTransformer
           display_name: MonoVertex Transformer Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken by transformer(if present).
           required_filters:
@@ -152,6 +162,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_udf_time_bucket
+          signal: stageUdf
           display_name: MonoVertex UDF Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken by UDF.
           required_filters:
@@ -182,6 +193,7 @@ data:
           required: false
       metrics:
         - metric_name: forwarder_write_processing_time_bucket
+          signal: stageWrite
           display_name: Vertex Write Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to write a message.
           required_filters:
@@ -195,6 +207,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: forwarder_read_processing_time_bucket
+          signal: stageRead
           display_name: Vertex Read Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to read messages.
           required_filters:
@@ -208,6 +221,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: forwarder_ack_processing_time_bucket
+          signal: stageAck
           display_name: Vertex Ack Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to ack messages.
           required_filters:
@@ -221,6 +235,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: forwarder_processing_time_bucket
+          signal: p99
           display_name: Vertex Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken to process messages (only available in Rust runtime mode).
           required_filters:
@@ -234,6 +249,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: forwarder_udf_processing_time_bucket
+          signal: stageUdf
           display_name: UDF Processing Time Latency
           metric_description: This metric represents a histogram to keep track of the total time taken by udf.
           required_filters:
@@ -329,6 +345,7 @@ data:
           required: false
       metrics:
         - metric_name: forwarder_drop_total
+          signal: drops
           display_name: Vertex Drop Rate
           metric_description: Messages dropped by a vertex during the selected duration. The reason label separates duplicate drops from other runtime drops.
           required_filters:
@@ -345,6 +362,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: forwarder_nack_total
+          signal: nacks
           display_name: Vertex Nack Rate
           metric_description: Messages negatively acknowledged by a vertex during the selected duration.
           required_filters:
@@ -373,6 +391,7 @@ data:
           required: false
       metrics:
         - metric_name: forwarder_critical_error_total
+          signal: critical
           display_name: Vertex Critical Errors
           metric_description: Critical runtime errors during the selected duration, such as a forwarder failure or a UDF failure.
           required_filters:
@@ -464,6 +483,7 @@ data:
           required: false
       metrics:
         - metric_name: monovtx_dropped_total
+          signal: drops
           display_name: MonoVertex Drop Rate
           metric_description: Duplicate source messages discarded by the MonoVertex during the selected duration.
           required_filters:
@@ -476,6 +496,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_nack_total
+          signal: nacks
           display_name: MonoVertex Nack Rate
           metric_description: Messages negatively acknowledged by the sink during the selected duration.
           required_filters:
@@ -488,6 +509,7 @@ data:
                 - name: pod
                   required: false
         - metric_name: monovtx_fallback_sink_write_total
+          signal: fallback
           display_name: MonoVertex Fallback Sink Write Rate
           metric_description: Messages written to the fallback sink during the selected duration.
           required_filters:
@@ -515,6 +537,7 @@ data:
           required: false
       metrics:
         - metric_name: monovtx_critical_error_total
+          signal: critical
           display_name: MonoVertex Critical Errors
           metric_description: Critical runtime errors during the selected duration, such as a forwarder failure or a UDF failure.
           required_filters:

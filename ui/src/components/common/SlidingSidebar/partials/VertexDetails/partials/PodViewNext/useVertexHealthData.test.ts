@@ -2,6 +2,7 @@ import { createElement, ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { AppContext } from "../../../../../../../App";
 import { useVertexHealthData } from "./useVertexHealthData";
+import { MONO_VERTEX_DISCOVERY, VERTEX_DISCOVERY } from "./signalDiscovery.fixture";
 
 jest.mock("../../../../../../../App", () => {
   const { createContext } = jest.requireActual("react");
@@ -9,6 +10,7 @@ jest.mock("../../../../../../../App", () => {
 });
 
 const fetchMock = jest.fn();
+let discoveryResponse: (objectType: string) => any;
 
 function wrapper(disableMetricsCharts: boolean) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -33,6 +35,8 @@ function respond(url: string, init?: RequestInit) {
       json: () => Promise.resolve({ lastScaledAt: "2026-10-12T11:50:00Z" }),
     });
   }
+  const discovery = url.match(/\/api\/v1\/metrics-discovery\/object\/(.+)$/);
+  if (discovery) return Promise.resolve(discoveryResponse(discovery[1]));
   let data: any = [];
   if (url.endsWith("/health")) data = { dataHealthStatus: "healthy", dataHealthCode: "D1" };
   else if (url.endsWith("/watermarks")) data = [{ from: "cat", to: "out", watermarks: ["1"] }];
@@ -48,6 +52,14 @@ const proxyBodies = () =>
 
 describe("useVertexHealthData", () => {
   beforeEach(() => {
+    discoveryResponse = (objectType) => ({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: objectType === "mono-vertex" ? MONO_VERTEX_DISCOVERY : VERTEX_DISCOVERY,
+          errMsg: null,
+        }),
+    });
     fetchMock.mockReset();
     fetchMock.mockImplementation(respond);
     global.fetch = fetchMock as any;
@@ -130,7 +142,61 @@ describe("useVertexHealthData", () => {
     await waitFor(() => expect(result.current.health).toBeDefined());
     expect(result.current.metricsEnabled).toBe(false);
     expect(proxyBodies()).toHaveLength(0);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/metrics-discovery/"))).toBe(false);
     expect(result.current.series.p99).toBeUndefined();
+  });
+
+  it("queries renamed metrics from discovery and skips untagged signals", async () => {
+    discoveryResponse = () => ({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: [
+            { pattern_name: "custom_histogram", metric_name: "renamed_processing_time_bucket", signal: "p99" },
+            { pattern_name: "mono_vertex_histogram", metric_name: "monovtx_read_time_bucket" },
+          ],
+          errMsg: null,
+        }),
+    });
+    const { result } = renderHook(
+      () =>
+        useVertexHealthData({
+          namespaceId: "ns",
+          pipelineId: "mv",
+          vertexId: "mv",
+          type: "monoVertex",
+          active: true,
+        }),
+      { wrapper: wrapper(false) }
+    );
+
+    await waitFor(() => expect(result.current.series.p99).toEqual([2]));
+    expect(proxyBodies()).toEqual([
+      expect.objectContaining({
+        metric_name: "renamed_processing_time_bucket",
+        pattern_name: "custom_histogram",
+      }),
+    ]);
+    expect(Object.keys(result.current.queries ?? {})).toEqual(["p99"]);
+  });
+
+  it("treats a failed discovery as metrics unavailable", async () => {
+    discoveryResponse = () => ({ ok: false, json: () => Promise.resolve({}) });
+    const { result } = renderHook(
+      () =>
+        useVertexHealthData({
+          namespaceId: "ns",
+          pipelineId: "mv",
+          vertexId: "mv",
+          type: "monoVertex",
+          active: true,
+        }),
+      { wrapper: wrapper(false) }
+    );
+
+    await waitFor(() => expect(result.current.metricsEnabled).toBe(false));
+    expect(result.current.queries).toBeUndefined();
+    expect(proxyBodies()).toHaveLength(0);
   });
 
   it("does not poll hidden Pod Views", () => {

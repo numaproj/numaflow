@@ -4,18 +4,22 @@ import { failingContainer, PodViewNext } from "./index";
 import { usePodViewState } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/usePodViewState";
 import { VertexDetailsContext } from "../../index";
 import { signalQueries } from "./goldenSignalsModel";
+import { VERTEX_DISCOVERY } from "./signalDiscovery.fixture";
 import { PodFleetItem } from "../../../../../../../types/declarations/pods";
 
 const mockFleetProps = jest.fn();
 const mockUseVertexHealthData = jest.fn(() => ({
   queries: jest
     .requireActual("./goldenSignalsModel")
-    .signalQueries({
-      namespaceId: "default",
-      pipelineId: "pipeline",
-      vertexId: "vertex",
-      type: "udf",
-    }),
+    .signalQueries(
+      {
+        namespaceId: "default",
+        pipelineId: "pipeline",
+        vertexId: "vertex",
+        type: "udf",
+      },
+      jest.requireActual("./signalDiscovery.fixture").VERTEX_DISCOVERY
+    ),
   series: { p99: [1000, 2000] } as any,
   metricsEnabled: true,
   now: Date.now(),
@@ -75,12 +79,15 @@ function renderPodView() {
 describe("PodViewNext", () => {
   beforeEach(() => {
     mockUseVertexHealthData.mockReturnValue({
-      queries: signalQueries({
-        namespaceId: "default",
-        pipelineId: "pipeline",
-        vertexId: "vertex",
-        type: "udf",
-      }),
+      queries: signalQueries(
+        {
+          namespaceId: "default",
+          pipelineId: "pipeline",
+          vertexId: "vertex",
+          type: "udf",
+        },
+        VERTEX_DISCOVERY
+      ),
       series: { p99: [1000, 2000] },
       metricsEnabled: true,
       now: Date.now(),
@@ -203,12 +210,15 @@ describe("PodViewNext", () => {
 
     fireEvent.click(screen.getByTestId("vertex-health-card-latency"));
     expect(openMetrics).toHaveBeenCalledWith({
-      panelId: `${signalQueries({
-        namespaceId: "default",
-        pipelineId: "pipeline",
-        vertexId: "vertex",
-        type: "udf",
-      }).p99?.metric_name}-panel`,
+      panelId: `${signalQueries(
+        {
+          namespaceId: "default",
+          pipelineId: "pipeline",
+          vertexId: "vertex",
+          type: "udf",
+        },
+        VERTEX_DISCOVERY
+      ).p99?.metric_name}-panel`,
       presets: { quantile: "0.99", duration: "5m" },
     });
   });
@@ -255,12 +265,15 @@ describe("PodViewNext", () => {
   it("opens critical runtime metrics from the Errors card", () => {
     const openMetrics = jest.fn();
     mockUseVertexHealthData.mockReturnValueOnce({
-      queries: signalQueries({
-        namespaceId: "default",
-        pipelineId: "pipeline",
-        vertexId: "vertex",
-        type: "udf",
-      }),
+      queries: signalQueries(
+        {
+          namespaceId: "default",
+          pipelineId: "pipeline",
+          vertexId: "vertex",
+          type: "udf",
+        },
+        VERTEX_DISCOVERY
+      ),
       series: { p99: [1000], critical: [3] },
       metricsEnabled: true,
       now: Date.now(),
