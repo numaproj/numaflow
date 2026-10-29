@@ -14,52 +14,6 @@
   gap: 0.8rem;
 }
 
-.vertex-details-pod-view-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.6rem;
-  margin-right: 4.8rem;
-  margin-bottom: 1.6rem;
-  padding: 1.2rem 1.6rem;
-  border: 1px solid rgba(0, 119, 197, 0.3);
-  border-radius: 1.2rem;
-  background-color: var(--accent-primary);
-}
-
-.vertex-details-pod-view-banner-copy {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 0.8rem;
-}
-
-.vertex-details-pod-view-banner-title {
-  color: #ffffff;
-  font-size: 1.4rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.vertex-details-pod-view-banner-beta {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid rgba(255, 255, 255, 0.48);
-  border-radius: 1rem;
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.vertex-details-pod-view-banner-description {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 1.2rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .vertex-details-header-text {
   font-size: 2rem;
   font-style: normal;
@@ -220,26 +174,5 @@
 
   .vertex-details-header-actions {
     gap: 0.4rem;
-  }
-
-  .pod-view-mode-toggle .MuiToggleButton-root {
-    min-width: 5.8rem;
-    padding-right: 0.8rem;
-    padding-left: 0.8rem;
-  }
-
-  .vertex-details-pod-view-banner {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
-    margin-right: 3.6rem;
-  }
-
-  .vertex-details-pod-view-banner-copy {
-    width: 100%;
-  }
-
-  .vertex-details-pod-view-banner-description {
-    display: none;
   }
 }
