@@ -32,6 +32,7 @@ const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS
 
 #[derive(Debug, Clone)]
 pub(crate) struct MonovertexConfig {
+    #[allow(dead_code)]
     pub(crate) name: String,
     pub(crate) batch_size: usize,
     /// Cap on in-flight (read-but-not-acked) messages, sourced from `spec.limits.concurrency`.
@@ -47,6 +48,8 @@ pub(crate) struct MonovertexConfig {
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
+    // Loaded from the callback env, but the monovertex forwarder does not consume it.
+    #[allow(dead_code)]
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
     /// When true, the source reads continuously bounded by `concurrency` in-flight messages

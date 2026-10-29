@@ -59,6 +59,7 @@ pub(crate) mod watermark;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PipelineConfig {
+    #[allow(dead_code)]
     pub(crate) pipeline_name: &'static str,
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
@@ -79,6 +80,8 @@ pub(crate) struct PipelineConfig {
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    // Read by tests. Per-edge ordering lives on `ToVertexConfig`.
+    #[allow(dead_code)]
     pub(crate) ordered_processing_enabled: bool,
 }
 
