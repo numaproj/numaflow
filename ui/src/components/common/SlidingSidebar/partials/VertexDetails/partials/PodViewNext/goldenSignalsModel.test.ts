@@ -259,7 +259,8 @@ describe("buildVertexHealth", () => {
     const health = buildVertexHealth(
       input({
         health: { dataHealthStatus: "healthy", dataHealthCode: "D1" },
-        monoStatus: { readyReplicas: 3, desiredReplicas: 3, lastScaledAt: "2026-09-30T12:00:00Z" },
+        scaleStatus: { readyReplicas: 5, desiredReplicas: 5, lastScaledAt: "2026-10-12T11:50:00Z" },
+        scale: { min: 5, max: 10 },
         series: {
           p99: [1000, 1000, 1000],
           stageRead: [10],
@@ -274,7 +275,10 @@ describe("buildVertexHealth", () => {
     );
     expect(health.tone).toBe("ok");
     expect(health.verdict).toEqual({ label: "Data flow healthy", tone: "ok" });
-    expect(health.replicas).toEqual({ label: "3/3 ready · scaled 12d ago", tone: "ok" });
+    expect(health.replicas).toEqual({
+      label: "5/5 ready · scaled 10 min ago · scale 5–10",
+      tone: "ok",
+    });
     expect(card(health, "latency")).toEqual(
       expect.objectContaining({
         value: "P99 1.0 ms",
@@ -436,6 +440,9 @@ describe("buildVertexHealth", () => {
       "Buffer fullness",
       "Watermark lag",
     ]);
+    expect(withBuffer.breakdown?.items.find((item) => item.name === "Buffer fullness")?.description).toBe(
+      "How full the busiest buffer is. At 100%, new messages have to wait."
+    );
     expect(backlog({ ...pipeline, daemon: { rate1m: 10 }, buffers: [buffer] })).toEqual(
       expect.objectContaining({ value: "buffer 15% full", detail: "Source does not report pending messages" })
     );
@@ -604,34 +611,50 @@ describe("buildVertexHealth", () => {
         vertexId: "cat",
         queries: signalQueries(pipelineIds),
         health: { dataHealthStatus: "critical", dataHealthCode: "D3" },
-        scale: { min: 1, max: 5 },
+        scaleStatus: { readyReplicas: 3, desiredReplicas: 5, lastScaledAt: "2026-10-12T11:50:00Z" },
+        scale: { min: 5, max: 10 },
         fleetItems: [fleetItem(), fleetItem({ runtime: { name: "p", status: "Pending", containerDetailsMap: {} } })],
       })
     );
     expect(pipeline.verdict).toEqual({ label: "Pipeline data flow critical", tone: "critical" });
-    expect(pipeline.replicas).toEqual({ label: "1 pod running · scale 1–5", tone: "warn" });
+    expect(pipeline.replicas).toEqual({
+      label: "3/5 ready · scaled 10 min ago · scale 5–10",
+      tone: "warn",
+    });
     expect(pipeline.tone).toBe("critical");
     expect(buildVertexHealth(input({ health: { dataHealthStatus: "unknown" } })).verdict?.tone).toBe(
       "neutral"
     );
     expect(
-      buildVertexHealth(input({ monoStatus: { readyReplicas: 1, desiredReplicas: 3 } })).replicas
+      buildVertexHealth(input({ scaleStatus: { readyReplicas: 1, desiredReplicas: 3 } })).replicas
     ).toEqual({ label: "1/3 ready", tone: "warn" });
     expect(
       buildVertexHealth(
-        input({ type: "udf", vertexId: "cat", queries: signalQueries(pipelineIds), scale: { min: 2, max: 2 } })
+        input({
+          type: "udf",
+          vertexId: "cat",
+          queries: signalQueries(pipelineIds),
+          scaleStatus: { readyReplicas: 2, desiredReplicas: 2 },
+          scale: { min: 2, max: 2 },
+        })
       ).replicas?.label
-    ).toBe("1 pod running · scale 2");
+    ).toBe("2/2 ready · scale 2");
     expect(
       buildVertexHealth(
-        input({ type: "udf", vertexId: "cat", queries: signalQueries(pipelineIds), scale: { min: 1 } })
+        input({
+          type: "udf",
+          vertexId: "cat",
+          queries: signalQueries(pipelineIds),
+          scaleStatus: { readyReplicas: 1, desiredReplicas: 1 },
+          scale: { min: 1 },
+        })
       ).replicas?.label
-    ).toBe("1 pod running · scale 1–50");
+    ).toBe("1/1 ready · scale 1–50");
   });
 
   it("falls back to live values when Prometheus is off", () => {
     const health = buildVertexHealth(input({ metricsEnabled: false, series: {} }));
-    expect(health.meta).toBe("live values · Prometheus not configured");
+    expect(health).not.toHaveProperty("meta");
     expect(card(health, "latency")).toEqual(
       expect.objectContaining({ value: "Metrics unavailable", tone: "neutral" })
     );

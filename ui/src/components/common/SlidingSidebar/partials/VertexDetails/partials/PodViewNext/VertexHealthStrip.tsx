@@ -170,7 +170,6 @@ export function VertexHealthStrip({ health, onInspect }: VertexHealthStripProps)
               {health.replicas.label}
             </span>
           )}
-          <span className="vertex-health-meta">{health.meta}</span>
         </div>
       </div>
       <div className="vertex-health-grid">

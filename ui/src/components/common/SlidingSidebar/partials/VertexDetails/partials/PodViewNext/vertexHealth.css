@@ -53,17 +53,9 @@
   text-transform: uppercase;
 }
 
-.vertex-health-verdict,
-.vertex-health-meta {
-  font-size: 1.1rem;
-}
-
 .vertex-health-verdict {
+  font-size: 1.1rem;
   font-weight: 600;
-}
-
-.vertex-health-meta {
-  color: var(--text-tertiary);
 }
 
 .vertex-health-badge {
