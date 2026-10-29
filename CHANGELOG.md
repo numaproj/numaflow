@@ -1,5 +1,174 @@
 # Changelog
 
+## v1.9.0 (2026-10-29)
+
+ * [3337d26d3](https://github.com/numaproj/numaflow/commit/3337d26d3c35e22a8c6e0ab68016f56cc3ca18cb) Update manifests to v1.9.0
+ * [26a9e9a02](https://github.com/numaproj/numaflow/commit/26a9e9a02042cf3b15220f13c85d68a8465c0c75) fix(UI): drive Pod View health metrics from discovery signal tags (#3750)
+ * [95fc24bb7](https://github.com/numaproj/numaflow/commit/95fc24bb75365e2a2c3a08b859edf9c3d499d160) fix: redact secrets in logs (v2) (#3719)
+ * [d150a4883](https://github.com/numaproj/numaflow/commit/d150a48837fff671f7c04bc6c6b2685f5d505ec1) fix(UI): scale badge changes (#3749)
+ * [44ac12c9a](https://github.com/numaproj/numaflow/commit/44ac12c9a9e6cbe0d95e93e4c0610a57447c9566) chore(deps): bump github.com/go-jose/go-jose/v4 from 4.1.4 to 4.1.6 in the go-dependencies group across 1 directory (#3748)
+ * [7aa7be9ea](https://github.com/numaproj/numaflow/commit/7aa7be9ea9c5f8a2c68a46251f57dd4cb8427639) chore(deps): bump rustls from 0.23.45 to 0.23.46 in /rust in the rust-dependencies group across 1 directory (#3746)
+ * [62e8b7d67](https://github.com/numaproj/numaflow/commit/62e8b7d67655148070dd6abfb96206c886ca0045) chore(deps): bump the ui-dependencies group across 1 directory with 7 updates (#3745)
+ * [d5dce6152](https://github.com/numaproj/numaflow/commit/d5dce6152c7591fc83bd984e43868a65f543763c) feat(ui): beta Pod View for pipeline vertices and MonoVertex (#3739)
+ * [47045b5ce](https://github.com/numaproj/numaflow/commit/47045b5ce7ebf5473f59a287cf5a12585feae74c) fix: lower default readTimeout from 1s to 100ms (#3741)
+ * [7bb64bd67](https://github.com/numaproj/numaflow/commit/7bb64bd679762c4d48f1f8b3306940df57fd7001) feat(metrics): add MonoVertex data processing health metric  (#3740)
+ * [3ec005936](https://github.com/numaproj/numaflow/commit/3ec005936c2170dad3c9f0be273790ff52797461) fix(UI): contextual modal title and chart description in dark mode (#3738)
+ * [58dba292f](https://github.com/numaproj/numaflow/commit/58dba292f5d04c386891425868489535755da081) fix(ui): case-insensitive level filter for pipeline pod logs (#3737)
+ * [a8e267b54](https://github.com/numaproj/numaflow/commit/a8e267b548ea40a2cae71ac6c8b685b11d884137) fix(UI): add copy view for jetstream/isb spec (#3735)
+ * [5f34c9d22](https://github.com/numaproj/numaflow/commit/5f34c9d222e9bea91a0b35d900027f9ae98eccd1) fix: only remove offset from tracker after ack/nack succeed (#3665)
+ * [e43ad2222](https://github.com/numaproj/numaflow/commit/e43ad222209bcc4de3a69c552621ab052a980155) feat: cleanup redrive/reconnect flow (#3702)
+ * [f39df509f](https://github.com/numaproj/numaflow/commit/f39df509fd538578d83044c5ba41e7c5fb335d0f) feat: add schedulerName to pod template (#3725)
+ * [85256ccdf](https://github.com/numaproj/numaflow/commit/85256ccdfed608032c9665eaa8e3269cd97136b0) chore(deps): bump launch-editor from 2.14.1 to 2.14.2 in /ui in the ui-dependencies group across 1 directory (#3732)
+ * [0102894b0](https://github.com/numaproj/numaflow/commit/0102894b052afea12a30da00ebe3963552836101) chore(deps): bump github.com/klauspost/compress from 1.18.4 to 1.18.7 in the go-dependencies group across 1 directory (#3730)
+ * [8286553a8](https://github.com/numaproj/numaflow/commit/8286553a86102858b722f8fcdf6dd7407c00ceb7) chore(deps): bump follow-redirects from 1.16.0 to 1.16.1 in /ui in the ui-dependencies group across 1 directory (#3729)
+ * [e3efee874](https://github.com/numaproj/numaflow/commit/e3efee874edd4efa4fcfb4d621b4be23688ffeff) fix(UI):  sections in buffers tab in dark theme (#3728)
+ * [92d669e86](https://github.com/numaproj/numaflow/commit/92d669e86c758c1eabc645157c9858afd4579497) fix(UI): Display Messages/API Requests counts in compact (k/M) format on ISB Service Details page (#3726)
+ * [f5f14e87a](https://github.com/numaproj/numaflow/commit/f5f14e87a8cee07352c83f9ce198b68166915ebc) chore(deps): bump github.com/getkin/kin-openapi from 0.144.0 to 0.149.0 in the go-dependencies group across 1 directory (#3724)
+ * [884990c96](https://github.com/numaproj/numaflow/commit/884990c96e4c0591c254404a0aae7bb95988f8f4) feat(sqs): validate native dead-letter queue policies (#3662)
+ * [bbf01013e](https://github.com/numaproj/numaflow/commit/bbf01013ebc470f12cb21d763f4fb3d383f83cc6) fix(ui): unify pod view dark mode (#3721)
+ * [388b59557](https://github.com/numaproj/numaflow/commit/388b59557876bc7ad09e1f93d921f34da90a5a31) fix(monovertex): keep spec.replicas in sync with real replica count (#3687)
+ * [924b318a5](https://github.com/numaproj/numaflow/commit/924b318a570596b241ffad221809152c9ee25dca) chore(deps): bump the ui-dependencies group across 1 directory with 5 updates (#3715)
+ * [a45b5c06f](https://github.com/numaproj/numaflow/commit/a45b5c06fef690e10c91056af66f656d30ba4d83) chore(deps): bump rustls from 0.23.31 to 0.23.45 in /rust in the rust-dependencies group across 1 directory (#3714)
+ * [6bd11458c](https://github.com/numaproj/numaflow/commit/6bd11458c5bc81323d7237e39fe56427f42b7b44) fix: resume pipelines unpaused before pause is recorded (#3707)
+ * [f7edbabcd](https://github.com/numaproj/numaflow/commit/f7edbabcd6952db56097c80fa71ea84b8d10a81c) fix: remove default replicas value from mvtx/vtx CRD (#3709)
+ * [d66ae8b90](https://github.com/numaproj/numaflow/commit/d66ae8b906c63cec9bd7d64db32067da5d86f0a2) fix(server): scope pod log access to Numaflow resources (#3686)
+ * [9843ce1c6](https://github.com/numaproj/numaflow/commit/9843ce1c6eaa88ac5fe301fb3696da5de71973cc) fix: release scaler lock before dispatching to workers (#3706)
+ * [96e84448a](https://github.com/numaproj/numaflow/commit/96e84448a12e79b59661aa8418db326b9e70139e) Add keep alive to daemon connection (#3703)
+ * [0516f5130](https://github.com/numaproj/numaflow/commit/0516f5130fee739a80ba1995d5250ce554054bcd) fix: serve sidecar-livez during reduce fence wait (#3674)
+ * [0cc88b188](https://github.com/numaproj/numaflow/commit/0cc88b18889502114193b3cffeb6be5fd6f5f65a) feat(server): add API v2 MonoVertex summary and status endpoints (#3696)
+ * [fd8af2185](https://github.com/numaproj/numaflow/commit/fd8af2185c9f1655d5a0bced5eb2f95f26615aa8) fix: store the pending future back in jetstreamwatcher (#3683)
+ * [3cd5ba644](https://github.com/numaproj/numaflow/commit/3cd5ba644fc0633ee4c9fd7daefc83f547b366e9) feat: rebuild forwarder on runtime errors (#3673)
+ * [3804f7d25](https://github.com/numaproj/numaflow/commit/3804f7d256a7b51e632ee3986e0d939ab3c36ec9) feat(server): add API v2 pipeline vertex status endpoint (#3695)
+ * [95370305d](https://github.com/numaproj/numaflow/commit/95370305dae2db341a569d9e69e5da03d154d9f7) chore(deps): bump the rust-dependencies group across 1 directory with 3 updates (#3693)
+ * [4e0eeea83](https://github.com/numaproj/numaflow/commit/4e0eeea8330cf2883151da09be6a48474873912f) chore(deps): bump moment from 2.30.1 to 2.31.0 in /ui in the ui-dependencies group across 1 directory (#3691)
+ * [f482d68f7](https://github.com/numaproj/numaflow/commit/f482d68f77371aa3eb28fbee4b756bb7ada20a7d) feat: multi-partition support for pulsar source (#3682)
+ * [82443a254](https://github.com/numaproj/numaflow/commit/82443a2544262f8449bb6a22e2a01ed3250f5f2f) feat(server): add API v2 pipeline vertex summary endpoint (#3679)
+ * [75004633e](https://github.com/numaproj/numaflow/commit/75004633ed60cbd91366d9a422b8d47a87d242bf) feat: propagate ISB type as env var (#3677)
+ * [bf7deab6f](https://github.com/numaproj/numaflow/commit/bf7deab6f82b045eda59d45a7b1a1de78ddd681a) feat(server): add API v2 capabilities discovery (#3658)
+ * [4ee902439](https://github.com/numaproj/numaflow/commit/4ee902439445edea365bf88940df2abab11b2f57) fix: avoid retry count resets across batchMap redrives (#3661)
+ * [e22262485](https://github.com/numaproj/numaflow/commit/e2226248516ac74e6a483e806eaa0addd6f80ef2) fix(ui): stabilize metrics and logs deep links (#3664)
+ * [242990b35](https://github.com/numaproj/numaflow/commit/242990b3503bc75f2421216536830aee253ffeb2) feat: allow a startupProbe on the numa container (#3656)
+ * [692090c8e](https://github.com/numaproj/numaflow/commit/692090c8e6e9b294d16263727c197ecb6a98025d) feat(ui): add Spec deep links and Copy View UX (#3663)
+ * [e356ad485](https://github.com/numaproj/numaflow/commit/e356ad485ec639cd30ac6f06960535614939f842) feat(ui): add core observability URL state (#3652)
+ * [30010a980](https://github.com/numaproj/numaflow/commit/30010a9805336839cc55a8cf1faedeb0efd0c060) Add TLS caCertSecret support to Pulsar source and sink (#3657)
+ * [ccd7676ce](https://github.com/numaproj/numaflow/commit/ccd7676cec5741becde60767bbb597dcfa93659b) fix: daemon should not be recreated on scale changes (#3638)
+ * [a2c552da6](https://github.com/numaproj/numaflow/commit/a2c552da668abbb4892b400e18e66b164d410b3b) chore(deps): bump the go-dependencies group across 1 directory with 2 updates (#3655)
+ * [a29c7f945](https://github.com/numaproj/numaflow/commit/a29c7f945f34b8a21b9729bf5bb8af8bd9bd13a2) fix: remove scale.max dependency and fix broken replica count in mvtx health status (#3649)
+ * [a6c85b082](https://github.com/numaproj/numaflow/commit/a6c85b082e87fff2fcfba3e54674241ab6264c4d) feat: use dns resolver to detect active replicas from daemon (#3643)
+ * [efeb82bef](https://github.com/numaproj/numaflow/commit/efeb82bef67cd145513fff625e0a5fa0b3259cb5) fix: log NATS server errors and disconnects at ERROR level (#3646)
+ * [396b52ae4](https://github.com/numaproj/numaflow/commit/396b52ae44e6f7da68816235dcc2077e75981f28) feat: Introduce a KVStoreFactory trait (#3640)
+ * [715825e09](https://github.com/numaproj/numaflow/commit/715825e091dca72aba63e8e5e79077abe4d63605) fix: spec level validation for conditional forwarding's tag values (#3636)
+ * [8c54f5a64](https://github.com/numaproj/numaflow/commit/8c54f5a640949e06021820f9cbdb71541a9aa55c) fix(docs): UI metrics, pods view and logs tab (#3634)
+ * [492c398a1](https://github.com/numaproj/numaflow/commit/492c398a1b76587a609b3a7793fe4948cc736c22) feat: SQS source can consume multiple queues (#3615)
+ * [9c8ef5536](https://github.com/numaproj/numaflow/commit/9c8ef5536c6742d9f3720a8eddf84be22b04f6f2) feat: e2e testing for cron based autoscaling (#3623)
+ * [385ca8963](https://github.com/numaproj/numaflow/commit/385ca8963b74439621f9f6705c92b135e8f57f93) chore(deps): bump @xmldom/xmldom from 0.8.13 to 0.8.15 in /ui (#3627)
+ * [fb56fca0d](https://github.com/numaproj/numaflow/commit/fb56fca0dab24152372eccadf67c7f0ff6953bde) chore(deps): bump fast-uri from 3.1.5 to 3.1.7 in /ui (#3626)
+ * [aee65e6cb](https://github.com/numaproj/numaflow/commit/aee65e6cba6d9bfaf7da106aa20e23ccfce3e0f0) chore(deps): bump nanoid from 3.3.8 to 3.3.18 in /ui (#3622)
+ * [515b37cf0](https://github.com/numaproj/numaflow/commit/515b37cf09a0ca972002562204b7ab369fea719a) chore(deps): bump browserslist from 4.23.2 to 4.28.8 in /ui (#3621)
+ * [339ddb310](https://github.com/numaproj/numaflow/commit/339ddb3104c5c467b73ee8b3dc85e87fc7074b5f) chore(deps): bump google.golang.org/grpc from 1.82.1 to 1.83.1 (#3620)
+ * [e15364bcd](https://github.com/numaproj/numaflow/commit/e15364bcde3658de207e7c37c654d8132182a893) chore(deps): bump postcss-selector-parser from 6.1.1 to 6.1.4 in /ui (#3618)
+ * [dad933d06](https://github.com/numaproj/numaflow/commit/dad933d06d1744c6b267b1b4073d2377568413cf) feat: add JetStream max payload exceeded metric (#3612)
+ * [cf6c843f2](https://github.com/numaproj/numaflow/commit/cf6c843f2ccc76a93fee8f2c6fd0bd45078c7ea2) fix: vertex pod recreation on scale min/max change (#3613)
+ * [ea0438351](https://github.com/numaproj/numaflow/commit/ea04383518b1db3e6d45be7badd90ae532dba6ed) feat: introduce endpoint field for http source (#3605)
+ * [e7b7de79a](https://github.com/numaproj/numaflow/commit/e7b7de79a9ba79362d73ab1141f93f8b37d066bf) fix: stricter health check for pipeline/mvtx in UI (#3600)
+ * [51e73008e](https://github.com/numaproj/numaflow/commit/51e73008efbd045bbca15b631d809aa2f76ea2b5) fix: bound pipeline buffer clean up job lifetime (#3611)
+ * [9bad7659a](https://github.com/numaproj/numaflow/commit/9bad7659a262c6409c9bffed1577321255279f79) chore(deps): bump github.com/gorilla/websocket from 1.5.0 to 1.5.3 (#3609)
+ * [63ba4e8c8](https://github.com/numaproj/numaflow/commit/63ba4e8c8692b8f797e446af1a144f2291d19d14) fix(doc): match docs readme with root readme (#3606)
+ * [bce1ded77](https://github.com/numaproj/numaflow/commit/bce1ded77295c55c9d1de08e55bcaae784c12b44) feat(ui): add Focus logs modal for larger pod log viewing (#3602)
+ * [335ae742b](https://github.com/numaproj/numaflow/commit/335ae742b304fb56197aac14812eb14671db6217) feat: introduce retry config for transformer and map (#3570)
+ * [e42c02b17](https://github.com/numaproj/numaflow/commit/e42c02b17e50e9de580564e4efa83774531ac30d) fix: avoid unnecessary calls to SQS during nack (#3601)
+ * [d9a36ab73](https://github.com/numaproj/numaflow/commit/d9a36ab73daf6c4cde4dc48805197c112a262fe1) doc: add MonoVertex usage guide for HTTP source (#3596)
+ * [892933d5b](https://github.com/numaproj/numaflow/commit/892933d5bde4e65740dee59e6f29e721d32db5ed) doc: fallback doc update based on review comment (#3597)
+ * [ca821988b](https://github.com/numaproj/numaflow/commit/ca821988bcb93bfbe15fc73469276768f7978240) feat(ui): N-lines selector for pod logs (#3591)
+ * [bb5370aaa](https://github.com/numaproj/numaflow/commit/bb5370aaa82331f65ad871f18b4f6260a7f9be3e) doc: update fallback sink documentation to clarify message lifecycle (#3593)
+ * [4c1b6bb2c](https://github.com/numaproj/numaflow/commit/4c1b6bb2c59ec96e06cb9a13f57b78585a5b64a5) doc: add Rancher Desktop to container runtime quick-start options (#3595)
+ * [99d2bb584](https://github.com/numaproj/numaflow/commit/99d2bb58477061bdaa289b81576f0bd7a486d4bf) feat: support cron-based autoscaling for source vertices (#3569)
+ * [3ea471875](https://github.com/numaproj/numaflow/commit/3ea4718754d16706ca316ed083fd6c25954f115b) feat(ui): add pod log search navigation and visual improvement for logs search (#3583)
+ * [2cf564153](https://github.com/numaproj/numaflow/commit/2cf56415338866ffb7e230648cb8a127072b9d3e) feat(ui): restyle pod logs toolbar and layout with MUI (#3584)
+ * [9f5919b7e](https://github.com/numaproj/numaflow/commit/9f5919b7e34bb81a762a43639e5b8bfa971ee0f6) doc: link monovertex bypass with conditional forward (#3586)
+ * [3a70cd8d8](https://github.com/numaproj/numaflow/commit/3a70cd8d866d50f390a3263d3732be76665f4ce2) chore(deps): bump fast-uri from 3.1.4 to 3.1.5 in /ui (#3581)
+ * [762a743c4](https://github.com/numaproj/numaflow/commit/762a743c4ba961a6807cf8071199e9154523904b) feat(ui): add virtualized rendering for pod logs (#3575)
+ * [05af4fd2d](https://github.com/numaproj/numaflow/commit/05af4fd2d83e01cd1661f7db128756ddeb9d2e59) feat(testing): `redrive-e2e` tests to cover UDF failure scenarios (#3562)
+ * [c0a14816e](https://github.com/numaproj/numaflow/commit/c0a14816e8b5595c4151b5f50b4ff90dededad76) refactor(ui): split PodLogs helpers and fix log stream lifecycle (#3567)
+ * [7956c80e3](https://github.com/numaproj/numaflow/commit/7956c80e3ed6bc23d49d89e7c399d65f4aa9f4f8) refactor(rust): box nack_options in Message (#3573)
+ * [a43f93dec](https://github.com/numaproj/numaflow/commit/a43f93decdbe5bf1b7ceb72c138a88f621d258af) fix: Ensure batch consumes it's own EOT (#3572)
+ * [55c3519fd](https://github.com/numaproj/numaflow/commit/55c3519fd82595d8248d26b4a1cf8c955a63d3af) chore(docs): update nats docs (#3568)
+ * [ce0fff069](https://github.com/numaproj/numaflow/commit/ce0fff069f5c335fac7ba6a955b717093b56bf3a) doc: update email address (#3566)
+ * [05660f786](https://github.com/numaproj/numaflow/commit/05660f786a040ddae631cfba309417b9b05d05a6) feat: cron-based MonoVertex autoscaling spec (#3558)
+ * [7b02ed936](https://github.com/numaproj/numaflow/commit/7b02ed9367c87f471e9236870bbca5c13d4bba15) chore(deps): bump quinn-proto from 0.11.14 to 0.11.16 in /rust (#3564)
+ * [0069107ab](https://github.com/numaproj/numaflow/commit/0069107abe386cfef1368427526bfb0c1ec7c61c) feat: remove monitor container (#3524)
+ * [fc71cb482](https://github.com/numaproj/numaflow/commit/fc71cb4820fbe44b8b1b7f93b84b87c2cd2b50a6) feat(sqs): utilize nack options for SQS (#3557)
+ * [f5da84f47](https://github.com/numaproj/numaflow/commit/f5da84f470e9317614f687699ebc205d2d882717) feat: reconnect on map(udf) failures (#3488)
+ * [8770f3fe6](https://github.com/numaproj/numaflow/commit/8770f3fe606a27be8a79d00892ae40a3aa9ba2b8) chore(deps): bump fast-uri from 3.1.2 to 3.1.4 in /ui (#3559)
+ * [616d3b2a1](https://github.com/numaproj/numaflow/commit/616d3b2a14a62c8f5fbf6594fe052b416954c86a) chore(deps): bump shell-quote from 1.8.4 to 1.10.0 in /ui (#3561)
+ * [503613b87](https://github.com/numaproj/numaflow/commit/503613b87ea03c159a4d7e83eb469eb50ebc2020) feat: Generic ISB (#3551)
+ * [5e6779c56](https://github.com/numaproj/numaflow/commit/5e6779c56772f7d9163ada56608b2d0d0a17a6a3) feat: introduce a generic map for per message nack options (#3539)
+ * [70e5aff1d](https://github.com/numaproj/numaflow/commit/70e5aff1def5422cfeb143d94569948a864d5a69) fix: apply retention gate when deleting frozen gc files after compaction (#3533)
+ * [fe110d413](https://github.com/numaproj/numaflow/commit/fe110d4132860374dedfa28ac7d61a98cb6e818e) chore(deps): bump websocket-driver from 0.7.4 to 0.7.5 in /ui (#3541)
+ * [8c3d93a4c](https://github.com/numaproj/numaflow/commit/8c3d93a4cadc568224e66c8dbed1302609284e4c) feat(UI): move metrics beside pods view (#3538)
+ * [895d0f380](https://github.com/numaproj/numaflow/commit/895d0f3808e948c05ab96b32a5f0297191f65c01) feat(pulsar): support consumer dead letter policy and redelivery delay (#3532)
+ * [5e563c946](https://github.com/numaproj/numaflow/commit/5e563c946e59e0cd68c20001499257e88921c6ed) fix: remove streaming gate for monovertex metrics in source (#3535)
+ * [c429fc223](https://github.com/numaproj/numaflow/commit/c429fc223081d7898266b97158bba5d586551b84) feat: metrics to track nacks (#3534)
+ * [4d9294f64](https://github.com/numaproj/numaflow/commit/4d9294f643d7d586d0f3806662c4d5d1c9e81d93) feat(pulsar): log unsupported per-message nack options (#3529)
+ * [acc16ad80](https://github.com/numaproj/numaflow/commit/acc16ad809d59cd634d2ccebdefc409c107ea9a9) chore(deps): bump golang.org/x/crypto from 0.51.0 to 0.52.0 (#3527)
+ * [e6a253491](https://github.com/numaproj/numaflow/commit/e6a253491c328733bd55791502044e5aeb8326e0) fix(UI): source transformer node in pipeline (#3508)
+ * [cc96f31bc](https://github.com/numaproj/numaflow/commit/cc96f31bcd87c798875b375310a30ed816378103) fix: drain closed accumulator window on re-opened key (#3494)
+ * [6e64ec119](https://github.com/numaproj/numaflow/commit/6e64ec119974130f8ddd8749e0832de7b8b2dd55) feat: add securityContext to monitor container (#3519)
+ * [915c41efe](https://github.com/numaproj/numaflow/commit/915c41efe020d915b1ef4a7a520c0e2e4063f39a) fix(isbsvc): use quorum-aware health threshold for JetStream (#3484)
+ * [9f9eb2ad2](https://github.com/numaproj/numaflow/commit/9f9eb2ad27d1558c9085ca0ea4036630cb63bef7) fix(UI): dynamic monovertex dimension for cleaner UI (#3505)
+ * [29343228c](https://github.com/numaproj/numaflow/commit/29343228cd9cab20363a553ea970c4cb913a6024) feat: show mvtx udf metrics on UI (#3503)
+ * [6e94ca490](https://github.com/numaproj/numaflow/commit/6e94ca490a0eb31d6e24bce71e312db85c953f15) fix: return detailed vertex status message when unhealthy (#3502)
+ * [7ac2628eb](https://github.com/numaproj/numaflow/commit/7ac2628ebcf944978de491c44bc13ce1a81b3611) doc: introduce monovertex in getting-started (#3506)
+ * [128ddde86](https://github.com/numaproj/numaflow/commit/128ddde86b9acdea3727167f61de61d84bad7713) chore(deps): bump golang.org/x/net from 0.51.0 to 0.55.0 (#3495)
+ * [3de36b301](https://github.com/numaproj/numaflow/commit/3de36b3011a8339330dd2ef9a99310af4effd8bc) feat: surface OOM (and other) reasons as free-form text (#3481)
+ * [3ffcf1231](https://github.com/numaproj/numaflow/commit/3ffcf1231881f0a7b2f4143487a8da10890a79af) chore(deps): bump opentelemetry_sdk from 0.31.0 to 0.32.1 in /rust (#3487)
+ * [e63269293](https://github.com/numaproj/numaflow/commit/e63269293a562664aaa3ffc24303113c065312f5) feat: isb stream consumer kv debug info (#3472)
+ * [948bf6bdd](https://github.com/numaproj/numaflow/commit/948bf6bdd6af0c92aab2d639051c14a6d0ed1ab7) feat: end to end wiring for per msg nack option (#3455)
+ * [aa4a5b20e](https://github.com/numaproj/numaflow/commit/aa4a5b20e787c6b1173d2284108c7cea12a1ba5b) chore(deps): bump http-proxy-middleware from 2.0.9 to 2.0.10 in /ui (#3486)
+ * [df9269365](https://github.com/numaproj/numaflow/commit/df92693656d38d1c82664b1f88388216631966f7) feat: keep numa alive across source, transformer, and sink UDF failures (#3475)
+ * [83c554d59](https://github.com/numaproj/numaflow/commit/83c554d5930d22582d901120a5d8fcae0c822c24) chore(deps): bump go.mongodb.org/mongo-driver from 1.15.0 to 1.17.7 (#3479)
+ * [a79b13f68](https://github.com/numaproj/numaflow/commit/a79b13f68d834df3cbcf49f2442d97698342bf94) chore(deps): bump form-data from 3.0.4 to 3.0.5 in /ui (#3476)
+ * [4945557de](https://github.com/numaproj/numaflow/commit/4945557de7a0eb1c3950a61e733cf8a230a6e672) chore(deps): bump @babel/core from 7.24.9 to 7.29.7 in /ui (#3477)
+ * [51747b280](https://github.com/numaproj/numaflow/commit/51747b280f2a6ca3e178949906b086d2113a34d3) fix: cleanup wal on eof in accumulator (#3461)
+ * [02489d3e1](https://github.com/numaproj/numaflow/commit/02489d3e110ed2541ad3541a87215627737de0f4) feat: expose udsink retry count in the system metadata (#3464)
+ * [f9436232b](https://github.com/numaproj/numaflow/commit/f9436232b3fbb19b9528f28b17ab0ea381bb8096) fix: pod logs streaming blocked by cleanResponseMiddleware buffering (#3471)
+ * [eb80370e8](https://github.com/numaproj/numaflow/commit/eb80370e83c21fd45235cb7c1ddfe7e4953d7ce4) feat(UI): jetstream summary & raft details (#3466)
+ * [c1429a11e](https://github.com/numaproj/numaflow/commit/c1429a11e9a72d7c61239e7366285456a30ea38e) feat: support micro batching alternative at source (#3450)
+ * [b8063fb23](https://github.com/numaproj/numaflow/commit/b8063fb23d8979fa9b386032af1f03b3eb71db0a) feat: add udf shared helpers and resilient error persistence (#3459)
+ * [9bd8b838c](https://github.com/numaproj/numaflow/commit/9bd8b838cea42fd08d8b04fa260f05258b938a38) chore(deps): bump shell-quote from 1.8.1 to 1.8.4 in /ui (#3467)
+ * [393ff8ab5](https://github.com/numaproj/numaflow/commit/393ff8ab54909512c2bf36ce783f2168f9aac0b7) fix: wait for deployments during e2e startup (#3465)
+ * [6a0704592](https://github.com/numaproj/numaflow/commit/6a0704592749ea07dfa3c838d15fe3e2c1fc133a) fix: remove the trailing `&` from the Install k3d step (#3460)
+ * [e2fb36b25](https://github.com/numaproj/numaflow/commit/e2fb36b25040c2ae4919a3300886847f6ddb827a) chore(deps): bump launch-editor from 2.8.0 to 2.14.1 in /ui (#3454)
+ * [08145dd77](https://github.com/numaproj/numaflow/commit/08145dd770e1bb7663fe4cbcb5e9a580f6055cf6) fix: option to skip main image rebuilds during `make Test%` (#3446)
+
+### Contributors
+
+ * Adarsh Jain
+ * Ayush Srivastava
+ * Callum Cooper
+ * Chris Carter
+ * Da.Sanchez
+ * Do Tuan Anh
+ * Esha Wadher
+ * HamdaanAliQuatil
+ * Jagjot Bisram
+ * Mads Bach Villadsen
+ * Niyaz K
+ * Sarvesh
+ * Sreekanth
+ * Sri Harsha Yayi
+ * Surya Pratap Singh
+ * Vaibhav Kant Tiwari
+ * Vigith Maurice
+ * Yashash Lokesh
+ * adarsh0728
+ * dependabot[bot]
+ * mchoy
+ * nirajkumarbarot
+ * rahulsgh21
+ * sbbuilds
+ * will-flemmer
+
 ## v1.8.4 (2026-09-10)
 
  * [85dbc9516](https://github.com/numaproj/numaflow/commit/85dbc9516a1a2f316f7b8dce63e0580c3fe595df) Update manifests to v1.8.4
@@ -29,15 +198,11 @@
 
  * [d5f32d110](https://github.com/numaproj/numaflow/commit/d5f32d11014d3fe131ef57fc710b9caa7b28d37e) Update manifests to v1.8.2
  * [4840682b9](https://github.com/numaproj/numaflow/commit/4840682b90ca3b13f7e5f549ce488ae732d65dde) feat(sqs): utilize nack options for SQS (#3557)
- * [7572b5735](https://github.com/numaproj/numaflow/commit/7572b573568ece4fa8e1fb14ec2b77c5d2c8be89) chore: prepare for release v1.8.2 (#3556)
 
 ### Contributors
 
  * Ayush Srivastava
- * Surya Pratap Singh
- * Vaibhav Tiwari
- * Vigith Maurice
- * Yashash Lokesh
+ * vtiwari5
 
 ## v1.8.1 (2026-06-17)
 
