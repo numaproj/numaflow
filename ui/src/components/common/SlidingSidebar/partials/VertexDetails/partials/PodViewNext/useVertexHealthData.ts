@@ -6,7 +6,7 @@ import { useMetricsFetch } from "../../../../../../../utils/fetchWrappers/metric
 import {
   DataHealth,
   MONO_VERTEX,
-  MonoVertexScaleStatus,
+  VertexScaleStatus,
   SignalQueries,
   SignalQuery,
   SignalSeries,
@@ -32,7 +32,7 @@ export interface VertexHealthData {
   queries: SignalQueries;
   series: SignalSeries;
   health?: DataHealth;
-  monoStatus?: MonoVertexScaleStatus;
+  scaleStatus?: VertexScaleStatus;
   watermarkEdges?: WatermarkEdge[];
   metricsEnabled: boolean;
   now: number;
@@ -111,6 +111,20 @@ async function fetchData<T>(url: string, signal: AbortSignal): Promise<T | undef
   return body?.errMsg ? undefined : body?.data;
 }
 
+async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T | undefined> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) return undefined;
+  return response.json();
+}
+
+interface PipelineVertexStatus {
+  replicas?: { ready?: number; desired?: number };
+}
+
+interface PipelineVertexSummary {
+  lastScaledAt?: string;
+}
+
 /** useVertexHealthData loads the strip's live inputs and refreshes them every minute. */
 export function useVertexHealthData({
   namespaceId,
@@ -124,7 +138,7 @@ export function useVertexHealthData({
   const isMono = type === MONO_VERTEX;
   const [now, setNow] = useState(() => Date.now());
   const [health, setHealth] = useState<DataHealth>();
-  const [monoStatus, setMonoStatus] = useState<MonoVertexScaleStatus>();
+  const [scaleStatus, setScaleStatus] = useState<VertexScaleStatus>();
   const [watermarkEdges, setWatermarkEdges] = useState<WatermarkEdge[]>();
   const [fetchedAt, setFetchedAt] = useState<number>();
 
@@ -193,23 +207,46 @@ export function useVertexHealthData({
     const controller = new AbortController();
     const base = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}`;
     const load = async () => {
-      const [healthData, vertexData, watermarks] = await Promise.allSettled([
-        fetchData<DataHealth>(
-          isMono ? `${base}/mono-vertices/${vertexId}/health` : `${base}/pipelines/${pipelineId}/health`,
-          controller.signal
-        ),
-        isMono
-          ? fetchData<any>(`${base}/mono-vertices/${vertexId}`, controller.signal)
-          : Promise.resolve(undefined),
-        isMono
-          ? Promise.resolve(undefined)
-          : fetchData<WatermarkEdge[]>(`${base}/pipelines/${pipelineId}/watermarks`, controller.signal),
-      ]);
+      const vertexBase = `${host}${getBaseHref()}/api/v2/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}`;
+      const [healthData, vertexData, watermarks, pipelineStatus, pipelineSummary] =
+        await Promise.allSettled([
+          fetchData<DataHealth>(
+            isMono ? `${base}/mono-vertices/${vertexId}/health` : `${base}/pipelines/${pipelineId}/health`,
+            controller.signal
+          ),
+          isMono
+            ? fetchData<any>(`${base}/mono-vertices/${vertexId}`, controller.signal)
+            : Promise.resolve(undefined),
+          isMono
+            ? Promise.resolve(undefined)
+            : fetchData<WatermarkEdge[]>(`${base}/pipelines/${pipelineId}/watermarks`, controller.signal),
+          isMono
+            ? Promise.resolve(undefined)
+            : fetchJson<PipelineVertexStatus>(`${vertexBase}/status`, controller.signal),
+          isMono
+            ? Promise.resolve(undefined)
+            : fetchJson<PipelineVertexSummary>(`${vertexBase}/summary`, controller.signal),
+        ]);
       if (controller.signal.aborted) return;
       setHealth(healthData.status === "fulfilled" ? healthData.value : undefined);
-      setMonoStatus(
-        vertexData.status === "fulfilled" ? vertexData.value?.monoVertex?.status : undefined
-      );
+      if (isMono) {
+        setScaleStatus(
+          vertexData.status === "fulfilled" ? vertexData.value?.monoVertex?.status : undefined
+        );
+      } else {
+        const status = pipelineStatus.status === "fulfilled" ? pipelineStatus.value : undefined;
+        const summary = pipelineSummary.status === "fulfilled" ? pipelineSummary.value : undefined;
+        const desired = status?.replicas?.desired;
+        setScaleStatus(
+          desired === undefined
+            ? undefined
+            : {
+                desiredReplicas: desired,
+                readyReplicas: status?.replicas?.ready,
+                lastScaledAt: summary?.lastScaledAt,
+              }
+        );
+      }
       setWatermarkEdges(watermarks.status === "fulfilled" ? watermarks.value : undefined);
       setFetchedAt(Date.now());
     };
@@ -222,7 +259,7 @@ export function useVertexHealthData({
     queries,
     series,
     health,
-    monoStatus,
+    scaleStatus,
     watermarkEdges,
     metricsEnabled,
     now: fetchedAt ?? now,

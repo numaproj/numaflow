@@ -381,7 +381,7 @@ export interface DataHealth {
   dataHealthMessage?: string;
 }
 
-export interface MonoVertexScaleStatus {
+export interface VertexScaleStatus {
   desiredReplicas?: number;
   readyReplicas?: number;
   lastScaledAt?: string;
@@ -400,7 +400,7 @@ export interface VertexHealthInput {
   buffers?: BufferInfo[];
   watermarkEdges?: WatermarkEdge[];
   health?: DataHealth;
-  monoStatus?: MonoVertexScaleStatus;
+  scaleStatus?: VertexScaleStatus;
   scale?: { min?: number; max?: number };
   fleetItems: PodFleetItem[];
   recentErrorCount?: number;
@@ -842,35 +842,28 @@ function verdict(health: DataHealth | undefined, isMono: boolean): VertexHealth[
   return { label: `${isMono ? "Data flow" : "Pipeline data flow"} ${status}`, tone };
 }
 
-/** Unset scale.max uses the controller default of 50. */
+/** Unset scale.min is 0 and unset scale.max is the controller default of 50. */
 const DEFAULT_MAX_REPLICAS = 50;
 
+function scaleRange(scale?: { min?: number; max?: number }): string | undefined {
+  if (!scale || (scale.min === undefined && scale.max === undefined)) return undefined;
+  const minReplicas = scale.min ?? 0;
+  const maxReplicas = scale.max ?? DEFAULT_MAX_REPLICAS;
+  return minReplicas === maxReplicas
+    ? `scale ${minReplicas}`
+    : `scale ${minReplicas}–${maxReplicas}`;
+}
+
 function replicas(input: VertexHealthInput): VertexHealth["replicas"] {
-  if (input.type === MONO_VERTEX) {
-    const { readyReplicas, desiredReplicas, lastScaledAt } = input.monoStatus || {};
-    if (desiredReplicas === undefined) return undefined;
-    const ready = readyReplicas || 0;
-    const scaled = formatAgo(lastScaledAt, input.now);
-    return {
-      label: `${ready}/${desiredReplicas} ready${scaled ? ` · scaled ${scaled}` : ""}`,
-      tone: ready < desiredReplicas ? "warn" : "ok",
-    };
-  }
-  if (!input.fleetItems.length) return undefined;
-  const running = input.fleetItems.filter((item) => item.runtime?.status === "Running").length;
-  const { min, max } = input.scale || {};
-  let range = "";
-  if (min !== undefined || max !== undefined) {
-    const minReplicas = min ?? 0;
-    const maxReplicas = max ?? DEFAULT_MAX_REPLICAS;
-    range =
-      minReplicas === maxReplicas
-        ? ` · scale ${minReplicas}`
-        : ` · scale ${minReplicas}–${maxReplicas}`;
-  }
+  const { readyReplicas, desiredReplicas, lastScaledAt } = input.scaleStatus || {};
+  if (desiredReplicas === undefined) return undefined;
+  const ready = readyReplicas || 0;
+  const scaled = formatAgo(lastScaledAt, input.now);
   return {
-    label: `${running} ${running === 1 ? "pod" : "pods"} running${range}`,
-    tone: running < input.fleetItems.length ? "warn" : "ok",
+    label: [`${ready}/${desiredReplicas} ready`, scaled ? `scaled ${scaled}` : undefined, scaleRange(input.scale)]
+      .filter(Boolean)
+      .join(" · "),
+    tone: ready < desiredReplicas ? "warn" : "ok",
   };
 }
 
@@ -888,9 +881,6 @@ export function buildVertexHealth(input: VertexHealthInput): VertexHealth {
     tone: worstTone([...cards.map((card) => card.tone), headerVerdict?.tone]),
     verdict: headerVerdict,
     replicas: replicas(input),
-    meta: input.metricsEnabled
-      ? "trends over the last 30 minutes"
-      : "live values · Prometheus not configured",
     cards,
   };
 }

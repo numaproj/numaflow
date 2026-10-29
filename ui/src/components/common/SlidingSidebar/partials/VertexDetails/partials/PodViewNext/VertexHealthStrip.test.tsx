@@ -88,8 +88,7 @@ const cards: HealthCard[] = [
 const health: VertexHealth = {
   tone: "critical",
   verdict: { label: "Data flow unknown", tone: "neutral" },
-  replicas: { label: "3/3 ready · scaled 12d ago", tone: "ok" },
-  meta: "trends over the last 30 minutes",
+  replicas: { label: "3/5 ready · scaled 10 min ago · scale 5–10", tone: "warn" },
   cards,
 };
 
@@ -100,8 +99,11 @@ describe("VertexHealthStrip", () => {
     expect(screen.getByText("Vertex health")).toBeInTheDocument();
     expect(screen.getByTestId("vertex-health-dot")).toHaveAttribute("data-tone", "critical");
     expect(screen.getByTestId("vertex-health-verdict")).toHaveTextContent("Data flow unknown");
-    expect(screen.getByTestId("vertex-health-replicas")).toHaveTextContent("3/3 ready");
-    expect(screen.getByText("trends over the last 30 minutes")).toBeInTheDocument();
+    expect(screen.getByTestId("vertex-health-replicas")).toHaveTextContent(
+      "3/5 ready · scaled 10 min ago · scale 5–10"
+    );
+    expect(screen.queryByText(/trends over the last/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Prometheus not configured/)).not.toBeInTheDocument();
     expect(screen.getByText("LATENCY")).toBeInTheDocument();
     expect(screen.getByText("ERRORS")).toBeInTheDocument();
     expect(screen.queryByText("01 · LATENCY")).not.toBeInTheDocument();

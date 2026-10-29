@@ -80,7 +80,7 @@ export function PodViewNext(props: PodViewNextProps) {
   const [filter, setFilter] = useState<PodFleetFilter>("all");
   const { namespaceId, pipelineId, vertexId, type, vertexMetrics, buffers, recentErrorCount, vertexSpec } =
     props;
-  const { queries, series, health, monoStatus, watermarkEdges, metricsEnabled, now } =
+  const { queries, series, health, scaleStatus, watermarkEdges, metricsEnabled, now } =
     useVertexHealthData({ namespaceId, pipelineId, vertexId, type, active });
 
   const fleetItems = useMemo(
@@ -120,7 +120,7 @@ export function PodViewNext(props: PodViewNextProps) {
         buffers,
         watermarkEdges,
         health,
-        monoStatus,
+        scaleStatus,
         scale: vertexSpec?.scale,
         fleetItems,
         recentErrorCount,
@@ -132,7 +132,7 @@ export function PodViewNext(props: PodViewNextProps) {
       fleetItems,
       health,
       metricsEnabled,
-      monoStatus,
+      scaleStatus,
       now,
       queries,
       recentErrorCount,
