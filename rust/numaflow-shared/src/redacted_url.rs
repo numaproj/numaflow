@@ -68,10 +68,10 @@ impl FromStr for RedactedUrl {
 impl fmt::Debug for RedactedUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut url = self.0.clone();
-        if !url.username().is_empty() || url.password().is_some() {
-            if url.set_password(None).is_err() || url.set_username("REDACTED").is_err() {
-                return f.write_str("<redacted url>");
-            }
+        if (!url.username().is_empty() || url.password().is_some())
+            && (url.set_password(None).is_err() || url.set_username("REDACTED").is_err())
+        {
+            return f.write_str("<redacted url>");
         }
         f.write_str(url.as_str())
     }
