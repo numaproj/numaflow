@@ -20,6 +20,7 @@ import {
   worstTone,
 } from "./goldenSignalsModel";
 import { HealthCard, PodFleetItem } from "../../../../../../../types/declarations/pods";
+import { MONO_VERTEX_DISCOVERY, VERTEX_DISCOVERY } from "./signalDiscovery.fixture";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
 const monoIds = { namespaceId: "ns", pipelineId: "mv", vertexId: "mv", type: "monoVertex" };
@@ -51,7 +52,7 @@ function input(overrides: Partial<VertexHealthInput> = {}): VertexHealthInput {
       fallback: [],
       critical: [],
     },
-    queries: signalQueries(monoIds),
+    queries: signalQueries(monoIds, MONO_VERTEX_DISCOVERY),
     fleetItems: [fleetItem()],
     ...overrides,
   };
@@ -63,7 +64,7 @@ function card(health: ReturnType<typeof buildVertexHealth>, id: HealthCard["id"]
 
 describe("signalQueries", () => {
   it("uses MonoVertex patterns and filters, including fallback writes", () => {
-    const queries = signalQueries(monoIds);
+    const queries = signalQueries(monoIds, MONO_VERTEX_DISCOVERY);
     expect(queries.p99).toEqual(
       expect.objectContaining({
         pattern_name: "mono_vertex_histogram",
@@ -93,7 +94,7 @@ describe("signalQueries", () => {
   });
 
   it("uses pipeline vertex patterns without fallback or transformer stages", () => {
-    const queries = signalQueries(pipelineIds);
+    const queries = signalQueries(pipelineIds, VERTEX_DISCOVERY);
     expect(queries.p99?.pattern_name).toBe("vertex_histogram");
     expect(queries.drops).toEqual(
       expect.objectContaining({
@@ -113,6 +114,25 @@ describe("signalQueries", () => {
     );
     expect(queries.fallback).toBeUndefined();
     expect(queries.stageTransformer).toBeUndefined();
+  });
+
+  it("follows renamed metrics through their signal tag and ignores untagged or unknown ones", () => {
+    const queries = signalQueries(monoIds, [
+      { pattern_name: "custom_histogram", metric_name: "my_processing_time_bucket", signal: "p99" },
+      { pattern_name: "custom_histogram", metric_name: "second_p99_bucket", signal: "p99" },
+      { pattern_name: "mono_vertex_histogram", metric_name: "monovtx_processing_time_bucket" },
+      { pattern_name: "custom_outcomes", metric_name: "my_drops", signal: "not-a-signal" },
+    ]);
+    expect(queries).toEqual({
+      p99: {
+        pattern_name: "custom_histogram",
+        metric_name: "my_processing_time_bucket",
+        dimension: "mono-vertex",
+        quantile: "0.99",
+        duration: "5m",
+        filters: { namespace: "ns", mvtx_name: "mv" },
+      },
+    });
   });
 });
 
@@ -419,7 +439,7 @@ describe("buildVertexHealth", () => {
     const pipeline = {
       type: "udf",
       vertexId: "cat",
-      queries: signalQueries(pipelineIds),
+      queries: signalQueries(pipelineIds, VERTEX_DISCOVERY),
       daemon: { rate1m: 10, pending: 3 },
     };
     const withBuffer = backlog({
@@ -466,7 +486,7 @@ describe("buildVertexHealth", () => {
     const loss = (series: VertexHealthInput["series"]) =>
       card(
         buildVertexHealth(
-          input({ type: "udf", queries: signalQueries(pipelineIds), series: { p99: [1], ...series } })
+          input({ type: "udf", queries: signalQueries(pipelineIds, VERTEX_DISCOVERY), series: { p99: [1], ...series } })
         ),
         "loss"
       );
@@ -609,7 +629,7 @@ describe("buildVertexHealth", () => {
       input({
         type: "udf",
         vertexId: "cat",
-        queries: signalQueries(pipelineIds),
+        queries: signalQueries(pipelineIds, VERTEX_DISCOVERY),
         health: { dataHealthStatus: "critical", dataHealthCode: "D3" },
         scaleStatus: { readyReplicas: 3, desiredReplicas: 5, lastScaledAt: "2026-10-12T11:50:00Z" },
         scale: { min: 5, max: 10 },
@@ -633,7 +653,7 @@ describe("buildVertexHealth", () => {
         input({
           type: "udf",
           vertexId: "cat",
-          queries: signalQueries(pipelineIds),
+          queries: signalQueries(pipelineIds, VERTEX_DISCOVERY),
           scaleStatus: { readyReplicas: 2, desiredReplicas: 2 },
           scale: { min: 2, max: 2 },
         })
@@ -644,7 +664,7 @@ describe("buildVertexHealth", () => {
         input({
           type: "udf",
           vertexId: "cat",
-          queries: signalQueries(pipelineIds),
+          queries: signalQueries(pipelineIds, VERTEX_DISCOVERY),
           scaleStatus: { readyReplicas: 1, desiredReplicas: 1 },
           scale: { min: 1 },
         })
@@ -662,5 +682,39 @@ describe("buildVertexHealth", () => {
     expect(card(health, "loss").value).toBe("Metrics unavailable");
     expect(card(health, "traffic").value).toBe("15 msg/s");
     expect(health.cards.every((entry) => entry.sparkline === undefined)).toBe(true);
+  });
+
+  it("shows untagged signals as not configured instead of loading forever", () => {
+    const health = buildVertexHealth(input({ queries: {}, series: {} }));
+    expect(card(health, "latency")).toEqual(
+      expect.objectContaining({ value: "Not configured", tone: "neutral" })
+    );
+    expect(card(health, "latency").detail).toContain('signal "p99"');
+    expect(card(health, "loss").value).toBe("Not configured");
+    const critical = card(health, "errors").breakdown?.items.find(
+      (item) => item.name === "Critical runtime errors"
+    );
+    expect(critical).toEqual(expect.objectContaining({ value: "Not configured", available: false }));
+  });
+
+  it("still counts configured outcomes when only some are tagged", () => {
+    const queries = signalQueries(
+      monoIds,
+      MONO_VERTEX_DISCOVERY.filter((metric) => metric.signal !== "nacks" && metric.signal !== "fallback")
+    );
+    const loss = card(
+      buildVertexHealth(input({ queries, series: { p99: [1], drops: [], duplicateDrops: [3] } })),
+      "loss"
+    );
+    expect(loss.value).toBe("3 duplicate drops / 10m");
+    expect(loss.breakdown?.items.find((item) => item.name === "Nacks / redeliveries")).toEqual(
+      expect.objectContaining({ value: "Not configured", available: false })
+    );
+  });
+
+  it("keeps cards loading while discovery is pending", () => {
+    const health = buildVertexHealth(input({ queries: undefined, series: {} }));
+    expect(card(health, "latency").value).toBe("Loading…");
+    expect(card(health, "loss").value).toBe("Loading…");
   });
 });

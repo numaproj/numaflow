@@ -68,64 +68,59 @@ interface VertexIds {
   type: string;
 }
 
-/** signalQueries returns the metrics-proxy requests for a vertex; names must exist in the proxy ConfigMap. */
-export function signalQueries({
-  namespaceId,
-  pipelineId,
-  vertexId,
-  type,
-}: VertexIds): SignalQueries {
+/** DiscoveredMetric is one entry from GET /api/v1/metrics-discovery/object/{vertex|mono-vertex}. */
+export interface DiscoveredMetric {
+  metric_name: string;
+  pattern_name: string;
+  /** Health-strip query this metric backs, set by `signal` in the metrics proxy ConfigMap. */
+  signal?: string;
+}
+
+/** Histogram signals ask for a P99; the outcome and critical counters are counted over a trailing window. */
+const SIGNAL_PARAMS: Record<SignalQueryKey, { quantile?: string; duration: string }> = {
+  p99: { quantile: "0.99", duration: "5m" },
+  stageRead: { quantile: "0.99", duration: "5m" },
+  stageTransformer: { quantile: "0.99", duration: "5m" },
+  stageUdf: { quantile: "0.99", duration: "5m" },
+  stageSink: { quantile: "0.99", duration: "5m" },
+  stageWrite: { quantile: "0.99", duration: "5m" },
+  stageAck: { quantile: "0.99", duration: "5m" },
+  drops: { duration: MESSAGE_OUTCOME_WINDOW },
+  nacks: { duration: MESSAGE_OUTCOME_WINDOW },
+  fallback: { duration: MESSAGE_OUTCOME_WINDOW },
+  critical: { duration: CRITICAL_ERROR_WINDOW },
+};
+
+const isSignalQueryKey = (value: string | undefined): value is SignalQueryKey =>
+  (SIGNAL_QUERY_KEYS as readonly string[]).includes(value ?? "");
+
+/**
+ * signalQueries maps discovered metrics to the strip's requests by their `signal` tag.
+ * Metric and pattern names come from the metrics proxy ConfigMap, so renamed metrics keep working.
+ * The first metric tagged with a signal wins; a signal with no tagged metric has no query.
+ */
+export function signalQueries(
+  { namespaceId, pipelineId, vertexId, type }: VertexIds,
+  discovered: DiscoveredMetric[]
+): SignalQueries {
   const isMono = type === MONO_VERTEX;
   const filters: Record<string, string> = isMono
     ? { namespace: namespaceId, mvtx_name: vertexId }
     : { namespace: namespaceId, pipeline: pipelineId, vertex: vertexId };
   const dimension = isMono ? "mono-vertex" : "vertex";
-  const histogram = (metric_name: string): SignalQuery => ({
-    metric_name,
-    pattern_name: isMono ? "mono_vertex_histogram" : "vertex_histogram",
-    dimension,
-    quantile: "0.99",
-    duration: "5m",
-    filters,
-  });
-  const messageOutcomes = (metric_name: string): SignalQuery => ({
-    metric_name,
-    pattern_name: isMono ? "mono_vertex_message_outcomes" : "vertex_message_outcomes",
-    dimension,
-    duration: MESSAGE_OUTCOME_WINDOW,
-    filters,
-  });
-  const criticalErrors = (metric_name: string): SignalQuery => ({
-    metric_name,
-    pattern_name: isMono ? "mono_vertex_critical_errors" : "vertex_critical_errors",
-    dimension,
-    duration: CRITICAL_ERROR_WINDOW,
-    filters,
-  });
-  if (isMono) {
-    return {
-      p99: histogram("monovtx_processing_time_bucket"),
-      stageRead: histogram("monovtx_read_time_bucket"),
-      stageTransformer: histogram("monovtx_transformer_time_bucket"),
-      stageUdf: histogram("monovtx_udf_time_bucket"),
-      stageSink: histogram("monovtx_sink_time_bucket"),
-      stageAck: histogram("monovtx_ack_time_bucket"),
-      drops: messageOutcomes("monovtx_dropped_total"),
-      nacks: messageOutcomes("monovtx_nack_total"),
-      fallback: messageOutcomes("monovtx_fallback_sink_write_total"),
-      critical: criticalErrors("monovtx_critical_error_total"),
+  const queries: SignalQueries = {};
+  for (const metric of discovered) {
+    const key = metric.signal;
+    if (!isSignalQueryKey(key) || queries[key]) continue;
+    queries[key] = {
+      metric_name: metric.metric_name,
+      pattern_name: metric.pattern_name,
+      dimension,
+      ...SIGNAL_PARAMS[key],
+      filters,
     };
   }
-  return {
-    p99: histogram("forwarder_processing_time_bucket"),
-    stageRead: histogram("forwarder_read_processing_time_bucket"),
-    stageUdf: histogram("forwarder_udf_processing_time_bucket"),
-    stageWrite: histogram("forwarder_write_processing_time_bucket"),
-    stageAck: histogram("forwarder_ack_processing_time_bucket"),
-    drops: messageOutcomes("forwarder_drop_total"),
-    nacks: messageOutcomes("forwarder_nack_total"),
-    critical: criticalErrors("forwarder_critical_error_total"),
-  };
+  return queries;
 }
 
 /**
@@ -396,7 +391,8 @@ export interface VertexHealthInput {
   /** Daemon snapshots recorded by the strip. Sparklines and the backlog trend read this, not Prometheus. */
   daemonHistory?: DaemonSample[];
   series: SignalSeries;
-  queries: SignalQueries;
+  /** Undefined until metrics discovery responds; then a missing key means the signal is not configured. */
+  queries?: SignalQueries;
   buffers?: BufferInfo[];
   watermarkEdges?: WatermarkEdge[];
   health?: DataHealth;
@@ -409,13 +405,21 @@ export interface VertexHealthInput {
 const UNAVAILABLE = "Metrics unavailable";
 const UNAVAILABLE_DETAIL = "Prometheus is not configured";
 const LOADING = "Loading…";
+const NOT_CONFIGURED = "Not configured";
+const notConfiguredDetail = (key: SignalQueryKey) =>
+  `No metric has signal "${key}" in the metrics proxy config`;
+
+/** notConfigured is true only after discovery responded without a metric tagged for this signal. */
+function notConfigured(input: VertexHealthInput, key: SignalQueryKey): boolean {
+  return input.queries !== undefined && !input.queries[key];
+}
 
 function metricsTarget(
-  queries: SignalQueries,
+  queries: SignalQueries | undefined,
   key: SignalQueryKey,
   presets?: Record<string, string>
 ): InspectTarget | undefined {
-  const metric = queries[key]?.metric_name;
+  const metric = queries?.[key]?.metric_name;
   return metric ? { kind: "metrics", metric, presets } : undefined;
 }
 
@@ -423,6 +427,9 @@ function latencyCard(input: VertexHealthInput): HealthCard {
   const base = { id: "latency" as const, title: "Latency" };
   if (!input.metricsEnabled) {
     return { ...base, value: UNAVAILABLE, detail: UNAVAILABLE_DETAIL, tone: "neutral" };
+  }
+  if (notConfigured(input, "p99")) {
+    return { ...base, value: NOT_CONFIGURED, detail: notConfiguredDetail("p99"), tone: "neutral" };
   }
   const p99 = input.series.p99;
   const current = latest(p99);
@@ -437,7 +444,7 @@ function latencyCard(input: VertexHealthInput): HealthCard {
     };
   }
   const stages = (Object.keys(STAGE_LABELS) as SignalQueryKey[])
-    .filter((key) => input.queries[key])
+    .filter((key) => input.queries?.[key])
     .map((key) => ({ name: STAGE_LABELS[key] as string, micros: latest(input.series[key]) }))
     .filter((stage): stage is { name: string; micros: number } => stage.micros !== undefined);
   const slowest = slowestStage(stages);
@@ -638,16 +645,27 @@ function lossCard(input: VertexHealthInput): HealthCard {
   const isMono = input.type === MONO_VERTEX;
   const { drops, duplicateDrops, nacks, fallback } = input.series;
   const inspect = metricsTarget(input.queries, "drops", { duration: MESSAGE_OUTCOME_WINDOW });
-  const requestedKeys = [
-    "drops",
-    "nacks",
-    ...(isMono ? ["fallback" as const] : []),
-  ] as SignalQueryKey[];
+  const requestedKeys = (
+    ["drops", "nacks", ...(isMono ? ["fallback" as const] : [])] as SignalQueryKey[]
+  ).filter((key) => !notConfigured(input, key));
+  if (!requestedKeys.length) {
+    return {
+      ...base,
+      value: NOT_CONFIGURED,
+      detail: "No message outcome metric has a signal in the metrics proxy config",
+      tone: "neutral",
+    };
+  }
+  // Duplicate drops are split out of the drops query, so they only exist when drops is configured.
+  const dropsConfigured = requestedKeys.includes("drops");
   const requested = requestedKeys.map((key) => input.series[key]);
-  if (requested.some((series) => series === undefined) || duplicateDrops === undefined) {
+  if (
+    requested.some((series) => series === undefined) ||
+    (dropsConfigured && duplicateDrops === undefined)
+  ) {
     return { ...base, value: LOADING, detail: "Fetching message outcome counts", tone: "neutral", inspect };
   }
-  if (requested.every((series) => series === null) && duplicateDrops === null) {
+  if (requested.every((series) => series === null) && (!dropsConfigured || duplicateDrops === null)) {
     return {
       ...base,
       value: "No data",
@@ -665,9 +683,17 @@ function lossCard(input: VertexHealthInput): HealthCard {
   const countLabel = (value: number, noun: string) =>
     `${formatCompact(value)} ${value === 1 ? noun : `${noun}s`} / ${MESSAGE_OUTCOME_WINDOW}`;
   const partiallyUnavailable =
-    requested.some((series) => series === null) || duplicateDrops === null;
-  const outcomeSeries = [
+    requestedKeys.length < (isMono ? 3 : 2) ||
+    requested.some((series) => series === null) ||
+    (dropsConfigured && duplicateDrops === null);
+  const outcomeSeries: {
+    key: SignalQueryKey;
+    name: string;
+    description: string;
+    series: number[] | null | undefined;
+  }[] = [
     {
+      key: "drops",
       name: "Duplicate-message drops",
       description: isMono
         ? "Duplicate source messages discarded by MonoVertex. A duplicate drop is not message loss."
@@ -677,6 +703,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ...(!isMono
       ? [
           {
+            key: "drops" as const,
             name: "Other runtime drops",
             description:
               "Messages discarded by vertex runtime paths other than duplicates, such as a full buffer, an unmatched forwarding rule, a write failure, or exhausted sink handling.",
@@ -685,6 +712,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
         ]
       : []),
     {
+      key: "nacks",
       name: "Nacks / redeliveries",
       description:
         "Messages negatively acknowledged for redelivery. A nack is a retry signal, not a confirmed message drop.",
@@ -693,6 +721,7 @@ function lossCard(input: VertexHealthInput): HealthCard {
     ...(isMono
       ? [
           {
+            key: "fallback" as const,
             name: "Fallback deliveries",
             description:
               "Messages delivered to the configured fallback sink or DLQ instead of the primary sink; this is alternate delivery, not loss.",
@@ -701,12 +730,19 @@ function lossCard(input: VertexHealthInput): HealthCard {
         ]
       : []),
   ];
-  const outcomes = outcomeSeries.map(({ name, description, series }) => ({
-    name,
-    value: series === null ? "Unavailable" : `${formatCompact(count(series))} / ${MESSAGE_OUTCOME_WINDOW}`,
-    description,
-    available: series !== null,
-  }));
+  const outcomes = outcomeSeries.map(({ key, name, description, series }) => {
+    const configured = requestedKeys.includes(key);
+    return {
+      name,
+      value: !configured
+        ? NOT_CONFIGURED
+        : series === null
+        ? "Unavailable"
+        : `${formatCompact(count(series))} / ${MESSAGE_OUTCOME_WINDOW}`,
+      description,
+      available: configured && series !== null,
+    };
+  });
   const activeOutcomes = outcomes.filter(
     (outcome) => outcome.available && outcome.value !== `0 / ${MESSAGE_OUTCOME_WINDOW}`
   ).length;
@@ -759,8 +795,11 @@ function errorsCard(input: VertexHealthInput): HealthCard {
   const criticalCount = Array.isArray(criticalSeries)
     ? Math.round(latest(criticalSeries) ?? 0)
     : 0;
+  const criticalConfigured = !notConfigured(input, "critical");
   const criticalMetricValue = !input.metricsEnabled
     ? UNAVAILABLE
+    : !criticalConfigured
+    ? NOT_CONFIGURED
     : criticalSeries === undefined
     ? LOADING
     : criticalSeries === null
@@ -820,7 +859,7 @@ function errorsCard(input: VertexHealthInput): HealthCard {
           name: "Critical runtime errors",
           value: criticalMetricValue,
           description: `Critical runtime errors in the last ${CRITICAL_ERROR_WINDOW}, such as a forwarder failure or a UDF failure.`,
-          available: input.metricsEnabled && criticalSeries !== null,
+          available: input.metricsEnabled && criticalConfigured && criticalSeries !== null,
         },
       ],
     },

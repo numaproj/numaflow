@@ -5,6 +5,7 @@ import { getBaseHref } from "../../../../../../../utils";
 import { useMetricsFetch } from "../../../../../../../utils/fetchWrappers/metricsFetch";
 import {
   DataHealth,
+  DiscoveredMetric,
   MONO_VERTEX,
   VertexScaleStatus,
   SignalQueries,
@@ -29,7 +30,8 @@ interface VertexHealthDataProps {
 }
 
 export interface VertexHealthData {
-  queries: SignalQueries;
+  /** Undefined until metrics discovery responds. */
+  queries?: SignalQueries;
   series: SignalSeries;
   health?: DataHealth;
   scaleStatus?: VertexScaleStatus;
@@ -134,13 +136,15 @@ export function useVertexHealthData({
   active,
 }: VertexHealthDataProps): VertexHealthData {
   const { host, disableMetricsCharts } = useContext<AppContextProps>(AppContext);
-  const metricsEnabled = !disableMetricsCharts;
   const isMono = type === MONO_VERTEX;
+  const objectType = isMono ? "mono-vertex" : "vertex";
   const [now, setNow] = useState(() => Date.now());
   const [health, setHealth] = useState<DataHealth>();
   const [scaleStatus, setScaleStatus] = useState<VertexScaleStatus>();
   const [watermarkEdges, setWatermarkEdges] = useState<WatermarkEdge[]>();
   const [fetchedAt, setFetchedAt] = useState<number>();
+  const [discovery, setDiscovery] = useState<{ objectType: string; metrics: DiscoveredMetric[] }>();
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -148,9 +152,42 @@ export function useVertexHealthData({
     return () => clearInterval(timer);
   }, [active]);
 
+  const fetchMetrics = !disableMetricsCharts && active;
+  const discovered = discovery?.objectType === objectType ? discovery.metrics : undefined;
+
+  // Discovery is fetched once per object type; a failed attempt is retried on the next refresh tick.
+  useEffect(() => {
+    if (!fetchMetrics || discovered) return undefined;
+    const controller = new AbortController();
+    fetchData<DiscoveredMetric[] | null>(
+      `${host}${getBaseHref()}/api/v1/metrics-discovery/object/${objectType}`,
+      controller.signal
+    )
+      .then((metrics) => {
+        if (controller.signal.aborted) return;
+        // The server returns null data when no pattern serves this object type.
+        if (metrics === undefined) {
+          setDiscoveryFailed(true);
+        } else {
+          setDiscovery({ objectType, metrics: metrics ?? [] });
+          setDiscoveryFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setDiscoveryFailed(true);
+      });
+    return () => controller.abort();
+  }, [fetchMetrics, discovered, host, objectType, now]);
+
+  // Without discovery the strip cannot name any metric, which is the same as having no metrics proxy.
+  const metricsEnabled = !disableMetricsCharts && !(discoveryFailed && !discovered);
+
   const queries = useMemo(
-    () => signalQueries({ namespaceId, pipelineId, vertexId, type }),
-    [namespaceId, pipelineId, vertexId, type]
+    () =>
+      discovered
+        ? signalQueries({ namespaceId, pipelineId, vertexId, type }, discovered)
+        : undefined,
+    [discovered, namespaceId, pipelineId, vertexId, type]
   );
   const range = useMemo(
     () => ({
@@ -160,18 +197,17 @@ export function useVertexHealthData({
     [now]
   );
 
-  const fetchMetrics = metricsEnabled && active;
-  const p99 = useSeries(queries.p99, range, fetchMetrics);
-  const stageRead = useSeries(queries.stageRead, range, fetchMetrics);
-  const stageTransformer = useSeries(queries.stageTransformer, range, fetchMetrics);
-  const stageUdf = useSeries(queries.stageUdf, range, fetchMetrics);
-  const stageSink = useSeries(queries.stageSink, range, fetchMetrics);
-  const stageWrite = useSeries(queries.stageWrite, range, fetchMetrics);
-  const stageAck = useSeries(queries.stageAck, range, fetchMetrics);
-  const dropRates = useDropRates(queries.drops, range, fetchMetrics, isMono);
-  const nacks = useSeries(queries.nacks, range, fetchMetrics);
-  const fallback = useSeries(queries.fallback, range, fetchMetrics);
-  const critical = useSeries(queries.critical, range, fetchMetrics);
+  const p99 = useSeries(queries?.p99, range, fetchMetrics);
+  const stageRead = useSeries(queries?.stageRead, range, fetchMetrics);
+  const stageTransformer = useSeries(queries?.stageTransformer, range, fetchMetrics);
+  const stageUdf = useSeries(queries?.stageUdf, range, fetchMetrics);
+  const stageSink = useSeries(queries?.stageSink, range, fetchMetrics);
+  const stageWrite = useSeries(queries?.stageWrite, range, fetchMetrics);
+  const stageAck = useSeries(queries?.stageAck, range, fetchMetrics);
+  const dropRates = useDropRates(queries?.drops, range, fetchMetrics, isMono);
+  const nacks = useSeries(queries?.nacks, range, fetchMetrics);
+  const fallback = useSeries(queries?.fallback, range, fetchMetrics);
+  const critical = useSeries(queries?.critical, range, fetchMetrics);
   const series = useMemo<SignalSeries>(
     () => ({
       p99,

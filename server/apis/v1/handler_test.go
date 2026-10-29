@@ -219,6 +219,38 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 				},
 			},
 		},
+		{
+			// The Pod View health strip resolves its queries from this field instead of hardcoded names.
+			name:   "signal tag is passed through",
+			object: "mono-vertex",
+			configPatterns: []Pattern{
+				{
+					Name:    "mono_vertex_histogram",
+					Objects: []string{"mono-vertex"},
+					Metrics: []Metric{
+						{
+							Name:       "custom_processing_time_bucket",
+							Signal:     "p99",
+							Filters:    []string{"namespace"},
+							Dimensions: []Dimension{{Name: "mono-vertex"}},
+						},
+					},
+				},
+			},
+			want: []DiscoveryResponse{
+				{
+					PatternName: "mono_vertex_histogram",
+					MetricName:  "custom_processing_time_bucket",
+					Signal:      "p99",
+					Dimensions: []Dimensions{
+						{
+							Name:    "mono-vertex",
+							Filters: []Filter{{Name: "namespace", Required: true}},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
