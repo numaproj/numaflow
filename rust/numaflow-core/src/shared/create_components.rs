@@ -38,7 +38,7 @@ use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 use numaflow_models::models::{NatsAuth, Tls};
-use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
+use numaflow_nats::{TlsClientAuthCerts, TlsConfigWithClientAuth};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
@@ -727,15 +727,18 @@ pub(crate) fn parse_nats_auth(
                 )
                 .map_err(|e| Error::Config(format!("Failed to get password secret: {e:?}")))?;
 
-                Ok(Some(numaflow_nats::NatsAuth::Basic { username, password }))
+                Ok(Some(numaflow_nats::NatsAuth::Basic {
+                    username,
+                    password: password.into(),
+                }))
             } else if let Some(nkey_auth) = auth.nkey {
                 let nkey = get_secret_from_volume(&nkey_auth.name, &nkey_auth.key)
                     .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
-                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey)))
+                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey.into())))
             } else if let Some(token_auth) = auth.token {
                 let token = get_secret_from_volume(&token_auth.name, &token_auth.key)
                     .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
-                Ok(Some(numaflow_nats::NatsAuth::Token(token)))
+                Ok(Some(numaflow_nats::NatsAuth::Token(token.into())))
             } else {
                 Err(Error::Config(
                     "Authentication is specified, but auth setting is empty".into(),
@@ -746,14 +749,16 @@ pub(crate) fn parse_nats_auth(
     }
 }
 
-pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<TlsConfig>, Error> {
+pub(crate) fn parse_tls_config(
+    tls_config: Option<Box<Tls>>,
+) -> Result<Option<TlsConfigWithClientAuth>, Error> {
     let Some(tls_config) = tls_config else {
         return Ok(None);
     };
 
     let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
     if tls_skip_verify {
-        return Ok(Some(TlsConfig {
+        return Ok(Some(TlsConfigWithClientAuth {
             insecure_skip_verify: true,
             ca_cert: None,
             client_auth: None,
@@ -791,16 +796,16 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
                 )?;
 
             Some(TlsClientAuthCerts {
-                client_cert,
-                client_cert_private_key,
+                client_cert: client_cert.into(),
+                client_cert_private_key: client_cert_private_key.into(),
             })
         }
         None => None,
     };
 
-    Ok(Some(TlsConfig {
+    Ok(Some(TlsConfigWithClientAuth {
         insecure_skip_verify: false,
-        ca_cert,
+        ca_cert: ca_cert.map(Into::into),
         client_auth,
     }))
 }

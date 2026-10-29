@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
+use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::{Authentication, Producer, Pulsar, SerializeMessage, TokioExecutor, producer};
+use secrecy::ExposeSecret;
 use tracing::info;
 
 use crate::{Error, PulsarAuth, Result, TlsConfig};
@@ -11,17 +13,33 @@ pub struct Sink {
 }
 
 /// Configuration for creating a Pulsar producer
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Pulsar broker address
-    pub addr: String,
+    pub addr: RedactedUrl,
     /// The topic to send messages to
     pub topic: String,
     /// The name of the producer
     pub producer_name: String,
     /// The authentication mechanism to use for the Pulsar producer
     pub auth: Option<PulsarAuth>,
-    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    /// TLS configuration for connecting to a Pulsar broker.
+    ///
+    /// Only server-authentication (one-way TLS) is supported: `ca_cert` lets the
+    /// client trust a custom/self-signed broker CA via
+    /// `PulsarBuilder::with_certificate_chain`. Mutual TLS (presenting a client
+    /// certificate) is intentionally not supported here because the underlying
+    /// `pulsar` crate's `PulsarBuilder` does not currently expose a way to set a
+    /// client certificate/key for the broker connection - see
+    /// https://docs.rs/pulsar/latest/pulsar/struct.PulsarBuilder.html.
+    ///
+    /// `ca_cert`: PEM-encoded custom CA certificate chain used to authenticate the Pulsar
+    /// broker's TLS certificate. Required when the broker presents a
+    /// certificate that isn't trusted by the process's default trust store
+    /// (e.g. a self-signed/internal CA).
+    ///
+    /// `insecure_skip_verify`: When true, skip TLS server verification entirely. Prefer setting
+    /// `ca_cert` instead; this is only for testing against untrusted setups.
     pub tls: Option<TlsConfig>,
 }
 
@@ -57,10 +75,10 @@ pub struct Response {
 }
 
 pub async fn new_sink(config: Config) -> Result<Sink> {
-    let mut pulsar = Pulsar::builder(&config.addr, TokioExecutor);
+    let mut pulsar = Pulsar::builder(config.addr.expose_url().as_str(), TokioExecutor);
     if let Some(tls) = &config.tls {
         if let Some(ca_cert) = &tls.ca_cert {
-            pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+            pulsar = pulsar.with_certificate_chain(ca_cert.expose_secret().as_bytes().to_vec());
         }
         if tls.insecure_skip_verify {
             pulsar = pulsar.with_allow_insecure_connection(true);
@@ -70,14 +88,14 @@ pub async fn new_sink(config: Config) -> Result<Sink> {
         Some(PulsarAuth::JWT(token)) => {
             let auth_token = Authentication {
                 name: "token".into(),
-                data: token.into(),
+                data: token.expose_secret().into(),
             };
             pulsar = pulsar.with_auth(auth_token);
         }
         Some(PulsarAuth::HTTPBasic { username, password }) => {
             let auth_token = Authentication {
                 name: "basic".into(),
-                data: format!("{username}:{password}").into(),
+                data: format!("{username}:{}", password.expose_secret()).into(),
             };
             pulsar = pulsar.with_auth(auth_token);
         }
@@ -214,7 +232,7 @@ mod tests {
     async fn test_pulsar_sink_send_and_consume() {
         let (topic_name, subscription_name) = test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer".to_string(),
             auth: None,
@@ -256,7 +274,7 @@ mod tests {
     async fn test_pulsar_sink_multiple_messages() {
         let (topic_name, subscription_name) = test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-multi".to_string(),
             auth: None,
@@ -304,7 +322,7 @@ mod tests {
     async fn test_pulsar_sink_empty_messages() {
         let (topic_name, _) = test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name,
             producer_name: "test-producer-empty".to_string(),
             auth: None,
@@ -324,7 +342,7 @@ mod tests {
     async fn test_pulsar_sink_large_payload() {
         let (topic_name, subscription_name) = test_utils::setup_test_topic().await;
         let config = Config {
-            addr: "pulsar://localhost:6650".to_string(),
+            addr: "pulsar://localhost:6650".parse().unwrap(),
             topic: topic_name.clone(),
             producer_name: "test-producer-large".to_string(),
             auth: None,

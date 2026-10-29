@@ -30,8 +30,9 @@ const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct MonovertexConfig {
+    #[allow(dead_code)]
     pub(crate) name: String,
     pub(crate) batch_size: usize,
     /// Cap on in-flight (read-but-not-acked) messages, sourced from `spec.limits.concurrency`.
@@ -47,6 +48,8 @@ pub(crate) struct MonovertexConfig {
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
+    // Loaded from the callback env, but the monovertex forwarder does not consume it.
+    #[allow(dead_code)]
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
     /// When true, the source reads continuously bounded by `concurrency` in-flight messages
@@ -305,6 +308,7 @@ mod tests {
 
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
+    use numaflow_shared::redacted_url::RedactedUrl;
 
     use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::config::components::sink::SinkType;
@@ -659,7 +663,11 @@ mod tests {
         let expected_source_config = crate::config::components::source::SourceConfig {
             read_ahead: false,
             source_type: SourceType::Jetstream(numaflow_nats::jetstream::JetstreamSourceConfig {
-                addr: "jetstream-server.internal".to_string(),
+                addr: RedactedUrl::comma_separated_with_default_scheme(
+                    "nats://jetstream-server.internal",
+                    "nats",
+                )
+                .unwrap(),
                 stream: "mystream".to_string(),
                 consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
                 deliver_policy: ConsumerDeliverPolicy::by_start_time(
@@ -671,7 +679,23 @@ mod tests {
             }),
         };
 
-        assert_eq!(config.source_config, expected_source_config);
+        assert_eq!(
+            config.source_config.read_ahead,
+            expected_source_config.read_ahead
+        );
+        let SourceType::Jetstream(actual) = config.source_config.source_type else {
+            panic!("Expected JetStream")
+        };
+        let SourceType::Jetstream(expected) = expected_source_config.source_type else {
+            panic!("Expected JetStream")
+        };
+        assert_eq!(actual.addr, expected.addr);
+        assert_eq!(actual.stream, expected.stream);
+        assert_eq!(actual.consumer, expected.consumer);
+        assert_eq!(actual.deliver_policy, expected.deliver_policy);
+        assert_eq!(actual.filter_subjects, expected.filter_subjects);
+        assert!(actual.auth.is_none());
+        assert!(actual.tls.is_none());
     }
 
     #[test]

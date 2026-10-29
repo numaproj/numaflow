@@ -12,7 +12,9 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
+use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::consumer::DeadLetterPolicy;
+use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
 use tracing::info;
 
@@ -24,16 +26,32 @@ pub struct PulsarDeadLetterPolicy {
     pub max_redelivery: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct PulsarSourceConfig {
-    pub pulsar_server_addr: String,
+    pub pulsar_server_addr: RedactedUrl,
     pub topic: String,
     pub consumer_name: String,
     pub subscription: String,
     pub max_unack: usize,
     pub dead_letter_policy: Option<PulsarDeadLetterPolicy>,
     pub auth: Option<PulsarAuth>,
-    /// TLS configuration, e.g. to trust a custom/self-signed broker CA.
+    /// TLS configuration for connecting to a Pulsar broker.
+    ///
+    /// Only server-authentication (one-way TLS) is supported: `ca_cert` lets the
+    /// client trust a custom/self-signed broker CA via
+    /// `PulsarBuilder::with_certificate_chain`. Mutual TLS (presenting a client
+    /// certificate) is intentionally not supported here because the underlying
+    /// `pulsar` crate's `PulsarBuilder` does not currently expose a way to set a
+    /// client certificate/key for the broker connection - see
+    /// https://docs.rs/pulsar/latest/pulsar/struct.PulsarBuilder.html.
+    ///
+    /// `ca_cert`: PEM-encoded custom CA certificate chain used to authenticate the Pulsar
+    /// broker's TLS certificate. Required when the broker presents a
+    /// certificate that isn't trusted by the process's default trust store
+    /// (e.g. a self-signed/internal CA).
+    ///
+    /// `insecure_skip_verify`: When true, skip TLS server verification entirely. Prefer setting
+    /// `ca_cert` instead; this is only for testing against untrusted setups.
     pub tls: Option<TlsConfig>,
 }
 
@@ -135,7 +153,7 @@ impl ConsumerReaderActor {
         cancel_token: CancellationToken,
     ) -> Result<()> {
         info!(
-            addr = &config.pulsar_server_addr,
+            addr = ?config.pulsar_server_addr,
             "Pulsar connection details"
         );
 
@@ -145,10 +163,13 @@ impl ConsumerReaderActor {
         // CA, prefer `tls.ca_cert`, which uses `with_certificate_chain()` - this adds the
         // provided CA to the client's trust root rather than disabling verification, and is
         // confirmed to work as of the `pulsar` crate version pinned in Cargo.toml.
-        let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
+        let mut pulsar = Pulsar::builder(
+            config.pulsar_server_addr.expose_url().as_str(),
+            TokioExecutor,
+        );
         if let Some(tls) = &config.tls {
             if let Some(ca_cert) = &tls.ca_cert {
-                pulsar = pulsar.with_certificate_chain(ca_cert.clone());
+                pulsar = pulsar.with_certificate_chain(ca_cert.expose_secret().as_bytes().to_vec());
             }
             if tls.insecure_skip_verify {
                 pulsar = pulsar.with_allow_insecure_connection(true);
@@ -158,14 +179,14 @@ impl ConsumerReaderActor {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {
                     name: "token".into(),
-                    data: token.into(),
+                    data: token.expose_secret().into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }
             Some(PulsarAuth::HTTPBasic { username, password }) => {
                 let auth_token = Authentication {
                     name: "basic".into(),
-                    data: format!("{username}:{password}").into(),
+                    data: format!("{username}:{}", password.expose_secret()).into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }

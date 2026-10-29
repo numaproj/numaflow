@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use crate::{Error, NatsAuth, Result, TlsConfigWithClientAuth, tls};
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
@@ -12,6 +12,8 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
+use numaflow_shared::redacted_url::{RedactedUrl, join_comma_separated_urls};
+use secrecy::ExposeSecret;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant, sleep};
@@ -95,15 +97,15 @@ impl TryFrom<&str> for ConsumerDeliverPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct JetstreamSourceConfig {
-    pub addr: String,
+    pub addr: Vec<RedactedUrl>,
     pub stream: String,
     pub consumer: String,
     pub deliver_policy: ConsumerDeliverPolicy,
     pub filter_subjects: Vec<String>,
     pub auth: Option<NatsAuth>,
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
 }
 
 /// Message represents a message received from Jetstream which can be converted to Numaflow Message.
@@ -205,21 +207,22 @@ impl JetstreamActor {
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {
-                    conn_opts.user_and_password(username, password)
+                    conn_opts.user_and_password(username, password.expose_secret().to_owned())
                 }
-                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
-                NatsAuth::Token(token) => conn_opts.token(token),
+                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey.expose_secret().to_owned()),
+                NatsAuth::Token(token) => conn_opts.token(token.expose_secret().to_owned()),
             };
         }
         if let Some(tls_config) = config.tls {
             conn_opts = tls::configure_tls(conn_opts, tls_config)?;
         }
-        let client = async_nats::connect_with_options(&config.addr, conn_opts)
-            .await
-            .map_err(|err| Error::Connection {
-                server: config.addr.to_string(),
-                error: err.to_string(),
-            })?;
+        let client =
+            async_nats::connect_with_options(join_comma_separated_urls(&config.addr), conn_opts)
+                .await
+                .map_err(|err| Error::Connection {
+                    server: config.addr.clone(),
+                    error: err.to_string(),
+                })?;
 
         let js_ctx = async_nats::jetstream::new(client);
         let consumer = js_ctx
@@ -816,7 +819,7 @@ mod tests {
         let stream_name = "test_jetstream_source_consumer_exists_on_stream";
         let js = setup_jetstream(stream_name, true).await;
         let config = JetstreamSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::comma_separated_with_default_scheme("localhost", "nats").unwrap(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
             deliver_policy: ConsumerDeliverPolicy::ALL,
@@ -840,7 +843,7 @@ mod tests {
         let stream_name = "test_jetstream_source_consumer_not_exists_on_stream";
         let js = setup_jetstream(stream_name, false).await;
         let config = JetstreamSourceConfig {
-            addr: "localhost".to_string(),
+            addr: RedactedUrl::comma_separated_with_default_scheme("localhost", "nats").unwrap(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
             deliver_policy: ConsumerDeliverPolicy::ALL,

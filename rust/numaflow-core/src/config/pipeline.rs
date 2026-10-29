@@ -57,8 +57,9 @@ pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
 pub(crate) mod isb;
 pub(crate) mod watermark;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct PipelineConfig {
+    #[allow(dead_code)]
     pub(crate) pipeline_name: &'static str,
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
@@ -79,6 +80,8 @@ pub(crate) struct PipelineConfig {
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    // Read by tests. Per-edge ordering lives on `ToVertexConfig`.
+    #[allow(dead_code)]
     pub(crate) ordered_processing_enabled: bool,
 }
 
@@ -119,7 +122,7 @@ impl Default for PipelineConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SourceVtxConfig {
     pub(crate) source_config: SourceConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
@@ -173,7 +176,7 @@ pub(crate) mod map {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
@@ -181,7 +184,7 @@ pub(crate) struct SinkVtxConfig {
     pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) enum VertexConfig {
     Source(SourceVtxConfig),
     Sink(Box<SinkVtxConfig>),
@@ -756,6 +759,7 @@ mod tests {
     use numaflow_models::models::{Container, Udf};
     use numaflow_nats::jetstream::ConsumerDeliverPolicy;
     use numaflow_pulsar::source::PulsarSourceConfig;
+    use numaflow_shared::redacted_url::RedactedUrl;
 
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, RetryConfig, SinkType};
@@ -764,6 +768,156 @@ mod tests {
     use crate::config::pipeline::watermark::{
         BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
+
+    // Test-only equivalence comparison of `VertexConfig`, which may contains secrets
+    // that don't implement `PartialEq`. Not a complete equality implementation;
+    // if tests are added with source/sink types that were not previously used
+    // in calls to this function, the function may panic due to unimplemented
+    // comparisons between secret-carrying types. You may then need to
+    // extend the implementation.
+    fn assert_vertex_config(actual: VertexConfig, expected: VertexConfig) {
+        match (actual, expected) {
+            (VertexConfig::Source(actual), VertexConfig::Source(expected)) => {
+                assert_eq!(actual.transformer_config, expected.transformer_config);
+                assert_eq!(
+                    actual.source_config.read_ahead,
+                    expected.source_config.read_ahead
+                );
+                match (
+                    actual.source_config.source_type,
+                    expected.source_config.source_type,
+                ) {
+                    (SourceType::Generator(actual), SourceType::Generator(expected)) => {
+                        assert_eq!(actual, expected)
+                    }
+                    (SourceType::Pulsar(actual), SourceType::Pulsar(expected)) => {
+                        assert_eq!(actual.pulsar_server_addr, expected.pulsar_server_addr);
+                        assert_eq!(actual.topic, expected.topic);
+                        assert_eq!(actual.consumer_name, expected.consumer_name);
+                        assert_eq!(actual.subscription, expected.subscription);
+                        assert_eq!(actual.max_unack, expected.max_unack);
+                        assert_eq!(actual.dead_letter_policy, expected.dead_letter_policy);
+                        // Not comparing secrets
+                        assert!(actual.auth.is_none() && expected.auth.is_none());
+                        assert!(actual.tls.is_none() && expected.tls.is_none());
+                    }
+                    (SourceType::Jetstream(actual), SourceType::Jetstream(expected)) => {
+                        assert_eq!(actual.addr, expected.addr);
+                        assert_eq!(actual.stream, expected.stream);
+                        assert_eq!(actual.consumer, expected.consumer);
+                        assert_eq!(actual.filter_subjects, expected.filter_subjects);
+                        assert_eq!(actual.deliver_policy, expected.deliver_policy);
+                        // Not comparing secrets
+                        assert!(actual.auth.is_none() && expected.auth.is_none());
+                        assert!(actual.tls.is_none() && expected.tls.is_none());
+                    }
+                    (actual, expected) => {
+                        panic!("Unexpected source configs: {actual:?}, {expected:?}")
+                    }
+                }
+            }
+            (VertexConfig::Sink(actual), VertexConfig::Sink(expected)) => {
+                fn assert_sink(actual: SinkConfig, expected: SinkConfig) {
+                    assert_eq!(actual.retry_config, expected.retry_config);
+                    match (actual.sink_type, expected.sink_type) {
+                        (SinkType::Log(actual), SinkType::Log(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Blackhole(actual), SinkType::Blackhole(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Serve, SinkType::Serve) => {}
+                        (SinkType::UserDefined(actual), SinkType::UserDefined(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Sqs(actual), SinkType::Sqs(expected)) => {
+                            assert_eq!(actual, expected)
+                        }
+                        (SinkType::Kafka(actual), SinkType::Kafka(expected)) => {
+                            unimplemented!(
+                                "comparison between secret-carrying sink types: {actual:?}, {expected:?}"
+                            )
+                        }
+                        (SinkType::Pulsar(actual), SinkType::Pulsar(expected)) => {
+                            assert_eq!(actual.addr, expected.addr);
+                            assert_eq!(actual.topic, expected.topic);
+                            assert_eq!(actual.producer_name, expected.producer_name);
+                            // Not comparing secrets
+                            assert!(actual.auth.is_none() && expected.auth.is_none());
+                            assert!(actual.tls.is_none() && expected.tls.is_none());
+                        }
+                        (actual, expected) => {
+                            panic!("Unexpected sink configs: {actual:?}, {expected:?}")
+                        }
+                    }
+                }
+                assert_sink(actual.sink_config, expected.sink_config);
+                for (actual, expected) in [
+                    (actual.fb_sink_config, expected.fb_sink_config),
+                    (
+                        actual.on_success_sink_config,
+                        expected.on_success_sink_config,
+                    ),
+                ] {
+                    match (actual, expected) {
+                        (Some(actual), Some(expected)) => assert_sink(actual, expected),
+                        (None, None) => {}
+                        (actual, expected) => {
+                            panic!("Unexpected optional sink configs: {actual:?}, {expected:?}")
+                        }
+                    }
+                }
+                assert_eq!(actual.serving_store_config, expected.serving_store_config);
+            }
+            (VertexConfig::Map(actual), VertexConfig::Map(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (VertexConfig::Reduce(actual), VertexConfig::Reduce(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (actual, expected) => panic!("Unexpected vertex configs: {actual:?}, {expected:?}"),
+        }
+    }
+
+    fn assert_pipeline_config(actual: PipelineConfig, expected: PipelineConfig) {
+        assert_eq!(actual.pipeline_name, expected.pipeline_name);
+        assert_eq!(actual.vertex_name, expected.vertex_name);
+        assert_eq!(actual.replica, expected.replica);
+        assert_eq!(actual.batch_size, expected.batch_size);
+        assert_eq!(actual.concurrency, expected.concurrency);
+        assert_eq!(actual.writer_concurrency, expected.writer_concurrency);
+        assert_eq!(actual.read_timeout, expected.read_timeout);
+        assert_eq!(
+            actual.graceful_shutdown_time,
+            expected.graceful_shutdown_time
+        );
+        match (actual.isb_client_config, expected.isb_client_config) {
+            (
+                isb::ISBClientConfig::Jetstream(actual),
+                isb::ISBClientConfig::Jetstream(expected),
+            ) => {
+                assert_eq!(actual.url, expected.url);
+                assert_eq!(actual.user, expected.user);
+                assert!(actual.password.is_none() && expected.password.is_none());
+                assert_eq!(actual.tls_enabled, expected.tls_enabled);
+            }
+            (isb::ISBClientConfig::InMemory, isb::ISBClientConfig::InMemory) => {}
+            (actual, expected) => panic!("Unexpected ISB configs: {actual:?}, {expected:?}"),
+        }
+        assert_eq!(actual.from_vertex_config, expected.from_vertex_config);
+        assert_eq!(actual.to_vertex_config, expected.to_vertex_config);
+        assert_vertex_config(actual.vertex_config, expected.vertex_config);
+        assert_eq!(actual.vertex_type, expected.vertex_type);
+        assert_eq!(actual.metrics_config, expected.metrics_config);
+        assert_eq!(actual.watermark_config, expected.watermark_config);
+        assert_eq!(actual.callback_config, expected.callback_config);
+        assert_eq!(actual.isb_config, expected.isb_config);
+        assert_eq!(actual.rate_limit, expected.rate_limit);
+        assert_eq!(
+            actual.ordered_processing_enabled,
+            expected.ordered_processing_enabled
+        );
+    }
 
     #[test]
     fn test_default_pipeline_config() {
@@ -795,7 +949,7 @@ mod tests {
         };
 
         let config = PipelineConfig::default();
-        assert_eq!(config, expected);
+        assert_pipeline_config(config, expected);
     }
 
     #[test]
@@ -864,7 +1018,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -908,7 +1062,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1003,7 +1157,11 @@ mod tests {
                 read_ahead: false,
                 source_type: SourceType::Jetstream(
                     numaflow_nats::jetstream::JetstreamSourceConfig {
-                        addr: "jetstream-server.internal".to_string(),
+                        addr: RedactedUrl::comma_separated_with_default_scheme(
+                            "nats://jetstream-server.internal",
+                            "nats",
+                        )
+                        .unwrap(),
                         stream: "testing-numaflow".to_string(),
                         consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
                         filter_subjects: vec![],
@@ -1016,7 +1174,7 @@ mod tests {
             transformer_config: None,
         });
 
-        assert_eq!(pipeline_config.vertex_config, expected_vertex_config);
+        assert_vertex_config(pipeline_config.vertex_config, expected_vertex_config);
     }
 
     #[test]
@@ -1037,7 +1195,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1076,7 +1234,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1097,7 +1255,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1120,7 +1278,7 @@ mod tests {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
-                        pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
+                        pulsar_server_addr: "pulsar://pulsar-service:6650".parse().unwrap(),
                         topic: "test_persistent".to_string(),
                         consumer_name: "my_persistent_consumer".to_string(),
                         subscription: "my_persistent_subscription".to_string(),
@@ -1152,7 +1310,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1209,7 +1367,7 @@ mod tests {
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             isb_client_config: isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "localhost:4222".to_string(),
+                url: "nats://localhost:4222".parse().unwrap(),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -1247,7 +1405,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(pipeline_config, expected);
+        assert_pipeline_config(pipeline_config, expected);
     }
 
     #[test]
@@ -1634,15 +1792,13 @@ mod tests {
         // No NUMAFLOW_ISBSVC_TYPE — defaults to jetstream
         let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "nats://localhost:4222")];
         let config = PipelineConfig::load(pipeline_cfg_base64.clone(), env_vars).unwrap();
-        assert_eq!(
-            config.isb_client_config,
-            isb::ISBClientConfig::Jetstream(isb::jetstream::ClientConfig {
-                url: "nats://localhost:4222".to_string(),
-                user: None,
-                password: None,
-                tls_enabled: false,
-            })
-        );
+        let isb::ISBClientConfig::Jetstream(config) = config.isb_client_config else {
+            panic!("Expected JetStream")
+        };
+        assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
+        assert!(config.user.is_none());
+        assert!(config.password.is_none());
+        assert!(!config.tls_enabled);
 
         // Explicit jetstream
         let env_vars = [
