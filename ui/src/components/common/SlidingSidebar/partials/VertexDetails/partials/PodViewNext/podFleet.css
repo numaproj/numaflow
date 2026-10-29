@@ -117,10 +117,11 @@
 .pod-fleet-cell {
   position: relative;
   display: grid;
-  width: 3.8rem;
+  width: auto;
+  min-width: 4.8rem;
   height: 3.8rem;
   place-items: center;
-  padding: 0;
+  padding: 0 0.4rem;
   overflow: visible;
   border: none;
   border-radius: 0.4rem;

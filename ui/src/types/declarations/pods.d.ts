@@ -209,7 +209,6 @@ export interface VertexHealth {
   tone: SignalTone;
   verdict?: { label: string; tone: SignalTone };
   replicas?: { label: string; tone: SignalTone };
-  meta: string;
   cards: HealthCard[];
 }
 

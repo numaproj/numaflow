@@ -21,6 +21,18 @@ function wrapper(disableMetricsCharts: boolean) {
 }
 
 function respond(url: string, init?: RequestInit) {
+  if (url.endsWith("/api/v2/namespaces/ns/pipelines/p/vertices/cat/status")) {
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ replicas: { ready: 3, desired: 5 } }),
+    });
+  }
+  if (url.endsWith("/api/v2/namespaces/ns/pipelines/p/vertices/cat/summary")) {
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ lastScaledAt: "2026-10-12T11:50:00Z" }),
+    });
+  }
   let data: any = [];
   if (url.endsWith("/health")) data = { dataHealthStatus: "healthy", dataHealthCode: "D1" };
   else if (url.endsWith("/watermarks")) data = [{ from: "cat", to: "out", watermarks: ["1"] }];
@@ -54,7 +66,7 @@ describe("useVertexHealthData", () => {
       { wrapper: wrapper(false) }
     );
 
-    await waitFor(() => expect(result.current.monoStatus).toEqual({ readyReplicas: 3, desiredReplicas: 3 }));
+    await waitFor(() => expect(result.current.scaleStatus).toEqual({ readyReplicas: 3, desiredReplicas: 3 }));
     await waitFor(() => expect(result.current.series.p99).toEqual([2]));
     const bodies = proxyBodies();
     expect(bodies).toHaveLength(10);
@@ -69,6 +81,7 @@ describe("useVertexHealthData", () => {
     expect(Date.parse(p99.end_time) - Date.parse(p99.start_time)).toBe(30 * 60_000);
     expect(result.current.health?.dataHealthCode).toBe("D1");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/watermarks"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/v2/"))).toBe(false);
   });
 
   it("fetches pipeline watermarks and health but no MonoVertex status", async () => {
@@ -84,9 +97,18 @@ describe("useVertexHealthData", () => {
       { wrapper: wrapper(false) }
     );
 
+    await waitFor(() =>
+      expect(result.current.scaleStatus).toEqual({
+        readyReplicas: 3,
+        desiredReplicas: 5,
+        lastScaledAt: "2026-10-12T11:50:00Z",
+      })
+    );
     await waitFor(() => expect(result.current.watermarkEdges).toHaveLength(1));
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls).toContain("/api/v1/namespaces/ns/pipelines/p/health");
+    expect(urls).toContain("/api/v2/namespaces/ns/pipelines/p/vertices/cat/status");
+    expect(urls).toContain("/api/v2/namespaces/ns/pipelines/p/vertices/cat/summary");
     expect(urls.some((url) => url.includes("/mono-vertices/"))).toBe(false);
     await waitFor(() => expect(proxyBodies()).toHaveLength(8));
     expect(proxyBodies().every((body) => body.filters.pipeline === "p")).toBe(true);
