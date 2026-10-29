@@ -58,8 +58,13 @@ describe("classifyPod", () => {
 
 describe("podFleetModel helpers", () => {
   it("formats chip labels and status tones", () => {
-    expect(chipLabel("simple-mono-vertex-mv-0-a94xj")).toBe("0");
-    expect(chipLabel("pipeline-vertex-alpha")).toBe("alpha");
+    expect(chipLabel("simple-mono-vertex-mv-0-a94xj", "simple-mono-vertex", true)).toBe("mv-0");
+    expect(chipLabel("simple-mono-vertex-mv-1-bbbbb", "simple-mono-vertex", true)).toBe("mv-1");
+    expect(chipLabel("orders-payment-authorization-12-k2m9x", "payment-authorization", false)).toBe(
+      "pay-12"
+    );
+    expect(chipLabel("simple-pipeline-out-0-w04df", "out", false)).toBe("out-0");
+    expect(chipLabel("pipeline-vertex-alpha", "vertex", false)).toBe("alpha");
     expect(podStatusTone("Running")).toBe("running");
     expect(podStatusTone("OOMKilled")).toBe("failed");
   });

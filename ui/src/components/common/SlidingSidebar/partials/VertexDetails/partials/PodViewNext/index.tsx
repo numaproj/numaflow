@@ -228,6 +228,8 @@ export function PodViewNext(props: PodViewNextProps) {
           runtimeByName={podRuntimeByName}
           selectedPod={selectedPod}
           onPodSelect={selectPodFromFleet}
+          vertexId={vertexId}
+          isMono={type === "monoVertex"}
         />
         {podRuntimeError && (
           <p className="pod-view-next-runtime-warning" role="status">

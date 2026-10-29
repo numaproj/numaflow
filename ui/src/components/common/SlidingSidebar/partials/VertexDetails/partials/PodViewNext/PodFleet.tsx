@@ -29,6 +29,8 @@ interface PodFleetProps {
   runtimeByName: Map<string, PodRuntimeInfo>;
   selectedPod?: Pod;
   onPodSelect: (pod: Pod) => void;
+  vertexId: string;
+  isMono: boolean;
 }
 
 const filters: { value: PodFleetFilter; label: string }[] = [
@@ -95,6 +97,8 @@ export function PodFleet({
   runtimeByName,
   selectedPod,
   onPodSelect,
+  vertexId,
+  isMono,
 }: PodFleetProps) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<PodFleetSort>("severity");
@@ -193,7 +197,7 @@ export function PodFleet({
                 aria-label={`Select ${item.pod.name}, ${status}`}
                 onClick={() => onPodSelect(item.pod)}
               >
-                <span>{chipLabel(item.pod.name)}</span>
+                <span>{chipLabel(item.pod.name, vertexId, isMono)}</span>
                 {item.restartCount > 0 && <span className="pod-fleet-restart-marker" />}
               </button>
             </Tooltip>

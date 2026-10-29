@@ -81,6 +81,8 @@ function StatefulFleet({
       runtimeByName={runtime}
       selectedPod={selectedPod}
       onPodSelect={onPodSelect}
+      vertexId="vertex"
+      isMono={false}
     />
   );
 }
@@ -135,6 +137,8 @@ describe("PodFleet", () => {
         onFilterChange={onFilterChange}
         runtimeByName={runtime}
         onPodSelect={jest.fn()}
+        vertexId="vertex"
+        isMono={false}
       />
     );
 
@@ -197,6 +201,8 @@ describe("PodFleet", () => {
         onFilterChange={jest.fn()}
         runtimeByName={podRuntime}
         onPodSelect={jest.fn()}
+        vertexId="mv"
+        isMono
       />
     );
 

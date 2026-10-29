@@ -18,13 +18,27 @@ const severityOrder: Record<PodSeverity, number> = {
 
 export type PodStatusTone = "running" | "failed" | "neutral";
 
-/** chipLabel shows the replica number that fits a 38px fleet chip. */
-export function chipLabel(podName: string): string {
+/** replicaIndex is the pod ordinal, the last all-digit segment before the random suffix. */
+function replicaIndex(podName: string): string | undefined {
   const parts = podName.split("-");
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     if (/^\d+$/.test(parts[index])) return parts[index];
   }
-  return parts[parts.length - 1] || podName;
+  return undefined;
+}
+
+/**
+ * chipLabel names a fleet chip.
+ * MonoVertex pods are mv-0. Pipeline pods use the vertex name's first three letters, pay-12.
+ */
+export function chipLabel(podName: string, vertexId: string, isMono: boolean): string {
+  const replica = replicaIndex(podName);
+  if (replica === undefined) {
+    const parts = podName.split("-");
+    return parts[parts.length - 1] || podName;
+  }
+  if (isMono) return `mv-${replica}`;
+  return `${vertexId.slice(0, 3)}-${replica}`;
 }
 
 /** podStatusTone maps a Kubernetes pod status to the design's status color. */
