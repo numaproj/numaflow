@@ -18,22 +18,41 @@ package logging
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	zap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-// NewLogger returns a new zap.SugaredLogger
+const (
+	envDebug    = "NUMAFLOW_DEBUG"
+	envLogLevel = "NUMAFLOW_LOG_LEVEL"
+)
+
+// NewLogger returns a new zap.SugaredLogger.
+// Log level can be overridden at runtime via the NUMAFLOW_LOG_LEVEL env var
+// (accepted values: debug, info, warn, error).
+// NUMAFLOW_DEBUG=true selects the development preset (console encoder, debug level).
+// NUMAFLOW_LOG_LEVEL overrides the level chosen by NUMAFLOW_DEBUG.
 func NewLogger() *zap.SugaredLogger {
 	var config zap.Config
-	debugMode, ok := os.LookupEnv("NUMAFLOW_DEBUG")
+	debugMode, ok := os.LookupEnv(envDebug)
 	if ok && debugMode == "true" {
 		config = zap.NewDevelopmentConfig()
 	} else {
 		config = zap.NewProductionConfig()
 	}
-	// Config customization goes here if any
+	// NUMAFLOW_LOG_LEVEL overrides the level set by the preset above.
+	// Invalid values fall back to the preset level so a typo does not crash the pod.
+	if lvlStr, ok := os.LookupEnv(envLogLevel); ok && strings.TrimSpace(lvlStr) != "" {
+		if lvl, ok := parseLogLevel(lvlStr); ok {
+			config.Level = zap.NewAtomicLevelAt(lvl)
+		} else {
+			_, _ = fmt.Fprintf(os.Stderr, "invalid %s=%q, using default log level\n", envLogLevel, lvlStr)
+		}
+	}
 	config.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
 	config.OutputPaths = []string{"stdout"}
 	logger, err := config.Build()
@@ -41,6 +60,21 @@ func NewLogger() *zap.SugaredLogger {
 		panic(err)
 	}
 	return logger.Named("numaflow").Sugar()
+}
+
+func parseLogLevel(level string) (zapcore.Level, bool) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "debug":
+		return zapcore.DebugLevel, true
+	case "info":
+		return zapcore.InfoLevel, true
+	case "warn":
+		return zapcore.WarnLevel, true
+	case "error":
+		return zapcore.ErrorLevel, true
+	default:
+		return zapcore.InfoLevel, false
+	}
 }
 
 type loggerKey struct{}
