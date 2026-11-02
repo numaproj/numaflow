@@ -53,22 +53,20 @@ type Backoff struct {
 	// +kubebuilder:default="1ms"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty" protobuf:"bytes,1,opt,name=interval"`
-	// Steps defines the maximum number of retry attempts
+	// Steps defines the maximum number of retries after the initial attempt,
+	// e.g. steps: 1 means one initial attempt plus one retry. It cannot be 0.
 	// +optional
 	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
-	// Interval is multiplied by factor each iteration, if factor is not zero
-	// and the limits imposed by Steps and Cap have not been reached.
+	// Interval is multiplied by factor after each retry. It must be >= 1.
 	// +optional
 	Factor *float64 `json:"factor,omitempty" protobuf:"bytes,3,opt,name=factor"`
-	// A limit on revised values of the interval parameter. If a
-	// multiplication by the factor parameter would make the interval
-	// exceed the cap then the interval is set to the cap and the
-	// steps parameter is set to zero.
+	// A limit on the delay between retries. Once the delay reaches the cap,
+	// it stays at the cap, and retries continue until Steps is exhausted.
 	// +optional
 	Cap *metav1.Duration `json:"cap,omitempty" protobuf:"bytes,4,opt,name=cap"`
-	// The sleep at each iteration is the interval plus an additional
-	// amount chosen uniformly at random from the interval between
-	// zero and `jitter*interval`.
+	// The delay at each retry is multiplied by a factor chosen uniformly
+	// at random from [1 - jitter, 1 + jitter], then limited by Cap.
+	// It must be >= 0 and < 1.
 	// +optional
 	Jitter *float64 `json:"jitter,omitempty" protobuf:"bytes,5,opt,name=jitter"`
 }
