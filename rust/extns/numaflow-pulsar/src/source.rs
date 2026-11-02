@@ -349,6 +349,8 @@ impl ConsumerReaderActor {
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        let total = offsets.len();
+        let mut failed = Vec::new();
         for offset in offsets {
             let pending = self.message_ids.remove(&offset);
 
@@ -366,12 +368,21 @@ impl ConsumerReaderActor {
             };
             // Insert offset back
             self.message_ids.insert(offset, pending);
-            return Err(Error::Pulsar(e.into()));
+            failed.push(format!("{offset}: {e}"));
         }
-        Ok(())
+        if failed.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Other(format!(
+            "Failed to ack {} of {total} offsets: {}",
+            failed.len(),
+            failed.join("; ")
+        )))
     }
 
     async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        let total = offsets.len();
+        let mut failed = Vec::new();
         for offset in offsets {
             let pending = self.message_ids.remove(&offset);
 
@@ -389,9 +400,16 @@ impl ConsumerReaderActor {
             };
             // Insert offset back
             self.message_ids.insert(offset, pending);
-            return Err(Error::Pulsar(e.into()));
+            failed.push(format!("{offset}: {e}"));
         }
-        Ok(())
+        if failed.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Other(format!(
+            "Failed to nack {} of {total} offsets: {}",
+            failed.len(),
+            failed.join("; ")
+        )))
     }
 }
 
@@ -481,7 +499,10 @@ mod tests {
         let topic = format!("persistent://public/default/pulsar_source_{id}");
         let source = PulsarSource::new(
             PulsarSourceConfig {
-                pulsar_server_addr: "pulsar://localhost:6650".into(),
+                pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::parse(
+                    "pulsar://localhost:6650",
+                )
+                .unwrap(),
                 topic: topic.clone(),
                 consumer_name: "test".into(),
                 subscription: format!("source_subscription_{id}"),
