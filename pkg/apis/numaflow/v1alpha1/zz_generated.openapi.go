@@ -786,27 +786,27 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 					},
 					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the maximum number of retry attempts",
+							Description: "Steps defines the maximum number of retries after the initial attempt, e.g. steps: 1 means one initial attempt plus one retry. It cannot be 0.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"factor": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Description: "Interval is multiplied by factor after each retry. It must be >= 1.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
 					},
 					"cap": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero.",
+							Description: "A limit on the delay between retries. Once the delay reaches the cap, it stays at the cap, and retries continue until Steps is exhausted.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"jitter": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+							Description: "The delay at each retry is multiplied by a factor chosen uniformly at random from [1 - jitter, 1 + jitter], then limited by Cap. It must be >= 0 and < 1.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
