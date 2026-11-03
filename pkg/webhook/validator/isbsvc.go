@@ -18,6 +18,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -60,6 +61,11 @@ func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.Admissi
 		// check the persistence of ISB Service is not changed
 		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.JetStream.Persistence, v.newISBService.Spec.JetStream.Persistence) {
 			return DeniedResponse("can not change persistence of Jetstream ISB Service")
+		}
+		// scaling down does not move streams off the removed nodes, which can leave them without quorum
+		oldReplicas, newReplicas := v.oldISBService.Spec.JetStream.GetReplicas(), v.newISBService.Spec.JetStream.GetReplicas()
+		if newReplicas < oldReplicas {
+			return DeniedResponse(fmt.Sprintf("can not scale down Jetstream ISB Service from %d to %d replicas, streams on the removed nodes are not migrated and can lose quorum", oldReplicas, newReplicas))
 		}
 	default:
 	}

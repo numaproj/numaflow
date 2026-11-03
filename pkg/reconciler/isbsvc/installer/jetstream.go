@@ -86,6 +86,10 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 		return nil, fmt.Errorf("invalid jetstream ISB Service spec")
 	}
 	r.isbSvc.Status.SetType(dfv1.ISBSvcTypeJetStream)
+	if err := r.preventScaleDown(ctx); err != nil {
+		r.logger.Errorw("Failed to check jetstream replicas", zap.Error(err))
+		return nil, err
+	}
 	// merge
 	v := viper.New()
 	v.SetConfigType("yaml")
@@ -266,6 +270,37 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		r.logger.Info("Updated jetstream statefulset successfully")
 		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamStatefulSet", "Updated jetstream statefulset successfully")
 	}
+	return nil
+}
+
+// preventScaleDown keeps the JetStream StatefulSet at its current size when the spec asks for fewer
+// replicas. Shrinking the cluster does not move streams off the removed nodes, which can leave them
+// without quorum. See https://github.com/numaproj/numaflow/issues/3499.
+//
+// The ISB Service is not marked as failed, because that would mark every vertex using it as failed
+// too. Instead the current replica count is used for this reconciliation (the spec is not written
+// back), and a warning event is recorded.
+func (r *jetStreamInstaller) preventScaleDown(ctx context.Context) error {
+	sts := &appv1.StatefulSet{}
+	key := client.ObjectKey{Namespace: r.isbSvc.Namespace, Name: generateJetStreamStatefulSetName(r.isbSvc)}
+	if err := r.client.Get(ctx, key, sts); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get jetstream statefulset, err: %w", err)
+	}
+	if sts.Spec.Replicas == nil {
+		return nil
+	}
+	current := *sts.Spec.Replicas
+	desired := r.isbSvc.Spec.JetStream.GetReplicas()
+	if desired >= int(current) {
+		return nil
+	}
+	msg := fmt.Sprintf("Scaling down JetStream ISB Service from %d to %d replicas is not supported, keeping %d replicas", current, desired, current)
+	r.logger.Warn(msg)
+	r.recorder.Event(r.isbSvc, corev1.EventTypeWarning, "JetStreamScaleDownNotSupported", msg)
+	r.isbSvc.Spec.JetStream.Replicas = &current
 	return nil
 }
 
