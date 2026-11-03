@@ -662,6 +662,99 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
+    async fn test_write_max_payload_exceeded_metric() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let cln_token = CancellationToken::new();
+
+        // Same setup as test_async_write_max_payload_exceeded_metric, but exercises the
+        // synchronous `write` path.
+        let stream = Stream::new("test-write-max-payload-exceeded", "temp", 0);
+        let _ = context.delete_stream(stream.name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 512 * 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let writer = JetStreamWriter::new(
+            stream.clone(),
+            context.clone(),
+            writer_config,
+            None,
+            cln_token.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Wait for background task to update is_full
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        assert!(!writer.is_full());
+
+        let labels = jetstream_isb_metrics_labels(stream.name);
+        let before = pipeline_metrics()
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&labels)
+            .get();
+
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key_large".to_string()]),
+            tags: None,
+            value: vec![0u8; 768 * 1024].into(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_large_sync".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let result = writer.write(message).await;
+        assert!(
+            matches!(result, Err(WriteError::WriteFailed(_))),
+            "write should fail since the message exceeds the stream max message size"
+        );
+
+        let after = pipeline_metrics()
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&labels)
+            .get();
+        assert_eq!(after, before + 1);
+
+        cln_token.cancel();
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
     async fn test_fetch_buffer_info() {
         let js_url = "localhost:4222";
         // Create JetStream context
