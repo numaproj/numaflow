@@ -234,8 +234,16 @@ These metrics are emitted by the pipeline daemon and MonoVertex daemon services,
 | `pipeline_processing_lag`          | Gauge       | `pipeline=<pipeline-name>`                                                                                    | Pipeline processing lag in milliseconds (max watermark - min watermark)                                     |
 | `pipeline_watermark_cmp_now`       | Gauge       | `pipeline=<pipeline-name>`                                                                                    | Max watermark of source compared with current time in milliseconds                                          |
 | `pipeline_data_processing_health`  | Gauge       | `pipeline=<pipeline-name>`                                                                                    | Pipeline data processing health. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical                         |
+| `pipeline_edge_watermark`          | Gauge       | `pipeline=<pipeline-name>` <br> `from_vertex=<vertex-name>` <br> `to_vertex=<vertex-name>` <br> `partition_name=<partition-name>` | Watermark of each buffer partition on an edge, in milliseconds since epoch. -1 until a watermark is available. Not emitted when watermarks are disabled |
 | `vertex_pending_messages`          | Gauge       | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `partition_name=<partition-name>` <br> `period=<duration>` | Average pending messages in the last period of seconds for a vertex (aggregated from `vertex_pending_messages_raw`) |
 | `vertex_lookback_window_seconds`   | Gauge       | `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>`                                                       | Lookback window for a vertex in seconds                                                                      |
+
+Since `pipeline_edge_watermark` is labeled with both ends of the edge, it tells the incoming edges of a join vertex apart.
+For example, how far each edge into a vertex lags behind the current time, using its slowest partition:
+
+```
+time() * 1000 - min by (from_vertex) (pipeline_edge_watermark{pipeline="my-pipeline", to_vertex="my-join"} > 0)
+```
 
 ### MonoVertex Daemon Metrics
 

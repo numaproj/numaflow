@@ -18,6 +18,8 @@ const (
 	LabelComponent      = "component"
 	LabelComponentName  = "component_name"
 	LabelPeriod         = "period"
+	LabelFromVertex     = "from_vertex"
+	LabelToVertex       = "to_vertex"
 )
 
 var (
@@ -82,6 +84,13 @@ var (
 		Name:      "watermark_cmp_now",
 		Help:      "Max source watermark compared with current time in milliseconds",
 	}, []string{LabelPipeline})
+
+	// EdgeWatermark is the watermark of each ISB buffer partition between two vertices.
+	EdgeWatermark = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "pipeline",
+		Name:      "edge_watermark",
+		Help:      "Watermark of each ISB buffer partition on an edge, in milliseconds since epoch. -1 when it is not available yet",
+	}, []string{LabelPipeline, LabelFromVertex, LabelToVertex, LabelPartitionName})
 
 	DataProcessingHealth = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "pipeline",
