@@ -29,7 +29,9 @@ The NATS server `max_payload` (configured in `spec.jetstream.settings`) defaults
 larger than `stream.maxMsgSize` are rejected by the stream instead of the NATS connection being closed.
 
 Writes rejected because a message exceeds the max message size of the stream are counted by the
-`isb_jetstream_max_payload_exceeded_total` metric.
+`isb_jetstream_max_payload_exceeded_total` metric. The `numa` container also logs a warning for each rejected
+write, with the stream name and the size of the rejected message in `payload_size_bytes` (after compression,
+including headers), which you can compare against `stream.maxMsgSize`.
 
 Please be aware that if you increase the max message size of the `InterStepBufferService`, you probably will also need to
 change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the 

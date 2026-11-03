@@ -58,8 +58,7 @@ fn is_max_payload_exceeded(err: &PublishError) -> bool {
 
 /// Records the max payload exceeded metric if the publish ack failed because the message
 /// exceeds the maximum message size allowed by the stream. The payload size is logged so that
-/// the ISB service spec (stream `max_message_size` / nats `max_payload`) can be tuned based on
-/// the observed values.
+/// `stream.maxMsgSize` in the ISB service spec can be tuned based on the observed values.
 fn record_max_payload_exceeded(
     stream_name: &'static str,
     buffer_labels: &MetricLabels,
