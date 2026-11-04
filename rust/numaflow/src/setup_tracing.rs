@@ -203,6 +203,18 @@ impl Drop for TracerProviderGuard {
     }
 }
 
+/// Build filtering from default directives and allow `RUST_LOG` environment variable to override.
+/// `with_default_directive` only accepts a single directive, so a comma-separated default such as
+/// "debug,h2::codec=info" must be parsed as a full filter instead.
+fn build_env_filter(default_directives: &str, rust_log: Option<String>) -> EnvFilter {
+    let directives = rust_log
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| default_directives.to_string());
+    EnvFilter::builder()
+        .with_default_directive(Level::INFO.into())
+        .parse_lossy(directives)
+}
+
 /// Initialize the tracing subscriber with optional OTLP export.
 /// Returns a `TracerProviderGuard` that will flush buffered spans on drop.
 /// Callers must bind it (e.g., `let _guard = register();`) rather than
@@ -215,10 +227,7 @@ pub fn register() -> TracerProviderGuard {
         "info"
     };
 
-    // Build filtering from default directives and allow `RUST_LOG` environment variable to override.
-    let filter = EnvFilter::builder()
-        .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
-        .from_env_lossy();
+    let filter = build_env_filter(default_log_level, std::env::var("RUST_LOG").ok());
 
     let fmt_layer = if debug_mode {
         // Log in a human-readable format for local debugging/development.
@@ -434,6 +443,33 @@ mod tests {
         assert_eq!(
             sampling_decision(&sampler, Some(&unsampled_parent), TraceId::from(u128::MAX)),
             SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn env_filter_debug_default_enables_debug() {
+        let filter = build_env_filter("debug,h2::codec=info", None);
+        assert_eq!(
+            filter.max_level_hint(),
+            Some(tracing::level_filters::LevelFilter::DEBUG)
+        );
+    }
+
+    #[test]
+    fn env_filter_info_default() {
+        let filter = build_env_filter("info", None);
+        assert_eq!(
+            filter.max_level_hint(),
+            Some(tracing::level_filters::LevelFilter::INFO)
+        );
+    }
+
+    #[test]
+    fn env_filter_rust_log_overrides_default() {
+        let filter = build_env_filter("debug,h2::codec=info", Some("warn".into()));
+        assert_eq!(
+            filter.max_level_hint(),
+            Some(tracing::level_filters::LevelFilter::WARN)
         );
     }
 
