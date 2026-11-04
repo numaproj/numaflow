@@ -203,9 +203,14 @@ impl Drop for TracerProviderGuard {
     }
 }
 
+/// Default directives when `NUMAFLOW_DEBUG=true` and `RUST_LOG` is not set: debug for numaflow's
+/// own crates only, dependencies (h2, hyper, tonic, tower, rustls, async_nats, ...) stay at info.
+/// Target matching is by prefix, so `numaflow` also covers `numaflow_core`, `numaflow_pulsar`, etc.
+const NUMAFLOW_DEBUG_DIRECTIVES: &str = "info,numaflow=debug,serving=debug,backoff=debug";
+
 /// Build filtering from default directives and allow `RUST_LOG` environment variable to override.
 /// `with_default_directive` only accepts a single directive, so a comma-separated default such as
-/// "debug,h2::codec=info" must be parsed as a full filter instead.
+/// `NUMAFLOW_DEBUG_DIRECTIVES` must be parsed as a full filter instead.
 fn build_env_filter(default_directives: &str, rust_log: Option<String>) -> EnvFilter {
     let directives = rust_log
         .filter(|v| !v.trim().is_empty())
@@ -222,7 +227,7 @@ fn build_env_filter(default_directives: &str, rust_log: Option<String>) -> EnvFi
 pub fn register() -> TracerProviderGuard {
     let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
     let default_log_level = if debug_mode {
-        "debug,h2::codec=info" // "h2::codec" is too noisy
+        NUMAFLOW_DEBUG_DIRECTIVES
     } else {
         "info"
     };
@@ -448,11 +453,43 @@ mod tests {
 
     #[test]
     fn env_filter_debug_default_enables_debug() {
-        let filter = build_env_filter("debug,h2::codec=info", None);
+        let filter = build_env_filter(NUMAFLOW_DEBUG_DIRECTIVES, None);
         assert_eq!(
             filter.max_level_hint(),
             Some(tracing::level_filters::LevelFilter::DEBUG)
         );
+    }
+
+    #[test]
+    fn env_filter_debug_default_only_enables_numaflow_crates() {
+        let filter = build_env_filter(NUMAFLOW_DEBUG_DIRECTIVES, None);
+        let subscriber = tracing_subscriber::registry().with(filter);
+        tracing::subscriber::with_default(subscriber, || {
+            // numaflow's own crates log at debug
+            assert!(tracing::event_enabled!(target: "numaflow::setup_tracing", Level::DEBUG));
+            assert!(tracing::event_enabled!(target: "numaflow_core::metrics", Level::DEBUG));
+            assert!(tracing::event_enabled!(target: "numaflow_pulsar::source", Level::DEBUG));
+            assert!(tracing::event_enabled!(target: "serving::app", Level::DEBUG));
+            assert!(tracing::event_enabled!(target: "backoff::retry", Level::DEBUG));
+            // dependencies stay at info
+            assert!(!tracing::event_enabled!(target: "h2::client", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "h2::codec::framed_read", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "hyper::proto::h1", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "tonic::transport", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "tower::buffer::worker", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "rustls::server::hs", Level::DEBUG));
+            assert!(!tracing::event_enabled!(target: "async_nats::connector", Level::DEBUG));
+            assert!(tracing::event_enabled!(target: "async_nats::connector", Level::INFO));
+        });
+    }
+
+    #[test]
+    fn env_filter_rust_log_can_enable_dependency_debug() {
+        let filter = build_env_filter(NUMAFLOW_DEBUG_DIRECTIVES, Some("debug".into()));
+        let subscriber = tracing_subscriber::registry().with(filter);
+        tracing::subscriber::with_default(subscriber, || {
+            assert!(tracing::event_enabled!(target: "h2::client", Level::DEBUG));
+        });
     }
 
     #[test]
@@ -466,7 +503,7 @@ mod tests {
 
     #[test]
     fn env_filter_rust_log_overrides_default() {
-        let filter = build_env_filter("debug,h2::codec=info", Some("warn".into()));
+        let filter = build_env_filter(NUMAFLOW_DEBUG_DIRECTIVES, Some("warn".into()));
         assert_eq!(
             filter.max_level_hint(),
             Some(tracing::level_filters::LevelFilter::WARN)
