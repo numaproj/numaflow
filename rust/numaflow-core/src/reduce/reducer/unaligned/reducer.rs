@@ -787,10 +787,8 @@ impl UnalignedReducer {
                 increment_late_message_drop_metric("late-message");
                 return;
             }
-        }
-
-        // Validate message event time against current watermark (must not have progressed past this message)
-        if self.current_watermark > msg.event_time {
+        } else if self.current_watermark > msg.event_time {
+            // Validate message event time against current watermark (must not have progressed past this message)
             error!(
                 current_watermark = ?self.current_watermark.timestamp_millis(),
                 message_event_time = ?msg.event_time.timestamp_millis(),
