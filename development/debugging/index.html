@@ -5375,6 +5375,10 @@
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
+<p><code>NUMAFLOW_DEBUG=true</code> turns on debug logs for Numaflow's own components only. Logs from dependencies
+(such as <code>h2</code>, <code>tonic</code>, <code>tower</code> and <code>async_nats</code>) stay at <code>info</code>. To control the log level of the
+Rust data plane in more detail, set <code>RUST_LOG</code> (for example, <code>debug</code> or <code>info,numaflow=debug,h2=debug</code>).
+If <code>RUST_LOG</code> is set, it takes precedence over the default set by <code>NUMAFLOW_DEBUG</code>.</p>
 <p>To enable debug logs in the daemon pod, set environment variable <code>NUMAFLOW_DEBUG</code> to <code>true</code> for the daemon pod.
 For example:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
