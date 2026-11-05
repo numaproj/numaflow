@@ -116,28 +116,36 @@ Check the snippets below to see the UDF examples for different languages.
 === "Java"
 
     ```java
-    public class SumFunction extends Reducer {
-        private int sum = 0;
+    public static class Counter extends Reducer {
+        private final Config config;
+        private int count;
+
+        public Counter(Config config) {
+            this.config = config;
+        }
 
         @Override
         public void addMessage(String[] keys, Datum datum, Metadata md) {
-            try {
-                sum += Integer.parseInt(new String(datum.getValue()));
-            } catch (NumberFormatException e) {
-                log.info("error while parsing integer - {}", e.getMessage());
-            }
+            // increment based on the value specified in the config
+            count += config.getIncrementBy();
         }
 
         @Override
         public MessageList getOutput(String[] keys, Metadata md) {
+            log.info(
+                    "count - {}, window - {} {}",
+                    count,
+                    md.getIntervalWindow().getStartTime().toString(),
+                    md.getIntervalWindow().getEndTime().toString());
+
             return MessageList
                     .newBuilder()
-                    .addMessage(new Message(String.valueOf(sum).getBytes()))
+                    .addMessage(new Message(String.valueOf(count).getBytes(), keys))
                     .build();
         }
     }
     ```
-    [View the full example on numaflow-java GitHub](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/sum)
+    [View the full example on numaflow-java GitHub](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/count)
 
 === "Rust"
 
@@ -165,7 +173,7 @@ Check the snippets below to see the UDF examples for different languages.
 
 Reduce can be enabled on streaming mode to stream messages or forward partial responses to the next vertex.
 This is useful for custom triggering, where we want to forward responses to the next vertex quickly,
-even before the fixed window closes. The close-of-book and a final triggering will still happen even if
+even before the sliding window closes. The close-of-book and a final triggering will still happen even if
 partial results have been emitted.
 
 
