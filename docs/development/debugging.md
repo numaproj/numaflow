@@ -33,6 +33,11 @@ spec:
       to: out
 ```
 
+`NUMAFLOW_DEBUG=true` turns on debug logs for Numaflow's own components only. Logs from dependencies
+(such as `h2`, `tonic`, `tower` and `async_nats`) stay at `info`. To control the log level of the
+Rust data plane in more detail, set `RUST_LOG` (for example, `debug` or `info,numaflow=debug,h2=debug`).
+If `RUST_LOG` is set, it takes precedence over the default set by `NUMAFLOW_DEBUG`.
+
 To enable debug logs in the daemon pod, set environment variable `NUMAFLOW_DEBUG` to `true` for the daemon pod.
 For example:
 
