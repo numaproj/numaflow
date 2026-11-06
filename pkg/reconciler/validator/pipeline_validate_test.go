@@ -95,7 +95,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
@@ -144,7 +144,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
@@ -168,7 +168,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
@@ -646,6 +646,14 @@ func TestValidateReducePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `type of storage to use is missing`)
+	})
+
+	t.Run("pvc access mode not ReadWriteOncePod", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.GroupBy.Storage.PersistentVolumeClaim.AccessMode = ptr.To(corev1.ReadWriteOnce)
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `only "ReadWriteOncePod" is supported`)
 	})
 
 	t.Run("both pvc and emptyDir", func(t *testing.T) {

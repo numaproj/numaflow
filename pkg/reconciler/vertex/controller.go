@@ -473,6 +473,8 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 
 	pvcName := dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex)
 	newPvc := vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim.GetPVCSpec(pvcName)
+	// Reduce PVCs are always ReadWriteOncePod so that a PVC can only be mounted by a single pod.
+	newPvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod}
 	newPvc.SetNamespace(vertex.Namespace)
 	newPvc.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(vertex.GetObjectMeta(), dfv1.VertexGroupVersionKind)})
 	newPvc.SetLabels(map[string]string{

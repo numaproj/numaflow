@@ -598,9 +598,7 @@ func Test_reconcile(t *testing.T) {
 					},
 				},
 				Storage: &dfv1.PBQStorage{
-					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
-						AccessMode: ptr.To(corev1.ReadWriteOncePod),
-					},
+					PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
 				},
 			},
 		}
@@ -618,6 +616,7 @@ func Test_reconcile(t *testing.T) {
 		err = r.client.Get(ctx, types.NamespacedName{Name: dfv1.GeneratePBQStoragePVCName(testPl.Name, testObj.Spec.Name, 0), Namespace: testNamespace}, pvc)
 		assert.NoError(t, err)
 		assert.Equal(t, dfv1.GeneratePBQStoragePVCName(testPl.Name, testObj.Spec.Name, 0), pvc.Name)
+		assert.Equal(t, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod}, pvc.Spec.AccessModes)
 	})
 
 	t.Run("test reconcile vertex with customization", func(t *testing.T) {

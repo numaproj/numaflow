@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
@@ -365,6 +366,9 @@ func validateReduceUDF(udf dfv1.UDF) error {
 	}
 	if storage.EmptyDir != nil && storage.NoStore != nil {
 		return fmt.Errorf(`invalid "groupBy.storage", either none or emptyDir is allowed, not both`)
+	}
+	if pvc := storage.PersistentVolumeClaim; pvc != nil && pvc.AccessMode != nil && *pvc.AccessMode != corev1.ReadWriteOncePod {
+		return fmt.Errorf(`invalid "groupBy.storage.persistentVolumeClaim.accessMode", only %q is supported`, corev1.ReadWriteOncePod)
 	}
 
 	return nil
