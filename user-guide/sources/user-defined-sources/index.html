@@ -5375,12 +5375,105 @@
 <p>With no source data transformer, A pre-defined source vertex runs single-container pods; a user-defined source runs two-container pods.</p>
 <h2 id="build-your-own-user-defined-sources">Build Your Own User-defined Sources<a class="headerlink" href="#build-your-own-user-defined-sources" title="Permanent link">&para;</a></h2>
 <p>You can build your own user-defined sources in multiple languages.</p>
-<p>Check the links below to see the examples for different languages.</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sourcer/simple_source/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple/">Java</a></li>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/source/simple_source">Python</a></li>
-</ul>
+<p>A user-defined source implements a small set of handlers: <code>read</code> sends up to the requested number of messages,
+<code>ack</code> and <code>nack</code> acknowledge (or negatively acknowledge) the offsets of those messages, <code>pending</code> returns the
+number of messages yet to be processed, and <code>partitions</code> returns the partitions the source reads from.</p>
+<p>Check the snippets below to see the handlers for different languages, and follow the links for the full examples.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Go</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Java</label><label for="__tabbed_1_4">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">Read</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">readRequest</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">ReadRequest</span><span class="p">,</span><span class="w"> </span><span class="nx">messageCh</span><span class="w"> </span><span class="kt">chan</span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">Message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Send up to readRequest.Count() messages, returning early once readRequest.TimeOut() elapses.</span>
+<span class="w">    </span><span class="nx">messageCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">(</span>
+<span class="w">        </span><span class="p">[]</span><span class="kt">byte</span><span class="p">(</span><span class="nx">strconv</span><span class="p">.</span><span class="nx">FormatInt</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">readIdx</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">)),</span>
+<span class="w">        </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">NewOffsetWithDefaultPartitionId</span><span class="p">(</span><span class="nx">serializeOffset</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">readIdx</span><span class="p">)),</span>
+<span class="w">        </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">())</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">Ack</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">AckRequest</span><span class="p">)</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">Nack</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">NackRequest</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">Pending</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">int64</span><span class="w">                       </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">ActivePartitions</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">int32</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">sourcesdk</span><span class="p">.</span><span class="nx">DefaultPartitions</span><span class="p">()</span>
+<span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">SimpleSource</span><span class="p">)</span><span class="w"> </span><span class="nx">TotalPartitions</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="kt">int32</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sourcer/simple_source/">View the full example on numaflow-go GitHub</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AsyncSource</span><span class="p">(</span><span class="n">Sourcer</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">read_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">datum</span><span class="p">:</span> <span class="n">ReadRequest</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">NonBlockingIterator</span><span class="p">):</span>
+        <span class="c1"># Send up to datum.num_records messages.</span>
+        <span class="k">await</span> <span class="n">output</span><span class="o">.</span><span class="n">put</span><span class="p">(</span>
+            <span class="n">Message</span><span class="p">(</span>
+                <span class="n">payload</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_idx</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">Offset</span><span class="o">.</span><span class="n">offset_with_default_partition_id</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()),</span>
+                <span class="n">event_time</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="c1"># ...</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ack_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ack_request</span><span class="p">:</span> <span class="n">AckRequest</span><span class="p">):</span> <span class="o">...</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">nack_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ack_request</span><span class="p">:</span> <span class="n">NackRequest</span><span class="p">):</span> <span class="o">...</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">pending_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PendingResponse</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">active_partitions_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PartitionsResponse</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">PartitionsResponse</span><span class="p">(</span><span class="n">partitions</span><span class="o">=</span><span class="n">get_default_partitions</span><span class="p">())</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/source/simple_source">View the full example on numaflow-python GitHub</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SimpleSource</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Sourcer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">ReadRequest</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">OutputObserver</span><span class="w"> </span><span class="n">observer</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Send up to request.getCount() messages, returning early once request.getTimeout() elapses.</span>
+<span class="w">        </span><span class="n">observer</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="n">constructMessage</span><span class="p">(</span><span class="n">index</span><span class="p">));</span>
+<span class="w">        </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">ack</span><span class="p">(</span><span class="n">AckRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">nack</span><span class="p">(</span><span class="n">NackRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="nf">getPending</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Integer</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getActivePartitions</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Sourcer</span><span class="p">.</span><span class="na">defaultPartitions</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple/">View the full example on numaflow-java GitHub</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="cp">#[tonic::async_trait]</span>
+<span class="k">impl</span><span class="w"> </span><span class="n">Sourcer</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">SimpleSource</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">:</span><span class="w"> </span><span class="nc">SourceReadRequest</span><span class="p">,</span><span class="w"> </span><span class="n">transmitter</span><span class="p">:</span><span class="w"> </span><span class="nc">Sender</span><span class="o">&lt;</span><span class="n">Message</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Send up to request.count messages.</span>
+<span class="w">        </span><span class="n">transmitter</span>
+<span class="w">            </span><span class="p">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">create_message</span><span class="p">(</span><span class="n">offset</span><span class="p">.</span><span class="n">clone</span><span class="p">()).</span><span class="k">await</span><span class="p">)</span>
+<span class="w">            </span><span class="p">.</span><span class="k">await</span>
+<span class="w">            </span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span>
+<span class="w">        </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">ack</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Offset</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">nack</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">NackOffset</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">pending</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="kt">usize</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">partitions</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nb">Some</span><span class="p">(</span><span class="fm">vec!</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/simple-source">View the full example on numaflow-rs GitHub</a></p>
+</div>
+</div>
+</div>
 <p>After building a docker image for the written user-defined source, specify the image as below in the vertex spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
