@@ -211,7 +211,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
@@ -260,7 +260,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
@@ -284,7 +284,7 @@ var (
 							Storage: &dfv1.PBQStorage{
 								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 									StorageClassName: nil,
-									AccessMode:       &dfv1.DefaultAccessMode,
+									AccessMode:       ptr.To(corev1.ReadWriteOncePod),
 									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
