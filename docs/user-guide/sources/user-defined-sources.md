@@ -10,7 +10,7 @@ You can build your own user-defined sources in multiple languages.
 
 A user-defined source implements a small set of handlers: `read` sends up to the requested number of messages,
 `ack` and `nack` acknowledge (or negatively acknowledge) the offsets of those messages, `pending` returns the
-number of messages yet to be processed, and `partitions` returns the partitions the source reads from.
+number of messages yet to be processed, and `active_partitions` returns the partitions the source reads from.
 
 Check the snippets below to see the handlers for different languages, and follow the links for the full examples.
 
@@ -106,7 +106,7 @@ Check the snippets below to see the handlers for different languages, and follow
         async fn nack(&self, offset: Vec<NackOffset>) { /* ... */ }
         async fn pending(&self) -> Option<usize> { /* ... */ }
 
-        async fn partitions(&self) -> Option<Vec<i32>> {
+        async fn active_partitions(&self) -> Option<Vec<i32>> {
             Some(vec![0])
         }
     }
