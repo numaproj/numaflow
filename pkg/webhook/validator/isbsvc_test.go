@@ -88,6 +88,11 @@ func TestValidateISBServiceUpdate(t *testing.T) {
 					},
 				},
 			}, want: false},
+		{name: "scaling up is allowed - jetstream", old: jetStreamISBSvcWithReplicas(3), new: jetStreamISBSvcWithReplicas(5), want: true},
+		{name: "keeping replicas is allowed - jetstream", old: jetStreamISBSvcWithReplicas(5), new: jetStreamISBSvcWithReplicas(5), want: true},
+		{name: "scaling down is not allowed - jetstream", old: jetStreamISBSvcWithReplicas(12), new: jetStreamISBSvcWithReplicas(5), want: false},
+		{name: "scaling down to non-cluster mode is not allowed - jetstream", old: jetStreamISBSvcWithReplicas(3), new: jetStreamISBSvcWithReplicas(1), want: false},
+		{name: "setting the default replicas explicitly is allowed - jetstream", old: fakeJetStreamISBSvc(), new: jetStreamISBSvcWithReplicas(3), want: true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,4 +101,17 @@ func TestValidateISBServiceUpdate(t *testing.T) {
 			assert.Equal(t, tc.want, r.Allowed)
 		})
 	}
+}
+
+func jetStreamISBSvcWithReplicas(replicas int32) *dfv1.InterStepBufferService {
+	isbsvc := fakeJetStreamISBSvc()
+	isbsvc.Spec.JetStream.Replicas = &replicas
+	return isbsvc
+}
+
+func TestValidateISBServiceUpdateScaleDownMessage(t *testing.T) {
+	v := NewISBServiceValidator(jetStreamISBSvcWithReplicas(12), jetStreamISBSvcWithReplicas(5))
+	r := v.ValidateUpdate(contextWithLogger(t))
+	assert.False(t, r.Allowed)
+	assert.Contains(t, r.Result.Message, "from 12 to 5 replicas")
 }
