@@ -91,24 +91,6 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	return nil
 }
 
-// validateScaleBounds checks the min and max replicas of a scale spec.
-func validateScaleBounds(scale dfv1.Scale) error {
-	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
-	if scale.Min != nil {
-		min = *scale.Min
-	}
-	if scale.Max != nil {
-		max = *scale.Max
-	}
-	if min < 0 {
-		return fmt.Errorf("min number of replicas should not be smaller than 0")
-	}
-	if min > max {
-		return fmt.Errorf("max number of replicas should be greater than or equal to min")
-	}
-	return nil
-}
-
 func validateCronScaling(scale dfv1.Scale) error {
 	if scale.Cron == nil {
 		return nil
