@@ -19,6 +19,17 @@ import glowBackground from "../../../images/background_glow.png";
 
 import "./style.css";
 
+// getSSOLoginButton returns the label and icon of the SSO login button from the runtime config.
+const getSSOLoginButton = () => {
+  const runtimeConfig = window.__RUNTIME_CONFIG__;
+  const label = runtimeConfig?.LOGIN_SSO_LABEL || "Login via Github";
+  const icon = runtimeConfig?.LOGIN_SSO_ICON || "github";
+  if (icon === "none") {
+    return { label, icon: undefined };
+  }
+  return { label, icon: icon === "github" ? gitIcon : icon };
+};
+
 export function Login() {
   const { setUserInfo, host } = useContext<AppContextProps>(AppContext);
 
@@ -230,6 +241,7 @@ export function Login() {
       // No error, but return URL exists, ask to login again
       errorMessage = "Session expired, please login again.";
     }
+    const ssoButton = getSSOLoginButton();
 
     return (
       <div
@@ -378,7 +390,12 @@ export function Login() {
               marginTop: "3.2rem",
             }}
           >
-            <img src={gitIcon} style={{ width: "6rem", height: "6rem" }} />
+            {ssoButton.icon && (
+              <img
+                src={ssoButton.icon}
+                style={{ width: "6rem", height: "6rem" }}
+              />
+            )}
             <Button
               onClick={handleLoginClick}
               variant="text"
@@ -390,7 +407,7 @@ export function Login() {
                 fontSize: "2rem",
               }}
             >
-              Login via Github
+              {ssoButton.label}
             </Button>
             {errorMessage && (
               <span className="login-error-message">{errorMessage}</span>

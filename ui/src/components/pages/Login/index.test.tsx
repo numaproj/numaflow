@@ -38,6 +38,7 @@ jest.mock("react-router-dom", () => ({
 }));
 
 const mockFnParam = jest.fn();
+const originalRuntimeConfig = window.__RUNTIME_CONFIG__;
 
 describe("Login", () => {
   (useLocation as jest.Mock).mockReturnValue({
@@ -103,8 +104,78 @@ describe("Login", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(fetch).toHaveBeenCalledWith("/auth/v1/callback?code=123&state=abc");
   });
+  it("shows the GitHub SSO login label and icon by default", async () => {
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams(""),
+      mockFnParam,
+    });
+    const { container } = render(
+      <AppContext.Provider value={{ isAuthenticated: false }}>
+        <BrowserRouter>
+          <Login />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Login via Github")).toBeInTheDocument();
+    });
+    expect(container.querySelector('img[src="github.png"]')).toBeInTheDocument();
+  });
+
+  it("uses the SSO login label and icon from the runtime config", async () => {
+    window.__RUNTIME_CONFIG__ = {
+      BASE_HREF: "/",
+      NODE_ENV: "test",
+      LOGIN_SSO_LABEL: "Login with Keycloak",
+      LOGIN_SSO_ICON: "https://example.com/keycloak.png",
+    };
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams(""),
+      mockFnParam,
+    });
+    const { container } = render(
+      <AppContext.Provider value={{ isAuthenticated: false }}>
+        <BrowserRouter>
+          <Login />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Login with Keycloak")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Login via Github")).not.toBeInTheDocument();
+    expect(
+      container.querySelector('img[src="https://example.com/keycloak.png"]')
+    ).toBeInTheDocument();
+    expect(container.querySelector('img[src="github.png"]')).toBeNull();
+  });
+
+  it("hides the SSO login icon when it is set to none", async () => {
+    window.__RUNTIME_CONFIG__ = {
+      BASE_HREF: "/",
+      NODE_ENV: "test",
+      LOGIN_SSO_ICON: "none",
+    };
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams(""),
+      mockFnParam,
+    });
+    const { container } = render(
+      <AppContext.Provider value={{ isAuthenticated: false }}>
+        <BrowserRouter>
+          <Login />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Login via Github")).toBeInTheDocument();
+    });
+    expect(container.querySelector('img[src="github.png"]')).toBeNull();
+  });
+
   afterEach(() => {
     fetchMock.resetMocks();
     (useLocation as jest.Mock).mockReset();
+    window.__RUNTIME_CONFIG__ = originalRuntimeConfig;
   });
 });

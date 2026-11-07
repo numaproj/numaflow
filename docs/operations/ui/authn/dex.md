@@ -69,6 +69,22 @@ stringData:
   dex-github-client-secret: <GITHUB_CLIENT_SECRET>
 ```
 
+### Login Button
+
+The login page shows a "Login via Github" button with a GitHub icon by default. If you use a different connector, you
+can change the label and icon in the ConfigMap `numaflow-cmd-params-config`. The icon can be `github`, `none` or an
+image URL.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-cmd-params-config
+data:
+  server.login.sso.label: "Login with Keycloak"
+  server.login.sso.icon: "none"
+```
+
 ## 3. Restarting Pods
 
 If you are enabling/disabling authorization and authentication for the Numaflow server, it will need to be restarted.

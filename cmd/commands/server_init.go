@@ -18,6 +18,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -29,7 +30,9 @@ import (
 
 func NewServerInitCommand() *cobra.Command {
 	var (
-		baseHref string
+		baseHref      string
+		loginSSOLabel string
+		loginSSOIcon  string
 	)
 
 	command := &cobra.Command{
@@ -41,7 +44,10 @@ func NewServerInitCommand() *cobra.Command {
 				baseHref = strings.TrimSuffix(baseHref, "/")
 			}
 
-			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
+			reactVar, err := runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon)
+			if err != nil {
+				return fmt.Errorf("failed to build runtime config: %w", err)
+			}
 			if err := os.WriteFile("/opt/numaflow/runtime-env.js", []byte(reactVar), 0644); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
@@ -56,7 +62,23 @@ func NewServerInitCommand() *cobra.Command {
 	}
 
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
+	command.Flags().StringVar(&loginSSOLabel, "login-sso-label", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_LOGIN_SSO_LABEL", ""), "Label of the SSO login button, defaults to 'Login via Github'.")
+	command.Flags().StringVar(&loginSSOIcon, "login-sso-icon", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_LOGIN_SSO_ICON", ""), "Icon of the SSO login button: 'github', 'none' or an image URL, defaults to 'github'.")
 	return command
+}
+
+// runtimeConfigJS returns the runtime-env.js content read by the UI.
+func runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon string) (string, error) {
+	cfg := struct {
+		BaseHref      string `json:"BASE_HREF"`
+		LoginSSOLabel string `json:"LOGIN_SSO_LABEL,omitempty"`
+		LoginSSOIcon  string `json:"LOGIN_SSO_ICON,omitempty"`
+	}{baseHref, loginSSOLabel, loginSSOIcon}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("window.__RUNTIME_CONFIG__ = %s;", b), nil
 }
 
 func setBaseHref(filename string, baseHref string) error {

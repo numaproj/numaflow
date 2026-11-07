@@ -597,6 +597,18 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_LOGIN_SSO_LABEL
+          valueFrom:
+            configMapKeyRef:
+              key: server.login.sso.label
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_LOGIN_SSO_ICON
+          valueFrom:
+            configMapKeyRef:
+              key: server.login.sso.icon
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-init
