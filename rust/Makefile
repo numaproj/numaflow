@@ -20,6 +20,8 @@ all-tests:
 	cargo test --features global-state-tests test_batch_map_with_panic
 	cargo test --features global-state-tests test_map_stream_with_panic
 	cargo test --features global-state-tests test_transform_stream_with_panic
+	# Embeddable local runner facade (nfcli). Feature is default-off, so run it explicitly.
+	cargo test -p numaflow-core --features local-runner local::
 
 .PHONY: clean
 clean:
