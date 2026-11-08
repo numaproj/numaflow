@@ -14,7 +14,7 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
-use crate::kv::{KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
+use crate::kv::{CasResult, KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
 
 use super::error::SimpleKVStoreError;
 use super::error_injector::KVErrorInjector;
@@ -53,8 +53,9 @@ impl From<&KVHistoryEntry> for KVEntry {
 /// Internal state of the KV store.
 #[derive(Debug)]
 pub struct KVState {
-    /// The actual key-value storage.
-    pub(crate) data: HashMap<String, Bytes>,
+    /// The actual key-value storage. Each entry keeps the value
+    /// together with the revision at which it was last written.
+    pub(crate) data: HashMap<String, (Bytes, u64)>,
     /// Current revision number (incremented on each mutation).
     pub(crate) revision: u64,
     /// History of changes for watch replay.
@@ -80,8 +81,13 @@ impl KVState {
         }
     }
 
-    /// Record a mutation in history.
-    pub(crate) fn record_history(&mut self, key: String, value: Bytes, operation: KVWatchOp) {
+    /// Record a mutation in history and return the revision assigned to it.
+    pub(crate) fn record_history(
+        &mut self,
+        key: String,
+        value: Bytes,
+        operation: KVWatchOp,
+    ) -> u64 {
         self.revision += 1;
         let created = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -101,6 +107,8 @@ impl KVState {
             let excess = self.history.len() - self.max_history_size;
             self.history.drain(0..excess);
         }
+
+        self.revision
     }
 
     /// Get history entries from a specific revision (inclusive).
@@ -202,7 +210,12 @@ impl SimpleKVStore {
 
     /// Get all data as a snapshot (for testing).
     pub fn snapshot(&self) -> HashMap<String, Bytes> {
-        self.state.read().data.clone()
+        self.state
+            .read()
+            .data
+            .iter()
+            .map(|(k, (v, _))| (k.clone(), v.clone()))
+            .collect()
     }
 }
 
@@ -255,8 +268,8 @@ impl KVStore for SimpleKVStore {
         }
 
         let mut state = self.state.write();
-        state.data.insert(key.to_string(), value.clone());
-        state.record_history(key.to_string(), value, KVWatchOp::Put);
+        let revision = state.record_history(key.to_string(), value.clone(), KVWatchOp::Put);
+        state.data.insert(key.to_string(), (value, revision));
 
         // Notify watchers
         let entry = state.history.last().cloned();
@@ -277,7 +290,69 @@ impl KVStore for SimpleKVStore {
             )));
         }
 
-        Ok(self.state.read().data.get(key).cloned())
+        Ok(self
+            .state
+            .read()
+            .data
+            .get(key)
+            .map(|(value, _)| value.clone()))
+    }
+
+    async fn get_with_revision(&self, key: &str) -> Result<Option<(Bytes, u64)>, KVError> {
+        self.error_injector.apply_get_latency().await;
+
+        if self.error_injector.should_fail_get() {
+            return Err(Box::new(SimpleKVStoreError::Get(
+                "injected failure".to_string(),
+            )));
+        }
+
+        Ok(self
+            .state
+            .read()
+            .data
+            .get(key)
+            .map(|(value, revision)| (value.clone(), *revision)))
+    }
+
+    async fn put_if(
+        &self,
+        key: &str,
+        value: Bytes,
+        expected_revision: Option<u64>,
+    ) -> Result<CasResult, KVError> {
+        self.error_injector.apply_put_latency().await;
+
+        if self.error_injector.should_fail_put() {
+            return Err(Box::new(SimpleKVStoreError::Put(
+                "injected failure".to_string(),
+            )));
+        }
+
+        // The compare-and-set check and the write must be atomic, so both happen
+        // under a single write lock.
+        let (revision, entry) = {
+            let mut state = self.state.write();
+            let current = state.data.get(key).map(|(_, revision)| *revision);
+            let precondition_ok = match expected_revision {
+                None => current.is_none(),
+                Some(expected) => current == Some(expected),
+            };
+            if !precondition_ok {
+                return Ok(CasResult::Conflict);
+            }
+
+            let revision = state.record_history(key.to_string(), value.clone(), KVWatchOp::Put);
+            state.data.insert(key.to_string(), (value, revision));
+            (revision, state.history.last().cloned())
+        };
+
+        // Notify watchers outside the lock.
+        if let Some(entry) = entry {
+            let _ = self.watch_sender.send(entry);
+        }
+
+        Ok(CasResult::Committed(revision))
     }
 
     fn name(&self) -> &str {
@@ -652,6 +727,104 @@ mod tests {
         assert_eq!(snapshot.len(), 2);
         assert_eq!(snapshot.get("key1"), Some(&Bytes::from("value1")));
         assert_eq!(snapshot.get("key2"), Some(&Bytes::from("value2")));
+    }
+
+    #[tokio::test]
+    async fn test_get_with_revision() {
+        let store = SimpleKVStore::new("test-store");
+
+        // Absent key -> None.
+        assert_eq!(store.get_with_revision("k").await.unwrap(), None);
+
+        // After a put, revision is reported and matches the store revision.
+        store.put("k", Bytes::from("v1")).await.unwrap();
+        let (value, rev) = store.get_with_revision("k").await.unwrap().unwrap();
+        assert_eq!(value, Bytes::from("v1"));
+        assert_eq!(rev, store.revision());
+
+        // A second put advances the key's revision.
+        store.put("k", Bytes::from("v2")).await.unwrap();
+        let (value, rev2) = store.get_with_revision("k").await.unwrap().unwrap();
+        assert_eq!(value, Bytes::from("v2"));
+        assert!(rev2 > rev);
+
+        // After delete -> None.
+        store.delete("k").await.unwrap();
+        assert_eq!(store.get_with_revision("k").await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_put_if_create_semantics() {
+        let store = SimpleKVStore::new("test-store");
+
+        // Create on an absent key commits.
+        let outcome = store.put_if("k", Bytes::from("v1"), None).await.unwrap();
+        let rev = match outcome {
+            CasResult::Committed(rev) => rev,
+            CasResult::Conflict => panic!("expected create to commit"),
+        };
+        assert_eq!(
+            store.get_with_revision("k").await.unwrap(),
+            Some((Bytes::from("v1"), rev))
+        );
+
+        // A second create on the now-existing key conflicts and does not overwrite.
+        assert_eq!(
+            store.put_if("k", Bytes::from("v2"), None).await.unwrap(),
+            CasResult::Conflict
+        );
+        assert_eq!(store.get("k").await.unwrap(), Some(Bytes::from("v1")));
+    }
+
+    #[tokio::test]
+    async fn test_put_if_update_semantics() {
+        let store = SimpleKVStore::new("test-store");
+        store.put("k", Bytes::from("v1")).await.unwrap();
+        let (_, rev) = store.get_with_revision("k").await.unwrap().unwrap();
+
+        // Update against the current revision commits and advances the revision.
+        let new_rev = match store
+            .put_if("k", Bytes::from("v2"), Some(rev))
+            .await
+            .unwrap()
+        {
+            CasResult::Committed(new_rev) => new_rev,
+            CasResult::Conflict => panic!("expected update to commit"),
+        };
+        assert!(new_rev > rev);
+        assert_eq!(store.get("k").await.unwrap(), Some(Bytes::from("v2")));
+
+        // Update against the now-stale revision conflicts and does not overwrite.
+        assert_eq!(
+            store
+                .put_if("k", Bytes::from("v3"), Some(rev))
+                .await
+                .unwrap(),
+            CasResult::Conflict
+        );
+        assert_eq!(store.get("k").await.unwrap(), Some(Bytes::from("v2")));
+    }
+
+    /// The property that makes CAS the workflow keystone: two writers racing on the
+    /// same revision — exactly one commits, the other observes a conflict.
+    #[tokio::test]
+    async fn test_put_if_race_exactly_one_winner() {
+        let store = SimpleKVStore::new("test-store");
+        store.put("k", Bytes::from("v0")).await.unwrap();
+        let (_, rev) = store.get_with_revision("k").await.unwrap().unwrap();
+
+        let first = store
+            .put_if("k", Bytes::from("writer-a"), Some(rev))
+            .await
+            .unwrap();
+        let second = store
+            .put_if("k", Bytes::from("writer-b"), Some(rev))
+            .await
+            .unwrap();
+
+        assert!(matches!(first, CasResult::Committed(_)));
+        assert_eq!(second, CasResult::Conflict);
+        assert_eq!(store.get("k").await.unwrap(), Some(Bytes::from("writer-a")));
     }
 
     #[test]
