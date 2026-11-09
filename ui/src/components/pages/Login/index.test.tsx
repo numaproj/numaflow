@@ -108,3 +108,57 @@ describe("Login", () => {
     (useLocation as jest.Mock).mockReset();
   });
 });
+
+describe("Login SSO button", () => {
+  const renderLogin = () =>
+    render(
+      <AppContext.Provider value={{ isAuthenticated: false }}>
+        <BrowserRouter>
+          <Login />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+
+  beforeEach(() => {
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams(""),
+    });
+  });
+
+  afterEach(() => {
+    window.__RUNTIME_CONFIG__ = undefined as any;
+    (useLocation as jest.Mock).mockReset();
+  });
+
+  it("defaults to the GitHub label and icon", () => {
+    const { container } = renderLogin();
+    expect(screen.getByText("Login via Github")).toBeInTheDocument();
+    expect(container.querySelector('img[src="github.png"]')).not.toBeNull();
+  });
+
+  it("uses the configured label and hides the icon with none", () => {
+    window.__RUNTIME_CONFIG__ = {
+      BASE_HREF: "/",
+      NODE_ENV: "test",
+      LOGIN_SSO_LABEL: "Login with Keycloak",
+      LOGIN_SSO_ICON: "none",
+    };
+    const { container } = renderLogin();
+    expect(screen.getByText("Login with Keycloak")).toBeInTheDocument();
+    expect(screen.queryByText("Login via Github")).toBeNull();
+    expect(container.querySelector('img[src="github.png"]')).toBeNull();
+  });
+
+  it("uses an image URL as the icon", () => {
+    window.__RUNTIME_CONFIG__ = {
+      BASE_HREF: "/",
+      NODE_ENV: "test",
+      LOGIN_SSO_ICON: "https://example.com/keycloak.svg",
+    };
+    const { container } = renderLogin();
+    expect(screen.getByText("Login via Github")).toBeInTheDocument();
+    expect(
+      container.querySelector('img[src="https://example.com/keycloak.svg"]')
+    ).not.toBeNull();
+  });
+});

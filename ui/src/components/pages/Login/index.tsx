@@ -19,6 +19,21 @@ import glowBackground from "../../../images/background_glow.png";
 
 import "./style.css";
 
+// The SSO button starts the Dex login, which can use any connector, so its label and icon
+// come from the runtime config (server.login.sso.label and server.login.sso.icon).
+function getSSOButton(): { label: string; icon?: string } {
+  const runtimeConfig = window.__RUNTIME_CONFIG__;
+  const label = runtimeConfig?.LOGIN_SSO_LABEL || "Login via Github";
+  const icon = runtimeConfig?.LOGIN_SSO_ICON;
+  if (!icon || icon === "github") {
+    return { label, icon: gitIcon };
+  }
+  if (icon === "none") {
+    return { label };
+  }
+  return { label, icon };
+}
+
 export function Login() {
   const { setUserInfo, host } = useContext<AppContextProps>(AppContext);
 
@@ -184,6 +199,7 @@ export function Login() {
   }, [code, state]);
 
   const loginContent = useMemo(() => {
+    const { label: ssoLabel, icon: ssoIcon } = getSSOButton();
     if (loading || (code && state) || formLoading) {
       // Display spinner if loading or callback in progress
       return (
@@ -378,7 +394,9 @@ export function Login() {
               marginTop: "3.2rem",
             }}
           >
-            <img src={gitIcon} style={{ width: "6rem", height: "6rem" }} />
+            {ssoIcon && (
+              <img src={ssoIcon} style={{ width: "6rem", height: "6rem" }} />
+            )}
             <Button
               onClick={handleLoginClick}
               variant="text"
@@ -390,7 +408,7 @@ export function Login() {
                 fontSize: "2rem",
               }}
             >
-              Login via Github
+              {ssoLabel}
             </Button>
             {errorMessage && (
               <span className="login-error-message">{errorMessage}</span>
