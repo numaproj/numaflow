@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   build-go-binaries:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     name: Build binaries
     steps:
@@ -39,7 +39,7 @@ jobs:
           path: dist
 
   build-rust-amd64:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
       - name: Build binary
@@ -70,7 +70,7 @@ jobs:
           if-no-files-found: error
 
   build-rust-arm64:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ vars.RUNNER_ARM || 'ubuntu-24.04-arm' }}
     steps:
       - uses: actions/checkout@v4
       - name: Build binary
@@ -93,7 +93,7 @@ jobs:
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
     needs: [build-go-binaries, build-rust-amd64, build-rust-arm64]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
@@ -164,7 +164,7 @@ jobs:
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
   bom:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     needs: [build-push-linux-multi]
     steps:
@@ -192,7 +192,7 @@ jobs:
           path: /tmp/sbom.tar.gz
 
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     needs: [build-push-linux-multi, bom]
     steps:
