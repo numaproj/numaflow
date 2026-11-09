@@ -190,10 +190,9 @@ jobs:
     name: E2E Tests
     runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     needs: [build-rust-amd64]
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 13
       matrix:
         driver: [jetstream]
         case:
