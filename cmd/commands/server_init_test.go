@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRuntimeConfigJS(t *testing.T) {
@@ -53,9 +52,7 @@ func TestRuntimeConfigJS(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := runtimeConfigJS(tt.baseHref, tt.label, tt.icon)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.want, runtimeConfigJS(tt.baseHref, tt.label, tt.icon))
 		})
 	}
 }

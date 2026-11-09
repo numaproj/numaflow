@@ -44,10 +44,7 @@ func NewServerInitCommand() *cobra.Command {
 				baseHref = strings.TrimSuffix(baseHref, "/")
 			}
 
-			reactVar, err := runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon)
-			if err != nil {
-				return fmt.Errorf("failed to build runtime config: %w", err)
-			}
+			reactVar := runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon)
 			if err := os.WriteFile("/opt/numaflow/runtime-env.js", []byte(reactVar), 0644); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
@@ -68,17 +65,15 @@ func NewServerInitCommand() *cobra.Command {
 }
 
 // runtimeConfigJS returns the runtime-env.js content read by the UI.
-func runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon string) (string, error) {
+func runtimeConfigJS(baseHref, loginSSOLabel, loginSSOIcon string) string {
 	cfg := struct {
 		BaseHref      string `json:"BASE_HREF"`
 		LoginSSOLabel string `json:"LOGIN_SSO_LABEL,omitempty"`
 		LoginSSOIcon  string `json:"LOGIN_SSO_ICON,omitempty"`
 	}{baseHref, loginSSOLabel, loginSSOIcon}
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("window.__RUNTIME_CONFIG__ = %s;", b), nil
+	// Marshal can't fail for a struct of strings.
+	b, _ := json.Marshal(cfg)
+	return fmt.Sprintf("window.__RUNTIME_CONFIG__ = %s;", b)
 }
 
 func setBaseHref(filename string, baseHref string) error {
