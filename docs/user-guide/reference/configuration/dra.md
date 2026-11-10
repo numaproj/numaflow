@@ -2,10 +2,10 @@
 
 [Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) is supported in both [Pipeline](../../../core-concepts/pipeline.md) and [MonoVertex](../../../core-concepts/monovertex.md).
 
-Check the examples below.
+Here's an example.
 
 ```yaml
-apiVersion: resource.k8s.io/v1alpha3
+apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
   name: my-gpu
@@ -14,7 +14,8 @@ spec:
     devices:
       requests:
         - name: gpu
-          deviceClassName: gpu.nvidia.com
+          exactly:
+            deviceClassName: gpu.nvidia.com
 ---
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
