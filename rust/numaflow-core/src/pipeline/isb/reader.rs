@@ -722,6 +722,7 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
     use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::ISBReader;
     use crate::pipeline::isb::error::ISBError;
     use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
     use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};

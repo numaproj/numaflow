@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::message::{
     IntOffset, Message, MessageID, MessageType, NackOptions, Offset, message_from_isb_proto,
 };
+use crate::pipeline::isb::ISBReader;
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
 use async_nats::jetstream::{
@@ -125,12 +126,21 @@ impl JetStreamReader {
         })
     }
 
-    pub(crate) fn name(&self) -> &'static str {
-        self.stream.name
+    /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
+    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
+        if remove {
+            let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
+            map.remove(offset)
+        } else {
+            let map = self.offset2jsmsg.read().expect("handles mutex poisoned");
+            map.get(offset).cloned()
+        }
     }
+}
 
+impl ISBReader for JetStreamReader {
     /// Fetches messages from JetStream ISB in batches, it honors the batch size and timeout.
-    pub(crate) async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+    async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         let mut out = Vec::with_capacity(max);
         let messages = match self
             .read_consumer
@@ -193,19 +203,8 @@ impl JetStreamReader {
         Ok(out)
     }
 
-    /// Mark message as in progress by sending work in progress ack.
-    pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
-        let msg = self
-            .get_js_message(offset, false)
-            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
-        msg.ack_with(AckKind::Progress)
-            .await
-            .map_err(|e| Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e))))?;
-        Ok(())
-    }
-
     /// Acknowledge the offset
-    pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
+    async fn ack(&self, offset: &Offset) -> Result<()> {
         let msg = self
             .get_js_message(offset, false)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
@@ -217,11 +216,7 @@ impl JetStreamReader {
     }
 
     /// Negatively acknowledge the offset, optionally deferring redelivery by `delay`.
-    pub(crate) async fn nack(
-        &self,
-        offset: &Offset,
-        nack_options: Option<NackOptions>,
-    ) -> Result<()> {
+    async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()> {
         let msg = self
             .get_js_message(offset, false)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
@@ -235,19 +230,8 @@ impl JetStreamReader {
         Ok(())
     }
 
-    /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
-    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
-        if remove {
-            let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
-            map.remove(offset)
-        } else {
-            let map = self.offset2jsmsg.read().expect("handles mutex poisoned");
-            map.get(offset).cloned()
-        }
-    }
-
     /// Returns the number of pending messages in the stream.
-    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
+    async fn pending(&self) -> Result<Option<usize>> {
         let subject = format!("CONSUMER.INFO.{}.{}", self.stream.name, self.stream.name);
         let info: consumer::Info =
             self.js_context
@@ -262,31 +246,20 @@ impl JetStreamReader {
 
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
     }
-}
-
-impl crate::pipeline::isb::ISBReader for JetStreamReader {
-    async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
-        JetStreamReader::fetch(self, max, timeout).await
-    }
-
-    async fn ack(&self, offset: &Offset) -> Result<()> {
-        JetStreamReader::ack(self, offset).await
-    }
-
-    async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()> {
-        JetStreamReader::nack(self, offset, nack_options).await
-    }
-
-    async fn pending(&self) -> Result<Option<usize>> {
-        JetStreamReader::pending(self).await
-    }
 
     fn name(&self) -> &'static str {
-        JetStreamReader::name(self)
+        self.stream.name
     }
 
+    /// Mark message as in progress by sending work in progress ack.
     async fn mark_wip(&self, offset: &Offset) -> Result<()> {
-        JetStreamReader::mark_wip(self, offset).await
+        let msg = self
+            .get_js_message(offset, false)
+            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        msg.ack_with(AckKind::Progress)
+            .await
+            .map_err(|e| Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e))))?;
+        Ok(())
     }
 
     fn wip_ack_interval(&self) -> Option<Duration> {
