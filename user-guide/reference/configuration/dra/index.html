@@ -5263,8 +5263,8 @@
 
 <h1 id="dynamic-resource-allocation">Dynamic Resource Allocation<a class="headerlink" href="#dynamic-resource-allocation" title="Permanent link">&para;</a></h1>
 <p><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/">Dynamic Resource Allocation</a> is supported in both <a href="../../../../core-concepts/pipeline/">Pipeline</a> and <a href="../../../../core-concepts/monovertex/">MonoVertex</a>.</p>
-<p>Check the examples below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">resource.k8s.io/v1alpha3</span>
+<p>Here's an example.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">resource.k8s.io/v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceClaimTemplate</span>
 <span class="nt">metadata</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-gpu</span>
@@ -5273,7 +5273,8 @@
 <span class="w">    </span><span class="nt">devices</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">requests</span><span class="p">:</span>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu</span>
-<span class="w">          </span><span class="nt">deviceClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu.nvidia.com</span>
+<span class="w">          </span><span class="nt">exactly</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">deviceClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu.nvidia.com</span>
 <span class="nn">---</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
