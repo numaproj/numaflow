@@ -77,6 +77,42 @@ impl JSWrappedMessage {
     }
 }
 
+/// Original JetStream messages for the offsets handed out by `fetch`.
+///
+/// JetStream can only ack/nack/WIP-ack through the original message, not an offset, so
+/// we track the original message using an offset.
+#[derive(Clone, Default)]
+struct InflightMessages(Arc<RwLock<HashMap<Offset, JetstreamMessage>>>);
+
+impl InflightMessages {
+    /// Starts tracking the message for `offset`.
+    fn insert(&self, offset: Offset, msg: JetstreamMessage) {
+        self.0
+            .write()
+            .expect("inflight messages lock poisoned")
+            .insert(offset, msg);
+    }
+
+    /// Returns a copy of the message for `offset`. A copy is returned (rather than a
+    /// reference) so the lock is never held across an `.await` on the broker.
+    fn get(&self, offset: &Offset) -> Result<JetstreamMessage> {
+        self.0
+            .read()
+            .expect("inflight messages lock poisoned")
+            .get(offset)
+            .cloned()
+            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))
+    }
+
+    /// Stops tracking `offset`. Call only once the broker has accepted the ack/nack.
+    fn remove(&self, offset: &Offset) {
+        self.0
+            .write()
+            .expect("inflight messages lock poisoned")
+            .remove(offset);
+    }
+}
+
 /// JetStreamReader, exposes methods to read, ack, and nack messages from JetStream ISB.
 #[derive(Clone)]
 pub(crate) struct JetStreamReader {
@@ -88,9 +124,8 @@ pub(crate) struct JetStreamReader {
     js_context: Arc<Context>,
     /// compression_type is used to decompress the message body
     compression_type: Option<CompressionType>,
-    /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
-    /// so that we can ack/nack them later using the offset.
-    offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
+    /// original messages for fetched offsets, needed later to ack/nack/WIP-ack them.
+    inflight: InflightMessages,
     /// interval at which we should send wip ack to avoid redelivery.
     wip_ack_interval: Duration,
 }
@@ -121,20 +156,9 @@ impl JetStreamReader {
             read_consumer: Arc::new(consumer.clone()),
             js_context: Arc::new(js_ctx),
             compression_type: isb_config.map(|c| c.compression.compress_type),
-            offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
+            inflight: InflightMessages::default(),
             wip_ack_interval: Duration::from_secs(ack_wait_seconds / 3), // give 2 chances
         })
-    }
-
-    /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
-    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
-        if remove {
-            let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
-            map.remove(offset)
-        } else {
-            let map = self.offset2jsmsg.read().expect("handles mutex poisoned");
-            map.get(offset).cloned()
-        }
     }
 }
 
@@ -192,10 +216,7 @@ impl ISBReader for JetStreamReader {
             message.offset = offset.clone();
 
             // Track the actual message for doing ack/nack/wip by offset
-            {
-                let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
-                map.insert(offset, js_msg);
-            }
+            self.inflight.insert(offset, js_msg);
 
             out.push(message);
         }
@@ -205,28 +226,24 @@ impl ISBReader for JetStreamReader {
 
     /// Acknowledge the offset
     async fn ack(&self, offset: &Offset) -> Result<()> {
-        let msg = self
-            .get_js_message(offset, false)
-            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        let msg = self.inflight.get(offset)?;
         msg.double_ack()
             .await
             .map_err(|e| Error::ISB(ISBError::Ack(format!("offset {}: {}", offset, e))))?;
-        let _ = self.get_js_message(offset, true);
+        self.inflight.remove(offset);
         Ok(())
     }
 
     /// Negatively acknowledge the offset, optionally deferring redelivery by `delay`.
     async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()> {
-        let msg = self
-            .get_js_message(offset, false)
-            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        let msg = self.inflight.get(offset)?;
         let delay = nack_options
             .and_then(|option| option.delay)
             .map(Duration::from_millis);
         msg.ack_with(AckKind::Nak(delay))
             .await
             .map_err(|e| Error::ISB(ISBError::Nack(format!("offset {}: {}", offset, e))))?;
-        let _ = self.get_js_message(offset, true);
+        self.inflight.remove(offset);
         Ok(())
     }
 
@@ -253,9 +270,7 @@ impl ISBReader for JetStreamReader {
 
     /// Mark message as in progress by sending work in progress ack.
     async fn mark_wip(&self, offset: &Offset) -> Result<()> {
-        let msg = self
-            .get_js_message(offset, false)
-            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        let msg = self.inflight.get(offset)?;
         msg.ack_with(AckKind::Progress)
             .await
             .map_err(|e| Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e))))?;

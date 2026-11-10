@@ -535,8 +535,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             // see the redelivery while the original copy is still being processed.
             //
             // We do NOT ack or nack the duplicate delivery against the broker. JetStream
-            // tracks by stream_seq (not by delivery), and `offset2jsmsg` holds at most one
-            // handle per offset — the most recent fetch overwrites prior ones. The
+            // tracks by stream_seq (not by delivery), and the JetStream reader's
+            // `InflightMessages` holds at most one handle per offset — the most recent
+            // fetch overwrites prior ones. The
             // original's eventual ack/nack via the current handle resolves the stream_seq
             // for all deliveries.
             match self.tracker.insert(&message).await {
@@ -1223,7 +1224,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Fetch the message to populate offset2jsmsg
+        // Fetch the message to populate the reader's inflight messages
         let messages = js_reader
             .fetch(1, Duration::from_millis(1000))
             .await
@@ -1295,7 +1296,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Publish and fetch one message to populate offset2jsmsg.
+        // Publish and fetch one message to populate the reader's inflight messages.
         let message = Message {
             keys: Arc::from(vec!["k".to_string()]),
             value: Bytes::from("delayed"),
@@ -1476,7 +1477,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Fetch the message to populate offset2jsmsg
+        // Fetch the message to populate the reader's inflight messages
         let messages = js_reader
             .fetch(1, Duration::from_millis(1000))
             .await
