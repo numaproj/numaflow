@@ -32,6 +32,7 @@ pub(crate) trait DynISBReader: Send + Sync {
     ) -> BoxFuture<'a, Result<()>>;
     fn pending<'a>(&'a self) -> BoxFuture<'a, Result<Option<usize>>>;
     fn name(&self) -> &'static str;
+    fn isb_type(&self) -> &'static str;
     fn mark_wip<'a>(&'a self, offset: &'a Offset) -> BoxFuture<'a, Result<()>>;
     fn wip_ack_interval(&self) -> Option<Duration>;
 }
@@ -56,6 +57,9 @@ impl<T: ISBReader> DynISBReader for T {
     fn name(&self) -> &'static str {
         ISBReader::name(self)
     }
+    fn isb_type(&self) -> &'static str {
+        ISBReader::isb_type(self)
+    }
     fn mark_wip<'a>(&'a self, offset: &'a Offset) -> BoxFuture<'a, Result<()>> {
         Box::pin(ISBReader::mark_wip(self, offset))
     }
@@ -76,6 +80,7 @@ pub(crate) trait DynISBWriter: Send + Sync {
     ) -> BoxFuture<'a, std::result::Result<WriteResult, WriteError>>;
     #[allow(dead_code)] // part of the ISBWriter surface; used by backends/tests
     fn name(&self) -> &'static str;
+    fn isb_type(&self) -> &'static str;
     #[allow(dead_code)] // part of the ISBWriter surface; used by backends/tests
     fn is_full(&self) -> bool;
 }
@@ -95,6 +100,9 @@ impl<T: ISBWriter> DynISBWriter for T {
     }
     fn name(&self) -> &'static str {
         ISBWriter::name(self)
+    }
+    fn isb_type(&self) -> &'static str {
+        ISBWriter::isb_type(self)
     }
     fn is_full(&self) -> bool {
         ISBWriter::is_full(self)

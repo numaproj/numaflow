@@ -510,6 +510,10 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
         self.stream.name
     }
 
+    fn isb_type(&self) -> &'static str {
+        "jetstream"
+    }
+
     fn is_full(&self) -> bool {
         self.is_full.load(Ordering::Relaxed)
     }
