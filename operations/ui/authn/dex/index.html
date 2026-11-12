@@ -4691,6 +4691,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#customizing-the-login-button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customizing the Login Button
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5352,6 +5363,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#customizing-the-login-button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customizing the Login Button
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5431,6 +5453,19 @@ you created earlier for the application here.</p>
 <p>If you are enabling/disabling authorization and authentication for the Numaflow server, it will need to be restarted.</p>
 <p>Any changes or additions to the connectors in the <code>numaflow-dex-server-config</code> ConfigMap will need to be read and
 generated again requiring a restart as well.</p>
+<h2 id="customizing-the-login-button">Customizing the Login Button<a class="headerlink" href="#customizing-the-login-button" title="Permanent link">&para;</a></h2>
+<p>The login page shows a "Login via Github" button with the GitHub icon, which starts the Dex login. If Dex uses another
+connector, set the button label and icon in the <code>numaflow-cmd-params-config</code> ConfigMap. The icon accepts <code>github</code>
+(the default), <code>none</code>, or an image URL.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">server.login.sso.label</span><span class="p">:</span><span class="w"> </span><span class="s">"Login</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">Keycloak"</span>
+<span class="w">  </span><span class="nt">server.login.sso.icon</span><span class="p">:</span><span class="w"> </span><span class="s">"https://keycloak.example.com/logo.svg"</span>
+</code></pre></div>
+<p>The values are read when the Numaflow server starts, so restart it after changing them.</p>
 
 
 
