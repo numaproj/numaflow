@@ -42,6 +42,18 @@ spec:
                   name: numaflow-cmd-params-config
                   key: server.base.href
                   optional: true
+            - name: NUMAFLOW_SERVER_LOGIN_SSO_LABEL
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.login.sso.label
+                  optional: true
+            - name: NUMAFLOW_SERVER_LOGIN_SSO_ICON
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.login.sso.icon
+                  optional: true
           volumeMounts:
             - mountPath: /opt/numaflow
               name: env-volume
