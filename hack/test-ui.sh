@@ -12,7 +12,7 @@ ensure_yarn
 
 test_ui() {
     yarn --cwd ui lint
-    yarn --cwd ui test
+    yarn --cwd ui test ${UI_TEST_MAX_WORKERS:+--maxWorkers=$UI_TEST_MAX_WORKERS}
 }
 
 test_ui

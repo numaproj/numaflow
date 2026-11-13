@@ -16,7 +16,7 @@ defaults:
 
 jobs:
   build-go-binaries:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     name: Build binaries
     steps:
@@ -41,7 +41,7 @@ jobs:
           path: dist
 
   build-rust-amd64:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
       # TODO: Use actions/cache@v4 to cache target/ directory
@@ -73,7 +73,7 @@ jobs:
           if-no-files-found: error
 
   build-rust-arm64:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ vars.RUNNER_ARM || 'ubuntu-24.04-arm' }}
     steps:
       - uses: actions/checkout@v4
       - name: Build binary
@@ -96,7 +96,7 @@ jobs:
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
     needs: [build-go-binaries, build-rust-amd64, build-rust-arm64]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
