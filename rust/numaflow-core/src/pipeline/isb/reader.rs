@@ -25,8 +25,8 @@ use crate::message::{
 };
 use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
-    MetricLabels, jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels,
-    pipeline_metrics, pipeline_partition_metric_labels,
+    MetricLabels, isb_error_metrics_labels, isb_metrics_labels, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_metrics, pipeline_partition_metric_labels,
 };
 use crate::pipeline::isb::dyn_adapter::ISBReaderRef;
 use crate::pipeline::isb::error::ISBError;
@@ -58,6 +58,8 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     reader: ISBReaderRef,
     /// Reader name cached to avoid lock acquisition
     reader_name: &'static str,
+    /// ISB implementation, cached for metric labels
+    isb_type: &'static str,
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
@@ -81,6 +83,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
             watermark: self.watermark.clone(),
             reader: Arc::clone(&self.reader),
             reader_name: self.reader_name,
+            isb_type: self.isb_type,
             rate_limiter: self.rate_limiter.clone(),
             metric_labels: Arc::clone(&self.metric_labels),
         }
@@ -100,6 +103,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
         // Cache reader name for fast access
         let reader_name = reader.name();
+        let isb_type = reader.isb_type();
 
         Ok(Self {
             vertex_type: components.vertex_type,
@@ -111,6 +115,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             watermark: components.watermark_handle,
             reader,
             reader_name,
+            isb_type,
             rate_limiter,
             metric_labels,
         })
@@ -154,6 +159,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                         .jetstream_isb
                         .read_time_total
                         .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                        .observe(start.elapsed().as_micros() as f64);
+                    pipeline_metrics()
+                        .isb
+                        .read_time_total
+                        .get_or_create(&isb_metrics_labels(self.stream.name, self.isb_type))
                         .observe(start.elapsed().as_micros() as f64);
 
                     // Handle idle watermarks
@@ -223,6 +233,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                             } else {
                                 Self::publish_ack_metrics(
                                     params.stream_name,
+                                    params.isb_type,
                                     &params.labels,
                                     ack_start,
                                 );
@@ -236,6 +247,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                             } else {
                                 Self::publish_nack_metrics(
                                     params.stream_name,
+                                    params.isb_type,
                                     &params.labels,
                                     nack_start,
                                 );
@@ -354,11 +366,21 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         })
     }
 
-    fn publish_ack_metrics(stream_name: &'static str, labels: &MetricLabels, ack_start: Instant) {
+    fn publish_ack_metrics(
+        stream_name: &'static str,
+        isb_type: &'static str,
+        labels: &MetricLabels,
+        ack_start: Instant,
+    ) {
         pipeline_metrics()
             .jetstream_isb
             .ack_time_total
             .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(ack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .isb
+            .ack_time_total
+            .get_or_create(&isb_metrics_labels(stream_name, isb_type))
             .observe(ack_start.elapsed().as_micros() as f64);
         pipeline_metrics()
             .forwarder
@@ -372,11 +394,21 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             .inc();
     }
 
-    fn publish_nack_metrics(stream_name: &'static str, labels: &MetricLabels, nack_start: Instant) {
+    fn publish_nack_metrics(
+        stream_name: &'static str,
+        isb_type: &'static str,
+        labels: &MetricLabels,
+        nack_start: Instant,
+    ) {
         pipeline_metrics()
             .jetstream_isb
             .nack_time_total
             .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(nack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .isb
+            .nack_time_total
+            .get_or_create(&isb_metrics_labels(stream_name, isb_type))
             .observe(nack_start.elapsed().as_micros() as f64);
         pipeline_metrics()
             .forwarder
@@ -452,6 +484,15 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                         .read_error_total
                         .get_or_create(&jetstream_isb_error_metrics_labels(
                             self.stream.name,
+                            e.to_string(),
+                        ))
+                        .inc();
+                    pipeline_metrics()
+                        .isb
+                        .read_error_total
+                        .get_or_create(&isb_error_metrics_labels(
+                            self.stream.name,
+                            self.isb_type,
                             e.to_string(),
                         ))
                         .inc();
@@ -599,6 +640,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         let tick = self.reader.wip_ack_interval();
         let params = WipParams {
             stream_name: self.stream.name,
+            isb_type: self.isb_type,
             labels: Arc::clone(&self.metric_labels),
             reader: Arc::clone(&self.reader),
             offset,
@@ -664,6 +706,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
 struct WipParams {
     stream_name: &'static str,
+    isb_type: &'static str,
     labels: MetricLabels,
     reader: ISBReaderRef,
     offset: Offset,
@@ -1693,6 +1736,39 @@ mod simplebuffer_tests {
         handle.await.unwrap().unwrap();
     }
 
+    /// Test: reading from and acking on the in-memory ISB reports the
+    /// ISB-agnostic metrics labeled with its ISB type.
+    #[tokio::test]
+    async fn test_inmemory_read_emits_isb_metrics() {
+        use crate::metrics::isb_metrics_labels;
+
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        for _ in 0..3 {
+            let msg = rx.next().await.expect("should receive message");
+            mark_success!(msg);
+        }
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty after acks");
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+
+        // create_orchestrator reads the "test-stream" stream
+        let labels = isb_metrics_labels("test-stream", "inmemory");
+        let isb = &pipeline_metrics().isb;
+        assert!(isb.read_time_total.get(&labels).is_some());
+        assert!(isb.ack_time_total.get(&labels).is_some());
+    }
+
     /// Test: fetch errors are handled gracefully and reading continues
     #[tokio::test]
     async fn test_fetch_error_recovery() {
@@ -2130,6 +2206,10 @@ mod duplicate_inflight_tests {
 
         fn name(&self) -> &'static str {
             "scripted"
+        }
+
+        fn isb_type(&self) -> &'static str {
+            "test"
         }
 
         async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
