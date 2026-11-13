@@ -16,7 +16,7 @@ use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::consumer::DeadLetterPolicy;
 use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result, TlsConfig};
 
@@ -349,11 +349,14 @@ impl ConsumerReaderActor {
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        let total = offsets.len();
+        let mut failed = Vec::new();
         for offset in offsets {
             let pending = self.message_ids.remove(&offset);
 
             let Some(pending) = pending else {
-                return Err(Error::UnknownOffset(offset));
+                warn!(%offset, "Received ack request for unknown offset");
+                continue;
             };
 
             let Err(e) = self
@@ -365,17 +368,27 @@ impl ConsumerReaderActor {
             };
             // Insert offset back
             self.message_ids.insert(offset, pending);
-            return Err(Error::Pulsar(e.into()));
+            failed.push(format!("{offset}: {e}"));
         }
-        Ok(())
+        if failed.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Other(format!(
+            "Failed to ack {} of {total} offsets: {}",
+            failed.len(),
+            failed.join("; ")
+        )))
     }
 
     async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        let total = offsets.len();
+        let mut failed = Vec::new();
         for offset in offsets {
             let pending = self.message_ids.remove(&offset);
 
             let Some(pending) = pending else {
-                return Err(Error::UnknownOffset(offset));
+                warn!(%offset, "Received nack request for unknown offset");
+                continue;
             };
 
             let Err(e) = self
@@ -387,9 +400,16 @@ impl ConsumerReaderActor {
             };
             // Insert offset back
             self.message_ids.insert(offset, pending);
-            return Err(Error::Pulsar(e.into()));
+            failed.push(format!("{offset}: {e}"));
         }
-        Ok(())
+        if failed.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Other(format!(
+            "Failed to nack {} of {total} offsets: {}",
+            failed.len(),
+            failed.join("; ")
+        )))
     }
 }
 
@@ -465,5 +485,69 @@ impl PulsarSource {
 
     pub fn partitions_vec(&self) -> Vec<u16> {
         vec![self.vertex_replica]
+    }
+}
+
+#[cfg(feature = "pulsar-tests")]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_retry_skips_already_settled_offsets() {
+        let id = uuid::Uuid::new_v4().simple();
+        let topic = format!("persistent://public/default/pulsar_source_{id}");
+        let source = PulsarSource::new(
+            PulsarSourceConfig {
+                pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::parse(
+                    "pulsar://localhost:6650",
+                )
+                .unwrap(),
+                topic: topic.clone(),
+                consumer_name: "test".into(),
+                subscription: format!("source_subscription_{id}"),
+                max_unack: 100,
+                dead_letter_policy: None,
+                auth: None,
+                tls: None,
+            },
+            10,
+            Duration::from_millis(500),
+            0,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+        let client = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+            .build()
+            .await
+            .unwrap();
+        let mut producer = client.producer().with_topic(&topic).build().await.unwrap();
+        for i in 0..4 {
+            producer
+                .send_non_blocking(format!("message {i}"))
+                .await
+                .unwrap()
+                .await
+                .unwrap();
+        }
+
+        let mut offsets = Vec::new();
+        for _ in 0..20 {
+            if offsets.len() == 4 {
+                break;
+            }
+            let batch = source.read_messages().await.unwrap().unwrap();
+            offsets.extend(batch.into_iter().map(|m| m.offset));
+        }
+        let [a, b, c, d] = offsets.as_slice() else {
+            panic!("expected 4 offsets, got {}", offsets.len());
+        };
+
+        source.ack_offsets(vec![*a]).await.unwrap();
+        source.ack_offsets(vec![*a, *b]).await.unwrap();
+        source.nack_offsets(vec![*c]).await.unwrap();
+        source.nack_offsets(vec![*c, *d]).await.unwrap();
     }
 }
