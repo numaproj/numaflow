@@ -61,6 +61,9 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
+    /// Upper bound for ack/nack retries, taken from the ISB's ack wait. `None` means retries are
+    /// only stopped by cancellation (the ISB does not redeliver on its own).
+    ack_retry_timeout: Option<Duration>,
 }
 
 /// Manual Clone implementation for ISBReaderOrchestrator.
@@ -83,6 +86,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
             reader_name: self.reader_name,
             rate_limiter: self.rate_limiter.clone(),
             metric_labels: Arc::clone(&self.metric_labels),
+            ack_retry_timeout: self.ack_retry_timeout,
         }
     }
 }
@@ -100,6 +104,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
         // Cache reader name for fast access
         let reader_name = reader.name();
+        // A zero ack wait would make every ack give up immediately, so treat it as unbounded.
+        let ack_retry_timeout = reader.ack_wait().filter(|d| !d.is_zero());
 
         Ok(Self {
             vertex_type: components.vertex_type,
@@ -113,6 +119,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             reader_name,
             rate_limiter,
             metric_labels,
+            ack_retry_timeout,
         })
     }
 
@@ -218,7 +225,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                     match res.unwrap_or(ReadAck::Nak(None)) {
                         ReadAck::Ack => {
                             let ack_start = Instant::now();
-                            if let Err(e) = Self::ack_with_retry(&params.reader, &params.offset, &params.cancel).await {
+                            if let Err(e) = Self::ack_with_retry(&params.reader, &params.offset, &params.cancel, params.ack_retry_timeout).await {
+                                Self::publish_ack_retry_timeout_metric(params.stream_name, &e, "ack");
                                 error!(?e, ?params.offset, "Failed to ack message after retries");
                             } else {
                                 Self::publish_ack_metrics(
@@ -231,7 +239,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                         ReadAck::Nak(option) => {
                             let nack_start = Instant::now();
                             info!(?params.offset, "Nak received for offset");
-                            if let Err(e) = Self::nak_with_retry(&params.reader, &params.offset, option, &params.cancel).await {
+                            if let Err(e) = Self::nak_with_retry(&params.reader, &params.offset, option, &params.cancel, params.ack_retry_timeout).await {
+                                Self::publish_ack_retry_timeout_metric(params.stream_name, &e, "nack");
                                 error!(?e, ?params.offset, "Failed to nack message after retries");
                             } else {
                                 Self::publish_nack_metrics(
@@ -252,14 +261,16 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         }
     }
 
-    /// invokes the ack with infinite retries until the cancellation token is cancelled.
+    /// invokes the ack with retries until it succeeds, the cancellation token is cancelled, or
+    /// `timeout` (the ISB's ack wait) elapses.
     async fn ack_with_retry(
         reader: &ISBReaderRef,
         offset: &Offset,
         cancel: &CancellationToken,
+        timeout: Option<Duration>,
     ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        Retry::new(
+        let retry = Retry::new(
             interval,
             async || reader.ack(offset).await,
             |e: &Error| {
@@ -279,19 +290,21 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 warn!(?e, ?offset, "Ack failed, retrying...");
                 true
             },
-        )
-        .await
+        );
+        Self::with_ack_retry_timeout(retry, timeout, offset, "Ack").await
     }
 
-    /// invokes the nack with infinite retries until the cancellation token is cancelled.
+    /// invokes the nack with retries until it succeeds, the cancellation token is cancelled, or
+    /// `timeout` (the ISB's ack wait) elapses.
     async fn nak_with_retry(
         reader: &ISBReaderRef,
         offset: &Offset,
         option: Option<NackOptions>,
         cancel: &CancellationToken,
+        timeout: Option<Duration>,
     ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let result = Retry::new(
+        let retry = Retry::new(
             interval,
             async || reader.nack(offset, option.clone()).await,
             |e: &Error| {
@@ -311,13 +324,56 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 warn!(?e, ?offset, "Nak failed, retrying...");
                 true
             },
-        )
-        .await;
+        );
+        let result = Self::with_ack_retry_timeout(retry, timeout, offset, "Nak").await;
 
         if result.is_ok() {
             info!(?offset, "Nak sent for offset");
         }
         result
+    }
+
+    /// Bounds an ack/nack retry loop by `timeout`. The timeout also covers a single attempt that
+    /// never returns (e.g. the broker never answers), not just repeated failures.
+    ///
+    /// Once the ISB's ack wait has passed, the ISB has redelivered the message, so retrying the
+    /// old delivery only keeps the inflight permit and the tracker entry (and with it the
+    /// watermark) held. The redelivered copy is processed under the at-least-once guarantee.
+    async fn with_ack_retry_timeout(
+        retry: impl std::future::Future<Output = Result<()>>,
+        timeout: Option<Duration>,
+        offset: &Offset,
+        op: &str,
+    ) -> Result<()> {
+        let Some(timeout) = timeout else {
+            return retry.await;
+        };
+        match time::timeout(timeout, retry).await {
+            Ok(result) => result,
+            Err(_) => {
+                warn!(
+                    ?offset,
+                    ?timeout,
+                    "{op} did not succeed within the ack wait, giving up, the message will be redelivered"
+                );
+                Err(Error::ISB(ISBError::AckRetryTimeout(format!(
+                    "{op} for offset {offset} did not succeed within {timeout:?}"
+                ))))
+            }
+        }
+    }
+
+    fn publish_ack_retry_timeout_metric(stream_name: &'static str, err: &Error, op: &str) {
+        if matches!(err, Error::ISB(ISBError::AckRetryTimeout(_))) {
+            pipeline_metrics()
+                .jetstream_isb
+                .ack_retry_timeout_total
+                .get_or_create(&jetstream_isb_error_metrics_labels(
+                    stream_name,
+                    op.to_string(),
+                ))
+                .inc();
+        }
     }
 
     /// Creates and writes a WMB message for reduce vertex when it is idle.
@@ -608,6 +664,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             cancel,
             message_processing_start: processing_start,
             tracker: self.tracker.clone(),
+            ack_retry_timeout: self.ack_retry_timeout,
         };
 
         tokio::spawn(async move {
@@ -673,6 +730,7 @@ struct WipParams {
     cancel: CancellationToken,
     message_processing_start: Instant,
     tracker: Tracker,
+    ack_retry_timeout: Option<Duration>,
 }
 
 /// Components needed to create an ISB reader.
@@ -1245,6 +1303,7 @@ mod tests {
             &offset,
             None,
             &cancel_token,
+            None,
         )
         .await;
         assert!(result.is_ok(), "nack_with_retry should succeed");
@@ -1406,6 +1465,7 @@ mod tests {
             &missing_offset,
             None,
             &cancel_token,
+            None,
         )
         .await;
         assert!(
@@ -1497,6 +1557,7 @@ mod tests {
             &js_reader,
             &offset,
             &cancel_token,
+            None,
         )
         .await;
         assert!(result.is_ok(), "ack_with_retry should succeed");
@@ -1553,6 +1614,7 @@ mod tests {
             &js_reader,
             &missing_offset,
             &cancel_token,
+            None,
         )
         .await;
         assert!(
@@ -1787,6 +1849,7 @@ mod simplebuffer_tests {
             &reader,
             &missing_offset,
             &cancel,
+            None,
         )
         .await;
 
@@ -1802,6 +1865,7 @@ mod simplebuffer_tests {
             &missing_offset,
             None,
             &cancel,
+            None,
         )
         .await;
 
@@ -1844,6 +1908,7 @@ mod simplebuffer_tests {
                 &reader,
                 &offset,
                 &cancel_clone,
+                None,
             )
             .await
         });
@@ -1859,6 +1924,167 @@ mod simplebuffer_tests {
 
         // Result should be an error (cancelled during retry)
         assert!(result.is_err(), "Should error after cancellation");
+    }
+
+    /// Fetches one message from a fresh SimpleBuffer and returns its offset with the reader.
+    async fn fetched_offset(adapter: &SimpleBufferAdapter) -> (ISBReaderRef, Offset) {
+        use crate::pipeline::isb::ISBReader;
+        write_messages(adapter, 1).await;
+        let reader = adapter.reader();
+        let messages = ISBReader::fetch(&reader, 1, Duration::from_millis(100))
+            .await
+            .unwrap();
+        let offset = messages.first().expect("one message").offset.clone();
+        (Arc::new(reader) as ISBReaderRef, offset)
+    }
+
+    /// Test: an ack that keeps failing gives up once the ack wait elapses.
+    #[tokio::test]
+    async fn test_ack_with_retry_gives_up_after_ack_wait() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (reader, offset) = fetched_offset(&adapter).await;
+        adapter.error_injector().fail_acks(1000);
+
+        let start = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+                &reader,
+                &offset,
+                &CancellationToken::new(),
+                Some(Duration::from_millis(300)),
+            ),
+        )
+        .await
+        .expect("ack_with_retry should give up on its own");
+
+        assert!(
+            matches!(result, Err(Error::ISB(ISBError::AckRetryTimeout(_)))),
+            "expected AckRetryTimeout, got {result:?}"
+        );
+        assert!(start.elapsed() >= Duration::from_millis(300));
+    }
+
+    /// Test: the bound also covers a single ack attempt that never returns.
+    #[tokio::test]
+    async fn test_ack_with_retry_gives_up_on_unanswered_ack() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (reader, offset) = fetched_offset(&adapter).await;
+        adapter.error_injector().set_ack_latency(60_000);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+                &reader,
+                &offset,
+                &CancellationToken::new(),
+                Some(Duration::from_millis(200)),
+            ),
+        )
+        .await
+        .expect("a hung ack should be cut off by the ack wait");
+
+        assert!(matches!(
+            result,
+            Err(Error::ISB(ISBError::AckRetryTimeout(_)))
+        ));
+    }
+
+    /// Test: transient ack failures inside the ack wait still end in a successful ack.
+    #[tokio::test]
+    async fn test_ack_with_retry_succeeds_within_ack_wait() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (reader, offset) = fetched_offset(&adapter).await;
+        adapter.error_injector().fail_acks(2);
+
+        let result = ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+            &reader,
+            &offset,
+            &CancellationToken::new(),
+            Some(Duration::from_secs(5)),
+        )
+        .await;
+        assert!(result.is_ok(), "expected ack to succeed, got {result:?}");
+    }
+
+    /// Test: a nack that keeps failing gives up once the ack wait elapses.
+    #[tokio::test]
+    async fn test_nak_with_retry_gives_up_after_ack_wait() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (reader, offset) = fetched_offset(&adapter).await;
+        adapter.error_injector().fail_nacks(1000);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            ISBReaderOrchestrator::<WithSimpleBuffer>::nak_with_retry(
+                &reader,
+                &offset,
+                None,
+                &CancellationToken::new(),
+                Some(Duration::from_millis(300)),
+            ),
+        )
+        .await
+        .expect("nak_with_retry should give up on its own");
+
+        assert!(matches!(
+            result,
+            Err(Error::ISB(ISBError::AckRetryTimeout(_)))
+        ));
+    }
+
+    /// Test (#3704): with max_ack_pending == batch_size, an ack that never succeeds used to hold
+    /// its permit forever and stop all later fetches. With the ack wait bound, the reader gives
+    /// up on the stuck ack, releases the permit and the tracker entry, and keeps reading.
+    #[tokio::test]
+    async fn test_stuck_ack_does_not_stall_reader() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 2).await;
+
+        let (mut orchestrator, tracker, cancel) = create_orchestrator(&adapter, 1, 1).await;
+        orchestrator.ack_retry_timeout = Some(Duration::from_millis(300));
+        let labels = jetstream_isb_error_metrics_labels("test-stream", "ack".to_string());
+        let before = pipeline_metrics()
+            .jetstream_isb
+            .ack_retry_timeout_total
+            .get_or_create(&labels)
+            .get();
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        let first = rx.next().await.expect("should receive the first message");
+        let first_message = first.message().clone();
+        adapter.error_injector().fail_acks(usize::MAX);
+        mark_success!(first);
+
+        // The only permit is held by the stuck ack. The second message can only be fetched
+        // after the ack wait releases it.
+        let second = tokio::time::timeout(Duration::from_secs(5), rx.next())
+            .await
+            .expect("reader stalled behind an ack that never succeeds");
+        assert!(second.is_some());
+
+        let after = pipeline_metrics()
+            .jetstream_isb
+            .ack_retry_timeout_total
+            .get_or_create(&labels)
+            .get();
+        assert!(
+            after > before,
+            "ack_retry_timeout metric should be incremented"
+        );
+
+        // The tracker entry for the first message was removed, so the watermark can move.
+        // Re-inserting it only succeeds if it is no longer tracked.
+        tracker
+            .insert(&first_message)
+            .await
+            .expect("first message should no longer be in the tracker");
+        tracker.delete(&first_message.offset).await.unwrap();
+
+        drop(second);
+        cancel.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(5), handle).await;
     }
 
     /// Test: WIP failures are ignored and loop continues
@@ -2177,6 +2403,7 @@ mod duplicate_inflight_tests {
             &offset,
             Some(opts.clone()),
             &cancel,
+            None,
         )
         .await
         .expect("nack should succeed");

@@ -54,6 +54,11 @@ pub enum ISBError {
     #[error("Failed to fetch buffer information: {0}")]
     BufferInfo(String),
 
+    /// Ack/nack retries gave up because they ran longer than the ISB's ack wait. The ISB
+    /// redelivers the message after its ack wait, so the redelivered copy takes over.
+    #[error("Gave up retrying after the ack wait elapsed: {0}")]
+    AckRetryTimeout(String),
+
     /// Generic ISB error for cases not covered by specific variants.
     /// TODO: As we identify more specific error cases, we should add dedicated variants.
     #[error("ISB operation failed: {0}")]

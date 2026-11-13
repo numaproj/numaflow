@@ -126,6 +126,7 @@ const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
 const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
 const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
 const JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL: &str = "max_payload_exceeded";
+const JETSTREAM_ISB_ACK_RETRY_TIMEOUT_TOTAL: &str = "ack_retry_timeout";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING_RAW: &str = "pending_raw";
@@ -710,6 +711,7 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) max_payload_exceeded_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_retry_timeout_total: Family<Vec<(String, String)>, Counter>,
 
     pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
@@ -731,6 +733,7 @@ impl JetStreamISBMetrics {
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
             max_payload_exceeded_total: Family::<Vec<(String, String)>, Counter>::default(),
+            ack_retry_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
 
             buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
@@ -1251,6 +1254,11 @@ impl PipelineMetrics {
             JETSTREAM_ISB_MAX_PAYLOAD_EXCEEDED_TOTAL,
             "Total number of jetstream writes rejected because the message exceeds the max message size",
             metrics.jetstream_isb.max_payload_exceeded_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ACK_RETRY_TIMEOUT_TOTAL,
+            "Total number of acks/nacks given up on because retries ran past the consumer ack wait",
+            metrics.jetstream_isb.ack_retry_timeout_total.clone(),
         );
         // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
