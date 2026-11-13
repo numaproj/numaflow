@@ -7058,6 +7058,12 @@
 <td>Pipeline data processing health. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical</td>
 </tr>
 <tr>
+<td><code>pipeline_edge_watermark</code></td>
+<td>Gauge</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>from_vertex=&lt;vertex-name&gt;</code> <br> <code>to_vertex=&lt;vertex-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Watermark of each buffer partition on an edge, in milliseconds since epoch. -1 until a watermark is available. Not emitted when watermarks are disabled</td>
+</tr>
+<tr>
 <td><code>vertex_pending_messages</code></td>
 <td>Gauge</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code> <br> <code>period=&lt;duration&gt;</code></td>
@@ -7071,6 +7077,10 @@
 </tr>
 </tbody>
 </table>
+<p>Since <code>pipeline_edge_watermark</code> is labeled with both ends of the edge, it tells the incoming edges of a join vertex apart.
+For example, how far each edge into a vertex lags behind the current time, using its slowest partition:</p>
+<div class="highlight"><pre><span></span><code>time() * 1000 - min by (from_vertex) (pipeline_edge_watermark{pipeline="my-pipeline", to_vertex="my-join"} &gt; 0)
+</code></pre></div>
 <h3 id="monovertex-daemon-metrics">MonoVertex Daemon Metrics<a class="headerlink" href="#monovertex-daemon-metrics" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
