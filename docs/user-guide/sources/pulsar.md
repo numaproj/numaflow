@@ -79,3 +79,8 @@ supported for Pulsar, unlike the [Kafka source](../sources/kafka.md)'s `tls`
 block - the underlying Pulsar client does not currently support presenting a
 client certificate to the broker.
 
+## Autoscaling
+
+Pending messages are the subscription backlog reported by the Pulsar broker. When
+producers batch messages, the broker counts each batch as one message.
+

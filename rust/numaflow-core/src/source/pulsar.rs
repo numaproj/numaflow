@@ -401,7 +401,7 @@ mod tests {
         let msgs = tokio::time::timeout(Duration::from_millis(400), pulsar.read_messages()).await;
         assert!(msgs.is_ok());
 
-        assert!(pulsar.pending().await.unwrap().is_none());
+        assert_eq!(pulsar.pending().await.unwrap(), Some(0));
 
         let pulsar_producer: Pulsar<_> = Pulsar::builder(PULSAR_ADDR, TokioExecutor)
             .build()
@@ -430,6 +430,8 @@ mod tests {
         for fut in send_futures {
             fut.await?;
         }
+
+        assert_eq!(pulsar.pending().await.unwrap(), Some(10));
 
         let messages = pulsar.read().await.unwrap()?;
         assert_eq!(messages.len(), 10);
@@ -468,6 +470,8 @@ mod tests {
             )
             .await;
         }
+
+        assert_eq!(source.pending().await.unwrap(), Some(6));
 
         let messages = read_until(&mut source, 6, Duration::from_secs(15)).await;
         assert_eq!(messages.len(), 6);
