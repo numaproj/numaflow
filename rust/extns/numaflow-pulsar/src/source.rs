@@ -16,7 +16,7 @@ use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::consumer::DeadLetterPolicy;
 use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{Error, PulsarAuth, Result, TlsConfig};
 
@@ -68,6 +68,9 @@ enum ConsumerActorMessage {
     Nack {
         offsets: Vec<PulsarOffset>,
         respond_to: oneshot::Sender<Result<()>>,
+    },
+    Pending {
+        respond_to: oneshot::Sender<Option<usize>>,
     },
 }
 
@@ -260,6 +263,22 @@ impl ConsumerReaderActor {
             } => {
                 let status = self.nack_messages(offsets).await;
                 let _ = respond_to.send(status);
+            }
+            ConsumerActorMessage::Pending { respond_to } => {
+                let _ = respond_to.send(self.pending_count().await);
+            }
+        }
+    }
+
+    async fn pending_count(&mut self) -> Option<usize> {
+        match self.consumer.get_stats().await {
+            Ok(stats) => stats
+                .iter()
+                .map(|s| s.msg_backlog.map(|n| n as usize))
+                .sum(),
+            Err(e) => {
+                warn!(?e, "Fetching Pulsar consumer stats");
+                None
             }
         }
     }
@@ -460,7 +479,12 @@ impl PulsarSource {
     }
 
     pub async fn pending_count(&self) -> Option<usize> {
-        None
+        let (tx, rx) = oneshot::channel();
+        let _ = self
+            .actor_tx
+            .send(ConsumerActorMessage::Pending { respond_to: tx })
+            .await;
+        rx.await.ok().flatten()
     }
 
     pub fn partitions_vec(&self) -> Vec<u16> {
