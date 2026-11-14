@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use numaflow_shared::redacted_url::RedactedUrl;
 use pulsar::consumer::DeadLetterPolicy;
+use pulsar::error::ConsumerError;
 use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
 use tracing::{info, warn};
@@ -141,10 +142,93 @@ struct PendingMessage {
     message_id: MessageIdData,
 }
 
+/// Whether an error from the consumer's message stream means the consumer has given up its
+/// subscription. The client resubscribes on its own when the broker closes the consumer; if
+/// that fails, it puts the connection or lookup error on the stream once and then delivers
+/// nothing more, while still looking alive. A per-message error (for example a payload it
+/// cannot decode) leaves the subscription in place.
+fn subscription_abandoned(e: &pulsar::Error) -> bool {
+    matches!(
+        e,
+        pulsar::Error::Connection(_) | pulsar::Error::ServiceDiscovery(_)
+    )
+}
+
+/// What an ack or nack finds for an offset.
+enum Pending {
+    Live(PendingMessage),
+    /// Read from a consumer that has since been replaced. The broker redelivers the message
+    /// to the new consumer, so its ack or nack is dropped.
+    Stale,
+    Unknown,
+}
+
+/// Messages read but not yet acked or nacked.
+#[derive(Default)]
+struct PendingMessages {
+    live: BTreeMap<PulsarOffset, PendingMessage>,
+    stale: BTreeSet<PulsarOffset>,
+}
+
+impl PendingMessages {
+    fn len(&self) -> usize {
+        self.live.len()
+    }
+
+    fn insert(&mut self, offset: PulsarOffset, message: PendingMessage) {
+        self.live.insert(offset, message);
+    }
+
+    fn take(&mut self, offset: PulsarOffset) -> Pending {
+        if let Some(message) = self.live.remove(&offset) {
+            return Pending::Live(message);
+        }
+        if self.stale.remove(&offset) {
+            return Pending::Stale;
+        }
+        Pending::Unknown
+    }
+
+    /// Marks every live message stale, when the consumer that read them is replaced.
+    fn retire_all(&mut self) {
+        self.stale
+            .extend(std::mem::take(&mut self.live).into_keys());
+    }
+}
+
+/// How long to wait after a failed consumer rebuild before trying again. Acks are retried
+/// every 100 ms, so without it each retry would look the topic up on the broker again.
+const REBUILD_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Spaces out consumer rebuilds while they keep failing.
+#[derive(Default)]
+struct RebuildBackoff {
+    last_failure: Option<Instant>,
+}
+
+impl RebuildBackoff {
+    fn ready(&self, now: Instant) -> bool {
+        self.last_failure
+            .is_none_or(|failed_at| now.duration_since(failed_at) >= REBUILD_RETRY_INTERVAL)
+    }
+
+    fn failed(&mut self, now: Instant) {
+        self.last_failure = Some(now);
+    }
+
+    fn succeeded(&mut self) {
+        self.last_failure = None;
+    }
+}
+
 struct ConsumerReaderActor {
+    // Kept to build a new consumer when the current one stops.
+    pulsar: Pulsar<TokioExecutor>,
+    config: PulsarSourceConfig,
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
-    message_ids: BTreeMap<PulsarOffset, PendingMessage>,
+    pending: PendingMessages,
+    rebuild: RebuildBackoff,
     max_unack: usize,
     cancel_token: CancellationToken,
 }
@@ -178,7 +262,7 @@ impl ConsumerReaderActor {
                 pulsar = pulsar.with_allow_insecure_connection(true);
             }
         }
-        match config.auth {
+        match &config.auth {
             Some(PulsarAuth::JWT(token)) => {
                 let auth_token = Authentication {
                     name: "token".into(),
@@ -201,6 +285,28 @@ impl ConsumerReaderActor {
             .await
             .map_err(|e| format!("Creating Pulsar client connection: {e:?}"))?;
 
+        let consumer = Self::build_consumer(&pulsar, &config).await?;
+
+        tokio::spawn(async move {
+            let mut consumer_actor = ConsumerReaderActor {
+                pulsar,
+                max_unack: config.max_unack,
+                config,
+                consumer,
+                handler_rx,
+                pending: PendingMessages::default(),
+                rebuild: RebuildBackoff::default(),
+                cancel_token,
+            };
+            consumer_actor.run().await;
+        });
+        Ok(())
+    }
+
+    async fn build_consumer(
+        pulsar: &Pulsar<TokioExecutor>,
+        config: &PulsarSourceConfig,
+    ) -> Result<Consumer<Vec<u8>, TokioExecutor>> {
         let mut builder = pulsar
             .consumer()
             .with_topic(&config.topic)
@@ -216,22 +322,37 @@ impl ConsumerReaderActor {
             });
         }
 
-        let consumer = builder
+        Ok(builder
             .build()
             .await
-            .map_err(|e| format!("Creating a Pulsar consumer: {e:?}"))?;
+            .map_err(|e| format!("Creating a Pulsar consumer: {e:?}"))?)
+    }
 
-        tokio::spawn(async move {
-            let mut consumer_actor = ConsumerReaderActor {
-                consumer,
-                handler_rx,
-                message_ids: BTreeMap::new(),
-                max_unack: config.max_unack,
-                cancel_token,
-            };
-            consumer_actor.run().await;
-        });
-        Ok(())
+    /// Replaces a consumer whose task has stopped. Without this the source would retry its
+    /// acks forever and never read again. The broker redelivers the old consumer's unacked
+    /// messages to the new one, so they are marked stale.
+    async fn replace_consumer(&mut self) -> Result<()> {
+        if !self.rebuild.ready(Instant::now()) {
+            return Err(Error::Other(
+                "Pulsar consumer stopped, waiting to create a new one".to_string(),
+            ));
+        }
+        warn!(
+            pending = self.pending.len(),
+            "Pulsar consumer stopped, creating a new one; its unacked messages will be redelivered"
+        );
+        match Self::build_consumer(&self.pulsar, &self.config).await {
+            Ok(consumer) => {
+                self.consumer = consumer;
+                self.pending.retire_all();
+                self.rebuild.succeeded();
+                Ok(())
+            }
+            Err(e) => {
+                self.rebuild.failed(Instant::now());
+                Err(e)
+            }
+        }
     }
 
     async fn run(&mut self) {
@@ -292,8 +413,8 @@ impl ConsumerReaderActor {
             return None;
         }
 
-        if self.message_ids.len() >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
+        if self.pending.len() >= self.max_unack {
+            return Some(Err(Error::AckPendingExceeded(self.pending.len())));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -303,9 +424,21 @@ impl ConsumerReaderActor {
             };
             let msg = match msg {
                 Ok(Some(msg)) => msg,
-                Ok(None) => break,
+                // The consumer's stream ends only when its task has stopped.
+                Ok(None) => {
+                    if let Err(e) = self.replace_consumer().await {
+                        return Some(Err(e));
+                    }
+                    break;
+                }
                 Err(e) => {
                     tracing::error!(?e, "Fetching message from Pulsar");
+                    if subscription_abandoned(&e) {
+                        if let Err(e) = self.replace_consumer().await {
+                            return Some(Err(e));
+                        }
+                        break;
+                    }
                     let remaining_time = timeout_at - Instant::now();
                     if remaining_time.as_millis() >= 100 {
                         time::sleep(Duration::from_millis(50)).await; // FIXME: add error metrics. Also, respect the timeout
@@ -342,7 +475,7 @@ impl ConsumerReaderActor {
             let message_id = msg.message_id().clone();
 
             // Physical topic (e.g. <topic>-partition-N) that ack/nack must route to.
-            self.message_ids.insert(
+            self.pending.insert(
                 offset,
                 PendingMessage {
                     topic: msg.topic,
@@ -368,64 +501,54 @@ impl ConsumerReaderActor {
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
     async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
-        let total = offsets.len();
-        let mut failed = Vec::new();
-        for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                warn!(%offset, "Received ack request for unknown offset");
-                continue;
-            };
-
-            let Err(e) = self
-                .consumer
-                .ack_with_id(&pending.topic, pending.message_id.clone())
-                .await
-            else {
-                continue;
-            };
-            // Insert offset back
-            self.message_ids.insert(offset, pending);
-            failed.push(format!("{offset}: {e}"));
-        }
-        if failed.is_empty() {
-            return Ok(());
-        }
-        Err(Error::Other(format!(
-            "Failed to ack {} of {total} offsets: {}",
-            failed.len(),
-            failed.join("; ")
-        )))
+        self.settle(offsets, true).await
     }
 
     async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+        self.settle(offsets, false).await
+    }
+
+    async fn settle(&mut self, offsets: Vec<PulsarOffset>, ack: bool) -> Result<()> {
+        let action = if ack { "ack" } else { "nack" };
         let total = offsets.len();
         let mut failed = Vec::new();
         for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                warn!(%offset, "Received nack request for unknown offset");
-                continue;
+            let pending = match self.pending.take(offset) {
+                Pending::Live(pending) => pending,
+                Pending::Stale => continue,
+                Pending::Unknown => {
+                    warn!(%offset, "Received {action} request for unknown offset");
+                    continue;
+                }
             };
-
-            let Err(e) = self
-                .consumer
-                .nack_with_id(&pending.topic, pending.message_id.clone())
-                .await
-            else {
-                continue;
+            let result = if ack {
+                self.consumer
+                    .ack_with_id(&pending.topic, pending.message_id.clone())
+                    .await
+            } else {
+                self.consumer
+                    .nack_with_id(&pending.topic, pending.message_id.clone())
+                    .await
             };
-            // Insert offset back
-            self.message_ids.insert(offset, pending);
-            failed.push(format!("{offset}: {e}"));
+            match result {
+                Ok(()) => {}
+                Err(ConsumerError::Closed) => {
+                    self.pending.insert(offset, pending);
+                    self.replace_consumer().await?;
+                    // Stale now along with the rest, so this one is dropped too.
+                    self.pending.take(offset);
+                }
+                Err(e) => {
+                    self.pending.insert(offset, pending);
+                    failed.push(format!("{offset}: {e}"));
+                }
+            }
         }
         if failed.is_empty() {
             return Ok(());
         }
         Err(Error::Other(format!(
-            "Failed to nack {} of {total} offsets: {}",
+            "Failed to {action} {} of {total} offsets: {}",
             failed.len(),
             failed.join("; ")
         )))
@@ -512,11 +635,12 @@ impl PulsarSource {
     }
 }
 
-#[cfg(feature = "pulsar-tests")]
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Needs a Pulsar broker on localhost:6650.
+    #[cfg(feature = "pulsar-tests")]
     #[tokio::test]
     async fn test_retry_skips_already_settled_offsets() {
         let id = uuid::Uuid::new_v4().simple();
@@ -573,5 +697,80 @@ mod tests {
         source.ack_offsets(vec![*a, *b]).await.unwrap();
         source.nack_offsets(vec![*c]).await.unwrap();
         source.nack_offsets(vec![*c, *d]).await.unwrap();
+    }
+
+    fn offset(entry_id: u64) -> PulsarOffset {
+        PulsarOffset {
+            ledger_id: 1,
+            entry_id,
+            partition: -1,
+            batch_index: -1,
+        }
+    }
+
+    fn message() -> PendingMessage {
+        PendingMessage {
+            topic: "persistent://public/default/test".to_string(),
+            message_id: MessageIdData::default(),
+        }
+    }
+
+    #[test]
+    fn only_resubscribe_failures_abandon_the_subscription() {
+        use pulsar::error::{ConnectionError, ServiceDiscoveryError};
+
+        assert!(subscription_abandoned(&pulsar::Error::Connection(
+            ConnectionError::Disconnected
+        )));
+        assert!(subscription_abandoned(&pulsar::Error::ServiceDiscovery(
+            ServiceDiscoveryError::NotFound
+        )));
+        assert!(!subscription_abandoned(&pulsar::Error::Consumer(
+            ConsumerError::MissingPayload("no payload".to_string())
+        )));
+    }
+
+    #[test]
+    fn rebuilds_wait_after_a_failure_until_the_interval_passes() {
+        let mut backoff = RebuildBackoff::default();
+        let start = Instant::now();
+        assert!(backoff.ready(start));
+
+        backoff.failed(start);
+        assert!(!backoff.ready(start + Duration::from_millis(100)));
+        assert!(backoff.ready(start + REBUILD_RETRY_INTERVAL));
+
+        backoff.failed(start + REBUILD_RETRY_INTERVAL);
+        backoff.succeeded();
+        assert!(backoff.ready(start + REBUILD_RETRY_INTERVAL));
+    }
+
+    #[test]
+    fn take_returns_a_live_message_once() {
+        let mut pending = PendingMessages::default();
+        pending.insert(offset(1), message());
+
+        assert!(matches!(pending.take(offset(1)), Pending::Live(_)));
+        assert!(matches!(pending.take(offset(1)), Pending::Unknown));
+        assert!(matches!(pending.take(offset(2)), Pending::Unknown));
+    }
+
+    #[test]
+    fn retired_messages_are_dropped_once_and_free_the_unack_budget() {
+        let mut pending = PendingMessages::default();
+        pending.insert(offset(1), message());
+        pending.insert(offset(2), message());
+
+        pending.retire_all();
+        assert_eq!(pending.len(), 0);
+
+        // A message read by the new consumer is live alongside the stale ones.
+        pending.insert(offset(3), message());
+        assert_eq!(pending.len(), 1);
+
+        assert!(matches!(pending.take(offset(1)), Pending::Stale));
+        assert!(matches!(pending.take(offset(1)), Pending::Unknown));
+        assert!(matches!(pending.take(offset(2)), Pending::Stale));
+        assert!(matches!(pending.take(offset(3)), Pending::Live(_)));
     }
 }
