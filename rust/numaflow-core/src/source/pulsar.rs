@@ -372,6 +372,23 @@ mod tests {
         );
     }
 
+    async fn subscription_backlog(local: &str, subscription: &str) -> u64 {
+        let resp = reqwest::Client::new()
+            .get(format!(
+                "{ADMIN_ADDR}/admin/v2/persistent/public/default/{local}/stats?getPreciseBacklog=true"
+            ))
+            .send()
+            .await
+            .expect("admin stats request failed");
+        let status = resp.status();
+        let text = resp.text().await.expect("reading stats response body");
+        assert!(status.is_success(), "admin stats failed: {status} {text}");
+        let body: serde_json::Value = serde_json::from_str(&text).expect("parsing stats JSON");
+        body.pointer(&format!("/subscriptions/{subscription}/msgBacklog"))
+            .and_then(|v| v.as_u64())
+            .unwrap_or_else(|| panic!("no msgBacklog for {subscription} in {body}"))
+    }
+
     #[tokio::test]
     async fn test_pulsar_source() -> Result<()> {
         let topic = full_topic(&format!("r1-{}", get_rand_str()));
@@ -584,6 +601,47 @@ mod tests {
 
         let ack_result = source.ack(offsets).await;
         assert!(ack_result.is_ok(), "ack failed: {ack_result:?}");
+
+        wait_for_backlog_zero(&local, false, &subscription, Duration::from_secs(15)).await;
+    }
+
+    #[tokio::test]
+    async fn test_pulsar_source_batch_partial_ack() {
+        let local = format!("b1-{}", get_rand_str());
+        let topic = full_topic(&local);
+        let subscription = format!("sub-{}", get_rand_str());
+
+        create_non_partitioned_topic(&local).await;
+        create_subscription(&local, &subscription).await;
+
+        let payloads: Vec<String> = (0..10).map(|i| format!("b{i}")).collect();
+        produce(&topic, payloads, true).await;
+
+        let mut source =
+            new_test_source(&topic, &subscription, 10, Duration::from_millis(500)).await;
+
+        let messages = read_until(&mut source, 10, Duration::from_secs(15)).await;
+        assert_eq!(messages.len(), 10);
+
+        let offsets: Vec<Offset> = messages.iter().map(|m| m.offset.clone()).collect();
+        let entries: HashSet<(u64, u64)> = offsets
+            .iter()
+            .map(parse_offset)
+            .map(|o| (o.ledger_id, o.entry_id))
+            .collect();
+        assert_eq!(
+            entries.len(),
+            1,
+            "expected one batch entry, got {entries:?}"
+        );
+
+        let (first, rest) = offsets.split_first().expect("read 10 messages");
+        source.ack(vec![first.clone()]).await.expect("ack failed");
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert_eq!(subscription_backlog(&local, &subscription).await, 10);
+
+        source.ack(rest.to_vec()).await.expect("ack failed");
 
         wait_for_backlog_zero(&local, false, &subscription, Duration::from_secs(15)).await;
     }

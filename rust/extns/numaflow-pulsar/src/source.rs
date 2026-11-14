@@ -141,10 +141,120 @@ struct PendingMessage {
     message_id: MessageIdData,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct EntryKey {
+    ledger_id: u64,
+    entry_id: u64,
+    partition: i32,
+}
+
+impl From<&PulsarOffset> for EntryKey {
+    fn from(offset: &PulsarOffset) -> Self {
+        Self {
+            ledger_id: offset.ledger_id,
+            entry_id: offset.entry_id,
+            partition: offset.partition,
+        }
+    }
+}
+
+struct BatchEntry {
+    settled: Vec<bool>,
+    remaining: usize,
+    nacked: bool,
+}
+
+impl BatchEntry {
+    fn is_settled(&self, offset: &PulsarOffset) -> Option<bool> {
+        self.settled.get(offset.batch_index as usize).copied()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Settlement {
+    Ack,
+    Nack,
+}
+
+// pulsar-rs acks the whole batch on any ack, so we ack a batch only after all its messages are done.
+#[derive(Default)]
+struct PendingMessages {
+    messages: BTreeMap<PulsarOffset, PendingMessage>,
+    batches: HashMap<EntryKey, BatchEntry>,
+}
+
+impl PendingMessages {
+    fn len(&self) -> usize {
+        self.messages.len()
+    }
+
+    fn insert(&mut self, offset: PulsarOffset, message: PendingMessage, batch_size: Option<i32>) {
+        if offset.batch_index >= 0
+            && let Some(size) = batch_size.filter(|&size| size > 1)
+        {
+            self.batches
+                .entry(EntryKey::from(&offset))
+                .or_insert(BatchEntry {
+                    settled: vec![false; size as usize],
+                    remaining: size as usize,
+                    nacked: false,
+                });
+        }
+        self.messages.insert(offset, message);
+    }
+
+    fn plan(
+        &self,
+        offset: &PulsarOffset,
+        settlement: Settlement,
+    ) -> Result<Option<(&PendingMessage, Settlement)>> {
+        let Some(message) = self.messages.get(offset) else {
+            return Err(Error::UnknownOffset(*offset));
+        };
+        let Some(batch) = self.batches.get(&EntryKey::from(offset)) else {
+            return Ok(Some((message, settlement)));
+        };
+        match batch.is_settled(offset) {
+            None => return Ok(Some((message, settlement))),
+            Some(true) => return Ok(None),
+            Some(false) if batch.remaining > 1 => return Ok(None),
+            Some(false) => {}
+        }
+        let settlement = if batch.nacked {
+            Settlement::Nack
+        } else {
+            settlement
+        };
+        Ok(Some((message, settlement)))
+    }
+
+    fn settle(&mut self, offset: &PulsarOffset, settlement: Settlement) {
+        if self.messages.remove(offset).is_none() {
+            return;
+        }
+        let key = EntryKey::from(offset);
+        let Some(batch) = self.batches.get_mut(&key) else {
+            return;
+        };
+        let Some(settled) = batch.settled.get_mut(offset.batch_index as usize) else {
+            return;
+        };
+        if *settled {
+            return;
+        }
+        *settled = true;
+        batch.remaining -= 1;
+        batch.nacked |= settlement == Settlement::Nack;
+        if batch.remaining == 0 {
+            self.batches.remove(&key);
+        }
+    }
+}
+
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
-    message_ids: BTreeMap<PulsarOffset, PendingMessage>,
+    pending: PendingMessages,
     max_unack: usize,
     cancel_token: CancellationToken,
 }
@@ -225,7 +335,7 @@ impl ConsumerReaderActor {
             let mut consumer_actor = ConsumerReaderActor {
                 consumer,
                 handler_rx,
-                message_ids: BTreeMap::new(),
+                pending: PendingMessages::default(),
                 max_unack: config.max_unack,
                 cancel_token,
             };
@@ -254,14 +364,14 @@ impl ConsumerReaderActor {
                 offsets,
                 respond_to,
             } => {
-                let status = self.ack_messages(offsets).await;
+                let status = self.settle_messages(offsets, Settlement::Ack).await;
                 let _ = respond_to.send(status);
             }
             ConsumerActorMessage::Nack {
                 offsets,
                 respond_to,
             } => {
-                let status = self.nack_messages(offsets).await;
+                let status = self.settle_messages(offsets, Settlement::Nack).await;
                 let _ = respond_to.send(status);
             }
             ConsumerActorMessage::Pending { respond_to } => {
@@ -292,8 +402,8 @@ impl ConsumerReaderActor {
             return None;
         }
 
-        if self.message_ids.len() >= self.max_unack {
-            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
+        if self.pending.len() >= self.max_unack {
+            return Some(Err(Error::AckPendingExceeded(self.pending.len())));
         }
         let mut messages = vec![];
         for _ in 0..count {
@@ -342,12 +452,13 @@ impl ConsumerReaderActor {
             let message_id = msg.message_id().clone();
 
             // Physical topic (e.g. <topic>-partition-N) that ack/nack must route to.
-            self.message_ids.insert(
+            self.pending.insert(
                 offset,
                 PendingMessage {
                     topic: msg.topic,
                     message_id,
                 },
+                msg.message_id.batch_size,
             );
 
             messages.push(PulsarMessage {
@@ -367,65 +478,41 @@ impl ConsumerReaderActor {
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
-    async fn ack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
+    async fn settle_messages(
+        &mut self,
+        offsets: Vec<PulsarOffset>,
+        settlement: Settlement,
+    ) -> Result<()> {
+        let verb = match settlement {
+            Settlement::Ack => "ack",
+            Settlement::Nack => "nack",
+        };
         let total = offsets.len();
         let mut failed = Vec::new();
         for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                warn!(%offset, "Received ack request for unknown offset");
+            let Ok(planned) = self.pending.plan(&offset, settlement) else {
+                warn!(%offset, "Received {verb} request for unknown offset");
                 continue;
             };
-
-            let Err(e) = self
-                .consumer
-                .ack_with_id(&pending.topic, pending.message_id.clone())
-                .await
-            else {
-                continue;
-            };
-            // Insert offset back
-            self.message_ids.insert(offset, pending);
-            failed.push(format!("{offset}: {e}"));
+            if let Some((message, action)) = planned {
+                let topic = &message.topic;
+                let message_id = message.message_id.clone();
+                let result = match action {
+                    Settlement::Ack => self.consumer.ack_with_id(topic, message_id).await,
+                    Settlement::Nack => self.consumer.nack_with_id(topic, message_id).await,
+                };
+                if let Err(e) = result {
+                    failed.push(format!("{offset}: {e}"));
+                    continue;
+                }
+            }
+            self.pending.settle(&offset, settlement);
         }
         if failed.is_empty() {
             return Ok(());
         }
         Err(Error::Other(format!(
-            "Failed to ack {} of {total} offsets: {}",
-            failed.len(),
-            failed.join("; ")
-        )))
-    }
-
-    async fn nack_messages(&mut self, offsets: Vec<PulsarOffset>) -> Result<()> {
-        let total = offsets.len();
-        let mut failed = Vec::new();
-        for offset in offsets {
-            let pending = self.message_ids.remove(&offset);
-
-            let Some(pending) = pending else {
-                warn!(%offset, "Received nack request for unknown offset");
-                continue;
-            };
-
-            let Err(e) = self
-                .consumer
-                .nack_with_id(&pending.topic, pending.message_id.clone())
-                .await
-            else {
-                continue;
-            };
-            // Insert offset back
-            self.message_ids.insert(offset, pending);
-            failed.push(format!("{offset}: {e}"));
-        }
-        if failed.is_empty() {
-            return Ok(());
-        }
-        Err(Error::Other(format!(
-            "Failed to nack {} of {total} offsets: {}",
+            "Failed to {verb} {} of {total} offsets: {}",
             failed.len(),
             failed.join("; ")
         )))
@@ -512,11 +599,197 @@ impl PulsarSource {
     }
 }
 
-#[cfg(feature = "pulsar-tests")]
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
+    fn offset(entry_id: u64, batch_index: i32) -> PulsarOffset {
+        PulsarOffset {
+            ledger_id: 7,
+            entry_id,
+            partition: -1,
+            batch_index,
+        }
+    }
+
+    fn message(offset: &PulsarOffset) -> PendingMessage {
+        PendingMessage {
+            topic: "persistent://public/default/topic".into(),
+            message_id: MessageIdData {
+                ledger_id: offset.ledger_id,
+                entry_id: offset.entry_id,
+                batch_index: (offset.batch_index >= 0).then_some(offset.batch_index),
+                ..Default::default()
+            },
+        }
+    }
+
+    fn insert_batch(pending: &mut PendingMessages, entry_id: u64, size: i32) -> Vec<PulsarOffset> {
+        (0..size)
+            .map(|i| {
+                let offset = offset(entry_id, i);
+                pending.insert(offset, message(&offset), Some(size));
+                offset
+            })
+            .collect()
+    }
+
+    fn planned(
+        pending: &PendingMessages,
+        offset: &PulsarOffset,
+        s: Settlement,
+    ) -> Option<Settlement> {
+        pending
+            .plan(offset, s)
+            .expect("offset is pending")
+            .map(|(_, action)| action)
+    }
+
+    #[test]
+    fn unbatched_message_is_sent_immediately() {
+        let mut pending = PendingMessages::default();
+        let offset = offset(1, -1);
+        pending.insert(offset, message(&offset), None);
+
+        assert_eq!(
+            planned(&pending, &offset, Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        assert_eq!(
+            planned(&pending, &offset, Settlement::Nack),
+            Some(Settlement::Nack)
+        );
+
+        pending.settle(&offset, Settlement::Ack);
+        assert_eq!(pending.len(), 0);
+        assert!(pending.batches.is_empty());
+    }
+
+    #[test]
+    fn batch_of_one_is_sent_immediately() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 1);
+
+        assert_eq!(
+            planned(&pending, &offsets[0], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        assert!(pending.batches.is_empty());
+    }
+
+    #[test]
+    fn batch_is_acked_once_every_message_is_acked() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 3);
+
+        for offset in [&offsets[2], &offsets[0]] {
+            assert_eq!(planned(&pending, offset, Settlement::Ack), None);
+            pending.settle(offset, Settlement::Ack);
+        }
+        assert_eq!(pending.len(), 1);
+
+        assert_eq!(
+            planned(&pending, &offsets[1], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        pending.settle(&offsets[1], Settlement::Ack);
+        assert_eq!(pending.len(), 0);
+        assert!(pending.batches.is_empty());
+    }
+
+    #[test]
+    fn batch_is_nacked_if_any_message_is_nacked() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 3);
+
+        assert_eq!(planned(&pending, &offsets[0], Settlement::Nack), None);
+        pending.settle(&offsets[0], Settlement::Nack);
+        assert_eq!(planned(&pending, &offsets[1], Settlement::Ack), None);
+        pending.settle(&offsets[1], Settlement::Ack);
+
+        assert_eq!(
+            planned(&pending, &offsets[2], Settlement::Ack),
+            Some(Settlement::Nack)
+        );
+        pending.settle(&offsets[2], Settlement::Ack);
+        assert!(pending.batches.is_empty());
+    }
+
+    #[test]
+    fn batches_in_different_entries_are_independent() {
+        let mut pending = PendingMessages::default();
+        let first = insert_batch(&mut pending, 1, 2);
+        let second = insert_batch(&mut pending, 2, 2);
+
+        pending.settle(&first[0], Settlement::Ack);
+        assert_eq!(planned(&pending, &second[0], Settlement::Ack), None);
+        assert_eq!(
+            planned(&pending, &first[1], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+    }
+
+    #[test]
+    fn plan_does_not_change_state() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+        pending.settle(&offsets[0], Settlement::Ack);
+
+        assert_eq!(
+            planned(&pending, &offsets[1], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        assert_eq!(
+            planned(&pending, &offsets[1], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        assert_eq!(pending.len(), 1);
+    }
+
+    #[test]
+    fn redelivered_copy_does_not_reset_batch() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+
+        pending.insert(offsets[0], message(&offsets[0]), Some(2));
+        pending.settle(&offsets[0], Settlement::Ack);
+
+        assert_eq!(
+            planned(&pending, &offsets[1], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+    }
+
+    #[test]
+    fn redelivered_copy_of_settled_message_is_not_counted_twice() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 4);
+        pending.settle(&offsets[0], Settlement::Ack);
+
+        pending.insert(offsets[0], message(&offsets[0]), Some(4));
+        for offset in [&offsets[1], &offsets[2], &offsets[0]] {
+            assert_eq!(planned(&pending, offset, Settlement::Ack), None);
+            pending.settle(offset, Settlement::Ack);
+        }
+        assert_eq!(pending.len(), 1);
+
+        assert_eq!(
+            planned(&pending, &offsets[3], Settlement::Ack),
+            Some(Settlement::Ack)
+        );
+        pending.settle(&offsets[3], Settlement::Ack);
+        assert!(pending.batches.is_empty());
+    }
+
+    #[test]
+    fn unknown_offset_is_an_error() {
+        let pending = PendingMessages::default();
+        let result = pending.plan(&offset(1, 0), Settlement::Ack);
+        assert!(matches!(result, Err(Error::UnknownOffset(_))));
+    }
+
+    #[cfg(feature = "pulsar-tests")]
     #[tokio::test]
     async fn test_retry_skips_already_settled_offsets() {
         let id = uuid::Uuid::new_v4().simple();
