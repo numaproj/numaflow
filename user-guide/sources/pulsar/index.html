@@ -1241,6 +1241,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#autoscaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autoscaling
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5328,6 +5339,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#autoscaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autoscaling
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5417,6 +5439,9 @@ client trust a custom CA. <code>certSecret</code>/<code>keySecret</code> (mutual
 supported for Pulsar, unlike the <a href="../kafka/">Kafka source</a>'s <code>tls</code>
 block - the underlying Pulsar client does not currently support presenting a
 client certificate to the broker.</p>
+<h2 id="autoscaling">Autoscaling<a class="headerlink" href="#autoscaling" title="Permanent link">&para;</a></h2>
+<p>Pending messages are the subscription backlog reported by the Pulsar broker. When
+producers batch messages, the broker counts each batch as one message.</p>
 
 
 
