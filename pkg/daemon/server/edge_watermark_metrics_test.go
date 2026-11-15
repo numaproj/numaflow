@@ -82,11 +82,11 @@ func TestEdgeWatermarkMetrics_JoinEdgesAreSeparateSeries(t *testing.T) {
 	})
 
 	assert.Equal(t, 4, seriesCount(gauge))
-	assert.Equal(t, float64(1000), value(t, gauge, "pl", "in-a", "join", "ns-pl-join-0"))
-	assert.Equal(t, float64(1001), value(t, gauge, "pl", "in-a", "join", "ns-pl-join-1"))
-	assert.Equal(t, float64(2000), value(t, gauge, "pl", "in-b", "join", "ns-pl-join-0"))
+	assert.Equal(t, float64(1000), value(t, gauge, "pl", "in-a", "join", "ns-pl-in-a-join-0"))
+	assert.Equal(t, float64(1001), value(t, gauge, "pl", "in-a", "join", "ns-pl-in-a-join-1"))
+	assert.Equal(t, float64(2000), value(t, gauge, "pl", "in-b", "join", "ns-pl-in-b-join-0"))
 	// no watermark yet is passed through as -1
-	assert.Equal(t, float64(-1), value(t, gauge, "pl", "in-b", "join", "ns-pl-join-1"))
+	assert.Equal(t, float64(-1), value(t, gauge, "pl", "in-b", "join", "ns-pl-in-b-join-1"))
 }
 
 func TestEdgeWatermarkMetrics_UpdatesValues(t *testing.T) {
@@ -96,7 +96,7 @@ func TestEdgeWatermarkMetrics_UpdatesValues(t *testing.T) {
 	m.update([]*daemon.EdgeWatermark{edgeWatermark("in", "out", true, 5000)})
 
 	assert.Equal(t, 1, seriesCount(gauge))
-	assert.Equal(t, float64(5000), value(t, gauge, "pl", "in", "out", "ns-pl-out-0"))
+	assert.Equal(t, float64(5000), value(t, gauge, "pl", "in", "out", "ns-pl-in-out-0"))
 }
 
 func TestEdgeWatermarkMetrics_DropsEdgesMissingFromUpdate(t *testing.T) {
@@ -112,7 +112,7 @@ func TestEdgeWatermarkMetrics_DropsEdgesMissingFromUpdate(t *testing.T) {
 	m.update([]*daemon.EdgeWatermark{edgeWatermark("in", "map", true, 1100)})
 
 	assert.Equal(t, 1, seriesCount(gauge))
-	assert.Equal(t, float64(1100), value(t, gauge, "pl", "in", "map", "ns-pl-map-0"))
+	assert.Equal(t, float64(1100), value(t, gauge, "pl", "in", "map", "ns-pl-in-map-0"))
 }
 
 func TestEdgeWatermarkMetrics_SkipsDisabledWatermarks(t *testing.T) {
