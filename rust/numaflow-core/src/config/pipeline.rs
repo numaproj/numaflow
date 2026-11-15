@@ -1597,7 +1597,10 @@ mod tests {
                 "Sink without ordered flag",
                 "",
                 false,
-                vec![0, 1, 2], // All partitions when ordered processing is disabled
+                // One partition per reader stream on this edge (toVertexPartitionCount=1 in the
+                // fixture below), not one per the from-vertex's own partition count (3) — the
+                // sink only ever reads a single stream from "in" here.
+                vec![0],
             ),
         ];
 
