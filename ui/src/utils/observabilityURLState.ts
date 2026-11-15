@@ -1,8 +1,11 @@
 import { History, Location } from "history";
 
 export const OBSERVABILITY_PARAM_NAMES = [
+  "isb",
+  "isbTab",
   "vertex",
   "vertexTab",
+  "podViewVersion",
   "specLine",
   "pod",
   "container",
@@ -27,7 +30,7 @@ export const OBSERVABILITY_PARAM_NAMES = [
   "metricFilter",
 ] as const;
 
-export type ObservabilityParamName = (typeof OBSERVABILITY_PARAM_NAMES)[number];
+export type ObservabilityParamName = typeof OBSERVABILITY_PARAM_NAMES[number];
 export type ObservabilityPatch = Partial<
   Record<ObservabilityParamName, string | number | boolean | null | undefined>
 >;
@@ -96,10 +99,12 @@ export const readMetricRequestFromSearch = (
     search.startsWith("?") ? search.slice(1) : search
   );
   const req: MetricRequestFromUrl = {};
-  (Object.entries(METRIC_REQ_PARAMS) as [
-    keyof typeof METRIC_REQ_PARAMS,
-    keyof MetricRequestFromUrl
-  ][]).forEach(([param, field]) => {
+  (
+    Object.entries(METRIC_REQ_PARAMS) as [
+      keyof typeof METRIC_REQ_PARAMS,
+      keyof MetricRequestFromUrl
+    ][]
+  ).forEach(([param, field]) => {
     const value = params.get(param);
     if (value) req[field] = value;
   });
@@ -121,7 +126,14 @@ export const updateObservabilitySearch = (
       params.delete(name);
       return;
     }
-    params.set(name, BOOLEAN_PARAMS.has(name as ObservabilityParamName) ? (value ? "1" : "0") : String(value));
+    params.set(
+      name,
+      BOOLEAN_PARAMS.has(name as ObservabilityParamName)
+        ? value
+          ? "1"
+          : "0"
+        : String(value)
+    );
   });
   const next = params.toString();
   return next ? `?${next}` : "";

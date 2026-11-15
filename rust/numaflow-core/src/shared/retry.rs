@@ -26,7 +26,7 @@ pub(crate) enum RetryStep {
 ///
 /// Construct once per unit of retry — per message for unary/stream/transformer, per batch for
 /// batch map. `Clone` copies the current backoff state; the transformer clones an *un-advanced*
-/// template so each per-message task (and each redrive) gets its own fresh iterator.
+/// template so each per-message task gets its own fresh iterator.
 #[derive(Clone)]
 pub(crate) struct RetryController {
     strategy: Option<OnFailureStrategy>,

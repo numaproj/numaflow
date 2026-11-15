@@ -28,7 +28,7 @@ pub struct RateLimiterRedisStore {
     pub sentinel: Option<Box<crate::models::RedisSentinelConfig>>,
     /// SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0 Mutually exclusive with .sentinel
     #[serde(rename = "url", skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub url: Option<numaflow_shared::redacted_url::RedactedUrl>,
 }
 
 impl RateLimiterRedisStore {

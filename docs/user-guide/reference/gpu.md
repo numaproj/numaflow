@@ -60,6 +60,54 @@ vertices:
 
 > Adjust the nodeSelector and annotations as required by your cluster setup.
 
+## Using an Alternate Scheduler
+
+Some clusters allocate GPUs with a scheduler other than the default Kubernetes scheduler, for example an AI workload scheduler such as KAI, Volcano or YuniKorn. Set `schedulerName` to have the vertex pods scheduled by it. Scheduler-specific settings, such as queue labels or annotations, can be added under `metadata`.
+
+The following example uses [Volcano](https://volcano.sh):
+
+```yaml
+vertices:
+  - name: gpu-vertex
+    schedulerName: volcano        # Replace with the name of your cluster's scheduler
+    udf:
+      container:
+        image: my-ml-image:latest
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+```
+
+To use the same scheduler for all vertices of a pipeline, set `schedulerName` under `spec.templates.vertex`. A value set on a vertex takes precedence. In the following example, `in` inherits `volcano` from the template, while `out` overrides it to use the default scheduler:
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  templates:
+    vertex:
+      schedulerName: volcano
+  vertices:
+    - name: in
+      source:
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: out
+      schedulerName: default-scheduler
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out
+```
+
+For a MonoVertex, set `schedulerName` under `spec`.
+
+> If no scheduler with the given name is running in the cluster, the pods stay `Pending`.
+
 ## Dynamic Resource Allocation (Advanced)
 
 For advanced GPU scheduling using Dynamic Resource Allocation (DRA), see [Dynamic Resource Allocation documentation](./configuration/dra.md).

@@ -37,6 +37,12 @@ jest.mock("../../../SpecEditor", () => {
           <div>{JSON.stringify(props.validationMessage)}</div>
           <div>{JSON.stringify(props.statusIndicator)}</div>
           <div>{JSON.stringify(props.initialYaml)}</div>
+          <div>
+            {JSON.stringify({
+              initialLine: props.initialLine,
+              initialEndLine: props.initialEndLine,
+            })}
+          </div>
           <button
             data-testid="spec-editor-reset"
             onClick={props.onResetApplied}
@@ -56,6 +62,10 @@ jest.mock("../../../SpecEditor", () => {
           <button
             data-testid="spec-editor-mutated"
             onClick={handleMutateClick}
+          />
+          <button
+            data-testid="spec-editor-select-lines"
+            onClick={() => props.onSelectionLineChange?.(12, 15)}
           />
         </div>
       );
@@ -82,7 +92,9 @@ describe("ISBUpdate", () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(`Edit ISB Service: test-isb`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Edit ISB Service: test-isb`)
+      ).toBeInTheDocument();
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
     // Click reset
@@ -121,7 +133,9 @@ describe("ISBUpdate", () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(`Edit ISB Service: test-isb`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Edit ISB Service: test-isb`)
+      ).toBeInTheDocument();
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
     // Click reset
@@ -152,7 +166,9 @@ describe("ISBUpdate", () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(`Edit ISB Service: test-isb`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Edit ISB Service: test-isb`)
+      ).toBeInTheDocument();
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
     // Click reset
@@ -181,7 +197,9 @@ describe("ISBUpdate", () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(`Edit ISB Service: test-isb`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Edit ISB Service: test-isb`)
+      ).toBeInTheDocument();
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
     // Click reset
@@ -215,7 +233,9 @@ describe("ISBUpdate", () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(`Edit ISB Service: test-isb`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Edit ISB Service: test-isb`)
+      ).toBeInTheDocument();
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
     // Click reset
@@ -368,11 +388,16 @@ describe("ISBUpdate", () => {
 
     await waitFor(() => {
       expect(screen.getByText("JetStream Summary")).toBeInTheDocument();
-      expect(screen.getByText("RAFT Meta Group Information")).toBeInTheDocument();
+      expect(
+        screen.getByText("RAFT Meta Group Information")
+      ).toBeInTheDocument();
       expect(screen.getAllByText("js-0").length).toBeGreaterThan(0);
       expect(screen.getAllByText("js-1").length).toBeGreaterThan(0);
-      expect(screen.getByText("400,006")).toBeInTheDocument();
-      expect(screen.getByText("250,263")).toBeInTheDocument();
+      expect(screen.getAllByText("200k")).toHaveLength(2);
+      expect(screen.getByText("400k")).toBeInTheDocument();
+      expect(screen.getByText("65.4k")).toBeInTheDocument();
+      expect(screen.getByText("149.7k")).toBeInTheDocument();
+      expect(screen.getByText("250.3k")).toBeInTheDocument();
       expect(screen.getByText("12 / 0.018%")).toBeInTheDocument();
       expect(screen.getByText("4 / 0.003%")).toBeInTheDocument();
       expect(screen.getByText("16 / 0.006%")).toBeInTheDocument();
@@ -389,11 +414,15 @@ describe("ISBUpdate", () => {
       expect(
         screen.getByTestId("isb-debug-header-help-current")
       ).toBeInTheDocument();
-      expect(screen.getByTestId("isb-debug-header-help-lag")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-lag")
+      ).toBeInTheDocument();
       expect(screen.queryByText("Memory")).not.toBeInTheDocument();
       expect(screen.queryByText("File")).not.toBeInTheDocument();
       expect(screen.queryByText("Stream Information")).not.toBeInTheDocument();
-      expect(screen.queryByText("Consumer Information")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Consumer Information")
+      ).not.toBeInTheDocument();
     });
 
     act(() => {
@@ -402,8 +431,101 @@ describe("ISBUpdate", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(2);
-      expect(screen.getAllByText("300,000")).toHaveLength(2);
+      expect(screen.getAllByText("300k")).toHaveLength(2);
+      expect(screen.getAllByText("1k")).toHaveLength(2);
       expect(screen.getAllByText("1 / 0.10%")).toHaveLength(2);
+    });
+  });
+
+  it("shows Copy View on the JetStream spec tab and copies the selected spec lines", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(global.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    fetch.mockResponseOnce(
+      JSON.stringify({
+        data: {
+          summary: [],
+          raftMetaGroup: [],
+        },
+      })
+    );
+
+    render(
+      <MemoryRouter
+        initialEntries={["/?namespace=test-namespace&isb=test-isb&isbTab=spec"]}
+      >
+        <ISBUpdate
+          initialYaml={{
+            metadata: { name: "test-isb" },
+            spec: { jetstream: {} },
+          }}
+          namespaceId="test-namespace"
+          isbId="test-isb"
+          viewType={0}
+          initialTab="spec"
+          onUpdateComplete={jest.fn()}
+          setModalOnClose={jest.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("spec-editor-mock")).toBeInTheDocument();
+      expect(screen.getByTestId("copy-view-link")).toHaveTextContent(
+        "Copy View"
+      );
+      expect(screen.queryByText("Refresh")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("spec-editor-select-lines"));
+    fireEvent.click(screen.getByTestId("copy-view-link"));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "?namespace=test-namespace&isb=test-isb&isbTab=spec&specLine=12-15"
+        )
+      );
+    });
+  });
+
+  it("restores the linked spec line range from the URL", async () => {
+    fetch.mockResponseOnce(
+      JSON.stringify({
+        data: {
+          summary: [],
+          raftMetaGroup: [],
+        },
+      })
+    );
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/?namespace=test-namespace&isb=test-isb&isbTab=spec&specLine=7-9",
+        ]}
+      >
+        <ISBUpdate
+          initialYaml={{
+            metadata: { name: "test-isb" },
+            spec: { jetstream: {} },
+          }}
+          namespaceId="test-namespace"
+          isbId="test-isb"
+          viewType={0}
+          initialTab="spec"
+          onUpdateComplete={jest.fn()}
+          setModalOnClose={jest.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(`{"initialLine":7,"initialEndLine":9}`)
+      ).toBeInTheDocument();
     });
   });
 
@@ -436,7 +558,9 @@ describe("ISBUpdate", () => {
     await waitFor(() => {
       expect(screen.getByText("Login Page")).toBeInTheDocument();
       expect(
-        screen.queryByText("Error loading JetStream information: Response code: 401")
+        screen.queryByText(
+          "Error loading JetStream information: Response code: 401"
+        )
       ).not.toBeInTheDocument();
     });
   });

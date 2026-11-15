@@ -1,0 +1,195 @@
+.pod-view-next {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.pod-view-next-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 1.6rem;
+  container-type: size;
+}
+
+.pod-view-next-scroll > .vertex-health {
+  flex-shrink: 0;
+  margin-bottom: 1.6rem;
+}
+
+.pod-view-next-workspace {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 2fr) minmax(25rem, 0.9fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 2.4rem;
+  /* The strip and fleet sit above, so on short windows the panel scrolls and logs fill its full visible height. */
+  min-height: max(42rem, 100cqh);
+  margin-top: 1.6rem;
+  overflow: hidden;
+}
+
+.pod-view-next-logs {
+  display: flex;
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.pod-view-next-containers {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1rem 1.6rem;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+}
+
+.pod-view-next-containers > span {
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pod-view-next-containers .pod-container-chip--selected.MuiChip-root,
+.PodLogs-focus-context .pod-container-chip--selected.MuiChip-root {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
+.pod-view-next-containers .pod-container-chip--selected.MuiChip-clickable:hover,
+.PodLogs-focus-context .pod-container-chip--selected.MuiChip-clickable:hover {
+  background: var(--accent-primary);
+}
+
+.pod-view-next-log-card {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pod-view-next-log-card > * {
+  flex: 1;
+}
+
+.pod-view-next-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 42rem;
+  margin-top: 1.6rem;
+  padding: 2.4rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.2rem;
+  background: var(--bg-primary);
+  text-align: center;
+}
+
+.pod-view-next-empty-icon {
+  display: flex;
+  width: 4.8rem;
+  height: 4.8rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.2rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 1.6rem;
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+}
+
+.pod-view-next-empty-icon svg {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.pod-view-next-empty-title,
+.pod-view-next-empty-subtitle {
+  margin: 0;
+}
+
+.pod-view-next-empty-title {
+  color: var(--text-secondary);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.pod-view-next-empty-subtitle {
+  margin-top: 0.4rem;
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+}
+
+.pod-view-next-state {
+  display: grid;
+  min-height: 24rem;
+  place-items: center;
+  padding: 2.4rem;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.pod-view-next-runtime-warning {
+  margin: 1.2rem 0 0;
+  padding: 0.8rem 1.2rem;
+  border: 1px solid #d38d00;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, #d38d00 10%, var(--bg-primary));
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+}
+
+.pod-view-next-state {
+  flex: 1;
+  gap: 0.8rem;
+}
+
+@media (max-width: 960px) {
+  .pod-view-next-scroll {
+    overflow: auto;
+  }
+
+  .pod-view-next-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    flex: initial;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .pod-view-next-logs {
+    height: clamp(36rem, 65vh, 60rem);
+    max-height: none;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .pod-view-next-scroll {
+    padding: 1.2rem;
+  }
+
+  .pod-view-next-containers {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

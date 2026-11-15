@@ -654,10 +654,8 @@ impl AlignedReducer {
                 increment_late_message_drop_metric("late-message");
                 return;
             }
-        }
-
-        // Validate message event time against current watermark (must not have progressed past this message)
-        if self.current_watermark > msg.event_time {
+        } else if self.current_watermark > msg.event_time {
+            // Validate message event time against current watermark (must not have progressed past this message)
             error!(
                 current_watermark = ?self.current_watermark.timestamp_millis(),
                 message_event_time = ?msg.event_time.timestamp_millis(),
@@ -762,10 +760,11 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_aligned_reducer_with_fixed_window() -> crate::Result<()> {
+    async fn test_aligned_reducer_with_fixed_window()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Set up the reducer server
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
+        let tmp_dir = TempDir::new()?;
         let sock_file = tmp_dir.path().join("reduce_fixed.sock");
         let server_info_file = tmp_dir.path().join("reduce_fixed-server-info");
 
@@ -793,7 +792,7 @@ mod tests {
 
         // Set up JetStream
         let js_url = "localhost:4222";
-        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let nats_client = async_nats::connect(js_url).await?;
         let js_context = jetstream::new(nats_client);
 
         // Create output stream
@@ -807,8 +806,7 @@ mod tests {
                 subjects: vec![stream.name.to_string()],
                 ..Default::default()
             })
-            .await
-            .unwrap();
+            .await?;
 
         // Create consumer
         let _consumer = js_context
@@ -820,8 +818,7 @@ mod tests {
                 },
                 stream.name,
             )
-            .await
-            .unwrap();
+            .await?;
 
         // Create ISBWriter
         let cln_token = CancellationToken::new();
@@ -841,8 +838,7 @@ mod tests {
                     None,
                     cln_token.clone(),
                 )
-                .await
-                .unwrap(),
+                .await?,
             ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
         );
 
@@ -882,7 +878,10 @@ mod tests {
         let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
 
         // Create test messages
-        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+        let base_time = Utc
+            .with_ymd_and_hms(2023, 1, 1, 0, 0, 0)
+            .single()
+            .ok_or("invalid base time")?;
 
         // Message 1: Within the first window
         let msg1 = Message {
@@ -953,44 +952,48 @@ mod tests {
         };
 
         // Send the messages
-        input_tx.send(msg1).await.unwrap();
-        input_tx.send(msg2).await.unwrap();
+        input_tx.send(msg1).await?;
+        input_tx.send(msg2).await?;
 
         // Send message with watermark past window end to trigger window close
-        input_tx.send(msg3).await.unwrap();
-        input_tx.send(msg4).await.unwrap();
+        input_tx.send(msg3).await?;
+        input_tx.send(msg4).await?;
 
         // Create a consumer to read the results
         let consumer: PullConsumer = js_context
             .get_consumer_from_stream(&stream.name, &stream.name)
-            .await
-            .unwrap();
+            .await?;
 
         // Read messages from the stream
         let mut messages = consumer
             .fetch()
             .expires(Duration::from_secs(1))
             .messages()
-            .await
-            .unwrap();
+            .await?;
 
         let mut result_count = 0;
 
         while let Some(msg) = messages.next().await {
-            let msg = msg.unwrap();
+            let msg = msg?;
 
             let data = msg.payload.to_vec();
 
             // Acknowledge the message
-            msg.ack().await.unwrap();
+            msg.ack().await?;
 
             // Parse the message
             let message: numaflow_pb::objects::isb::Message =
-                prost::Message::decode(data.as_ref()).unwrap();
+                prost::Message::decode(data.as_ref())?;
 
             // Verify the result
-            assert_eq!(message.header.unwrap().keys.to_vec(), vec!["key1"]);
-            assert_eq!(message.body.unwrap().payload.to_vec(), b"3".to_vec());
+            assert_eq!(
+                message.header.ok_or("missing header")?.keys.to_vec(),
+                vec!["key1"]
+            );
+            assert_eq!(
+                message.body.ok_or("missing body")?.payload.to_vec(),
+                b"3".to_vec()
+            );
 
             result_count += 1;
         }
@@ -1001,12 +1004,12 @@ mod tests {
         drop(input_tx);
 
         // Wait for the reducer to complete
-        reducer_handle.await.expect("reducer handle failed")?;
+        reducer_handle.await??;
 
         // Shutdown the server
         shutdown_tx
             .send(())
-            .expect("failed to send shutdown signal");
+            .map_err(|_| "failed to send shutdown signal")?;
 
         tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -1017,7 +1020,225 @@ mod tests {
         );
 
         // Clean up JetStream
-        js_context.delete_stream(stream.name).await.unwrap();
+        js_context.delete_stream(stream.name).await?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_aligned_reducer_with_allowed_lateness()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Set up the reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("reduce_lateness.sock");
+        let server_info_file = tmp_dir.path().join("reduce_lateness-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the client
+        let client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+
+        // Create a fixed window manager with 60s window length
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await?;
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_aligned_reducer_lateness", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await?;
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await?;
+
+        // Create ISBWriter
+        let cln_token = CancellationToken::new();
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            Arc::new(
+                crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                    stream.clone(),
+                    js_context.clone(),
+                    writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                )
+                .await?,
+            ) as crate::pipeline::isb::dyn_adapter::ISBWriterRef,
+        );
+
+        let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::ReduceUDF,
+        };
+        let isb_writer = ISBWriterOrchestrator::new(writer_components);
+
+        // Create the AlignedReducer with 30s allowed lateness
+        let reducer = AlignedReducer::new(
+            client,
+            AlignedWindowManager::Fixed(windower),
+            isb_writer,
+            None, // No GC WAL for testing
+            Duration::from_secs(30),
+            Duration::from_millis(50),
+            true,
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        let base_time = Utc
+            .with_ymd_and_hms(2023, 1, 1, 0, 0, 0)
+            .single()
+            .ok_or("invalid base time")?;
+        let make_msg = |idx: i64, event_secs: i64, wm_secs: i64, is_late: bool| Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: format!("value{idx}").into(),
+            offset: Offset::String(StringOffset::new(idx.to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(event_secs),
+            watermark: Some(base_time + chrono::Duration::seconds(wm_secs)),
+            is_late,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: idx.to_string().into(),
+                index: idx as i32,
+            },
+            ..Default::default()
+        };
+
+        // On-time messages within the first window [0, 60)
+        input_tx.send(make_msg(0, 10, 0, false)).await?;
+        input_tx.send(make_msg(1, 50, 40, false)).await?;
+        // Late message (event time 20 < watermark 40) but within allowed lateness (40 - 30 = 10),
+        // so it should be accepted into the first window.
+        input_tx.send(make_msg(2, 20, 40, true)).await?;
+        // Late message (event time 5 < watermark 40) outside allowed lateness, should be dropped.
+        input_tx.send(make_msg(3, 5, 40, true)).await?;
+        // Watermark 95 - allowed lateness 30 = 65, which is past the first window end, so it closes.
+        input_tx.send(make_msg(4, 100, 95, false)).await?;
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await?;
+
+        // Read messages from the stream
+        let mut messages = consumer
+            .fetch()
+            .expires(Duration::from_secs(1))
+            .messages()
+            .await?;
+
+        let mut result_count = 0;
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg?;
+
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await?;
+
+            // Parse the message
+            let message: numaflow_pb::objects::isb::Message =
+                prost::Message::decode(data.as_ref())?;
+
+            // The first window should include the two on-time messages and the late message
+            // within allowed lateness.
+            assert_eq!(
+                message.header.ok_or("missing header")?.keys.to_vec(),
+                vec!["key1"]
+            );
+            assert_eq!(
+                message.body.ok_or("missing body")?.payload.to_vec(),
+                b"3".to_vec()
+            );
+
+            result_count += 1;
+        }
+
+        assert_eq!(result_count, 1, "Expected exactly one result message");
+
+        cln_token.cancel();
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await??;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .map_err(|_| "failed to send shutdown signal")?;
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the server to shut down
+        assert!(
+            server_handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await?;
 
         Ok(())
     }

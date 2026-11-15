@@ -17,7 +17,6 @@ import { ProcessingRates } from "./partials/ProcessingRates";
 import { Errors } from "./partials/Errors";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
-import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { Metrics } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
@@ -40,6 +39,7 @@ import {
   ObservabilityPatch,
   replaceObservabilityState,
 } from "../../../../../utils/observabilityURLState";
+import { PodViewNext } from "./partials/PodViewNext";
 
 import "./style.css";
 
@@ -96,6 +96,8 @@ export interface VertexDetailsProps {
 
 export interface VertexDetailsContextProps {
   openMetrics: (options: OpenMetricsOptions) => void;
+  /** Switches to a vertex tab by its URL key (e.g. `errors`); unknown keys are ignored. */
+  openVertexTab: (key: string) => void;
   expanded: Set<string>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
   presets: any;
@@ -111,6 +113,8 @@ export interface OpenMetricsOptions {
 export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   openMetrics: () => {},
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  openVertexTab: () => {},
   expanded: new Set(),
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setExpanded: () => {},
@@ -136,7 +140,9 @@ export function VertexDetails({
   const location = useLocation();
   const isDeepLinkedVertex =
     new URLSearchParams(location.search).get("vertex") === vertexId;
+  const vertexIdentity = `${namespaceId}:${pipelineId}:${vertexId}:${type}`;
   const [errorsCount, setErrorsCount] = useState<number>(0);
+  const [errorsIdentity, setErrorsIdentity] = useState<string>();
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState<number>(PODS_VIEW_TAB_INDEX);
@@ -151,7 +157,6 @@ export function VertexDetails({
   const [constructedDetails, setConstructedDetails] = useState<
     (ContainerError & { pod: string })[]
   >([]);
-
   // Find the vertex spec by id
   useEffect(() => {
     if (type === "source") {
@@ -241,6 +246,12 @@ export function VertexDetails({
   }, [vertexType]);
 
   const showBuffersTab = !!buffers || type === "source";
+
+  useEffect(() => {
+    if (!isDeepLinkedVertex) return;
+    if (!new URLSearchParams(location.search).has("podViewVersion")) return;
+    replaceObservabilityState(history, location, { podViewVersion: null });
+  }, [history, isDeepLinkedVertex, location]);
 
   const syncVertexTabToUrl = useCallback(
     (newValue: number) => {
@@ -353,8 +364,16 @@ export function VertexDetails({
   }, []);
 
   useEffect(() => {
-    if (errorsDetailsData) constructDetails(errorsDetailsData);
-  }, [errorsDetailsData, constructDetails]);
+    setConstructedDetails([]);
+    setErrorsCount(0);
+    setErrorsIdentity(undefined);
+  }, [vertexIdentity]);
+
+  useEffect(() => {
+    if (!errorsDetailsData) return;
+    constructDetails(errorsDetailsData);
+    setErrorsIdentity(vertexIdentity);
+  }, [errorsDetailsData, constructDetails, vertexIdentity]);
 
   const filterErrorsWithinLast24Hours = useCallback(
     (containerErrorsData: (ContainerError & { pod: string })[]) => {
@@ -400,6 +419,14 @@ export function VertexDetails({
     [disableMetricsCharts, history, location, isDeepLinkedVertex]
   );
 
+  const openVertexTab = useCallback(
+    (key: string) => {
+      const index = TAB_INDEX_BY_KEY[key];
+      if (index !== undefined) applyVertexTab(index);
+    },
+    [applyVertexTab]
+  );
+
   useEffect(() => {
     if (disableMetricsCharts && tabValue === METRICS_TAB_INDEX) {
       applyVertexTab(PODS_VIEW_TAB_INDEX);
@@ -410,6 +437,7 @@ export function VertexDetails({
     <VertexDetailsContext.Provider
       value={{
         openMetrics,
+        openVertexTab,
         expanded,
         setExpanded,
         presets,
@@ -417,6 +445,7 @@ export function VertexDetails({
       }}
     >
       <Box
+        className="vertex-details--pod-beta"
         sx={{
           display: "flex",
           flexDirection: "column",
@@ -424,7 +453,11 @@ export function VertexDetails({
         }}
       >
         <Box className="vertex-details-header">
-          {header}
+          <Box className="vertex-details-beta-title">
+            {header}
+            <span className="vertex-details-beta-title-separator">:</span>
+            <span className="vertex-details-beta-title-name">{vertexId}</span>
+          </Box>
           {tabValue !== METRICS_TAB_INDEX && (
             <Box className="vertex-details-header-actions">
               <CopyViewLinkButton />
@@ -523,18 +556,24 @@ export function VertexDetails({
           </Tabs>
         </Box>
         <div
-          className="vertex-details-tab-panel"
+          className="vertex-details-tab-panel vertex-details-pod-view-panel"
           role="tabpanel"
           hidden={tabValue !== PODS_VIEW_TAB_INDEX}
         >
-          {tabValue === PODS_VIEW_TAB_INDEX && (
-            <Pods
+          <div className="vertex-details-pod-view-content">
+            <PodViewNext
+              key={vertexIdentity}
               namespaceId={namespaceId}
               pipelineId={pipelineId}
               vertexId={vertexId}
               type={type}
+              active={tabValue === PODS_VIEW_TAB_INDEX}
+              vertexMetrics={vertexMetrics}
+              buffers={buffers || undefined}
+              recentErrorCount={errorsIdentity === vertexIdentity ? errorsCount : 0}
+              vertexSpec={vertexSpec}
             />
-          )}
+          </div>
         </div>
         {!disableMetricsCharts && (
           <div
@@ -622,7 +661,7 @@ export function VertexDetails({
         </div>
         {showBuffersTab && (
           <div
-            className="vertex-details-tab-panel"
+            className="vertex-details-tab-panel vertex-details-buffers-panel"
             role="tabpanel"
             hidden={tabValue !== BUFFERS_TAB_INDEX}
           >

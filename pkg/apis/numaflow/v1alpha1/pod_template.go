@@ -97,6 +97,11 @@ type AbstractPodTemplate struct {
 	// +patchStrategy=merge,retainKeys
 	// +optional
 	ResourceClaims []corev1.PodResourceClaim `json:"resourceClaims,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"name" protobuf:"bytes,14,rep,name=resourceClaims"`
+	// If specified, the pod will be dispatched by specified scheduler.
+	// If not specified, the pod will be dispatched by default scheduler.
+	// More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
+	// +optional
+	SchedulerName string `json:"schedulerName,omitempty" protobuf:"bytes,15,opt,name=schedulerName"`
 }
 
 // ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
@@ -139,6 +144,9 @@ func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
 	}
 	if len(ps.ResourceClaims) == 0 {
 		ps.ResourceClaims = apt.ResourceClaims
+	}
+	if ps.SchedulerName == "" {
+		ps.SchedulerName = apt.SchedulerName
 	}
 }
 

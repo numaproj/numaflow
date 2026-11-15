@@ -8,8 +8,8 @@ Each [vertex](../../core-concepts/vertex.md) keeps running the cycle of reading 
 processing the data, and writing to the next Inter-Step Buffers (or sinks). There are some parameters can be adjusted for this data
 processing cycle.
 
-- `readBatchSize` - The number of messages to read in each cycle **from each buffer**, with a default value of `500`. It works together with `readTimeout` during a read operation, concluding when either limit is reached first. **`readBatchSize` controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use `concurrency` for that).**
-- `readTimeout` - Read timeout from the source or Inter-Step Buffer, defaults to `1s`. It works in conjunction with `readBatchSize`.
+- `readBatchSize` - The number of messages to read in each cycle, with a default value of `500`. It works together with `readTimeout` during a read operation, concluding when either limit is reached first. **`readBatchSize` controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use `concurrency` for that).**
+- `readTimeout` - Read timeout from the source or Inter-Step Buffer, defaults to `100ms`. It works in conjunction with `readBatchSize`.
 - `bufferMaxLength` - How many unprocessed messages can be existing in the Inter-Step Buffer, defaults to `30000`.
 - `bufferUsageLimit` - The percentage of the buffer usage limit, a valid number should be less than 100. Default value is `80`, which means `80%`.
 - `concurrency` - Maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time, **per buffer read by the pod** — not per vertex. Defaults to the value of `readBatchSize`. See [Concurrency and read-ahead](#concurrency-and-read-ahead) and [Multiple partitions and joins](#multiple-partitions-and-joins) below.

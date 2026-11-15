@@ -8,6 +8,12 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { ISBJetStreamResponse } from "../../../../../../../types/declarations/pipeline";
+import {
+  formatBytes,
+  formatCompactCount,
+  formatDecimal,
+  formatNumber,
+} from "../../../../../../../utils/formatters";
 import { Help } from "../../../../../Help";
 
 interface ISBDebugInfoProps {
@@ -15,31 +21,6 @@ interface ISBDebugInfoProps {
   loading: boolean;
   error?: any;
 }
-
-const formatNumber = (value?: number) => (value ?? 0).toLocaleString("en-US");
-
-const formatDecimal = (value: number, precision = 2) => {
-  const multiplier = Math.pow(10, precision);
-  return (
-    Math.round((value + Number.EPSILON) * multiplier) / multiplier
-  ).toFixed(precision);
-};
-
-const formatBytes = (value?: number) => {
-  const bytes = value ?? 0;
-  if (bytes === 0) {
-    return "0 B";
-  }
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-  const scaled = bytes / Math.pow(1024, index);
-  return `${index === 0 ? formatNumber(scaled) : formatDecimal(scaled)} ${
-    units[index]
-  }`;
-};
 
 const formatPercent = (value?: number) => {
   const percent = (value ?? 0) * 100;
@@ -207,9 +188,9 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
                   <TableCell>{item.cluster || "-"}</TableCell>
                   <TableCell>{formatNumber(item.streams)}</TableCell>
                   <TableCell>{formatNumber(item.consumers)}</TableCell>
-                  <TableCell>{formatNumber(item.messages)}</TableCell>
+                  <TableCell>{formatCompactCount(item.messages)}</TableCell>
                   <TableCell>{formatBytes(item.bytes)}</TableCell>
-                  <TableCell>{formatNumber(item.apiRequests)}</TableCell>
+                  <TableCell>{formatCompactCount(item.apiRequests)}</TableCell>
                   <TableCell>
                     {formatApiErrors(item.apiErrors, item.apiErrorRate)}
                   </TableCell>
@@ -221,9 +202,9 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
                   <TableCell>-</TableCell>
                   <TableCell>{formatNumber(total.streams)}</TableCell>
                   <TableCell>{formatNumber(total.consumers)}</TableCell>
-                  <TableCell>{formatNumber(total.messages)}</TableCell>
+                  <TableCell>{formatCompactCount(total.messages)}</TableCell>
                   <TableCell>{formatBytes(total.bytes)}</TableCell>
-                  <TableCell>{formatNumber(total.apiRequests)}</TableCell>
+                  <TableCell>{formatCompactCount(total.apiRequests)}</TableCell>
                   <TableCell>
                     {formatApiErrors(total.apiErrors, totalApiErrorRate)}
                   </TableCell>

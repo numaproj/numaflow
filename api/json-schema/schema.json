@@ -19577,6 +19577,10 @@
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
           "type": "string"
         },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
+        },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
@@ -19723,6 +19727,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Scale",
           "description": "Settings for autoscaling"
         },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
+        },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
@@ -19807,10 +19815,10 @@
       "properties": {
         "cap": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero."
+          "description": "A limit on the delay between retries. Once the delay reaches the cap, it stays at the cap, and retries continue until Steps is exhausted."
         },
         "factor": {
-          "description": "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+          "description": "Interval is multiplied by factor after each retry. It must be \u003e= 1.",
           "format": "double",
           "type": "number"
         },
@@ -19819,12 +19827,12 @@
           "description": "Interval sets the initial retry duration, after a failure occurs."
         },
         "jitter": {
-          "description": "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+          "description": "The delay at each retry is multiplied by a factor chosen uniformly at random from [1 - jitter, 1 + jitter], then limited by Cap. It must be \u003e= 0 and \u003c 1.",
           "format": "double",
           "type": "number"
         },
         "steps": {
-          "description": "Steps defines the maximum number of retry attempts",
+          "description": "Steps defines the maximum number of retries after the initial attempt, e.g. steps: 1 means one initial attempt plus one retry. It cannot be 0.",
           "format": "int64",
           "type": "integer"
         }
@@ -20143,6 +20151,10 @@
         },
         "runtimeClassName": {
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+          "type": "string"
+        },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
           "type": "string"
         },
         "securityContext": {
@@ -20843,6 +20855,10 @@
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
           "type": "string"
         },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
+        },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
@@ -21005,6 +21021,10 @@
         },
         "runtimeClassName": {
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+          "type": "string"
+        },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
           "type": "string"
         },
         "securityContext": {
@@ -21333,6 +21353,10 @@
         "scale": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Scale",
           "description": "Settings for autoscaling"
+        },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
         },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
@@ -22440,6 +22464,10 @@
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
           "type": "string"
         },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
+        },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
@@ -22599,6 +22627,10 @@
         },
         "runtimeClassName": {
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+          "type": "string"
+        },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
           "type": "string"
         },
         "securityContext": {
@@ -22761,12 +22793,21 @@
           "description": "AWSRegion is the AWS Region where the SQS queue is located",
           "type": "string"
         },
+        "deadLetterQueues": {
+          "description": "DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.",
+          "type": "string"
+        },
         "endpointUrl": {
           "description": "EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.",
           "type": "string"
         },
         "maxNumberOfMessages": {
           "description": "MaxNumberOfMessages is the maximum number of messages to return in a single poll. Valid values: 1-10 Defaults to 1",
+          "format": "int32",
+          "type": "integer"
+        },
+        "maxReceiveCount": {
+          "description": "MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.",
           "format": "int32",
           "type": "integer"
         },
@@ -23182,6 +23223,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Scale",
           "description": "Settings for autoscaling"
         },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+          "type": "string"
+        },
         "securityContext": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
@@ -23387,6 +23432,10 @@
         },
         "runtimeClassName": {
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+          "type": "string"
+        },
+        "schedulerName": {
+          "description": "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
           "type": "string"
         },
         "securityContext": {

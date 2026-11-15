@@ -57,6 +57,28 @@ describe("parsePodLogs", () => {
     expect(result[0]).toBe(`${ts} WARN ${body}`);
   });
 
+  it("filters Rust tracing levels case-insensitively", () => {
+    const body = JSON.stringify({
+      level: "INFO",
+      message: "Processed messages per second",
+    });
+    const options = {
+      enableTimestamp: false,
+      type: "pipeline",
+      isErrorMessage: false,
+    };
+
+    expect(
+      parsePodLogs(`${ts} ${body}`, { ...options, levelFilter: "info" })
+    ).toEqual([`INFO ${body}`]);
+    expect(
+      parsePodLogs(`${ts} ${body}`, {
+        ...options,
+        levelFilter: "error",
+      }).filter((line) => line !== "")
+    ).toEqual([]);
+  });
+
   it("skips timestamp slicing for API error messages", () => {
     const err = "Failed to get pod logs: not found";
     const result = parsePodLogs(err, {

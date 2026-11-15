@@ -26,6 +26,8 @@ def main():
         exit(1)
 
     defs = swagger["definitions"]
+    # Keep credential-bearing connection URLs safe in generated Debug output.
+    defs["io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore"]["properties"]["url"]["format"] = "redacted-url"
     for k in list(defs.keys()):
         if not k.startswith(prefix):
             del defs[k]

@@ -34,6 +34,7 @@ generate:
 		--model-name-suffix '' \
 		--additional-properties packageName=numaflow-models \
 		--additional-properties packageVersion=${SDK_VERSION} \
+		--type-mappings string+redacted-url="numaflow_shared::redacted_url::RedactedUrl" \
 		--type-mappings CoreV1Affinity="k8s_openapi::api::core::v1::Affinity" \
 		--type-mappings CoreV1SecretKeySelector="k8s_openapi::api::core::v1::SecretKeySelector" \
 		--type-mappings CoreV1EnvVar="k8s_openapi::api::core::v1::EnvVar" \

@@ -1,12 +1,13 @@
 import React, { act } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter } from "react-router-dom";
 
 import { NamespaceListingWrapper } from "./index";
 import { AppContext } from "../../../../../App";
 
 const mockRefresh = jest.fn();
+const mockSetSidebarProps = jest.fn();
 const mockData = {
   pipelinesCount: 4,
   pipelinesActiveCount: 3,
@@ -222,6 +223,10 @@ const mockISBRawData = {
 };
 
 describe("NamespaceListingWrapper", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("renders without crashing", async () => {
     await act(async () => {
       render(
@@ -298,5 +303,42 @@ describe("NamespaceListingWrapper", () => {
     tabs.forEach((tab) => {
       fireEvent.click(tab);
     });
+  });
+
+  it("opens the ISB spec view from URL state", async () => {
+    await act(async () => {
+      render(
+        <AppContext.Provider
+          value={{ setSidebarProps: mockSetSidebarProps } as any}
+        >
+          <MemoryRouter
+            initialEntries={[
+              "/?namespace=numaflow-system&isb=default&isbTab=spec",
+            ]}
+          >
+            <NamespaceListingWrapper
+              namespace="numaflow-system"
+              data={mockData}
+              refresh={mockRefresh}
+              isbData={mockISBRawData}
+              pipelineData={mockPipelineRawData}
+            />
+          </MemoryRouter>
+        </AppContext.Provider>
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockSetSidebarProps).toHaveBeenCalledWith(
+        expect.objectContaining({
+          specEditorProps: expect.objectContaining({
+            isbId: "default",
+            initialTab: "spec",
+            viewType: 0,
+          }),
+        })
+      );
+    });
+    expect(screen.getByText("ISB Services")).toBeInTheDocument();
   });
 });

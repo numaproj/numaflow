@@ -2,14 +2,17 @@ import { Pipeline } from "./index";
 import { render, screen, waitFor } from "@testing-library/react";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFetch";
+import { AppContext } from "../../../App";
+import { SidebarType } from "../../common/SlidingSidebar";
 
 global.ResizeObserver = require("resize-observer-polyfill");
 
 import "@testing-library/jest-dom";
+let mockLocationSearch = "?namespace=numaflow-system&pipeline=simple-pipeline";
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
   useLocation: () => ({
-    search: "?namespace=numaflow-system&pipeline=simple-pipeline",
+    search: mockLocationSearch,
   }),
 }));
 
@@ -218,6 +221,11 @@ const edgesArr = [
 ];
 
 describe("Pipeline", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLocationSearch = "?namespace=numaflow-system&pipeline=simple-pipeline";
+  });
+
   it("Renders Pipeline", async () => {
     mockedUsePipelineSummaryFetch.mockReturnValue({
       data: {
@@ -311,6 +319,85 @@ describe("Pipeline", () => {
     await waitFor(() => {
       expect(screen.getByTestId("pipeline")).toBeInTheDocument();
       expect(screen.getByTestId("graph")).toBeInTheDocument();
+    });
+  });
+
+  it("opens the ISB spec sidebar from pipeline URL state", async () => {
+    const mockSetSidebarProps = jest.fn();
+    mockLocationSearch =
+      "?namespace=numaflow-system&pipeline=simple-pipeline&isb=default&isbTab=spec";
+    const isbService = {
+      metadata: {},
+      spec: {
+        jetstream: {
+          version: "latest",
+          replicas: 3,
+          persistence: {
+            volumeSize: "3Gi",
+          },
+        },
+      },
+      status: {
+        phase: "Running",
+        conditions: [],
+      },
+    };
+
+    mockedUsePipelineSummaryFetch.mockReturnValue({
+      data: {
+        pipelineData: {
+          name: "simple-pipeline",
+          status: "healthy",
+          lag: 1999,
+          pipeline: pipelineObj,
+        },
+        isbData: {
+          name: "default",
+          status: "healthy",
+          isbService,
+        },
+      },
+      loading: false,
+      error: undefined,
+      refresh: () => {
+        return;
+      },
+    });
+    mockedUsePipelineViewFetch.mockReturnValue({
+      pipeline: pipelineObj,
+      vertices: verticesArr,
+      edges: edgesArr,
+      generatorToColorIdxMap: new Map(),
+      pipelineErr: undefined,
+      buffersErr: undefined,
+      loading: false,
+      refresh: () => {
+        return;
+      },
+    });
+
+    render(
+      <AppContext.Provider
+        value={{ setSidebarProps: mockSetSidebarProps } as any}
+      >
+        <Pipeline />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockSetSidebarProps).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: SidebarType.ISB_UPDATE,
+          specEditorProps: expect.objectContaining({
+            titleOverride: "ISB Service Details: default",
+            initialYaml: isbService,
+            namespaceId: "numaflow-system",
+            isbId: "default",
+            viewType: 0,
+            initialTab: "spec",
+          }),
+        })
+      );
     });
   });
 

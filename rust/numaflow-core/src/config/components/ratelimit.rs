@@ -92,3 +92,66 @@ impl RateLimitConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use numaflow_models::models::{RateLimiterRedisStore, RateLimiterStore};
+
+    #[test]
+    fn test_rate_limit_config_debug_redacts_redis_url_credentials() {
+        let mut redis_store = RateLimiterRedisStore::new("single".to_string());
+        redis_store.url = Some(
+            "redis://redis-user:secret-redis-password@redis-host:6379/0"
+                .parse()
+                .unwrap(),
+        );
+        let mut store = RateLimiterStore::new();
+        store.redis_store = Some(Box::new(redis_store));
+
+        let config = RateLimitConfig {
+            store: Some(Box::new(store)),
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(!debug_output.contains("secret-redis-password"));
+        assert!(!debug_output.contains("redis-user"));
+        assert!(debug_output.contains("redis-host:6379"));
+        assert!(debug_output.contains("REDACTED"));
+    }
+
+    #[test]
+    fn test_rate_limit_config_debug_keeps_clean_redis_url() {
+        let mut redis_store = RateLimiterRedisStore::new("single".to_string());
+        redis_store.url = Some("redis://redis-host:6379/0".parse().unwrap());
+        let mut store = RateLimiterStore::new();
+        store.redis_store = Some(Box::new(redis_store));
+
+        let config = RateLimitConfig {
+            store: Some(Box::new(store)),
+            ..Default::default()
+        };
+        let debug_output = format!("{:?}", config);
+        assert!(debug_output.contains("redis://redis-host:6379/0"));
+    }
+
+    #[test]
+    fn generated_store_roundtrip_preserves_credentials_but_debug_redacts() {
+        let input =
+            r#"{"redisStore":{"mode":"single","url":"redis://user:secret-password@[::1]:6379/0"}}"#;
+        let store: RateLimiterStore = serde_json::from_str(input).unwrap();
+        assert!(!format!("{store:#?}").contains("secret-password"));
+        let serialized = serde_json::to_string(&store).unwrap();
+        assert!(serialized.contains("secret-password"));
+        assert_eq!(
+            serde_json::from_str::<RateLimiterStore>(&serialized).unwrap(),
+            store
+        );
+        assert!(
+            serde_json::from_str::<RateLimiterStore>(
+                r#"{"redisStore":{"mode":"single","url":"redis://user:secret-password@[invalid"}}"#
+            )
+            .is_err()
+        );
+    }
+}

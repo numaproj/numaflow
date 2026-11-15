@@ -6,7 +6,7 @@ Each [MonoVertex](../../core-concepts/monovertex.md) keeps running the cycle of 
 processing the data, and writing to a sink. There are some parameters can be adjusted for this cycle.
 
 - `readBatchSize` - How many messages to read for each cycle, defaults to `500`. It works together with `readTimeout` during a read operation, concluding when either limit is reached first. **`readBatchSize` controls only how many messages are fetched in a single read call; it is not a cap on how many messages may be in-flight (use `concurrency` for that).**
-- `readTimeout` - Read timeout from the source, defaults to `1s`.
+- `readTimeout` - Read timeout from the source, defaults to `100ms`.
 - `concurrency` - Maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. Defaults to the value of `readBatchSize`. See [Concurrency and read-ahead](#concurrency-and-read-ahead) below.
 
 These parameters can be customized under `spec.limits` as below.

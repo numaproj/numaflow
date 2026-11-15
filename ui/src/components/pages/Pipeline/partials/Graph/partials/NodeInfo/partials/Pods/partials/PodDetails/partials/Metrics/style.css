@@ -9,12 +9,14 @@
   font-size: 1.4rem;
   font-family: Avenir Next, sans-serif;
   padding: 2rem 0;
+  color: var(--text-primary);
 }
 
 .metrics-discover-metrics-not-found {
   font-size: 1.4rem;
   font-family: Avenir Next, sans-serif;
   padding: 2rem 0;
+  color: var(--text-primary);
 }
 
 .metrics-accordion-summary {

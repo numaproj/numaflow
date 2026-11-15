@@ -1125,6 +1125,7 @@ func Test_copyVertexTemplate(t *testing.T) {
 								},
 							},
 							PriorityClassName: "test",
+							SchedulerName:     "template-scheduler",
 							DNSConfig: &corev1.PodDNSConfig{
 								Nameservers: []string{"1.1.1.1", "8.8.8.8"},
 							},
@@ -1160,6 +1161,7 @@ func Test_copyVertexTemplate(t *testing.T) {
 		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
 		assert.Equal(t, "value2", vtx.Metadata.Annotations["annotation2"])
 		assert.Equal(t, "test", vtx.PriorityClassName)
+		assert.Equal(t, "template-scheduler", vtx.SchedulerName)
 		assert.Equal(t, 2, len(vtx.DNSConfig.Nameservers))
 		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
 		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])
@@ -1191,6 +1193,7 @@ func Test_copyVertexTemplate(t *testing.T) {
 								},
 							},
 							PriorityClassName: "test",
+							SchedulerName:     "template-scheduler",
 							DNSConfig: &corev1.PodDNSConfig{
 								Nameservers: []string{"1.1.1.1", "8.8.8.8", "4.4.4.4"},
 							},
@@ -1232,6 +1235,7 @@ func Test_copyVertexTemplate(t *testing.T) {
 					},
 				},
 				PriorityClassName: "test2",
+				SchedulerName:     "vertex-scheduler",
 				DNSConfig: &corev1.PodDNSConfig{
 					Nameservers: []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"},
 				},
@@ -1270,6 +1274,7 @@ func Test_copyVertexTemplate(t *testing.T) {
 		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
 		assert.Equal(t, "value22", vtx.Metadata.Annotations["annotation2"])
 		assert.Equal(t, "test2", vtx.PriorityClassName)
+		assert.Equal(t, "vertex-scheduler", vtx.SchedulerName)
 		assert.Equal(t, 3, len(vtx.DNSConfig.Nameservers))
 		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
 		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])

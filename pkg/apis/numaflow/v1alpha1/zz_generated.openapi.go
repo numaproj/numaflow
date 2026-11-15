@@ -366,6 +366,13 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref common.ReferenceC
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -606,6 +613,13 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"volumes": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -772,27 +786,27 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 					},
 					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the maximum number of retry attempts",
+							Description: "Steps defines the maximum number of retries after the initial attempt, e.g. steps: 1 means one initial attempt plus one retry. It cannot be 0.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"factor": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Description: "Interval is multiplied by factor after each retry. It must be >= 1.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
 					},
 					"cap": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero.",
+							Description: "A limit on the delay between retries. Once the delay reaches the cap, it stays at the cap, and retries continue until Steps is exhausted.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"jitter": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+							Description: "The delay at each retry is multiplied by a factor chosen uniformly at random from [1 - jitter, 1 + jitter], then limited by Cap. It must be >= 0 and < 1.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
@@ -1405,6 +1419,13 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"replicas": {
@@ -2662,6 +2683,13 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"settings": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 68157440 (65MB), i.e. the gRPC max message size (64MB) plus 1MB of headroom for platform injected data. For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded.",
@@ -2966,6 +2994,13 @@ func schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref common.ReferenceCallback)
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -3562,6 +3597,13 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -5611,6 +5653,13 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"msgIDHeaderKey"},
 			},
@@ -5881,6 +5930,13 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.Refe
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {
@@ -6220,6 +6276,20 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 							Description: "QueueNames is a comma-separated list of SQS queue names to consume from. All queues must live in the configured awsRegion and queueOwnerAWSAccountID. Mutually exclusive with queueName.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"deadLetterQueues": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeadLetterQueues is a comma-separated list of SQS dead-letter queue names. Entries correspond positionally to the configured source queues.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"maxReceiveCount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxReceiveCount is the maximum number of receives before SQS moves a message to its configured dead-letter queue. Valid values: 1-1000. Defaults to 10 when deadLetterQueues is configured.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
@@ -6876,6 +6946,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							},
 						},
 					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"volumes": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -7315,6 +7392,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref common.ReferenceCallba
 									},
 								},
 							},
+						},
+					},
+					"schedulerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"containerTemplate": {

@@ -73,6 +73,7 @@ export interface SpecEditorSidebarProps {
   viewType?: ViewType;
   onUpdateComplete?: () => void;
   titleOverride?: string;
+  initialTab?: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
 }
 
@@ -104,6 +105,7 @@ export function SlidingSidebar({
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const history = useHistory();
   const location = useLocation();
+  const isVertexDetails = type === SidebarType.VERTEX_DETAILS;
   const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
@@ -139,7 +141,7 @@ export function SlidingSidebar({
   //   setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
   // }, [type]);
 
-  // Don't allow width greater then pageWidth
+  // Don't allow width greater then pageWidth.
   useEffect(() => {
     if (width > pageWidth) {
       setWidth(pageWidth);
@@ -173,7 +175,10 @@ export function SlidingSidebar({
     }
     // Close sidebar
     setSidebarProps && setSidebarProps(undefined);
-    if (type === SidebarType.VERTEX_DETAILS) {
+    if (
+      type === SidebarType.VERTEX_DETAILS ||
+      type === SidebarType.ISB_UPDATE
+    ) {
       const search = clearObservabilitySearch(location.search);
       if (search !== location.search) {
         history.replace({ pathname: location.pathname, search });
@@ -186,7 +191,10 @@ export function SlidingSidebar({
   const handleCloseConfirm = useCallback(() => {
     // Modal close confirmed
     setSidebarProps && setSidebarProps(undefined);
-    if (type === SidebarType.VERTEX_DETAILS) {
+    if (
+      type === SidebarType.VERTEX_DETAILS ||
+      type === SidebarType.ISB_UPDATE
+    ) {
       const search = clearObservabilitySearch(location.search);
       if (search !== location.search) {
         history.replace({ pathname: location.pathname, search });
@@ -291,6 +299,7 @@ export function SlidingSidebar({
 
   return (
     <Box
+      className={isVertexDetails ? "sidebar-root--pod-beta" : undefined}
       sx={{
         display: "flex",
         flexDirection: "row",
@@ -321,6 +330,7 @@ export function SlidingSidebar({
         </Box>
       )}
       <Box
+        className={isVertexDetails ? "sidebar-content--pod-beta" : undefined}
         sx={{
           display: "flex",
           flexDirection: "column",

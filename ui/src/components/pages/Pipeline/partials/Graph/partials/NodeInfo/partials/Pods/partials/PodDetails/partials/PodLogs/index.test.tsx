@@ -10,6 +10,12 @@ const render = (ui: any) => renderBase(ui, { wrapper: BrowserRouter });
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
+let mockResolvedTheme: "light" | "dark" = "light";
+
+jest.mock("../../../../../../../../../../../../../contexts/ThemeContext", () => ({
+  useThemeContext: () => ({ resolvedTheme: mockResolvedTheme }),
+}));
+
 // jsdom reports 0 for layout; give the virtual log scroller a viewport.
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
@@ -36,9 +42,11 @@ describe("PodLogs", () => {
   let originFetch: any;
   beforeEach(() => {
     originFetch = (global as any).fetch;
+    mockResolvedTheme = "light";
   });
   afterEach(() => {
     (global as any).fetch = originFetch;
+    mockResolvedTheme = "light";
   });
 
   it("Load PodLogs screen", async () => {
@@ -122,8 +130,10 @@ describe("PodLogs", () => {
       fireEvent.click(screen.getByTestId("pause-button"));
       fireEvent.click(screen.getByTestId("pause-button"));
     });
-    expect(screen.getByTestId("color-mode-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("color-mode-button"));
+    expect(screen.getByTestId("color-mode-button")).toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
     expect(screen.getByTestId("order-button")).toBeVisible();
     fireEvent.click(screen.getByTestId("order-button"));
 
@@ -165,6 +175,71 @@ describe("PodLogs", () => {
     });
 
     expect(mockedFetch).toBeCalledTimes(1);
+  });
+
+  it("uses the application dark theme for the log canvas", async () => {
+    mockResolvedTheme = "dark";
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      ok: true,
+    } as any);
+
+    await act(async () => {
+      render(
+        <PodLogs
+          namespaceId={"numaflow-system"}
+          containerName={"numa"}
+          podName={"simple-pipeline-in-0-abcde"}
+        />
+      );
+    });
+
+    expect(screen.getByTestId("log-virtual-list")).toHaveClass(
+      "PodLogs-virtual-list--dark"
+    );
+    expect(screen.getByTestId("color-mode-button")).toHaveClass(
+      "PodLogs-icon-btn--active"
+    );
+
+    fireEvent.click(screen.getByTestId("color-mode-button"));
+    expect(screen.getByTestId("log-virtual-list")).toHaveClass(
+      "PodLogs-virtual-list--light"
+    );
+  });
+
+  it("uses a logsColor URL override instead of the application theme", async () => {
+    mockResolvedTheme = "dark";
+    const history = createMemoryHistory({
+      initialEntries: ["/?logsColor=light"],
+    });
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      ok: true,
+    } as any);
+
+    await act(async () => {
+      renderBase(
+        <Router history={history}>
+          <PodLogs
+            namespaceId={"numaflow-system"}
+            containerName={"numa"}
+            podName={"simple-pipeline-in-0-abcde"}
+          />
+        </Router>
+      );
+    });
+
+    expect(screen.getByTestId("log-virtual-list")).toHaveClass(
+      "PodLogs-virtual-list--light"
+    );
   });
 
   it("navigates search matches with buttons and keyboard", async () => {

@@ -84,6 +84,9 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	if err := validateCronScaling(mvtx.Spec.Scale); err != nil {
 		return fmt.Errorf("invalid scale.cron: %w", err)
 	}
+	if err := validateScaleBounds(mvtx.Spec.Scale); err != nil {
+		return fmt.Errorf("invalid scale: %w", err)
+	}
 
 	return nil
 }

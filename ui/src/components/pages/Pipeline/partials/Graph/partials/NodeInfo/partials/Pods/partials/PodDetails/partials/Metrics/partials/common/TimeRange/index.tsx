@@ -5,7 +5,10 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-daterangepicker/daterangepicker.css";
 import DateRangePicker from "react-bootstrap-daterangepicker";
 import { ArrowDropDown } from "@mui/icons-material";
-import Box from "@mui/material/Box";
+import FormControl from "@mui/material/FormControl";
+import InputAdornment from "@mui/material/InputAdornment";
+import InputLabel from "@mui/material/InputLabel";
+import OutlinedInput from "@mui/material/OutlinedInput";
 
 import "./style.css";
 
@@ -130,9 +133,35 @@ const TimeSelector = ({
     "Last 12 Hours": [moment().subtract(12, "hours"), moment()],
   };
 
+  const rangeLabel = `${startDate.format(
+    "MMM DD YYYY hh:mm:ss A"
+  )} - ${endDate.format("MMM DD YYYY hh:mm:ss A")}`;
+
   return (
-    <Box className="date-range-picker-container">
-      <Box className="date-range-label">Time Range</Box>
+    <FormControl className="date-range-form" focused={isOpen}>
+      <InputLabel
+        shrink
+        htmlFor="dateRangeInput"
+        className="dropdown-input-label"
+      >
+        Time Range
+      </InputLabel>
+      <OutlinedInput
+        notched
+        readOnly
+        label="Time Range"
+        value={rangeLabel}
+        className="date-range-outlined dropdown-select-value"
+        endAdornment={
+          <InputAdornment
+            position="end"
+            className={`date-range-caret${isOpen ? " open" : ""}`}
+          >
+            <ArrowDropDown />
+          </InputAdornment>
+        }
+        inputProps={{ tabIndex: -1, "aria-hidden": true }}
+      />
       <DateRangePicker
         initialSettings={{
           startDate: startDate,
@@ -150,14 +179,12 @@ const TimeSelector = ({
         <input
           type="text"
           id="dateRangeInput"
-          className="form-control date-input"
-          placeholder="Select a date range"
+          className="date-range-proxy"
+          aria-label="Time Range"
+          readOnly
         />
       </DateRangePicker>
-      <span className={`caret ${isOpen ? "open" : ""}`}>
-        <ArrowDropDown />
-      </span>
-    </Box>
+    </FormControl>
   );
 };
 

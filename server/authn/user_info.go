@@ -16,11 +16,13 @@ limitations under the License.
 
 package authn
 
+import "encoding/json"
+
 // IDTokenClaims is the claims extract from the IDToken.
 type IDTokenClaims struct {
 	Iss               string   `json:"iss"`
 	Sub               string   `json:"sub"`
-	Aud               string   `json:"aud"`
+	Aud               Audience `json:"aud"`
 	Exp               int      `json:"exp"`
 	Iat               int      `json:"iat"`
 	AtHash            string   `json:"at_hash"`
@@ -30,6 +32,36 @@ type IDTokenClaims struct {
 	Groups            []string `json:"groups"`
 	Name              string   `json:"name"`
 	PreferredUsername string   `json:"preferred_username"`
+}
+
+// Audience is the "aud" claim. OIDC allows a single string or an array of
+// strings, and Dex sends an array for tokens issued to a trusted peer.
+type Audience []string
+
+func (a *Audience) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*a = Audience{s}
+		return nil
+	}
+	var auds []string
+	if err := json.Unmarshal(b, &auds); err != nil {
+		return err
+	}
+	*a = auds
+	return nil
+}
+
+// MarshalJSON writes no audience or a single one as a string, as before, so
+// the claims sent to the UI keep their shape.
+func (a Audience) MarshalJSON() ([]byte, error) {
+	switch len(a) {
+	case 0:
+		return json.Marshal("")
+	case 1:
+		return json.Marshal(a[0])
+	}
+	return json.Marshal([]string(a))
 }
 
 // UserInfo includes information about the user identity

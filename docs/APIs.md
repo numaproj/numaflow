@@ -571,6 +571,27 @@ available to those containers which consume them by name.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>schedulerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+If specified, the pod will be dispatched by specified scheduler. If not
+specified, the pod will be dispatched by default scheduler. More info:
+<a href="https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/">https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/</a>
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1340,7 +1361,8 @@ Interval sets the initial retry duration, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-Steps defines the maximum number of retry attempts
+Steps defines the maximum number of retries after the initial attempt,
+e.g. steps: 1 means one initial attempt plus one retry. It cannot be 0.
 </p>
 
 </td>
@@ -1359,8 +1381,7 @@ Steps defines the maximum number of retry attempts
 <em>(Optional)</em>
 <p>
 
-Interval is multiplied by factor each iteration, if factor is not zero
-and the limits imposed by Steps and Cap have not been reached.
+Interval is multiplied by factor after each retry. It must be \>= 1.
 </p>
 
 </td>
@@ -1381,9 +1402,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-A limit on revised values of the interval parameter. If a multiplication
-by the factor parameter would make the interval exceed the cap then the
-interval is set to the cap and the steps parameter is set to zero.
+A limit on the delay between retries. Once the delay reaches the cap, it
+stays at the cap, and retries continue until Steps is exhausted.
 </p>
 
 </td>
@@ -1402,9 +1422,9 @@ interval is set to the cap and the steps parameter is set to zero.
 <em>(Optional)</em>
 <p>
 
-The sleep at each iteration is the interval plus an additional amount
-chosen uniformly at random from the interval between zero and
-<code>jitter\*interval</code>.
+The delay at each retry is multiplied by a factor chosen uniformly at
+random from \[1 - jitter, 1 + jitter\], then limited by Cap. It must be
+\>= 0 and \< 1.
 </p>
 
 </td>
@@ -13703,6 +13723,47 @@ authentication.
 QueueNames is a comma-separated list of SQS queue names to consume from.
 All queues must live in the configured awsRegion and
 queueOwnerAWSAccountID. Mutually exclusive with queueName.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>deadLetterQueues</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DeadLetterQueues is a comma-separated list of SQS dead-letter queue
+names. Entries correspond positionally to the configured source queues.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxReceiveCount</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MaxReceiveCount is the maximum number of receives before SQS moves a
+message to its configured dead-letter queue. Valid values: 1-1000.
+Defaults to 10 when deadLetterQueues is configured.
 </p>
 
 </td>

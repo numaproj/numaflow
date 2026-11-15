@@ -22,10 +22,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 const TestTime = 1620000000
+
+func TestLatestPending(t *testing.T) {
+	q := sharedqueue.New[*TimestampedCounts](1800)
+	assert.Equal(t, v1alpha1.PendingNotAvailable, LatestPending(q, "partition1"))
+
+	now := time.Now().Unix()
+	tc1 := NewTimestampedCounts(now - 20)
+	tc1.UpdatePending(&PodPendingCount{"pod1", map[string]float64{"partition1": 3}})
+	q.Append(tc1)
+	tc2 := NewTimestampedCounts(now)
+	tc2.UpdatePending(&PodPendingCount{"pod1", map[string]float64{"partition1": 10}})
+	q.Append(tc2)
+
+	assert.Equal(t, int64(10), LatestPending(q, "partition1"))
+	assert.Equal(t, v1alpha1.PendingNotAvailable, LatestPending(q, "missing"))
+}
 
 func TestCalculateRate(t *testing.T) {
 	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnRateNotAvailable", func(t *testing.T) {

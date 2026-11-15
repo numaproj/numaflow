@@ -914,6 +914,7 @@ export default function Graph(props: GraphProps) {
         pushObservabilityState(history, location, {
           vertex: node.id,
           vertexTab: "pods",
+          podViewVersion: null,
           pod: null,
           container: null,
           logsSearch: null,

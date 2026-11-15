@@ -7,6 +7,10 @@ import { PodContainerSpec } from "../../../../../../../../../../../types/declara
 import { TextDecoder, TextEncoder } from "util";
 import { act } from "react-test-renderer";
 
+jest.mock("../../../../../../../../../../../contexts/ThemeContext", () => ({
+  useThemeContext: () => ({ resolvedTheme: "light" }),
+}));
+
 const render = (ui: React.ReactElement) =>
   renderBase(ui, { wrapper: BrowserRouter });
 

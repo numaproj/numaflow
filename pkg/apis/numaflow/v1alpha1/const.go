@@ -184,7 +184,7 @@ const (
 	DefaultBufferLength     = 30000
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
-	DefaultReadTimeout      = 1 * time.Second
+	DefaultReadTimeout      = 100 * time.Millisecond
 
 	// Auto scaling
 	DefaultLookbackSeconds          = 120 // Default lookback seconds for calculating avg rate and pending

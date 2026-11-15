@@ -18,6 +18,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -29,7 +30,9 @@ import (
 
 func NewServerInitCommand() *cobra.Command {
 	var (
-		baseHref string
+		baseHref      string
+		ssoLoginLabel string
+		ssoLoginIcon  string
 	)
 
 	command := &cobra.Command{
@@ -41,8 +44,11 @@ func NewServerInitCommand() *cobra.Command {
 				baseHref = strings.TrimSuffix(baseHref, "/")
 			}
 
-			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
-			if err := os.WriteFile("/opt/numaflow/runtime-env.js", []byte(reactVar), 0644); err != nil {
+			reactVar, err := runtimeEnvJS(baseHref, ssoLoginLabel, ssoLoginIcon)
+			if err != nil {
+				return fmt.Errorf("failed to build runtime-env.js: %w", err)
+			}
+			if err := os.WriteFile("/opt/numaflow/runtime-env.js", reactVar, 0644); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
 
@@ -56,7 +62,23 @@ func NewServerInitCommand() *cobra.Command {
 	}
 
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
+	command.Flags().StringVar(&ssoLoginLabel, "login-sso-label", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_LOGIN_SSO_LABEL", ""), "Label of the SSO login button, defaults to 'Login via Github'.")
+	command.Flags().StringVar(&ssoLoginIcon, "login-sso-icon", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_LOGIN_SSO_ICON", ""), "Icon of the SSO login button: 'github', 'none' or an image URL, defaults to 'github'.")
 	return command
+}
+
+// runtimeEnvJS returns the content of runtime-env.js, which the UI loads before anything else.
+// The values are JSON encoded so a quote or a "</script>" in them cannot break the script.
+func runtimeEnvJS(baseHref, ssoLoginLabel, ssoLoginIcon string) ([]byte, error) {
+	cfg, err := json.Marshal(map[string]string{
+		"BASE_HREF":       baseHref,
+		"LOGIN_SSO_LABEL": ssoLoginLabel,
+		"LOGIN_SSO_ICON":  ssoLoginIcon,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("window.__RUNTIME_CONFIG__ = %s;", cfg)), nil
 }
 
 func setBaseHref(filename string, baseHref string) error {

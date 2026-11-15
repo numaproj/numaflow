@@ -6,6 +6,7 @@ use async_nats::jetstream::kv::{Entry, Watch};
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use futures::StreamExt;
+use secrecy::ExposeSecret;
 use std::pin::Pin;
 use std::task::Poll;
 use std::time::Duration;
@@ -156,10 +157,10 @@ pub async fn create_js_context(config: config::ClientConfig) -> Result<Context> 
         .event_callback(log_nats_event);
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
+        opts = opts.user_and_password(user, password.expose_secret().to_owned());
     }
 
-    let js_client = async_nats::connect_with_options(&config.url, opts)
+    let js_client = async_nats::connect_with_options(config.url.expose_url().as_str(), opts)
         .await
         .map_err(|e| Error::Connection(e.to_string()))?;
 
@@ -168,39 +169,32 @@ pub async fn create_js_context(config: config::ClientConfig) -> Result<Context> 
 
 /// Build Jetstream client configuration.
 pub mod config {
-    use crate::error::{Error, Result};
+    use crate::{
+        error::{Error, Result},
+        redacted_url::RedactedUrl,
+    };
+    use secrecy::SecretString;
     use std::collections::HashMap;
 
-    const DEFAULT_URL: &str = "localhost:4222";
+    const DEFAULT_URL: &str = "nats://localhost:4222";
 
     /// Jetstream client configuration.
-    #[derive(Clone, PartialEq)]
+    #[derive(Debug, Clone)]
     pub struct ClientConfig {
         /// NATS server URL.
-        pub url: String,
+        pub url: RedactedUrl,
         /// NATS server username.
         pub user: Option<String>,
         /// NATS server password.
-        pub password: Option<String>,
+        pub password: Option<SecretString>,
         /// Whether to enable TLS.
         pub tls_enabled: bool,
-    }
-
-    impl std::fmt::Debug for ClientConfig {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("ClientConfig")
-                .field("url", &self.url)
-                .field("user", &self.user)
-                .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
-                .field("tls_enabled", &self.tls_enabled)
-                .finish()
-        }
     }
 
     impl Default for ClientConfig {
         fn default() -> Self {
             ClientConfig {
-                url: DEFAULT_URL.to_string(),
+                url: DEFAULT_URL.parse().expect("valid default NATS URL"),
                 user: None,
                 password: None,
                 tls_enabled: false,
@@ -236,9 +230,15 @@ pub mod config {
             };
 
             Ok(Self {
-                url: get_var(ENV_NUMAFLOW_JETSTREAM_URL)?,
+                url: RedactedUrl::with_default_scheme(
+                    &get_var(ENV_NUMAFLOW_JETSTREAM_URL)?,
+                    "nats",
+                )
+                .map_err(|e| Error::Config(format!("Invalid JetStream URL: {e}")))?,
                 user: get_var(ENV_NUMAFLOW_JETSTREAM_USER).ok(),
-                password: get_var(ENV_NUMAFLOW_JETSTREAM_PASSWORD).ok(),
+                password: get_var(ENV_NUMAFLOW_JETSTREAM_PASSWORD)
+                    .ok()
+                    .map(Into::into),
                 tls_enabled: get_var(ENV_NUMAFLOW_JETSTREAM_TLS_ENABLED)
                     .map(|v| v == "true")
                     .unwrap_or(false),
@@ -254,9 +254,9 @@ pub mod config {
         #[test]
         fn test_client_config_default() {
             let config = ClientConfig::default();
-            assert_eq!(config.url, "localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, None);
-            assert_eq!(config.password, None);
+            assert!(config.password.is_none());
             assert!(!config.tls_enabled);
         }
 
@@ -269,9 +269,26 @@ pub mod config {
             );
 
             let config = ClientConfig::load(env_vars).unwrap();
-            assert_eq!(config.url, "nats://localhost:4222");
+            assert_eq!(config.url.expose_url().as_str(), "nats://localhost:4222");
             assert_eq!(config.user, None);
-            assert_eq!(config.password, None);
+            assert!(config.password.is_none());
+        }
+
+        #[test]
+        fn test_client_config_debug_redacts_credentials() {
+            let config = ClientConfig {
+                url: "nats://js-user:secret-url-password@nats-host:4222"
+                    .parse()
+                    .unwrap(),
+                user: Some("js-user".to_string()),
+                password: Some("secret-password".into()),
+                tls_enabled: true,
+            };
+            let debug_output = format!("{:?}", config);
+            assert!(!debug_output.contains("secret-url-password"));
+            assert!(!debug_output.contains("secret-password"));
+            assert!(debug_output.contains("nats-host:4222"));
+            assert!(debug_output.contains("js-user"));
         }
     }
 }

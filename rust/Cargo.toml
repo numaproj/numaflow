@@ -60,6 +60,9 @@ debug = 0
 strip = "symbols"
 
 [workspace.dependencies]
+secrecy = { version = "0.10.3", features = ["serde"] }
+zeroize = "1.8"
+url = { version = "2.5", features = ["serde"] }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }

@@ -56,6 +56,9 @@ pub struct JobTemplate {
     /// RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
+    /// If specified, the pod will be dispatched by specified scheduler. If not specified, the pod will be dispatched by default scheduler. More info: https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
+    #[serde(rename = "schedulerName", skip_serializing_if = "Option::is_none")]
+    pub scheduler_name: Option<String>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
     pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     /// ServiceAccountName applied to the pod
@@ -88,6 +91,7 @@ impl JobTemplate {
             priority_class_name: None,
             resource_claims: None,
             runtime_class_name: None,
+            scheduler_name: None,
             security_context: None,
             service_account_name: None,
             tolerations: None,

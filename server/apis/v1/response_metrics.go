@@ -37,6 +37,10 @@ type Metric struct {
 	DisplayName       string `yaml:"display_name"`
 	MetricDescription string `yaml:"metric_description"`
 	Unit              string `yaml:"unit"`
+	// Signal names the Pod View health-strip query this metric backs (e.g. "p99", "drops").
+	// At most one metric per object type should carry a given signal; untagged metrics
+	// appear only in the Metrics tab.
+	Signal string `yaml:"signal"`
 	// array of required labels.
 	Filters []string `yaml:"required_filters"`
 	//array of dimensions and their data

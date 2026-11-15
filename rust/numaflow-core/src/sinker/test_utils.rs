@@ -114,7 +114,7 @@ where
         .expect("failed to wait for sink server to be ready");
 
     (
-        SinkClientType::UserDefined(Box::new(sink_client), None),
+        SinkClientType::UserDefined(Box::new(sink_client)),
         server_handle,
     )
 }

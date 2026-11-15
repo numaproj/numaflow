@@ -56,6 +56,10 @@ import {
   parseBooleanParam,
   replaceObservabilityState,
 } from "../../../../../../../../../../../../../utils/observabilityURLState";
+import {
+  ResolvedTheme,
+  useThemeContext,
+} from "../../../../../../../../../../../../../contexts/ThemeContext";
 
 import "./style.css";
 
@@ -119,6 +123,7 @@ export function PodLogs({
 }: PodLogsProps) {
   const history = useHistory();
   const location = useLocation();
+  const { resolvedTheme } = useThemeContext();
   const [search, setSearch] = useState<string>(
     () => new URLSearchParams(location.search).get("logsSearch") || ""
   );
@@ -131,9 +136,14 @@ export function PodLogs({
   const [paused, setPaused] = useState<boolean>(() =>
     parseBooleanParam(new URLSearchParams(location.search), "logsPaused")
   );
-  const [colorMode, setColorMode] = useState<string>(() =>
-    new URLSearchParams(location.search).get("logsColor") === "dark" ? "dark" : "light"
-  );
+  const [logThemeOverride, setLogThemeOverride] = useState<
+    ResolvedTheme | undefined
+  >(() => {
+    const logsColor = new URLSearchParams(location.search).get("logsColor");
+    return logsColor === "dark" || logsColor === "light"
+      ? logsColor
+      : undefined;
+  });
   const [logsOrder, setLogsOrder] = useState<string>(() =>
     new URLSearchParams(location.search).get("logsOrder") === "asc" ? "asc" : "desc"
   );
@@ -173,8 +183,14 @@ export function PodLogs({
     if (nextWrap !== wrapLines) setWrapLines(nextWrap);
     const nextPaused = parseBooleanParam(params, "logsPaused");
     if (nextPaused !== paused) setPaused(nextPaused);
-    const nextColor = params.get("logsColor") === "dark" ? "dark" : "light";
-    if (nextColor !== colorMode) setColorMode(nextColor);
+    const nextLogsColor = params.get("logsColor");
+    const nextLogThemeOverride =
+      nextLogsColor === "dark" || nextLogsColor === "light"
+        ? nextLogsColor
+        : undefined;
+    if (nextLogThemeOverride !== logThemeOverride) {
+      setLogThemeOverride(nextLogThemeOverride);
+    }
     const nextOrder = params.get("logsOrder") === "asc" ? "asc" : "desc";
     if (nextOrder !== logsOrder) setLogsOrder(nextOrder);
     const nextTimestamps = parseBooleanParam(params, "logsTimestamps");
@@ -191,6 +207,8 @@ export function PodLogs({
     const nextFocus = parseBooleanParam(params, "logsFocus");
     if (nextFocus !== focused) setFocused(nextFocus);
   }, [location.search]);
+
+  const effectiveLogTheme = logThemeOverride ?? resolvedTheme;
 
   // New container/pod: resume live with the default tail window.
   useEffect(() => {
@@ -380,11 +398,11 @@ export function PodLogs({
   }, [paused, history, location]);
 
   const handleColorMode = useCallback(() => {
-    setColorMode(colorMode === "light" ? "dark" : "light");
-    replaceObservabilityState(history, location, {
-      logsColor: colorMode === "light" ? "dark" : "light",
-    });
-  }, [colorMode, history, location]);
+    const nextTheme: ResolvedTheme =
+      effectiveLogTheme === "light" ? "dark" : "light";
+    setLogThemeOverride(nextTheme);
+    replaceObservabilityState(history, location, { logsColor: nextTheme });
+  }, [effectiveLogTheme, history, location]);
 
   const handleOrder = useCallback(() => {
     setLogsOrder(logsOrder === "asc" ? "desc" : "asc");
@@ -672,11 +690,13 @@ export function PodLogs({
           </ToolbarIconButton>
           <ToolbarIconButton
             testId="color-mode-button"
-            title={colorMode === "light" ? "Dark mode" : "Light mode"}
+            title={
+              effectiveLogTheme === "light" ? "Use dark log theme" : "Use light log theme"
+            }
             onClick={handleColorMode}
-            active={colorMode === "dark"}
+            active={effectiveLogTheme === "dark"}
           >
-            {colorMode === "light" ? <DarkMode /> : <LightMode />}
+            {effectiveLogTheme === "light" ? <DarkMode /> : <LightMode />}
           </ToolbarIconButton>
           <ToolbarIconButton
             testId="order-button"
@@ -748,7 +768,7 @@ export function PodLogs({
           logs={orderedLogs}
           search={search}
           wrapLines={wrapLines}
-          colorMode={colorMode}
+          theme={effectiveLogTheme}
           podName={podName}
           activeIndex={activeIndex}
         />

@@ -2652,6 +2652,8 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              schedulerName:
+                type: string
               securityContext:
                 properties:
                   appArmorProfile:
@@ -6540,9 +6542,14 @@ spec:
                         type: array
                       awsRegion:
                         type: string
+                      deadLetterQueues:
+                        type: string
                       endpointUrl:
                         type: string
                       maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      maxReceiveCount:
                         format: int32
                         type: integer
                       messageAttributeNames:

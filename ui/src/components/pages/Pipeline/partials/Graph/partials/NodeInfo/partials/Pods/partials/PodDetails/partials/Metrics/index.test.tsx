@@ -18,8 +18,8 @@ jest.mock(
 
 jest.mock("./partials/LineChart", () => ({
   __esModule: true,
-  default: ({ podName }: { podName?: string }) => (
-    <div data-testid="line-chart">{podName || "vertex-wide"}</div>
+  default: ({ metric, podName }: { metric: { metric_name: string }; podName?: string }) => (
+    <div data-testid={`line-chart-${metric.metric_name}`}>{podName || "vertex-wide"}</div>
   ),
 }));
 
@@ -47,10 +47,12 @@ const MetricsHarness = ({
   search,
   podName,
   initialExpanded,
+  type = "udf",
 }: {
   search: string;
   podName?: string;
   initialExpanded?: string[];
+  type?: string;
 }) => {
   const [expanded, setExpanded] = useState(
     new Set<string>(initialExpanded || [])
@@ -70,7 +72,7 @@ const MetricsHarness = ({
         <Metrics
           namespaceId="default"
           pipelineId="demo"
-          type="udf"
+          type={type}
           vertexId="cat"
           podName={podName}
         />
@@ -81,7 +83,7 @@ const MetricsHarness = ({
 
 const renderMetrics = (
   search: string,
-  options?: { podName?: string; initialExpanded?: string[] }
+  options?: { podName?: string; initialExpanded?: string[]; type?: string }
 ) => render(<MetricsHarness search={search} {...options} />);
 
 describe("Metrics", () => {
@@ -106,7 +108,7 @@ describe("Metrics", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByTestId("line-chart")).toHaveLength(2);
+      expect(screen.getAllByTestId(/^line-chart-/)).toHaveLength(2);
     });
   });
 
@@ -160,7 +162,7 @@ describe("Metrics", () => {
       expect(screen.getByTestId("location-search")).toHaveTextContent(
         "metricDuration=5m"
       );
-      expect(screen.getAllByTestId("line-chart")).toHaveLength(1);
+      expect(screen.getAllByTestId(/^line-chart-/)).toHaveLength(1);
       expect(screen.getByTestId("copy-metric-view-rate_b")).toHaveAttribute(
         "aria-label",
         "Copy Rate B view copied"
@@ -198,6 +200,57 @@ describe("Metrics", () => {
       initialExpanded: ["rate_a-panel"],
     });
 
-    expect(await screen.findByTestId("line-chart")).toHaveTextContent("cat-0");
+    expect(await screen.findByTestId("line-chart-rate_a")).toHaveTextContent("cat-0");
+  });
+
+  it("shows end-to-end and UDF latency for UDF vertices", async () => {
+    mockUseMetricsDiscoveryDataFetch.mockReturnValue({
+      metricsDiscoveryData: {
+        data: [
+          {
+            metric_name: "forwarder_processing_time_bucket",
+            display_name: "Vertex Processing Time Latency",
+          },
+          {
+            metric_name: "forwarder_udf_processing_time_bucket",
+            display_name: "UDF Processing Time Latency",
+          },
+        ],
+      },
+      error: undefined,
+      loading: false,
+    });
+
+    renderMetrics(
+      "?vertex=cat&vertexTab=metrics&metricPanels=forwarder_processing_time_bucket-panel"
+    );
+
+    expect(await screen.findByText("Vertex Processing Time Latency")).toBeInTheDocument();
+    expect(screen.getByText("UDF Processing Time Latency")).toBeInTheDocument();
+    expect(screen.getByTestId("line-chart-forwarder_processing_time_bucket")).toBeInTheDocument();
+  });
+
+  it("keeps UDF-only latency hidden for source vertices", async () => {
+    mockUseMetricsDiscoveryDataFetch.mockReturnValue({
+      metricsDiscoveryData: {
+        data: [
+          {
+            metric_name: "forwarder_processing_time_bucket",
+            display_name: "Vertex Processing Time Latency",
+          },
+          {
+            metric_name: "forwarder_udf_processing_time_bucket",
+            display_name: "UDF Processing Time Latency",
+          },
+        ],
+      },
+      error: undefined,
+      loading: false,
+    });
+
+    renderMetrics("?vertex=in&vertexTab=metrics", { type: "source" });
+
+    expect(await screen.findByText("Vertex Processing Time Latency")).toBeInTheDocument();
+    expect(screen.queryByText("UDF Processing Time Latency")).not.toBeInTheDocument();
   });
 });

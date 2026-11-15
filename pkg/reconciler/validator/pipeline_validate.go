@@ -245,18 +245,8 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if err := validateCronScaling(v.Scale); err != nil {
 		return fmt.Errorf("vertex %q: invalid scale.cron: %w", v.Name, err)
 	}
-	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
-	if v.Scale.Min != nil {
-		min = *v.Scale.Min
-	}
-	if v.Scale.Max != nil {
-		max = *v.Scale.Max
-	}
-	if min < 0 {
-		return fmt.Errorf("vertex %q: min number of replicas should not be smaller than 0", v.Name)
-	}
-	if min > max {
-		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
+	if err := validateScaleBounds(v.Scale); err != nil {
+		return fmt.Errorf("vertex %q: %w", v.Name, err)
 	}
 	if v.Partitions != nil {
 		if *v.Partitions < 0 {
@@ -845,11 +835,13 @@ func validateSQSSource(sqs dfv1.SqsSource) error {
 		return fmt.Errorf("either 'queueName' or 'queueNames' must be specified")
 	}
 
+	var sourceQueueNames []string
 	if sqs.QueueNames != "" {
-		queueNames, err := parseSQSQueueNames(sqs.QueueNames)
+		queueNames, err := parseSQSQueueList("queueNames", sqs.QueueNames)
 		if err != nil {
 			return err
 		}
+		sourceQueueNames = queueNames
 
 		seen := make(map[string]struct{}, len(queueNames))
 		for i, queueName := range queueNames {
@@ -862,8 +854,41 @@ func validateSQSSource(sqs dfv1.SqsSource) error {
 				return fmt.Errorf("invalid queueNames[%d]: %w", i, err)
 			}
 		}
-	} else if err := validateSQSQueueIdentity(sqs.AWSRegion, sqs.QueueName, sqs.QueueOwnerAWSAccountID); err != nil {
-		return err
+	} else {
+		sourceQueueNames = []string{sqs.QueueName}
+		if err := validateSQSQueueIdentity(sqs.AWSRegion, sqs.QueueName, sqs.QueueOwnerAWSAccountID); err != nil {
+			return err
+		}
+	}
+
+	if sqs.DeadLetterQueues == "" {
+		if sqs.MaxReceiveCount != nil {
+			return fmt.Errorf("'maxReceiveCount' requires 'deadLetterQueues'")
+		}
+	} else {
+		deadLetterQueueNames, err := parseSQSQueueList("deadLetterQueues", sqs.DeadLetterQueues)
+		if err != nil {
+			return err
+		}
+		if len(sourceQueueNames) != len(deadLetterQueueNames) {
+			return fmt.Errorf("'deadLetterQueues' must contain exactly one entry for each source queue: got %d source queues and %d dead-letter queues", len(sourceQueueNames), len(deadLetterQueueNames))
+		}
+
+		for i, deadLetterQueueName := range deadLetterQueueNames {
+			if err := validateSQSQueueIdentity(sqs.AWSRegion, deadLetterQueueName, sqs.QueueOwnerAWSAccountID); err != nil {
+				return fmt.Errorf("invalid deadLetterQueues[%d]: %w", i, err)
+			}
+			if sourceQueueNames[i] == deadLetterQueueName {
+				return fmt.Errorf("source queue %q cannot be its own dead-letter queue", sourceQueueNames[i])
+			}
+			if strings.HasSuffix(sourceQueueNames[i], ".fifo") != strings.HasSuffix(deadLetterQueueName, ".fifo") {
+				return fmt.Errorf("source queue %q and dead-letter queue %q must both be FIFO queues or both be standard queues", sourceQueueNames[i], deadLetterQueueName)
+			}
+		}
+
+		if sqs.MaxReceiveCount != nil && (*sqs.MaxReceiveCount < 1 || *sqs.MaxReceiveCount > 1000) {
+			return fmt.Errorf("maxReceiveCount must be between 1 and 1000")
+		}
 	}
 
 	// Validate assume role if present
@@ -874,15 +899,15 @@ func validateSQSSource(sqs dfv1.SqsSource) error {
 	return nil
 }
 
-// parseSQSQueueNames parses the comma-separated queueNames field. Empty
+// parseSQSQueueList parses a comma-separated SQS queue-name field. Empty
 // entries are rejected rather than silently discarded.
-func parseSQSQueueNames(queueNames string) ([]string, error) {
-	parts := strings.Split(queueNames, ",")
+func parseSQSQueueList(fieldName, value string) ([]string, error) {
+	parts := strings.Split(value, ",")
 	names := make([]string, 0, len(parts))
 	for i, part := range parts {
 		name := strings.TrimSpace(part)
 		if name == "" {
-			return nil, fmt.Errorf("queueNames contains empty queue name at position %d", i)
+			return nil, fmt.Errorf("%s contains empty queue name at position %d", fieldName, i)
 		}
 		names = append(names, name)
 	}

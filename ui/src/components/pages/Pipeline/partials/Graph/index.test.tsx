@@ -917,7 +917,7 @@ describe("Graph", () => {
     renderBase(
       <MemoryRouter
         initialEntries={[
-          "/?namespace=test&pipeline=simple-pipeline&vertex=in&vertexTab=spec&specLine=12",
+          "/?namespace=test&pipeline=simple-pipeline&vertex=in&vertexTab=spec&podViewVersion=classic&specLine=12",
         ]}
       >
         <AppContext.Provider value={mockContext}>
@@ -939,6 +939,9 @@ describe("Graph", () => {
     await waitFor(() => {
       expect(screen.getByTestId("location-search")).toHaveTextContent(
         "vertex=cat"
+      );
+      expect(screen.getByTestId("location-search")).not.toHaveTextContent(
+        "podViewVersion"
       );
       expect(screen.getByTestId("location-search")).not.toHaveTextContent(
         "specLine"

@@ -51,6 +51,26 @@ func TestSetCurrentHealth(t *testing.T) {
 	}
 }
 
+func TestMonoVertexDataProcessingHealthValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		status string
+		want   float64
+	}{
+		{name: "healthy", status: v1alpha1.MonoVertexStatusHealthy, want: 1},
+		{name: "warning", status: v1alpha1.MonoVertexStatusWarning, want: -1},
+		{name: "critical", status: v1alpha1.MonoVertexStatusCritical, want: -2},
+		{name: "unknown", status: v1alpha1.MonoVertexStatusUnknown, want: 0},
+		{name: "unrecognized", status: "unexpected", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, monoVertexDataProcessingHealthValue(tt.status))
+		})
+	}
+}
+
 func TestConvertMonoVtxStateToHealthResp(t *testing.T) {
 	monoVertex := &v1alpha1.MonoVertex{} // Simplified
 	hc := NewHealthChecker(monoVertex)

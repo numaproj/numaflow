@@ -76,6 +76,7 @@ func TestApplyToPodSpec(t *testing.T) {
 				Name: "template-resource-claim",
 			},
 		},
+		SchedulerName: "my-scheduler",
 	}
 
 	podSpec := &corev1.PodSpec{
@@ -98,4 +99,11 @@ func TestApplyToPodSpec(t *testing.T) {
 	assert.Equal(t, podSpec.Affinity, abstractPodTemplate.Affinity)
 	assert.Equal(t, podSpec.ServiceAccountName, "spec-sa")
 	assert.Equal(t, podSpec.ResourceClaims[0].Name, "template-resource-claim")
+	assert.Equal(t, podSpec.SchedulerName, "my-scheduler")
+}
+
+func TestApplyToPodSpec_SchedulerNameNotOverridden(t *testing.T) {
+	podSpec := &corev1.PodSpec{SchedulerName: "spec-scheduler"}
+	(&AbstractPodTemplate{SchedulerName: "template-scheduler"}).ApplyToPodSpec(podSpec)
+	assert.Equal(t, "spec-scheduler", podSpec.SchedulerName)
 }

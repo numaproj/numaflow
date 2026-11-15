@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 )
 
 func TestValidateMonoVertexCreate(t *testing.T) {
@@ -38,6 +39,16 @@ func TestValidateMonoVertexCreate(t *testing.T) {
 		r := v.ValidateCreate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
 		assert.Contains(t, r.Result.Message, "source is not defined")
+	})
+
+	t.Run("test create with min above max", func(t *testing.T) {
+		newMvtx := mvtx.DeepCopy()
+		newMvtx.Spec.Scale.Min = ptr.To[int32](10)
+		newMvtx.Spec.Scale.Max = ptr.To[int32](1)
+		v := NewMonoVertexValidator(nil, newMvtx)
+		r := v.ValidateCreate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "invalid scale")
 	})
 }
 
@@ -59,5 +70,15 @@ func TestValidateMonoVertexUpdate(t *testing.T) {
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
 		assert.Contains(t, r.Result.Message, "source is not defined")
+	})
+
+	t.Run("test update with min above max", func(t *testing.T) {
+		newMvtx := mvtx.DeepCopy()
+		newMvtx.Spec.Scale.Min = ptr.To[int32](10)
+		newMvtx.Spec.Scale.Max = ptr.To[int32](1)
+		v := NewMonoVertexValidator(mvtx, newMvtx)
+		r := v.ValidateUpdate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "invalid scale")
 	})
 }

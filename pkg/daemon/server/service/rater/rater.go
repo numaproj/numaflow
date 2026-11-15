@@ -431,6 +431,8 @@ func (r *Rater) GetPending(pipelineName, vertexName, vertexType, partitionName s
 			metrics.VertexPendingMessages.WithLabelValues(pipelineName, vertexName, vertexType, partitionName, windowLabel).Set(float64(pending))
 		}
 	}
+	// latest is the newest scrape. It is not published as the averaged pending gauge.
+	result["latest"] = wrapperspb.Int64(LatestPending(r.timestampedPendingCount[vertexName], partitionName))
 	return result
 }
 

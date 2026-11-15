@@ -15,14 +15,32 @@ use numaflow_nats::NatsAuth;
 use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
 use numaflow_nats::nats::NatsSourceConfig;
 use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
+use numaflow_shared::redacted_url::RedactedUrl;
 use numaflow_sqs::source::SqsSourceConfig;
 use tracing::warn;
 
 pub(crate) const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
+const DEFAULT_SQS_MAX_RECEIVE_COUNT: i32 = 10;
 
-#[derive(Debug, Clone, PartialEq)]
+fn parse_sqs_queue_list(field_name: &str, value: String) -> Result<Vec<String>> {
+    value
+        .split(',')
+        .enumerate()
+        .map(|(idx, name)| {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(Error::Config(format!(
+                    "{field_name} contains empty queue name at position {idx}"
+                )));
+            }
+            Ok(name.to_string())
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct SourceConfig {
     /// for high-throughput use-cases we read-ahead the next batch before the previous batch has
     /// been acked (or completed). For most cases it should be set to false.
@@ -80,13 +98,13 @@ impl SourceSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) enum SourceType {
     Generator(GeneratorConfig),
     UserDefined(UserDefinedConfig),
     Pulsar(PulsarSourceConfig),
     Jetstream(JetstreamSourceConfig),
-    Sqs(SqsSourceConfig),
+    Sqs(Box<SqsSourceConfig>),
     Kafka(Box<KafkaSourceConfig>),
     Http(numaflow_http::HttpSourceConfig),
     Nats(NatsSourceConfig),
@@ -144,7 +162,11 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
                 }
             }),
 
-            pulsar_server_addr: value.server_addr,
+            pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::with_default_scheme(
+                &value.server_addr,
+                "pulsar",
+            )
+            .map_err(|e| Error::Config(format!("Invalid Pulsar server address: {e}")))?,
             topic: value.topic,
             consumer_name: value.consumer_name,
             subscription: value.subscription_name,
@@ -159,7 +181,7 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
 impl TryFrom<Box<SqsSource>> for SourceType {
     type Error = Error;
 
-    fn try_from(value: Box<SqsSource>) -> Result<Self> {
+    fn try_from(mut value: Box<SqsSource>) -> Result<Self> {
         if let Some(timeout) = value.visibility_timeout
             && !(0..=43200).contains(&timeout)
         {
@@ -212,7 +234,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
         }
 
         // Both API forms collapse to a name list. queueName is a one-element Vec.
-        let queue_names = match (value.queue_name, value.queue_names) {
+        let queue_names = match (value.queue_name.take(), value.queue_names.take()) {
             (Some(_), Some(queue_names)) if !queue_names.is_empty() => {
                 return Err(Error::Config(
                     "'queueNames' is mutually exclusive with 'queueName' for SQS source"
@@ -220,19 +242,9 @@ impl TryFrom<Box<SqsSource>> for SourceType {
                 ));
             }
             (Some(queue_name), _) if !queue_name.is_empty() => vec![queue_name],
-            (None, Some(queue_names)) if !queue_names.is_empty() => queue_names
-                .split(',')
-                .enumerate()
-                .map(|(idx, name)| {
-                    let name = name.trim();
-                    if name.is_empty() {
-                        return Err(Error::Config(format!(
-                            "queueNames contains empty queue name at position {idx}"
-                        )));
-                    }
-                    Ok(name.to_string())
-                })
-                .collect::<Result<Vec<_>>>()?,
+            (None, Some(queue_names)) if !queue_names.is_empty() => {
+                parse_sqs_queue_list("queueNames", queue_names)?
+            }
             _ => {
                 return Err(Error::Config(
                     "either 'queueName' or 'queueNames' must be specified for SQS source"
@@ -250,12 +262,66 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             }
         }
 
+        let dead_letter_queue_names = match value.dead_letter_queues.take() {
+            Some(dead_letter_queues) if !dead_letter_queues.is_empty() => {
+                parse_sqs_queue_list("deadLetterQueues", dead_letter_queues)?
+            }
+            _ => Vec::new(),
+        };
+
+        let max_receive_count = if dead_letter_queue_names.is_empty() {
+            if value.max_receive_count.is_some() {
+                return Err(Error::Config(
+                    "maxReceiveCount requires deadLetterQueues for SQS source".to_string(),
+                ));
+            }
+            None
+        } else {
+            if dead_letter_queue_names.len() != queue_names.len() {
+                return Err(Error::Config(format!(
+                    "deadLetterQueues must contain exactly one queue for each SQS source queue: expected {}, got {}",
+                    queue_names.len(),
+                    dead_letter_queue_names.len()
+                )));
+            }
+
+            for (queue_name, dead_letter_queue_name) in
+                queue_names.iter().zip(&dead_letter_queue_names)
+            {
+                if queue_name == dead_letter_queue_name {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} cannot be its own dead-letter queue"
+                    )));
+                }
+                if queue_name.ends_with(".fifo") != dead_letter_queue_name.ends_with(".fifo") {
+                    return Err(Error::Config(format!(
+                        "SQS source queue {queue_name:?} and dead-letter queue {dead_letter_queue_name:?} must both be FIFO queues or both be standard queues"
+                    )));
+                }
+            }
+
+            let max_receive_count = value
+                .max_receive_count
+                .unwrap_or(DEFAULT_SQS_MAX_RECEIVE_COUNT);
+            if !(1..=1000).contains(&max_receive_count) {
+                return Err(Error::Config(format!(
+                    "maxReceiveCount must be between 1 and 1000 for SQS source, got {max_receive_count}"
+                )));
+            }
+            Some(max_receive_count)
+        };
+
         let sqs_source_config = SqsSourceConfig {
             region: Box::leak(value.aws_region.into_boxed_str()),
             queue_names: queue_names
                 .into_iter()
                 .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
                 .collect(),
+            dead_letter_queue_names: dead_letter_queue_names
+                .into_iter()
+                .map(|queue_name| Box::leak(queue_name.into_boxed_str()) as &'static str)
+                .collect(),
+            max_receive_count,
             queue_owner_aws_account_id: Box::leak(
                 value.queue_owner_aws_account_id.into_boxed_str(),
             ),
@@ -268,7 +334,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             assume_role_config,
         };
 
-        Ok(SourceType::Sqs(sqs_source_config))
+        Ok(SourceType::Sqs(Box::new(sqs_source_config)))
     }
 }
 
@@ -293,7 +359,11 @@ impl TryFrom<JetstreamSourceSpec> for SourceType {
         }
 
         let js_config = JetstreamSourceConfig {
-            addr: value.spec.url,
+            addr: numaflow_shared::redacted_url::RedactedUrl::comma_separated_with_default_scheme(
+                &value.spec.url,
+                "nats",
+            )
+            .map_err(|e| Error::Config(format!("Invalid JetStream URL: {e}")))?,
             consumer,
             stream: value.spec.stream,
             deliver_policy,
@@ -313,7 +383,8 @@ impl TryFrom<Box<numaflow_models::models::NatsSource>> for SourceType {
         let auth = parse_nats_auth(value.auth)?;
         let tls = parse_tls_config(value.tls)?;
         let nats_config = NatsSourceConfig {
-            addr: value.url,
+            addr: RedactedUrl::comma_separated_with_default_scheme(&value.url, "nats")
+                .map_err(|e| Error::Config(format!("Invalid NATS URL: {e}")))?,
             subject: value.subject,
             queue: value.queue,
             auth,
@@ -459,7 +530,7 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {
                 Error::Config(format!("Failed to get token secret from volume: {e:?}"))
             })?;
-            http_config = http_config.token(Box::leak(token.into_boxed_str()));
+            http_config = http_config.token(token);
         }
 
         Ok(SourceType::Http(http_config.build()))
@@ -480,16 +551,6 @@ impl Default for UserDefinedConfig {
             socket_path: DEFAULT_SOURCE_SOCKET.to_string(),
             server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
         }
-    }
-}
-
-impl UserDefinedConfig {
-    pub(crate) fn grpc_client_config(&self) -> crate::shared::grpc::GrpcClientConfig {
-        crate::shared::grpc::GrpcClientConfig::new(
-            self.socket_path.clone(),
-            self.server_info_path.clone(),
-            self.grpc_max_message_size,
-        )
     }
 }
 
@@ -524,9 +585,12 @@ mod tests {
                 value: None,
             }))
             .unwrap();
+        let SourceType::Generator(config) = source else {
+            panic!("Expected SourceType::Generator");
+        };
         assert_eq!(
-            source,
-            SourceType::Generator(GeneratorConfig {
+            config,
+            GeneratorConfig {
                 content: Bytes::from("hello world\n"),
                 duration: Duration::from_secs(1),
                 jitter: Duration::from_secs(0),
@@ -534,7 +598,7 @@ mod tests {
                 rpu: 1,
                 value: None,
                 msg_size_bytes: 8,
-            })
+            }
         );
     }
 
@@ -609,6 +673,7 @@ mod jetstream_tests {
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
     use numaflow_nats::{NatsAuth, jetstream::ConsumerDeliverPolicy};
+    use numaflow_shared::redacted_url::join_comma_separated_urls;
 
     use crate::config::components::source::JetstreamSourceSpec;
 
@@ -673,9 +738,12 @@ mod jetstream_tests {
                 panic!("Basic auth creds must be set");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
+            assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
             assert_eq!(config.consumer, "numaflow-test-stream");
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(
                 config.deliver_policy,
                 ConsumerDeliverPolicy::by_start_sequence(10)
@@ -732,10 +800,19 @@ mod jetstream_tests {
         .unwrap();
         if let SourceType::Jetstream(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&tls_config.ca_cert.unwrap()),
+                "test-ca-cert"
+            );
             let client_auth = tls_config.client_auth.as_ref().unwrap();
-            assert_eq!(client_auth.client_cert, "test-cert");
-            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert),
+                "test-cert"
+            );
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert_private_key),
+                "test-key"
+            );
             assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Jetstream");
@@ -781,6 +858,7 @@ mod pulsar_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::{PulsarAuth, PulsarBasicAuth, PulsarSource};
     use numaflow_pulsar::PulsarAuth as PulsarAuthEnum;
+    use secrecy::ExposeSecret;
 
     use super::*;
 
@@ -816,7 +894,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -855,7 +936,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -864,7 +948,7 @@ mod pulsar_source_tests {
             let PulsarAuthEnum::JWT(token) = auth else {
                 panic!("Expected PulsarAuth::JWT");
             };
-            assert_eq!(token, "test-jwt-token");
+            assert_eq!(token.expose_secret(), "test-jwt-token");
         } else {
             panic!("Expected SourceType::Pulsar");
         }
@@ -909,7 +993,10 @@ mod pulsar_source_tests {
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
         assert!(result.is_ok());
         if let Ok(SourceType::Pulsar(config)) = result {
-            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(
+                config.pulsar_server_addr.expose_url().as_str(),
+                "pulsar://localhost:6650"
+            );
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.consumer_name, "test-consumer");
             assert_eq!(config.subscription, "test-subscription");
@@ -919,7 +1006,7 @@ mod pulsar_source_tests {
                 panic!("Expected PulsarAuth::HTTPBasic");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
+            assert_eq!(password.expose_secret(), "test-pass");
         } else {
             panic!("Expected SourceType::Pulsar");
         }
@@ -1077,6 +1164,7 @@ mod nats_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::NatsSource;
     use numaflow_models::models::{BasicAuth, NatsAuth};
+    use numaflow_shared::redacted_url::join_comma_separated_urls;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 
@@ -1120,8 +1208,11 @@ mod nats_source_tests {
                 panic!("Basic auth creds must be set");
             };
             assert_eq!(username, "test-user");
-            assert_eq!(password, "test-pass");
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(secrecy::ExposeSecret::expose_secret(&password), "test-pass");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
         } else {
@@ -1146,7 +1237,10 @@ mod nats_source_tests {
 
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
-            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(
+                join_comma_separated_urls(&config.addr),
+                "nats://localhost:4222"
+            );
             assert_eq!(config.subject, "test-subject");
             assert_eq!(config.queue, "test-queue");
             assert!(config.auth.is_none());
@@ -1204,10 +1298,19 @@ mod nats_source_tests {
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
             let tls_config = config.tls.unwrap();
-            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&tls_config.ca_cert.unwrap()),
+                "test-ca-cert"
+            );
             let client_auth = tls_config.client_auth.as_ref().unwrap();
-            assert_eq!(client_auth.client_cert, "test-cert");
-            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert),
+                "test-cert"
+            );
+            assert_eq!(
+                secrecy::ExposeSecret::expose_secret(&client_auth.client_cert_private_key),
+                "test-key"
+            );
             assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Nats");
@@ -1278,6 +1381,107 @@ mod nats_source_tests {
         };
 
         assert_eq!(config.queue_names, vec!["orders-queue", "refunds-queue"]);
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queues_are_mapped_and_defaulted() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some(" orders-dlq , refunds-dlq ".to_string());
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(
+            config.dead_letter_queue_names,
+            vec!["orders-dlq", "refunds-dlq"]
+        );
+        assert_eq!(config.max_receive_count, Some(10));
+    }
+
+    #[test]
+    fn test_sqs_source_legacy_queue_supports_explicit_dead_letter_policy() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+        source.max_receive_count = Some(4);
+
+        let SourceType::Sqs(config) = SourceType::try_from(Box::new(source)).unwrap() else {
+            panic!("expected SQS source");
+        };
+
+        assert_eq!(config.dead_letter_queue_names, vec!["orders-dlq"]);
+        assert_eq!(config.max_receive_count, Some(4));
+    }
+
+    #[test]
+    fn test_sqs_source_dead_letter_queue_count_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("shared-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("exactly one queue"));
+    }
+
+    #[test]
+    fn test_sqs_source_empty_dead_letter_queue_entry_is_rejected() {
+        let mut source = base_sqs_source();
+        source.queue_names = Some("orders-queue,refunds-queue".to_string());
+        source.dead_letter_queues = Some("orders-dlq,   ".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("deadLetterQueues contains empty queue name")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_cannot_use_itself_as_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.dead_letter_queues = Some("orders-queue".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot be its own dead-letter queue")
+        );
+    }
+
+    #[test]
+    fn test_sqs_source_and_dead_letter_queue_types_must_match() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders.fifo".to_string());
+        source.dead_letter_queues = Some("orders-dlq".to_string());
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("must both be FIFO queues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_requires_dead_letter_queue() {
+        let mut source = base_sqs_source();
+        source.queue_name = Some("orders-queue".to_string());
+        source.max_receive_count = Some(4);
+
+        let err = SourceType::try_from(Box::new(source)).unwrap_err();
+        assert!(err.to_string().contains("requires deadLetterQueues"));
+    }
+
+    #[test]
+    fn test_sqs_source_max_receive_count_is_bounded() {
+        for invalid in [0, 1001] {
+            let mut source = base_sqs_source();
+            source.queue_name = Some("orders-queue".to_string());
+            source.dead_letter_queues = Some("orders-dlq".to_string());
+            source.max_receive_count = Some(invalid);
+
+            let err = SourceType::try_from(Box::new(source)).unwrap_err();
+            assert!(err.to_string().contains("between 1 and 1000"));
+        }
     }
 
     #[test]

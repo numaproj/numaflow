@@ -2,7 +2,7 @@ import {
   isDev,
   findSuffix,
   quantityToScalar,
-  getPodContainerUsePercentages,
+  resourceRequestPercent,
   timeAgo,
   GetISBType,
   DurationString,
@@ -11,37 +11,6 @@ import {
   getAPIResponseError,
   handleCopy,
 } from "./index";
-import { Pod, PodContainerSpec } from "../types/declarations/pods";
-
-const podContainerSpec: PodContainerSpec = {
-  name: "numa",
-  cpuParsed: 34,
-  memoryParsed: 50,
-};
-const containerSpecMap = new Map<string, PodContainerSpec>([
-  ["simple-pipeline-infer-0-xah5w", podContainerSpec],
-]);
-
-const pod: Pod = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containers: ["numa", "udf"],
-  containerSpecMap: containerSpecMap,
-};
-
-const podContainerSpec1: PodContainerSpec = {
-  name: "numa",
-  cpuParsed: 12,
-  memoryParsed: 15,
-};
-
-const containerMap = new Map<string, PodContainerSpec>([
-  ["simple-pipeline-infer-0-xah5w", podContainerSpec1],
-]);
-
-const podDetail = {
-  name: "simple-pipeline-infer-0-xah5w",
-  containerMap: containerMap,
-};
 
 describe("index", () => {
   it("isDev", () => {
@@ -58,6 +27,8 @@ describe("index", () => {
     expect(quantityToScalar("10n")).toEqual(1e-8);
     expect(quantityToScalar("10u")).toEqual(0.00001);
     expect(quantityToScalar("10m")).toEqual(0.01);
+    expect(quantityToScalar("1.2m")).toEqual(0.0012);
+    expect(quantityToScalar("4.25Mi")).toEqual(4.25 * 1024 * 1024);
     // @ts-ignore
     expect(quantityToScalar("10k")).toEqual(10000n);
     // @ts-ignore
@@ -84,46 +55,12 @@ describe("index", () => {
     expect(quantityToScalar("10Ei")).toEqual(11529215046068469760n);
   });
 
-  it("getPodContainerUsePercentages", () => {
-    expect(getPodContainerUsePercentages(pod, podDetail, "numa")).toEqual({
-      cpuPercent: undefined,
-      memoryPercent: undefined,
-    });
-    const containerMap = new Map<string, PodContainerSpec>();
-    containerMap.set("numa", {
-      name: "numa",
-      cpu: "6991490n",
-      cpuParsed: 0.00699149,
-      memory: "33724Ki",
-      memoryParsed: 34533376,
-    });
-    const containerSpecMap = new Map<string, PodContainerSpec>();
-    containerSpecMap.set("numa", {
-      name: "numa",
-      cpu: "100m",
-      cpuParsed: 0.1,
-      memory: "128Mi",
-      memoryParsed: 134217728,
-    });
-    const props = {
-      pod: {
-        name: "simple-pipeline-2-in-0-dpwxy",
-        containers: ["numa"],
-        containerSpecMap: containerSpecMap,
-      },
-      podDetails: {
-        name: "simple-pipeline-2-in-0-dpwxy",
-        containerMap: containerMap,
-      },
-      containerName: "numa",
-    };
-
-    expect(
-      getPodContainerUsePercentages(props.pod, props.podDetails, "numa")
-    ).toEqual({
-      cpuPercent: 6.991490000000001,
-      memoryPercent: 25.7293701171875,
-    });
+  it("resourceRequestPercent compares pods-info usage with the request", () => {
+    expect(resourceRequestPercent(undefined, "100m")).toBeUndefined();
+    expect(resourceRequestPercent("6991490n", "100m")).toBeCloseTo(6.99149);
+    expect(resourceRequestPercent("33724Ki", "128Mi")).toBeCloseTo(25.7293701171875);
+    expect(resourceRequestPercent("1.2m", "100m")).toBeCloseTo(1.2);
+    expect(resourceRequestPercent("4.25Mi", "128Mi")).toBeCloseTo(3.3203125);
   });
   it("timeAgo", () => {
     // Use fake timers to eliminate flakiness and make tests deterministic

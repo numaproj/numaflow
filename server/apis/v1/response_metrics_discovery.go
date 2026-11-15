@@ -13,19 +13,23 @@ type DiscoveryResponse struct {
 	DisplayName       string       `json:"display_name"`
 	Unit              string       `json:"unit"`
 	Dimensions        []Dimensions `json:"dimensions"`
+	// Signal is the Pod View health-strip query this metric backs, copied from the
+	// metrics-proxy ConfigMap. Empty when the metric is not used by the strip.
+	Signal string `json:"signal,omitempty"`
 }
 
 // MetricsDiscoveryResponse is a list of DiscoveryResponse
 type MetricsDiscoveryResponse []DiscoveryResponse
 
 // NewDiscoveryResponse creates a new DiscoveryResponse object for each metric.
-func NewDiscoveryResponse(patternName, metricName, metricDescription, displayName, unitName string, dimensions []Dimensions) DiscoveryResponse {
+func NewDiscoveryResponse(patternName, metricName, metricDescription, displayName, unitName, signal string, dimensions []Dimensions) DiscoveryResponse {
 	return DiscoveryResponse{
 		PatternName:       patternName,
 		MetricName:        metricName,
 		MetricDescription: metricDescription,
 		DisplayName:       displayName,
 		Unit:              unitName,
+		Signal:            signal,
 		Dimensions:        dimensions,
 	}
 }

@@ -264,6 +264,8 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 		}
 	}
 
+	edgeWatermarks := newEdgeWatermarkMetrics(ds.pipeline, metrics.EdgeWatermark)
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -275,6 +277,7 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 				continue
 			}
 			watermarks := resp.PipelineWatermarks
+			edgeWatermarks.update(watermarks)
 			var (
 				minWM int64 = math.MaxInt64
 				maxWM int64 = math.MinInt64

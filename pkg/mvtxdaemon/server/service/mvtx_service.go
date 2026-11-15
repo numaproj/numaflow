@@ -24,6 +24,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	runtimePkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -133,6 +134,25 @@ func (mvs *MonoVertexService) StartHealthCheck(ctx context.Context) {
 	mvs.startHealthCheck(ctx)
 }
 
+// monoVertexDataProcessingHealthValue maps the daemon data health status to the alerting gauge value.
+func monoVertexDataProcessingHealthValue(status string) float64 {
+	switch status {
+	case v1alpha1.MonoVertexStatusHealthy:
+		return 1
+	case v1alpha1.MonoVertexStatusWarning:
+		return -1
+	case v1alpha1.MonoVertexStatusCritical:
+		return -2
+	default:
+		return 0
+	}
+}
+
+func (mvs *MonoVertexService) setDataProcessingHealthMetric(status string) {
+	metrics.MonoVertexDataProcessingHealth.WithLabelValues(mvs.monoVtx.Name).
+		Set(monoVertexDataProcessingHealthValue(status))
+}
+
 // startHealthCheck starts the health check for the pipeline.
 // The ticks are generated at the interval of healthTimeStep.
 func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
@@ -159,11 +179,13 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 				// If there is an error, set the current health status to unknown.
 				// as we are not able to determine the health of the MonoVertex.
 				mvs.healthChecker.setCurrentHealth(defaultDataHealthResponse)
+				mvs.setDataProcessingHealthMetric(defaultDataHealthResponse.Status)
 			} else {
 				// convert the MonoVertex health state to API response
 				monoVertexState := mvs.healthChecker.convertMonoVtxStateToHealthResp(criticality)
 				// update the current health status of the MonoVertex to cache
 				mvs.healthChecker.setCurrentHealth(monoVertexState)
+				mvs.setDataProcessingHealthMetric(monoVertexState.Status)
 			}
 		// If the context is done, return.
 		case <-ctx.Done():

@@ -36,6 +36,12 @@ data:
   ### Base href for Numaflow UX server, defaults to '/'.
   # server.base.href: "/"
   #
+  ### Label of the SSO login button on the UX login page, defaults to 'Login via Github'.
+  # server.login.sso.label: "Login via Github"
+  #
+  ### Icon of the SSO login button: 'github', 'none' or an image URL, defaults to 'github'.
+  # server.login.sso.icon: "github"
+  #
   ### Whether to enable read only view for the UX server, defaults to false.
   #  server.readonly: "false"
   #

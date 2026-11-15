@@ -109,12 +109,16 @@ pub async fn run(config: Settings) -> Result<()> {
         .event_callback(numaflow_shared::isb::jetstream::log_nats_event);
 
     if let Some((user, password)) = config.nats_basic_auth.as_ref().cloned() {
-        opts = opts.user_and_password(user, password);
+        opts = opts.user_and_password(
+            user,
+            secrecy::ExposeSecret::expose_secret(&password).to_owned(),
+        );
     }
 
-    let js_client = async_nats::connect_with_options(&config.jetstream_url, opts)
-        .await
-        .map_err(|e| Error::Connection(e.to_string()))?;
+    let js_client =
+        async_nats::connect_with_options(config.jetstream_url.expose_url().as_str(), opts)
+            .await
+            .map_err(|e| Error::Connection(e.to_string()))?;
 
     let js_context = jetstream::new(js_client);
     start(js_context, Arc::new(config))

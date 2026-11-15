@@ -21,6 +21,11 @@ import {
   PipelineISBStream,
   PipelineISBStreamsResponse,
 } from "../../../../../types/declarations/pipeline";
+import {
+  formatBytes,
+  formatDecimal,
+  formatNumber,
+} from "../../../../../utils/formatters";
 
 export interface PipelineISBDebugInfoProps {
   streams?: PipelineISBStreamsResponse;
@@ -30,31 +35,6 @@ export interface PipelineISBDebugInfoProps {
   error?: any;
   edgeScoped?: boolean;
 }
-
-const formatNumber = (value?: number) => (value ?? 0).toLocaleString("en-US");
-
-const formatDecimal = (value: number, precision = 2) => {
-  const multiplier = Math.pow(10, precision);
-  return (
-    Math.round((value + Number.EPSILON) * multiplier) / multiplier
-  ).toFixed(precision);
-};
-
-const formatBytes = (value?: number) => {
-  const bytes = value ?? 0;
-  if (bytes === 0) {
-    return "0 B";
-  }
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-  const scaled = bytes / Math.pow(1024, index);
-  return `${index === 0 ? formatNumber(scaled) : formatDecimal(scaled)} ${
-    units[index]
-  }`;
-};
 
 const formatOptional = (value?: string | number) => {
   if (value === undefined || value === "") {
@@ -144,8 +124,8 @@ const streamColumnLayouts = Object.values(streamColumns);
 const kvStoreColumnLayouts = Object.values(kvStoreColumns);
 
 const tableContainerSx = {
-  backgroundColor: "#FFF",
-  border: "0.1rem solid #DADCE0",
+  backgroundColor: "var(--bg-secondary)",
+  border: "0.1rem solid var(--border-primary)",
   borderRadius: "0.8rem",
   maxHeight: "60rem",
   overflowX: "auto",
@@ -153,8 +133,11 @@ const tableContainerSx = {
 };
 
 const bodyRowSx = {
-  "&:nth-of-type(odd)": { backgroundColor: "#FAFBFC" },
-  "&:hover": { backgroundColor: "#F0F2F5" },
+  "&:nth-of-type(odd)": { backgroundColor: "var(--bg-tertiary)" },
+  "&:hover": {
+    backgroundColor:
+      "color-mix(in srgb, var(--text-primary) 8%, transparent)",
+  },
 };
 
 const ISBTable = ({
@@ -205,9 +188,9 @@ const HeaderCell = ({
   <TableCell
     align={align}
     sx={{
-      backgroundColor: "#F4F4F4",
-      borderBottom: "0.1rem solid #C6C6C6",
-      color: "#393939",
+      backgroundColor: "var(--bg-tertiary)",
+      borderBottom: "0.1rem solid var(--border-primary)",
+      color: "var(--text-primary)",
       overflow: "hidden",
       padding: "1rem 1.2rem",
       textOverflow: "ellipsis",
@@ -265,7 +248,7 @@ const BodyCell = ({
     align={align}
     title={title}
     sx={{
-      borderBottom: "0.1rem solid #E0E0E0",
+      borderBottom: "0.1rem solid var(--border-primary)",
       overflow: "hidden",
       padding: "1rem 1.2rem",
       overflowWrap: wrap ? "anywhere" : "normal",
@@ -307,8 +290,9 @@ const DebugAccordionSection = ({
   <Accordion
     defaultExpanded={defaultExpanded}
     sx={{
-      backgroundColor: "#FFF",
-      border: "0.1rem solid #DADCE0",
+      backgroundColor: "var(--bg-secondary)",
+      border: "0.1rem solid var(--border-primary)",
+      color: "var(--text-primary)",
       borderRadius: "0.8rem",
       boxShadow: "none",
       marginBottom: "1.2rem",
@@ -320,12 +304,16 @@ const DebugAccordionSection = ({
     <AccordionSummary
       expandIcon={<ExpandMoreIcon />}
       sx={{
-        backgroundColor: "#FAFBFC",
+        backgroundColor: "var(--bg-tertiary)",
+        color: "var(--text-primary)",
         "& .MuiAccordionSummary-content": {
           alignItems: "center",
           display: "flex",
           gap: "0.8rem",
           margin: "1.2rem 0",
+        },
+        "& .MuiAccordionSummary-expandIconWrapper": {
+          color: "var(--text-primary)",
         },
         minHeight: "5.6rem",
         padding: "0 1.6rem",
@@ -617,12 +605,12 @@ export function PipelineISBDebugInfo({
   return (
     <Box>
       {(error || !hasAllResponses) && (
-        <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
+        <Box sx={{ marginBottom: "1.6rem", color: "var(--text-tertiary)" }}>
           {PARTIAL_ISB_UNAVAILABLE_MESSAGE}
         </Box>
       )}
       {showSharedNotice && (
-        <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
+        <Box sx={{ marginBottom: "1.6rem", color: "var(--text-tertiary)" }}>
           Stream and consumer rows on an edge are scoped to the target vertex
           buffer and may be shared by multiple inbound edges.
         </Box>

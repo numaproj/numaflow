@@ -21,10 +21,10 @@ use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -90,7 +90,7 @@ struct DataResponse {
 }
 
 /// HTTPSource Builder with custom buffer size
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct HttpSourceConfig {
     pub vertex_name: &'static str,
     /// Default buffer size is 500
@@ -99,20 +99,9 @@ pub struct HttpSourceConfig {
     /// Optional HTTP (non-TLS) address. When set, an additional plain HTTP server is started.
     pub http_addr: Option<SocketAddr>,
     pub timeout: Duration,
-    pub token: Option<&'static str>,
+    pub token: Option<SecretString>,
     pub graceful_shutdown_time: Duration,
     pub endpoint: Option<&'static str>,
-}
-
-impl Debug for HttpSourceConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HttpSourceConfig")
-            .field("batch_size", &self.buffer_size)
-            .field("read_timeout", &self.timeout)
-            .field("addr", &self.addr)
-            .field("token", &self.token.as_ref().map(|_| "*****"))
-            .finish()
-    }
 }
 
 impl Default for HttpSourceConfig {
@@ -136,7 +125,7 @@ pub struct HttpSourceConfigBuilder {
     addr: Option<SocketAddr>,
     http_addr: Option<SocketAddr>,
     timeout: Option<Duration>,
-    token: Option<&'static str>,
+    token: Option<SecretString>,
     graceful_shutdown_time: Option<Duration>,
     endpoint: Option<&'static str>,
 }
@@ -170,8 +159,8 @@ impl HttpSourceConfigBuilder {
         self
     }
 
-    pub fn token(mut self, token: &'static str) -> Self {
-        self.token = Some(token);
+    pub fn token(mut self, token: impl Into<SecretString>) -> Self {
+        self.token = Some(token.into());
         self
     }
 
@@ -251,7 +240,7 @@ impl HttpSourceActor {
             http_source_config.vertex_name,
             tx.clone(),
             http_source_config.addr,
-            http_source_config.token,
+            http_source_config.token.clone(),
             Arc::clone(&inflight_requests),
             axum_handle.clone(),
             http_source_config.endpoint,
@@ -548,7 +537,7 @@ struct HttpState {
 /// Create an Axum router with the HTTP source endpoints
 pub fn create_router(
     vertex_name: &'static str,
-    token: Option<&'static str>,
+    token: Option<SecretString>,
     tx: mpsc::Sender<HttpMessage>,
     inflight_requests: InflightRequestsMap,
     endpoint: Option<&'static str>,
@@ -558,29 +547,33 @@ pub fn create_router(
         None => format!("/vertices/{vertex_name}"),
     };
 
+    let token: Option<Arc<SecretString>> = token.map(Arc::new);
     Router::new()
         .route("/health", get(health_handler))
         .route(endpoint.as_str(), post(data_handler))
         .route_layer(middleware::from_fn(
-            move |request: Request<Body>, next: Next| async move {
-                // if no token is provided, skip the auth check
-                let Some(token) = token else {
-                    return next.run(request).await;
-                };
+            move |request: Request<Body>, next: Next| {
+                let token = token.clone();
+                async move {
+                    // if no token is provided, skip the auth check
+                    let Some(token) = token else {
+                        return next.run(request).await;
+                    };
 
-                match request.headers().get("Authorization") {
-                    Some(t) => {
-                        let t = t.to_str().expect("token should be a string");
-                        if t == format!("Bearer {token}") {
-                            return next.run(request).await;
+                    match request.headers().get("Authorization") {
+                        Some(t) => {
+                            let t = t.to_str().expect("token should be a string");
+                            if t == format!("Bearer {}", token.expose_secret()) {
+                                return next.run(request).await;
+                            }
+                        }
+                        None => {
+                            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
                         }
                     }
-                    None => {
-                        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-                    }
-                }
 
-                (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
+                    (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
+                }
             },
         ))
         .with_state(HttpState {
@@ -602,7 +595,7 @@ pub async fn start_server(
     vertex_name: &'static str,
     tx: mpsc::Sender<HttpMessage>,
     addr: SocketAddr,
-    token: Option<&'static str>,
+    token: Option<SecretString>,
     inflight_requests: InflightRequestsMap,
     axum_handle: AxumHandle,
     endpoint: Option<&'static str>,
@@ -632,7 +625,7 @@ pub async fn start_http_server(
     vertex_name: &'static str,
     tx: mpsc::Sender<HttpMessage>,
     addr: SocketAddr,
-    token: Option<&'static str>,
+    token: Option<SecretString>,
     inflight_requests: InflightRequestsMap,
     axum_handle: AxumHandle,
     endpoint: Option<&'static str>,
@@ -1388,7 +1381,7 @@ mod tests {
         let test_token = "test-token";
         let app = create_router(
             "test",
-            Some(test_token),
+            Some(test_token.into()),
             tx,
             Arc::clone(&pending_responses),
             None,

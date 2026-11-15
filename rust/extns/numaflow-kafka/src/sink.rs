@@ -10,9 +10,9 @@ use rdkafka::{
 };
 use tracing::info;
 
-use crate::{KafkaSaslAuth, TlsConfig};
+use crate::{KafkaSaslAuth, TlsConfigWithClientAuth};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct KafkaSinkConfig {
     /// The Kafka brokers to connect to.
     pub brokers: Vec<String>,
@@ -21,7 +21,7 @@ pub struct KafkaSinkConfig {
     /// The authentication mechanism to use for the Kafka consumer.
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
-    pub tls: Option<TlsConfig>,
+    pub tls: Option<TlsConfigWithClientAuth>,
     /// Whether to set the partition key when sending the messages to Kafka.
     /// Whether to set the partition key when sending messages to Kafka.
     /// When set to true, messages will be routed to specific partitions based on their partition_key.

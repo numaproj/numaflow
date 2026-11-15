@@ -1,67 +1,46 @@
-.date-range-label {
-  font-size: 1.1rem;
-  font-family: Avenir Next, sans-serif;
-  line-height: 1.4375em;
-  font-weight: 400;
-  display: block;
-  white-space: nowrap;
-  position: absolute;
-  top: -1rem;
-  left: 1rem;
-  color: var(--text-tertiary);
-  transition: 0.2s ease all;
-  background-color: var(--bg-secondary);
-  padding: 0 5px;
-  z-index: 1;
-}
-
-.date-range-picker-container {
+.date-range-form {
   position: relative;
-  display: inline-block;
+  width: max-content;
+  min-width: max-content;
+  flex: 0 0 auto;
 }
 
-.date-input {
-  font-size: 1.2rem;
-  font-weight: 600;
-  font-family: Avenir Next, sans-serif;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  line-height: 100%;
-  height: 5rem;
-  width: 36rem;
-  cursor: pointer;
-  outline: none;
-  border: 1px solid rgba(255, 255, 255, 0);
-  background-color: transparent;
-  transition: border-color 0.3s;
-  padding: 1.65rem 3.2rem 1.65rem 1.4rem;
-}
-
-.date-input:hover {
-  border-color: var(--text-primary);
-}
-
-.date-input:focus {
-  border-color: var(--accent-primary);
-  outline: none;
-  box-shadow: none;
-  border-width: 2px;
-}
-.caret {
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-55%);
+.date-range-outlined.MuiOutlinedInput-root {
+  width: auto;
   pointer-events: none;
+}
+
+.date-range-outlined .MuiOutlinedInput-input {
+  width: 54ch;
+  min-width: 54ch;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  padding-right: 0.4rem;
+  text-overflow: clip;
+}
+
+.date-range-proxy {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.date-range-caret {
   color: var(--text-tertiary);
+  margin-right: -0.2rem;
+  pointer-events: none;
 }
 
-.open {
-  transform: translateY(-45%) rotate(180deg);
-}
-
-.date-range-picker-container:focus-within .date-range-label {
-  color: var(--accent-primary);
+.date-range-caret.open svg {
+  transform: rotate(180deg);
 }
 
 .daterangepicker {
@@ -71,6 +50,7 @@
   box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
     0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12) !important;
   background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
 }
 
 .daterangepicker:before {
@@ -96,12 +76,9 @@
   color: var(--text-primary) !important;
 }
 
-.active {
-  background-color: var(--bg-secondary) !important;
-}
-
-.active:hover {
+.daterangepicker .ranges li.active {
   background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
 }
 
 .daterangepicker .ranges li:hover {
@@ -110,12 +87,76 @@
 
 .daterangepicker.show-ranges.ltr .drp-calendar.left {
   font-family: Avenir Next, sans-serif;
+  border-left-color: var(--border-primary) !important;
 }
 
 .daterangepicker .drp-calendar.right {
   font-family: Avenir Next, sans-serif;
 }
 
+.daterangepicker .calendar-table {
+  background-color: var(--bg-primary) !important;
+  border-color: var(--border-primary) !important;
+}
+
+.daterangepicker .calendar-table th,
+.daterangepicker .calendar-table td {
+  color: var(--text-primary);
+}
+
+.daterangepicker .calendar-table .next span,
+.daterangepicker .calendar-table .prev span {
+  border-color: var(--text-secondary);
+}
+
+.daterangepicker td.available:hover,
+.daterangepicker th.available:hover {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.daterangepicker td.off,
+.daterangepicker td.off.in-range,
+.daterangepicker td.off.start-date,
+.daterangepicker td.off.end-date {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-tertiary) !important;
+}
+
+.daterangepicker td.in-range {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.daterangepicker td.active,
+.daterangepicker td.active:hover {
+  background-color: var(--accent-primary) !important;
+  color: var(--bg-primary) !important;
+}
+
+.daterangepicker select.hourselect,
+.daterangepicker select.minuteselect,
+.daterangepicker select.secondselect,
+.daterangepicker select.ampmselect {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-primary) !important;
+  color: var(--text-primary) !important;
+}
+
 .daterangepicker.show-calendar .drp-buttons {
   font-family: Avenir Next, sans-serif;
+  border-top-color: var(--border-primary) !important;
+  color: var(--text-primary);
+}
+
+.daterangepicker .drp-buttons .cancelBtn {
+  background-color: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+.daterangepicker .drp-buttons .applyBtn {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--bg-primary);
 }

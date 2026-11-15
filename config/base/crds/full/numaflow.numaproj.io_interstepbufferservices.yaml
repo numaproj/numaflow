@@ -1339,6 +1339,8 @@ spec:
                     type: array
                   runtimeClassName:
                     type: string
+                  schedulerName:
+                    type: string
                   securityContext:
                     properties:
                       appArmorProfile:

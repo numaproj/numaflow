@@ -75,3 +75,21 @@ If you are enabling/disabling authorization and authentication for the Numaflow 
 
 Any changes or additions to the connectors in the `numaflow-dex-server-config` ConfigMap will need to be read and
 generated again requiring a restart as well.
+
+## Customizing the Login Button
+
+The login page shows a "Login via Github" button with the GitHub icon, which starts the Dex login. If Dex uses another
+connector, set the button label and icon in the `numaflow-cmd-params-config` ConfigMap. The icon accepts `github`
+(the default), `none`, or an image URL.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-cmd-params-config
+data:
+  server.login.sso.label: "Login with Keycloak"
+  server.login.sso.icon: "https://keycloak.example.com/logo.svg"
+```
+
+The values are read when the Numaflow server starts, so restart it after changing them.

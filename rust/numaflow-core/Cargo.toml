@@ -15,6 +15,7 @@ all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "global-s
 workspace = true
 
 [dependencies]
+secrecy.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true

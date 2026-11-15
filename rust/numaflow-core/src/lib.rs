@@ -218,27 +218,34 @@ where
         }
 
         let attempt_token = root_token.child_token();
-        match forwarder(attempt_token.clone()).await {
-            Ok(()) => return Ok(()),
-            Err(error) => {
-                attempt_token.cancel();
+        let result = forwarder(attempt_token.clone()).await;
 
-                if root_token.is_cancelled() {
-                    return Ok(());
-                }
+        if root_token.is_cancelled() {
+            return Ok(());
+        }
 
-                report_error(&error);
-                error!(
-                    ?error,
-                    ?backoff,
-                    "Forwarder attempt failed; rebuilding forwarder"
-                );
-
-                tokio::select! {
-                    _ = root_token.cancelled() => return Ok(()),
-                    _ = time::sleep(backoff) => {}
-                }
+        // Attempt token is cancelled to stop and drain sibling tasks after an internal
+        // failure. If that graceful drain returns Ok while the root is still active, the attempt
+        // still failed and must be rebuilt.
+        let error = match result {
+            Ok(()) if attempt_token.is_cancelled() => {
+                Error::Forwarder("forwarder attempt was cancelled by a component".to_string())
             }
+            Ok(()) => return Ok(()),
+            Err(error) => error,
+        };
+
+        attempt_token.cancel();
+        report_error(&error);
+        error!(
+            ?error,
+            ?backoff,
+            "Forwarder attempt failed; rebuilding forwarder"
+        );
+
+        tokio::select! {
+            _ = root_token.cancelled() => return Ok(()),
+            _ = time::sleep(backoff) => {}
         }
     }
 }
@@ -342,6 +349,46 @@ mod tests {
         };
         assert!(first_attempt.is_cancelled());
         assert!(!second_attempt.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancelled_attempt_returning_ok_is_retried() {
+        let root_token = CancellationToken::new();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let reports = Arc::new(AtomicUsize::new(0));
+
+        let result = run_forwarder_with_recovery(
+            root_token,
+            {
+                let attempts = Arc::clone(&attempts);
+                move |attempt_token| {
+                    let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                    async move {
+                        if attempt == 0 {
+                            attempt_token.cancel();
+                        }
+                        Ok(())
+                    }
+                }
+            },
+            {
+                let reports = Arc::clone(&reports);
+                move |error| {
+                    assert!(matches!(
+                        error,
+                        Error::Forwarder(message)
+                            if message == "forwarder attempt was cancelled by a component"
+                    ));
+                    reports.fetch_add(1, Ordering::SeqCst);
+                }
+            },
+            Duration::ZERO,
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(reports.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

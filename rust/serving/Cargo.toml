@@ -11,6 +11,7 @@ all-tests = ["nats-tests"]
 workspace = true
 
 [dependencies]
+secrecy.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-models.workspace = true

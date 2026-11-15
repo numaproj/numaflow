@@ -252,7 +252,7 @@ impl BypassRouterReceiver {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
-                    // we are in shutting down mode, we will not be writing to any sink,
+                    // Forwarder attempt is draining after an error; do not write to any sink,
                     // messages will be nack'ed.
                     if self.shutting_down_on_err {
                         for msg in batch {
@@ -322,7 +322,10 @@ impl BypassRouterReceiver {
                             mark_success_batch!(msg_handles);
                         }
                         Err(e) => {
-                            error!(?e, "Error writing to sink, initiating shutdown.");
+                            error!(
+                                ?e,
+                                "Error writing to sink; cancelling forwarder attempt and draining"
+                            );
                             cln_token.cancel();
                             for msg in msg_handles {
                                 msg.mark_failed(&e, None);
@@ -503,12 +506,9 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             batch_size,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(
-                Box::new(SinkClient::new(
-                    create_rpc_channel(sock_file).await.unwrap(),
-                )),
-                None,
-            ),
+            SinkClientType::UserDefined(Box::new(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            ))),
         )
         .build()
         .await

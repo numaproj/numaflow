@@ -1,0 +1,21 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: runtime-error-source-pipeline
+spec:
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        udsource:
+          container:
+            # source-panic exits on Read, which exercises UDF failure capture and forwarder rebuild.
+            image: quay.io/numaio/numaflow-go/source-panic:stable
+            imagePullPolicy: IfNotPresent
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

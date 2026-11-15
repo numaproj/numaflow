@@ -89,6 +89,24 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	return delta / num
 }
 
+// LatestPending returns the pending count from the newest snapshot. CalculatePending averages
+// snapshots across the lookback window, which is what autoscaling uses.
+func LatestPending(q *sharedqueue.OverflowQueue[*TimestampedCounts]) int64 {
+	counts := q.Items()
+	if len(counts) == 0 {
+		return v1alpha1.PendingNotAvailable
+	}
+	snapshot := counts[len(counts)-1].PodCountSnapshot()
+	if len(snapshot) == 0 {
+		return v1alpha1.PendingNotAvailable
+	}
+	sum := int64(0)
+	for _, pendingCount := range snapshot {
+		sum += int64(pendingCount)
+	}
+	return sum
+}
+
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)

@@ -3,10 +3,15 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Button, Popover, MenuItem, Box, IconButton } from "@mui/material";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import OutlinedInput from "@mui/material/OutlinedInput";
 import AddIcon from "@mui/icons-material/Add";
+import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import {
@@ -55,7 +60,8 @@ const FiltersDropdown = ({
   initialFilters,
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
   const [selectedFilters, setSelectedFilters] = useState<any[]>(() =>
     (initialFilters || "").split(",").filter(Boolean)
   );
@@ -161,8 +167,8 @@ const FiltersDropdown = ({
     });
   }, [items, getFilterValues]);
 
-  const handleClick = (event: any) => {
-    setAnchorEl(event?.currentTarget);
+  const handleClick = () => {
+    setAnchorEl(formRef.current);
   };
 
   const handleClose = () => {
@@ -229,40 +235,61 @@ const FiltersDropdown = ({
   };
 
   return (
-    <Box
-      className={"filters-dropdown-container"}
-      sx={{
-        border: isFilterFocused ? "0.2rem solid var(--accent-primary)" : "0.1rem solid var(--border-primary)",
-        backgroundColor: "transparent",
-      }}
+    <FormControl
+      ref={formRef}
+      className="filters-dropdown-form"
+      focused={Boolean(anchorEl) || isFilterFocused}
       onFocus={() => setFilterFocused(true)}
       onBlur={() => setFilterFocused(false)}
     >
-      {selectedFilters.map((filter, index) => (
-        <Box
-          className={"filters-dropdown-selected-filters-container"}
-          key={index}
-        >
-          <Box className={"filters-dropdown-selected-filter-value"}>
-            {filter}
-          </Box>
-          <IconButton
-            size="small"
-            onClick={() => handleRemoveFilter(filter, metric)}
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      ))}
-
-      <Button
-        variant="outlined"
-        startIcon={<AddIcon sx={{ color: "var(--accent-primary)" }} />}
+      <InputLabel shrink htmlFor="filters-input" className="dropdown-input-label">
+        Filters
+      </InputLabel>
+      <OutlinedInput
+        id="filters-input"
+        notched
+        label="Filters"
+        readOnly
+        className="filters-dropdown-input dropdown-select-value"
         onClick={handleClick}
-        className={"filters-dropdown-add-filter-button"}
-      >
-        Add Filter
-      </Button>
+        startAdornment={
+          <Box className="filters-dropdown-content">
+            {selectedFilters.map((filter, index) => (
+              <Box
+                className={"filters-dropdown-selected-filters-container"}
+                key={index}
+              >
+                <Box className={"filters-dropdown-selected-filter-value"}>
+                  {filter}
+                </Box>
+                <IconButton
+                  size="small"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleRemoveFilter(filter, metric);
+                  }}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+            <Button
+              variant="text"
+              disableRipple
+              startIcon={<AddIcon />}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleClick();
+              }}
+              className={"filters-dropdown-add-filter-button"}
+            >
+              Add Filter
+            </Button>
+          </Box>
+        }
+        endAdornment={<ArrowDropDown className="filters-dropdown-caret" />}
+        inputProps={{ "aria-label": "Filters", tabIndex: -1 }}
+      />
 
       <Popover
         open={Boolean(anchorEl)}
@@ -293,7 +320,7 @@ const FiltersDropdown = ({
           ))}
         </Box>
       </Popover>
-    </Box>
+    </FormControl>
   );
 };
 

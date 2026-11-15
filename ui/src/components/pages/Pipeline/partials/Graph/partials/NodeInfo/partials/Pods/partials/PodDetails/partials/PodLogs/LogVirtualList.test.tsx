@@ -56,7 +56,7 @@ describe("LogVirtualList", () => {
           logs={logs}
           search=""
           wrapLines={false}
-          colorMode="light"
+          theme="light"
           podName="pod-a"
           activeIndex={null}
         />
@@ -80,7 +80,7 @@ describe("LogVirtualList", () => {
           logs={["alpha foo", "beta bar"]}
           search="foo"
           wrapLines={false}
-          colorMode="dark"
+          theme="dark"
           podName="pod-a"
           activeIndex={null}
         />
@@ -100,7 +100,7 @@ describe("LogVirtualList", () => {
           logs={["first match", "second match"]}
           search="match"
           wrapLines={false}
-          colorMode="light"
+          theme="light"
           podName="pod-a"
           activeIndex={1}
         />
@@ -130,7 +130,7 @@ describe("LogVirtualList", () => {
           logs={[line]}
           search=""
           wrapLines={false}
-          colorMode="dark"
+          theme="dark"
           podName="pod-a"
           activeIndex={null}
         />
@@ -154,7 +154,7 @@ describe("LogVirtualList", () => {
           logs={[line]}
           search=""
           wrapLines={true}
-          colorMode="dark"
+          theme="dark"
           podName="pod-a"
           activeIndex={null}
         />
@@ -173,7 +173,7 @@ describe("LogVirtualList", () => {
           logs={[NO_LOGS_MATCHING_SEARCH]}
           search="xyz"
           wrapLines={false}
-          colorMode="dark"
+          theme="dark"
           podName="pod-a"
           activeIndex={null}
         />
@@ -193,7 +193,7 @@ describe("LogVirtualList", () => {
           logs={[]}
           search=""
           wrapLines={false}
-          colorMode="light"
+          theme="light"
           podName="pod-a"
           activeIndex={null}
         />
