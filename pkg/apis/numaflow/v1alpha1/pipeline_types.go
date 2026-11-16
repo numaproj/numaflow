@@ -134,11 +134,15 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	return partitions
 }
 
+// FindVertexWithBuffer returns the downstream (to) vertex of the edge that owns the
+// given buffer. The to vertex's limits define the buffer's length/usage caps, which
+// is what the callers use it for. With edge-owned buffers a buffer name is of the form
+// {ns}-{pl}-{from}-{to}-{partition}; we match on the edge and return the to vertex.
 func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
-	for _, v := range p.Spec.Vertices {
-		for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
+	for _, e := range p.ListAllEdges() {
+		for _, b := range GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To)) {
 			if buffer == b {
-				return &v
+				return p.GetVertex(e.To)
 			}
 		}
 	}
@@ -165,10 +169,30 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
+// GetAllBuffers returns all the inter-step buffers in the pipeline, one set of
+// partitioned buffers per edge, named {ns}-{pl}-{from}-{to}-{partition}.
 func (p Pipeline) GetAllBuffers() []string {
 	r := []string{}
-	for _, v := range p.Spec.Vertices {
-		r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+	for _, e := range p.ListAllEdges() {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+	}
+	return r
+}
+
+// GetFromBuffers returns the buffers a vertex reads from, one set per incoming edge.
+func (p Pipeline) GetFromBuffers(vertexName string) []string {
+	r := []string{}
+	for _, e := range p.GetFromEdges(vertexName) {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
+	}
+	return r
+}
+
+// GetToBuffers returns the buffers a vertex writes to, one set per outgoing edge.
+func (p Pipeline) GetToBuffers(vertexName string) []string {
+	r := []string{}
+	for _, e := range p.GetToEdges(vertexName) {
+		r = append(r, GenerateBufferNames(p.Namespace, p.Name, e.From, e.To, p.NumOfPartitions(e.To))...)
 	}
 	return r
 }
@@ -696,6 +720,7 @@ type PipelineLimits struct {
 	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.
 	// ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
 	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
+	// It applies per buffer, so a pod reading several buffers issues a read of this size against each.
 	// +kubebuilder:default=500
 	// +kubebuilder:validation:Minimum=1
 	// +optional
@@ -723,11 +748,14 @@ type PipelineLimits struct {
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
 	// Concurrency defines the maximum number of messages that can be actively in-flight (read but not
-	// yet acknowledged) at any given time across each vertex of the pipeline. With read-ahead enabled,
+	// yet acknowledged) at any given time, per buffer read by a pod. With read-ahead enabled,
 	// the data plane keeps reading new batches from the source/buffer until the number of in-flight
 	// messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and
 	// held ready so that completed messages can be replaced immediately. Therefore the maximum
-	// in-flight count per vertex is at most `concurrency + readBatchSize`.
+	// in-flight count per buffer is at most `concurrency + readBatchSize`.
+	// This budget is per buffer, not per vertex: buffers are owned by edges, so a pod's total
+	// in-flight ceiling is `concurrency` times the number of buffers it reads (one per partition
+	// per incoming edge). A Map vertex with 3 partitions joining 2 incoming edges reads 6 buffers.
 	// `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
 	// messages can be processed in parallel. By default, read-ahead is disabled on source vertices
 	// (so re-reads on failure stay cheap and source ordering is preserved) and enabled on Map/Sink/

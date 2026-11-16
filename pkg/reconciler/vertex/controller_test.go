@@ -250,7 +250,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		// A source validates all the pipeline buffers.
+		assert.Contains(t, argStr, strings.Join(testPipeline.GetAllBuffers(), ","))
 		assert.Contains(t, argStr, "--buckets=")
 		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
 		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
@@ -319,7 +320,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		// A non-source vertex validates the buffers it reads from.
+		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuffers(), ","))
 		assert.Contains(t, argStr, "--buckets=")
 		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
 		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
@@ -379,7 +381,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		// A non-source vertex validates the buffers it reads from.
+		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuffers(), ","))
 		assert.Contains(t, argStr, "--buckets=")
 		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
 		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))

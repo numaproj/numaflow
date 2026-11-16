@@ -47,21 +47,32 @@ func addExpectedStreamResources(resources map[string]pipelineISBResourceMetadata
 	if vertex == nil || vertex.IsASource() {
 		return
 	}
-	for partition := 0; partition < vertex.GetPartitionCount(); partition++ {
-		if scope.partition != nil && *scope.partition != partition {
+	// Buffers are edge-owned, so a vertex has one set of partitioned streams per
+	// incoming edge rather than a single set named after itself. When the caller
+	// scoped the request to a specific from->to edge, only report that edge.
+	for _, e := range pl.GetFromEdges(vertexName) {
+		if from != "" && e.From != from {
 			continue
 		}
-		streamName := dfv1.GenerateBufferName(pl.Namespace, pl.Name, vertexName, partition)
-		resources[streamName] = pipelineISBResourceMetadata{
-			Namespace:            pl.Namespace,
-			Pipeline:             pl.Name,
-			Vertex:               vertexName,
-			From:                 from,
-			To:                   to,
-			Partition:            partition,
-			Scope:                scopeName,
-			Stream:               streamName,
-			SharedByInboundEdges: from != "" && len(pl.GetFromEdges(vertexName)) > 1,
+		for partition := 0; partition < vertex.GetPartitionCount(); partition++ {
+			if scope.partition != nil && *scope.partition != partition {
+				continue
+			}
+			streamName := dfv1.GenerateBufferName(pl.Namespace, pl.Name, e.From, e.To, partition)
+			resources[streamName] = pipelineISBResourceMetadata{
+				Namespace: pl.Namespace,
+				Pipeline:  pl.Name,
+				Vertex:    vertexName,
+				// Each stream now belongs to exactly one edge, so report that edge
+				// even when the caller did not scope the request to it.
+				From:      e.From,
+				To:        e.To,
+				Partition: partition,
+				Scope:     scopeName,
+				Stream:    streamName,
+				// Edge-owned buffers are never shared between inbound edges.
+				SharedByInboundEdges: false,
+			}
 		}
 	}
 }

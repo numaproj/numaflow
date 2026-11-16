@@ -22,6 +22,7 @@ pub(crate) mod error;
 pub(crate) mod factory;
 pub(crate) mod inmemory;
 pub(crate) mod jetstream;
+pub(crate) mod merge;
 pub(crate) mod reader;
 pub(crate) mod writer;
 

@@ -98,11 +98,17 @@ impl WatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
                         .map(|from| {
-                            // If ordered processing is enabled, only track the partition matching replica ID
+                            // If ordered processing is enabled, only track the partition matching replica ID.
+                            // Otherwise, track one partition per reader stream on this edge. This vertex's
+                            // own partition count (not `from.partitions`, which is the from-vertex's own
+                            // partition count) determines how many streams/partitions it reads from each
+                            // incoming edge, so the watermark bucket must be sized the same way the reader
+                            // config (and the actual OT keys the upstream writer publishes to) are sized —
+                            // otherwise partitions beyond index 0 are never seeded and stay stuck at -1.
                             let partitions = if ordered_processing_enabled {
                                 vec![*get_vertex_replica()]
                             } else {
-                                (0..from.partitions).collect()
+                                (0..from.reader_config.streams.len() as u16).collect()
                             };
                             create_from_vertex_bucket_config(from, partitions)
                         })

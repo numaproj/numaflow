@@ -29,7 +29,9 @@ spec:
   edges:
     - from: in-1
       to: cat
+      edgePartitions: y
     - from: in-2
       to: cat
+      edgePartitions: x
     - from: cat
       to: out

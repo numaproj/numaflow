@@ -74,7 +74,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(200).Body().Contains("buffers")
 
 	HTTPExpect(s.T(), "https://localhost:1234").
-		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))).
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "p1", 0))).
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
@@ -100,7 +100,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 2, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "p1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
@@ -252,7 +252,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 8, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "cat1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

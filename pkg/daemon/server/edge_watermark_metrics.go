@@ -58,7 +58,7 @@ func (m *edgeWatermarkMetrics) update(watermarks []*daemon.EdgeWatermark) {
 			continue
 		}
 		for idx, wm := range edge.GetWatermarks() {
-			key := [3]string{edge.GetFrom(), edge.GetTo(), v1alpha1.GenerateBufferName(m.namespace, m.pipeline, edge.GetTo(), idx)}
+			key := [3]string{edge.GetFrom(), edge.GetTo(), v1alpha1.GenerateBufferName(m.namespace, m.pipeline, edge.GetFrom(), edge.GetTo(), idx)}
 			m.gauge.WithLabelValues(m.pipeline, key[0], key[1], key[2]).Set(float64(wm.GetValue()))
 			current[key] = struct{}{}
 		}
