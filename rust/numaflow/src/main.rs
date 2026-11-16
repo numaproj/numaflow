@@ -98,7 +98,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
 
     match cli_matches.subcommand() {
         Some(("serving", _)) => {
-            info!("Starting serving");
+            info!("Starting serving (cache test)");
             if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_err() {
                 return Err(
                     "Environment variable NUMAFLOW_SERVING_MIN_PIPELINE_SPEC is not set".into(),

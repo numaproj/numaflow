@@ -182,6 +182,7 @@ jobs:
           got=$(strings ./numaflow-rs-linux-amd64 | grep -o -m1 'GitCommit: [0-9a-f]*' | cut -d' ' -f2)
           echo "embedded=$got expected=$(git rev-parse HEAD)"
           [ "$got" = "$(git rev-parse HEAD)" ]
+          strings ./numaflow-rs-linux-amd64 | grep -q 'Starting serving (cache test)' && echo "source change IS in the binary"
       - name: Verify numaflow binary is Statically Linked
         run: |
           file ./numaflow-rs-linux-amd64
