@@ -639,7 +639,8 @@ mod tests {
         source.ack(vec![first.clone()]).await.expect("ack failed");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
-        assert_eq!(subscription_backlog(&local, &subscription).await, 10);
+        // msgBacklog counts entries, so the unacked batch shows up as 1.
+        assert_eq!(subscription_backlog(&local, &subscription).await, 1);
 
         source.ack(rest.to_vec()).await.expect("ack failed");
 
