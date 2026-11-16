@@ -4,6 +4,7 @@ on:
     branches:
       - "main"
       - "release-*"
+      - "test/rust-build-cache" # TEST ONLY
   pull_request:
     branches: [main]
 jobs:
@@ -158,13 +159,28 @@ jobs:
     runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
-      # TODO: Use actions/cache@v4 to cache target/ directory
+      # runner.arch in the key keeps the amd64 and arm64 caches separate.
+      - name: Cache Rust crates and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/cargo/registry
+            dist/cargo/git
+            rust/target
+          key: rust-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/Cargo.lock') }}
       - name: Build binary
         run: make build-rust-docker-ghactions
       - name: Rename binaries
         run: |
           cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
           cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
+      # TEST ONLY: the binary must report this run's commit, also after a cache hit.
+      - name: Check embedded commit (test only)
+        run: |
+          du -sh rust/target dist/cargo/registry dist/cargo/git 2>/dev/null || true
+          got=$(strings ./numaflow-rs-linux-amd64 | grep -o -m1 'GitCommit: [0-9a-f]*' | cut -d' ' -f2)
+          echo "embedded=$got expected=$(git rev-parse HEAD)"
+          [ "$got" = "$(git rev-parse HEAD)" ]
       - name: Verify numaflow binary is Statically Linked
         run: |
           file ./numaflow-rs-linux-amd64
