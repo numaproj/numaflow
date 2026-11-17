@@ -8,9 +8,28 @@ import {
   BufferInfo,
   EdgeWatermark,
   Pipeline,
+  PipelineEdge,
   Spec,
   VertexMetrics,
 } from "../../types/declarations/pipeline";
+
+// Buffers are owned by edges and named `${ns}-${pl}-${from}-${to}-${partition}`. Vertex
+// names can contain hyphens, so a buffer is matched against each edge's full name prefix
+// rather than split on "-".
+export const findBufferEdge = (
+  bufferName: string | undefined,
+  nsPl: string,
+  edges: PipelineEdge[] | undefined
+): PipelineEdge | undefined => {
+  if (!bufferName || !edges) return undefined;
+  return edges.find((edge) => {
+    const prefix = `${nsPl}${edge?.from}-${edge?.to}-`;
+    return (
+      bufferName.startsWith(prefix) &&
+      /^\d+$/.test(bufferName.substring(prefix.length))
+    );
+  });
+};
 
 export const usePipelineViewFetch = (
   namespaceId: string | undefined,
@@ -442,6 +461,15 @@ export const usePipelineViewFetch = (
     setPipelineDetails();
   }, [setPipelineDetails]);
 
+  const bufferEdges = useMemo(() => {
+    const bufferToEdge = new Map<string, PipelineEdge>();
+    buffers?.forEach((buffer) => {
+      const edge = findBufferEdge(buffer?.bufferName, ns_pl, spec?.edges);
+      if (edge) bufferToEdge.set(buffer.bufferName, edge);
+    });
+    return bufferToEdge;
+  }, [buffers, ns_pl, spec]);
+
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
     if (spec?.vertices && buffers && vertexPods && vertexMetrics) {
@@ -469,11 +497,9 @@ export const usePipelineViewFetch = (
           ? vertexMetrics.get(vertex?.name)
           : null;
         newNode.data.buffers = [];
+        // A vertex's buffers are the ones on its incoming edges, i.e. the ones it reads from.
         buffers?.forEach((buffer) => {
-          const sidx = ns_pl.length;
-          const eidx = buffer?.bufferName?.lastIndexOf("-");
-          const bufferName = buffer?.bufferName?.substring(sidx, eidx);
-          if (vertex?.name === bufferName) {
+          if (bufferEdges.get(buffer?.bufferName)?.to === vertex?.name) {
             newNode?.data?.buffers.push(buffer);
           }
         });
@@ -517,9 +543,9 @@ export const usePipelineViewFetch = (
   }, [
     spec,
     buffers,
+    bufferEdges,
     vertexPods,
     vertexMetrics,
-    ns_pl,
     prevVertices,
     selfVertices,
     nextVertices,
@@ -528,17 +554,17 @@ export const usePipelineViewFetch = (
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (spec?.edges && buffers && edgeWatermark) {
-      // Edge hover shows a compact target-buffer summary. These counts are
-      // aggregated by the destination vertex buffer, not by the individual edge.
+      // Edge hover shows a compact buffer summary. Each edge owns its buffer, so the
+      // counts are summed over that edge's partitions.
       const edgePendingLabel = new Map();
       const edgeAckPendingLabel = new Map();
       const edgeIsFull = new Map();
 
       buffers.forEach((buffer) => {
-        const sidx = ns_pl.length;
-        const eidx = buffer?.bufferName?.lastIndexOf("-");
-        const id = buffer?.bufferName?.substring(sidx, eidx);
-        
+        const bufferEdge = bufferEdges.get(buffer?.bufferName);
+        if (!bufferEdge) return;
+        const id = `${bufferEdge.from}-${bufferEdge.to}`;
+
         // Initialize or accumulate pending count
         if (edgePendingLabel.get(id) === undefined) {
           const pendingCount = Number(buffer?.pendingCount);
@@ -568,7 +594,7 @@ export const usePipelineViewFetch = (
           type: MarkerType.Arrow,
           width: 15,
           height: 15,
-          color: edgeIsFull.get(edge?.to) ? "#DB334D" : "#8D9096",
+          color: edgeIsFull.get(id) ? "#DB334D" : "#8D9096",
         };
         const pipelineEdge = {
           id,
@@ -576,9 +602,9 @@ export const usePipelineViewFetch = (
           target: edge?.to,
           data: {
             conditions: edge?.conditions,
-            pendingLabel: edgePendingLabel.get(edge?.to),
-            ackPendingLabel: edgeAckPendingLabel.get(edge?.to),
-            isFull: edgeIsFull.get(edge?.to),
+            pendingLabel: edgePendingLabel.get(id),
+            ackPendingLabel: edgeAckPendingLabel.get(id),
+            isFull: edgeIsFull.get(id),
             source: edge?.from,
             target: edge?.to,
             fwdEdge: fwdEdges.has(id),
@@ -657,8 +683,8 @@ export const usePipelineViewFetch = (
   }, [
     spec,
     buffers,
+    bufferEdges,
     edgeWatermark,
-    ns_pl,
     backEdges,
     selfEdges,
     fwdEdges,
