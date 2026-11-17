@@ -280,6 +280,7 @@ where
             }
 
             let reader_components = ISBReaderComponents::new::<C>(
+                from_vertex.name,
                 stream.clone(),
                 reader_config.clone(),
                 watermark_handle.clone(),
@@ -472,6 +473,7 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
+            from_vertex: "in",
             stream: input_stream,
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -601,6 +603,7 @@ mod simple_buffer_tests {
 
             let reader_components = ISBReaderComponents {
                 vertex_type: "Sink".to_string(),
+                from_vertex: "in",
                 stream: input_stream.clone(),
                 config: buf_reader_config.clone(),
                 tracker: tracker.clone(),
@@ -729,6 +732,7 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
+            from_vertex: "in",
             stream: input_stream,
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -832,6 +836,7 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
+            from_vertex: "in",
             stream: input_stream,
             config: buf_reader_config,
             tracker: tracker.clone(),

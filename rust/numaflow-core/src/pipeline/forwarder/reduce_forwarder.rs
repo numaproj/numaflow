@@ -3,7 +3,7 @@ use crate::config::components::reduce::{
     UnalignedWindowType,
 };
 use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::{PipelineConfig, ReduceVtxConfig};
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig, ReduceVtxConfig};
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
@@ -160,10 +160,11 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     // One set of components per ingress edge, all at this replica's partition.
     let reader_components: Vec<ISBReaderComponents> = reader_configs_and_streams
         .into_iter()
-        .map(|(reader_config, stream)| {
+        .map(|(from_vertex, stream)| {
             ISBReaderComponents::new::<WithoutRateLimiter>(
+                from_vertex.name,
                 stream,
-                reader_config.clone(),
+                from_vertex.reader_config.clone(),
                 watermark_handle.clone(),
                 &context,
             )
@@ -288,10 +289,11 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     // One set of components per ingress edge, all at this replica's partition.
     let reader_components: Vec<ISBReaderComponents> = reader_configs_and_streams
         .into_iter()
-        .map(|(reader_config, stream)| {
+        .map(|(from_vertex, stream)| {
             ISBReaderComponents::new::<WithoutRateLimiter>(
+                from_vertex.name,
                 stream,
-                reader_config.clone(),
+                from_vertex.reader_config.clone(),
                 watermark_handle.clone(),
                 &context,
             )
@@ -372,7 +374,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 /// silently drop the other source's data.
 fn reduce_reader_configs_and_streams(
     config: &PipelineConfig,
-) -> Result<Vec<(&crate::config::pipeline::isb::BufferReaderConfig, Stream)>> {
+) -> Result<Vec<(&FromVertexConfig, Stream)>> {
     if config.from_vertex_config.is_empty() {
         return Err(crate::error::Error::Config(
             "No from vertex config found".to_string(),
@@ -390,7 +392,7 @@ fn reduce_reader_configs_and_streams(
                 from_vertex.name
             ))
         })?;
-        result.push((reader_config, stream));
+        result.push((from_vertex, stream));
     }
     Ok(result)
 }

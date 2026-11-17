@@ -292,6 +292,7 @@ where
             }
 
             let reader_components = ISBReaderComponents::new::<C>(
+                from_vertex.name,
                 stream.clone(),
                 reader_config.clone(),
                 watermark_handle.clone(),

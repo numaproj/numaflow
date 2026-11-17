@@ -334,6 +334,7 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
+            from_vertex: "in",
             stream: stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -470,6 +471,7 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
+            from_vertex: "in",
             stream: stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -709,6 +711,7 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
+            from_vertex: "in",
             stream: stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),

@@ -35,7 +35,7 @@ use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
-use crate::watermark::wmb::WMB;
+use crate::watermark::wmb::{WMB, Watermark};
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use numaflow_throttling::RateLimiter;
@@ -49,6 +49,8 @@ const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 /// ack/nack to the ISB.
 pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     vertex_type: String,
+    /// Name of the vertex on the other end of the edge this reader reads from.
+    from_vertex: &'static str,
     stream: Stream,
     cfg: BufferReaderConfig,
     batch_size: usize,
@@ -73,6 +75,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
     fn clone(&self) -> Self {
         Self {
             vertex_type: self.vertex_type.clone(),
+            from_vertex: self.from_vertex,
             stream: self.stream.clone(),
             cfg: self.cfg.clone(),
             batch_size: self.batch_size,
@@ -103,6 +106,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
         Ok(Self {
             vertex_type: components.vertex_type,
+            from_vertex: components.from_vertex,
             stream: components.stream,
             cfg: components.config,
             batch_size: components.batch_size,
@@ -322,19 +326,20 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         result
     }
 
-    /// Creates and writes a WMB message for reduce vertex when it is idle.
+    /// Creates and writes a WMB message for reduce vertex when it is idle. `idle_watermark` is the
+    /// vertex watermark rather than the WMB's own, because in a join the WMB only speaks for its
+    /// edge and the other edges may still be behind it.
     async fn create_and_write_wmb_message_for_reduce(
         vertex_type: &str,
         partition: u16,
         idle_wmb: WMB,
+        idle_watermark: Watermark,
         tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
         if vertex_type != ReduceUDF.as_str() {
             return Ok(());
         }
 
-        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
-            .expect("Failed to create watermark from WMB");
         let msg = Message {
             typ: MessageType::WMB,
             watermark: Some(idle_watermark),
@@ -480,30 +485,37 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     ) -> Result<()> {
         if batch_is_empty {
             if let Some(wm) = self.watermark.as_mut() {
-                let idle_wmb = wm.fetch_head_idle_wmb(self.stream.partition).await;
+                let idle_wmb = wm
+                    .fetch_head_idle_wmb(self.from_vertex, self.stream.partition)
+                    .await;
                 match idle_wmb {
-                    Some(wmb) => {
+                    Some((wmb, watermark)) => {
                         self.tracker
-                            .set_idle_offset(self.stream.partition, Some(wmb.offset))
+                            .set_idle_offset(
+                                self.from_vertex,
+                                self.stream.partition,
+                                Some(wmb.offset),
+                            )
                             .await?;
                         Self::create_and_write_wmb_message_for_reduce(
                             &self.vertex_type,
                             self.stream.partition,
                             wmb,
+                            watermark,
                             tx,
                         )
                         .await?;
                     }
                     None => {
                         self.tracker
-                            .set_idle_offset(self.stream.partition, None)
+                            .set_idle_offset(self.from_vertex, self.stream.partition, None)
                             .await?;
                     }
                 }
             }
         } else {
             self.tracker
-                .set_idle_offset(self.stream.partition, None)
+                .set_idle_offset(self.from_vertex, self.stream.partition, None)
                 .await?;
         }
         Ok(())
@@ -528,7 +540,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
             // Enrich message with watermark
             if let Some(wm) = self.watermark.as_mut() {
-                let watermark = wm.fetch_watermark(message.offset.clone()).await;
+                let watermark = wm
+                    .fetch_watermark(self.from_vertex, message.offset.clone())
+                    .await;
                 message.watermark = Some(watermark);
             }
 
@@ -685,6 +699,7 @@ struct WipParams {
 #[derive(Clone)]
 pub(crate) struct ISBReaderComponents {
     pub vertex_type: String,
+    pub from_vertex: &'static str,
     pub stream: Stream,
     pub config: BufferReaderConfig,
     pub tracker: Tracker,
@@ -697,6 +712,7 @@ pub(crate) struct ISBReaderComponents {
 
 impl ISBReaderComponents {
     pub fn new<C: crate::typ::NumaflowTypeConfig>(
+        from_vertex: &'static str,
         stream: Stream,
         reader_config: BufferReaderConfig,
         watermark_handle: Option<ISBWatermarkHandle>,
@@ -704,6 +720,7 @@ impl ISBReaderComponents {
     ) -> Self {
         Self {
             vertex_type: context.config.vertex_type.to_string(),
+            from_vertex,
             stream,
             config: reader_config,
             tracker: context.tracker.clone(),
@@ -816,6 +833,7 @@ mod tests {
 
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
+            from_vertex: "in",
             stream: stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -934,6 +952,7 @@ mod tests {
 
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
+            from_vertex: "in",
             stream: js_stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -1072,6 +1091,7 @@ mod tests {
 
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
+            from_vertex: "in",
             stream: stream.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -1609,6 +1629,7 @@ mod simplebuffer_tests {
 
         let components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
+            from_vertex: "in",
             stream,
             config: buf_reader_config,
             tracker: tracker.clone(),
@@ -2206,6 +2227,7 @@ mod duplicate_inflight_tests {
 
         let components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
+            from_vertex: "in",
             stream,
             config: BufferReaderConfig {
                 streams: vec![],

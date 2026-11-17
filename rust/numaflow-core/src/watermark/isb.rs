@@ -78,11 +78,11 @@ impl ISBWatermarkState {
         }
     }
 
-    /// Fetches the watermark for the given offset
-    fn fetch_watermark(&mut self, offset: IntOffset) -> Watermark {
-        let watermark = self
-            .fetcher
-            .fetch_watermark(offset.offset, offset.partition_idx);
+    /// Fetches the watermark for the given offset read from the edge coming from `from_vertex`.
+    fn fetch_watermark(&mut self, from_vertex: &str, offset: IntOffset) -> Watermark {
+        let watermark =
+            self.fetcher
+                .fetch_watermark(from_vertex, offset.offset, offset.partition_idx);
 
         self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
         watermark
@@ -94,18 +94,21 @@ impl ISBWatermarkState {
             .fetch_head_watermark(from_vertex, partition_idx)
     }
 
-    /// Fetches the head idle WMB for a specific partition
-    fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
-        let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
-
-        if let Some(wmb) = wmb {
-            self.latest_fetched_wm = std::cmp::max(
-                self.latest_fetched_wm,
-                Watermark::from_timestamp_millis(wmb.watermark).expect("failed to parse time"),
-            );
-        }
-
-        wmb
+    /// Fetches the head idle WMB for a specific partition of the edge coming from `from_vertex`,
+    /// along with the vertex watermark (min across all edges and partitions) after applying it.
+    /// The WMB's own watermark only speaks for its edge, so the vertex watermark is the one that
+    /// is safe to act on.
+    fn fetch_head_idle_wmb(
+        &mut self,
+        from_vertex: &str,
+        partition_idx: u16,
+    ) -> Option<(WMB, Watermark)> {
+        let wmb = self
+            .fetcher
+            .fetch_head_idle_wmb(from_vertex, partition_idx)?;
+        let watermark = self.fetcher.get_watermark();
+        self.latest_fetched_wm = std::cmp::max(self.latest_fetched_wm, watermark);
+        Some((wmb, watermark))
     }
 
     /// publishes the watermark for the given stream and offset
@@ -198,36 +201,41 @@ impl ISBWatermarkState {
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
     }
 
-    /// Gets the lowest idle watermark among all the partitions. If we cannot determine the lowest
-    /// watermark, we return -1.
+    /// Gets the lowest idle watermark among all the edges and partitions. If we cannot determine
+    /// the lowest watermark, we return -1.
     /// We achieve this via "optimistic locking", when we set idle status to true in tracker, we will
-    /// be setting the Head WMB offset. Here we will make sure that for every partition, the Head WMB
-    /// saved in the idle status matches the Head WMB offset in the partition's timeline.
+    /// be setting the Head WMB offset. Here we will make sure that for every edge and partition, the
+    /// Head WMB saved in the idle status matches the Head WMB offset in that edge's timeline.
     async fn get_idle_watermark(&mut self) -> Watermark {
         let idle_offsets = self.tracker.get_idle_offset().await.unwrap_or_default();
 
-        // iterate over all the partitions and check if they are idling by fetching the head idle wmb
-        // and comparing it with the tracker's idle state.
+        // iterate over all the edges and partitions and check if they are idling by fetching the
+        // head idle wmb and comparing it with the tracker's idle state.
         let mut min_wm = i64::MAX;
-        for partition_idx in self.from_partitions.iter() {
-            // if tracker's offset is none means, that partitions is not idling, we can skip publishing
-            // the head idle wmb.
-            let Some(Some(idle_offset)) = idle_offsets.get(partition_idx) else {
-                return Watermark::from_timestamp_millis(-1).unwrap();
-            };
+        for from_vertex in self.fetcher.from_vertices() {
+            for partition_idx in self.from_partitions.iter() {
+                // if tracker's offset is none means, that partitions is not idling, we can skip
+                // publishing the head idle wmb.
+                let Some(Some(idle_offset)) = idle_offsets.get(&(from_vertex, *partition_idx))
+                else {
+                    return Watermark::from_timestamp_millis(-1).unwrap();
+                };
 
-            let wmb = self.fetcher.fetch_head_idle_wmb(*partition_idx);
-            let Some(wmb) = wmb else {
-                return Watermark::from_timestamp_millis(-1).unwrap();
-            };
+                let wmb = self
+                    .fetcher
+                    .fetch_head_idle_wmb(from_vertex, *partition_idx);
+                let Some(wmb) = wmb else {
+                    return Watermark::from_timestamp_millis(-1).unwrap();
+                };
 
-            // if the offset doesn't match, that means it's not idling anymore
-            if wmb.offset != *idle_offset {
-                return Watermark::from_timestamp_millis(-1).unwrap();
-            }
+                // if the offset doesn't match, that means it's not idling anymore
+                if wmb.offset != *idle_offset {
+                    return Watermark::from_timestamp_millis(-1).unwrap();
+                }
 
-            if wmb.watermark < min_wm {
-                min_wm = wmb.watermark;
+                if wmb.watermark < min_wm {
+                    min_wm = wmb.watermark;
+                }
             }
         }
         if min_wm == i64::MAX {
@@ -335,9 +343,9 @@ impl ISBWatermarkHandle {
         Ok(isb_watermark_handle)
     }
 
-    /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
-    /// return -1.
-    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
+    /// Fetches the watermark for the given offset read from the edge coming from `from_vertex`, if
+    /// we are not able to compute the watermark we return -1.
+    pub(crate) async fn fetch_watermark(&self, from_vertex: &str, offset: Offset) -> Watermark {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot compute watermark");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
@@ -345,7 +353,7 @@ impl ISBWatermarkHandle {
 
         // Acquire lock, fetch watermark, and release immediately
         let mut state = self.state.lock().await;
-        state.fetch_watermark(offset)
+        state.fetch_watermark(from_vertex, offset)
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
@@ -360,13 +368,18 @@ impl ISBWatermarkHandle {
         state.fetch_head_watermark(from_vertex, partition_idx)
     }
 
-    /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
-    /// processors for the specified partition, but only if all active processors are idle for that
-    /// partition.
-    pub(crate) async fn fetch_head_idle_wmb(&self, partition_idx: u16) -> Option<WMB> {
+    /// Fetches the head idle WMB for the given partition of the edge coming from `from_vertex`.
+    /// Returns the minimum idle WMB across that edge's processors for the specified partition, but
+    /// only if all its active processors are idle for that partition, along with the vertex
+    /// watermark (min across all edges and partitions).
+    pub(crate) async fn fetch_head_idle_wmb(
+        &self,
+        from_vertex: &str,
+        partition_idx: u16,
+    ) -> Option<(WMB, Watermark)> {
         // Acquire lock, fetch WMB, and release immediately
         let mut state = self.state.lock().await;
-        state.fetch_head_idle_wmb(partition_idx)
+        state.fetch_head_idle_wmb(from_vertex, partition_idx)
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
@@ -756,10 +769,13 @@ mod tests {
                     .await;
 
                 let watermark = handle
-                    .fetch_watermark(Offset::Int(IntOffset {
-                        offset: 3,
-                        partition_idx: 0,
-                    }))
+                    .fetch_watermark(
+                        "from_vertex",
+                        Offset::Int(IntOffset {
+                            offset: 3,
+                            partition_idx: 0,
+                        }),
+                    )
                     .await;
 
                 if watermark.timestamp_millis() != -1 {
