@@ -5409,7 +5409,9 @@ not support messages larger than 32MB. The buffer creation fails if a bigger val
 <p>The NATS server <code>max_payload</code> (configured in <code>spec.jetstream.settings</code>) defaults to <code>68157440</code> (65MB), so messages
 larger than <code>stream.maxMsgSize</code> are rejected by the stream instead of the NATS connection being closed.</p>
 <p>Writes rejected because a message exceeds the max message size of the stream are counted by the
-<code>isb_jetstream_max_payload_exceeded_total</code> metric.</p>
+<code>isb_jetstream_max_payload_exceeded_total</code> metric. The <code>numa</code> container also logs a warning for each rejected
+write, with the stream name and the size of the rejected message in <code>payload_size_bytes</code> (after compression,
+including headers), which you can compare against <code>stream.maxMsgSize</code>.</p>
 <p>Please be aware that if you increase the max message size of the <code>InterStepBufferService</code>, you probably will also need to
 change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the 
 pipeline will make each of the Inter-Step Buffer need at least 800MB of disk space to store the messages, and the memory
