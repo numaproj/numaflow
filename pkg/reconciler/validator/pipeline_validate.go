@@ -183,6 +183,38 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateUniqueBufferNames(*pl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateUniqueBufferNames rejects a pipeline in which two edges generate the same
+// buffer name or the same watermark bucket name. Both join the vertex names with "-",
+// and vertex names can contain "-", so edges such as "a" -> "b-c" and "a-b" -> "c"
+// would otherwise silently share one JetStream stream and mix their data. Buffers and
+// buckets are separate JetStream resources, so each is only checked against its own kind.
+func validateUniqueBufferNames(pl dfv1.Pipeline) error {
+	bufferOwners := make(map[string]dfv1.Edge)
+	bucketOwners := make(map[string]dfv1.Edge)
+	claim := func(owners map[string]dfv1.Edge, kind, name string, e dfv1.Edge) error {
+		if other, ok := owners[name]; ok {
+			return fmt.Errorf("edges %q -> %q and %q -> %q both generate the %s name %q; rename a vertex so the names differ", other.From, other.To, e.From, e.To, kind, name)
+		}
+		owners[name] = e
+		return nil
+	}
+	for _, e := range pl.ListAllEdges() {
+		for _, b := range dfv1.GenerateBufferNames(pl.Namespace, pl.Name, e.From, e.To, pl.NumOfPartitions(e.To)) {
+			if err := claim(bufferOwners, "buffer", b, e); err != nil {
+				return err
+			}
+		}
+		if err := claim(bucketOwners, "watermark bucket", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), e); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
