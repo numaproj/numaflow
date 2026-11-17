@@ -9,6 +9,7 @@ use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{Semaphore, mpsc};
@@ -484,6 +485,10 @@ fn update_udf_read_metric(is_mono_vertex: bool) {
 #[derive(Clone)]
 pub(crate) struct ParentMessageInfo {
     pub(crate) offset: Offset,
+    /// The parent's `MessageID` offset. Unlike `offset`, it names the buffer the parent was
+    /// read from, which keeps child ids unique when a vertex reads several edge-owned buffers
+    /// whose sequences overlap. Child ids are the `Nats-Msg-Id` dedup key downstream.
+    pub(crate) id_offset: Bytes,
     pub(crate) event_time: DateTime<Utc>,
     pub(crate) is_late: bool,
     pub(crate) headers: Arc<HashMap<String, String>>,
@@ -499,6 +504,7 @@ impl From<&Message> for ParentMessageInfo {
     fn from(message: &Message) -> Self {
         Self {
             offset: message.offset.clone(),
+            id_offset: message.id.offset.clone(),
             event_time: message.event_time,
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
@@ -538,7 +544,12 @@ impl From<UserDefinedMessage<'_>> for Message {
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
-                offset: format!("{}-{}", value.1.offset, value.1.current_index).into(),
+                offset: format!(
+                    "{}-{}",
+                    String::from_utf8_lossy(&value.1.id_offset),
+                    value.1.current_index
+                )
+                .into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -1126,6 +1137,7 @@ mod tests {
 
         let msg_info = ParentMessageInfo {
             offset: Default::default(),
+            id_offset: Default::default(),
             event_time: Default::default(),
             is_late: false,
             headers: Arc::new(Default::default()),
@@ -1159,6 +1171,7 @@ mod tests {
 
         let msg_info = ParentMessageInfo {
             offset: Default::default(),
+            id_offset: Default::default(),
             event_time: Default::default(),
             is_late: false,
             headers: Arc::new(Default::default()),
@@ -1241,5 +1254,42 @@ mod tests {
         let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
         assert!(!msg_plain.nacked());
         assert_eq!(msg_plain.nack_options, None);
+    }
+
+    /// Two ingress edges hand a vertex buffers whose stream sequences overlap. The mapped
+    /// ids must still differ, since they are the downstream JetStream dedup key.
+    #[test]
+    fn test_map_output_id_distinguishes_source_buffers() {
+        use crate::message::IntOffset;
+        use numaflow_pb::clients::map::map_response;
+
+        let parent = |buffer: &str| {
+            let offset = Offset::Int(IntOffset::new(7, 1));
+            Message {
+                id: MessageID {
+                    vertex_name: "cat".to_string().into(),
+                    offset: format!("{buffer}-{offset}").into(),
+                    index: 0,
+                },
+                offset,
+                ..Default::default()
+            }
+        };
+        let result = || map_response::Result {
+            keys: vec![],
+            value: b"v".to_vec(),
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+
+        let from_a = ParentMessageInfo::from(&parent("ns-pl-in-a-cat-1"));
+        let from_b = ParentMessageInfo::from(&parent("ns-pl-in-b-cat-1"));
+        let msg_a: Message = UserDefinedMessage(result(), &from_a, 0).into();
+        let msg_b: Message = UserDefinedMessage(result(), &from_b, 0).into();
+
+        assert_eq!(msg_a.offset, msg_b.offset);
+        assert_ne!(msg_a.id, msg_b.id);
+        assert_eq!(msg_a.id.offset, Bytes::from("ns-pl-in-a-cat-1-7-1-0"));
     }
 }

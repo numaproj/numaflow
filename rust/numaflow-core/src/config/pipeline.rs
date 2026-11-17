@@ -1894,7 +1894,7 @@ mod tests {
         // Only the replica's partition, but named for the edge.
         assert_eq!(from_cfg.reader_config.streams.len(), 1);
         assert_eq!(
-            from_cfg.reader_config.streams[0].name,
+            from_cfg.reader_config.streams.first().unwrap().name,
             "default-ordered-pipeline-in-map-0"
         );
     }
@@ -1914,17 +1914,22 @@ mod tests {
 
         // Two sources => two ingress edges, each with its own buffer.
         assert_eq!(config.from_vertex_config.len(), 2);
-        assert_eq!(config.from_vertex_config[0].name, "s1");
-        assert_eq!(config.from_vertex_config[1].name, "s2");
+        let [e1, e2] = config.from_vertex_config.as_slice() else {
+            panic!("expected two ingress edges");
+        };
+        assert_eq!(e1.name, "s1");
+        assert_eq!(e2.name, "s2");
 
-        let s1 = &config.from_vertex_config[0].reader_config.streams;
-        let s2 = &config.from_vertex_config[1].reader_config.streams;
-        assert_eq!(s1.len(), 1);
-        assert_eq!(s2.len(), 1);
+        let [s1] = e1.reader_config.streams.as_slice() else {
+            panic!("s1 should have one stream");
+        };
+        let [s2] = e2.reader_config.streams.as_slice() else {
+            panic!("s2 should have one stream");
+        };
         // The two sources must not collide on one physical buffer.
-        assert_ne!(s1[0].name, s2[0].name);
-        assert_eq!(s1[0].vertex, "map");
-        assert_eq!(s2[0].vertex, "map");
+        assert_ne!(s1.name, s2.name);
+        assert_eq!(s1.vertex, "map");
+        assert_eq!(s2.vertex, "map");
     }
 
     /// An unordered join reads every partition of every ingress edge.
@@ -1942,13 +1947,16 @@ mod tests {
         assert!(!config.ordered_processing_enabled);
         assert_eq!(config.from_vertex_config.len(), 2);
 
-        let x: Vec<&str> = config.from_vertex_config[0]
+        let [x_edge, y_edge] = config.from_vertex_config.as_slice() else {
+            panic!("expected two ingress edges");
+        };
+        let x: Vec<&str> = x_edge
             .reader_config
             .streams
             .iter()
             .map(|s| s.name)
             .collect();
-        let y: Vec<&str> = config.from_vertex_config[1]
+        let y: Vec<&str> = y_edge
             .reader_config
             .streams
             .iter()
@@ -2003,9 +2011,10 @@ mod tests {
                 "edge {} should read one stream",
                 from_vertex.name
             );
-            assert_eq!(streams[0].partition, replica);
+            let stream = streams.first().unwrap();
+            assert_eq!(stream.partition, replica);
             assert_eq!(
-                streams[0].name,
+                stream.name,
                 format!("default-jp-{}-z-{}", from_vertex.name, replica)
             );
         }
@@ -2014,7 +2023,7 @@ mod tests {
         let partitions: Vec<u16> = config
             .from_vertex_config
             .iter()
-            .map(|f| f.reader_config.streams[0].partition)
+            .map(|f| f.reader_config.streams.first().unwrap().partition)
             .collect();
         assert_eq!(partitions, vec![replica, replica]);
     }

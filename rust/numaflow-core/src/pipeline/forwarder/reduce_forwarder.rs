@@ -1849,7 +1849,7 @@ mod reduce_join_tests {
 
         let resolved = reduce_reader_configs_and_streams(&config).unwrap();
         assert_eq!(resolved.len(), 1);
-        assert_eq!(resolved[0].1.partition, *get_vertex_replica());
+        assert_eq!(resolved.first().unwrap().1.partition, *get_vertex_replica());
     }
 
     /// No ingress edges is still an error.

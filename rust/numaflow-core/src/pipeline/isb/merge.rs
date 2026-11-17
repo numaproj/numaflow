@@ -45,7 +45,12 @@ impl RoundRobinReaders {
             if self.next >= self.streams.len() {
                 self.next = 0;
             }
-            match self.streams[self.next].next().await {
+            let Some(stream) = self.streams.get_mut(self.next) else {
+                // Unreachable: `next` was wrapped into range above.
+                self.next = 0;
+                continue;
+            };
+            match stream.next().await {
                 Some(msg) => {
                     // Advance so the next call starts at the following edge.
                     self.next += 1;
