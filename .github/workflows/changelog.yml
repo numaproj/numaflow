@@ -7,7 +7,7 @@ on:
 jobs:
   generate_changelog:
     if: github.repository == 'numaproj/numaflow'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     name: Generate changelog
     steps:
       - uses: actions/checkout@v4

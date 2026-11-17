@@ -11,7 +11,7 @@ on:
 jobs:
   docs:
     if: github.repository == 'numaproj/numaflow'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
