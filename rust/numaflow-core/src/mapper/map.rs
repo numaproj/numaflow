@@ -484,6 +484,12 @@ fn update_udf_read_metric(is_mono_vertex: bool) {
 #[derive(Clone)]
 pub(crate) struct ParentMessageInfo {
     pub(crate) offset: Offset,
+    /// The parent's `MessageID` offset, used to build the output message ids. Unlike `offset`,
+    /// for a message read from the ISB it includes the source buffer name, so it stays unique
+    /// across the vertex's ingress edges (whose stream sequences all start at 1). Output ids are
+    /// the `Nats-Msg-Id` dedup key downstream, so dropping the buffer name here would make
+    /// JetStream discard messages from the other edges of a join as duplicates.
+    pub(crate) id_offset: bytes::Bytes,
     pub(crate) event_time: DateTime<Utc>,
     pub(crate) is_late: bool,
     pub(crate) headers: Arc<HashMap<String, String>>,
@@ -499,6 +505,7 @@ impl From<&Message> for ParentMessageInfo {
     fn from(message: &Message) -> Self {
         Self {
             offset: message.offset.clone(),
+            id_offset: message.id.offset.clone(),
             event_time: message.event_time,
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
@@ -538,7 +545,12 @@ impl From<UserDefinedMessage<'_>> for Message {
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
-                offset: format!("{}-{}", value.1.offset, value.1.current_index).into(),
+                offset: format!(
+                    "{}-{}",
+                    String::from_utf8_lossy(&value.1.id_offset),
+                    value.1.current_index
+                )
+                .into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -1126,6 +1138,7 @@ mod tests {
 
         let msg_info = ParentMessageInfo {
             offset: Default::default(),
+            id_offset: Default::default(),
             event_time: Default::default(),
             is_late: false,
             headers: Arc::new(Default::default()),
@@ -1159,6 +1172,7 @@ mod tests {
 
         let msg_info = ParentMessageInfo {
             offset: Default::default(),
+            id_offset: Default::default(),
             event_time: Default::default(),
             is_late: false,
             headers: Arc::new(Default::default()),
@@ -1241,5 +1255,47 @@ mod tests {
         let msg_plain: Message = UserDefinedMessage(result_plain, &parent_info, 1).into();
         assert!(!msg_plain.nacked());
         assert_eq!(msg_plain.nack_options, None);
+    }
+
+    /// Two ingress edges of a join have their own buffers, whose stream sequences both start at
+    /// 1, so parents from different edges can share the same `offset`. The map output id is the
+    /// downstream `Nats-Msg-Id` dedup key, so it must keep the parent's buffer name to stay unique.
+    #[test]
+    fn test_map_output_id_is_unique_across_ingress_edges() {
+        use crate::message::IntOffset;
+        use numaflow_pb::clients::map::map_response;
+
+        let parent = |id_offset: &str| Message {
+            offset: Offset::Int(IntOffset::new(72, 1)),
+            id: MessageID {
+                vertex_name: "cat".to_string().into(),
+                offset: id_offset.to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+        let from_in_one = parent("default-mj-in-one-cat-1-72-1");
+        let from_in_two = parent("default-mj-in-two-cat-1-72-1");
+        assert_eq!(from_in_one.offset, from_in_two.offset);
+
+        let result = || map_response::Result {
+            keys: vec![],
+            value: b"v".to_vec(),
+            tags: vec![],
+            metadata: None,
+            nack_options: None,
+        };
+        let out_one: Message =
+            UserDefinedMessage(result(), &ParentMessageInfo::from(&from_in_one), 0).into();
+        let out_two: Message =
+            UserDefinedMessage(result(), &ParentMessageInfo::from(&from_in_two), 0).into();
+
+        assert_ne!(out_one.id.to_string(), out_two.id.to_string());
+        assert_eq!(
+            out_one.id.offset,
+            bytes::Bytes::from("default-mj-in-one-cat-1-72-1-0")
+        );
+        // The ack offset is unchanged: only the id carries the buffer name.
+        assert_eq!(out_one.offset, Offset::Int(IntOffset::new(72, 1)));
     }
 }
