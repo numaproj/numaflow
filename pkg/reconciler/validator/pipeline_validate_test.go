@@ -2122,3 +2122,58 @@ func Test_validateBufferNameLength(t *testing.T) {
 		assert.Contains(t, err.Error(), "over the max limit")
 	})
 }
+
+func Test_validateUniqueBufferNames(t *testing.T) {
+	build := func(vertices []dfv1.AbstractVertex, edges []dfv1.Edge) dfv1.Pipeline {
+		return dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "hy"},
+			Spec:       dfv1.PipelineSpec{Vertices: vertices, Edges: edges},
+		}
+	}
+
+	t.Run("hyphenated names that stay distinct pass", func(t *testing.T) {
+		pl := build(
+			[]dfv1.AbstractVertex{{Name: "in-one"}, {Name: "in-two"}, {Name: "cat", Partitions: ptr.To[int32](3)}, {Name: "out"}},
+			[]dfv1.Edge{{From: "in-one", To: "cat"}, {From: "in-two", To: "cat"}, {From: "cat", To: "out"}},
+		)
+		assert.NoError(t, validateUniqueBufferNames(pl))
+	})
+
+	t.Run("edges whose joined names collide are rejected", func(t *testing.T) {
+		// "a" -> "b-c" and "a-b" -> "c" both produce default-hy-a-b-c-0.
+		pl := build(
+			[]dfv1.AbstractVertex{{Name: "a"}, {Name: "a-b"}, {Name: "b-c", Partitions: ptr.To[int32](2)}, {Name: "c"}},
+			[]dfv1.Edge{{From: "a", To: "b-c"}, {From: "a-b", To: "c"}},
+		)
+		err := validateUniqueBufferNames(pl)
+		assert.ErrorContains(t, err, `edges "a" -> "b-c" and "a-b" -> "c" both generate the buffer name "default-hy-a-b-c-0"`)
+	})
+
+	t.Run("a buffer name equal to another edge's bucket name is not a collision", func(t *testing.T) {
+		// Buffer of "a" -> "b" partition 0 and the bucket of "a" -> "b-0" are both
+		// default-hy-a-b-0, but they are different JetStream resources.
+		pl := build(
+			[]dfv1.AbstractVertex{{Name: "a"}, {Name: "b"}, {Name: "b-0"}},
+			[]dfv1.Edge{{From: "a", To: "b"}, {From: "a", To: "b-0"}},
+		)
+		assert.Equal(t, dfv1.GenerateBufferName("default", "hy", "a", "b", 0), dfv1.GenerateEdgeBucketName("default", "hy", "a", "b-0"))
+		assert.NoError(t, validateUniqueBufferNames(pl))
+	})
+
+	t.Run("rejected through ValidatePipeline", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		source, udf, sink := testObj.Spec.Vertices[0], testObj.Spec.Vertices[1], testObj.Spec.Vertices[2]
+		source.Name, sink.Name = "a", "c"
+		udfAB, udfBC := *udf.DeepCopy(), *udf.DeepCopy()
+		udfAB.Name, udfBC.Name = "a-b", "b-c"
+		testObj.Spec.Vertices = []dfv1.AbstractVertex{source, udfAB, udfBC, sink}
+		testObj.Spec.Edges = []dfv1.Edge{
+			{From: "a", To: "a-b"},
+			{From: "a", To: "b-c"},
+			{From: "a-b", To: "c"},
+			{From: "b-c", To: "c"},
+		}
+		err := ValidatePipeline(testObj)
+		assert.ErrorContains(t, err, "both generate the buffer name")
+	})
+}
