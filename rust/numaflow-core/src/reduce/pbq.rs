@@ -12,7 +12,6 @@ use crate::typ::NumaflowTypeConfig;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -291,6 +290,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::sleep;
+    use tokio_stream::StreamExt;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

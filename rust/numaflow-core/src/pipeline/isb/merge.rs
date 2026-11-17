@@ -42,10 +42,11 @@ impl RoundRobinReaders {
     /// streams are exhausted.
     pub(crate) async fn next(&mut self) -> Option<MessageHandle> {
         while !self.streams.is_empty() {
-            if self.next >= self.streams.len() {
+            let Some(stream) = self.streams.get_mut(self.next) else {
                 self.next = 0;
-            }
-            match self.streams[self.next].next().await {
+                continue;
+            };
+            match stream.next().await {
                 Some(msg) => {
                     // Advance so the next call starts at the following edge.
                     self.next += 1;

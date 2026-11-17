@@ -1800,6 +1800,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod reduce_join_tests {
     use super::*;
     use crate::config::pipeline::PipelineConfig;

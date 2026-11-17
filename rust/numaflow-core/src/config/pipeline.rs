@@ -776,6 +776,7 @@ impl PipelineConfig {
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use numaflow_models::models::{Container, Udf};
     use numaflow_nats::jetstream::ConsumerDeliverPolicy;
