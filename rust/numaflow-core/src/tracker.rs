@@ -39,6 +39,10 @@ struct TrackerState {
     entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
 }
 
+/// Head idle WMB offset for each (from vertex, partition). `None` means that partition of that
+/// edge is not idling.
+pub(crate) type IdleOffsetMap = HashMap<(&'static str, u16), Option<i64>>;
+
 impl Drop for TrackerState {
     fn drop(&mut self) {
         let total_entries: usize = self.entries.values().map(|value| value.len()).sum();
@@ -107,7 +111,7 @@ pub(crate) struct Tracker {
     state: Arc<RwLock<TrackerState>>,
     /// tracks whether each (from vertex, partition) is currently idle (not reading any data)
     /// if it's set to none, it means it is not idle.
-    idle_offset_map: Arc<RwLock<HashMap<(&'static str, u16), Option<i64>>>>,
+    idle_offset_map: Arc<RwLock<IdleOffsetMap>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
 }
@@ -379,9 +383,7 @@ impl Tracker {
     /// Gets the idle wmb status of the tracker. It returns a map of (from vertex, partition index)
     /// to the idle offset. This idle offset is compared against the newly fetch Head WMB as part of
     /// the optimistic locking.
-    pub(crate) async fn get_idle_offset(
-        &self,
-    ) -> Result<HashMap<(&'static str, u16), Option<i64>>> {
+    pub(crate) async fn get_idle_offset(&self) -> Result<IdleOffsetMap> {
         let idle_map = self.idle_offset_map.read().await;
         Ok(idle_map.clone())
     }

@@ -243,7 +243,7 @@ impl ISBWatermarkFetcher {
     }
 
     /// Returns the names of the vertices on the incoming edges.
-    pub(crate) fn from_vertices(&self) -> Vec<&'static str> {
+    pub(crate) fn upstream_vertices(&self) -> Vec<&'static str> {
         self.processor_managers.keys().copied().collect()
     }
 

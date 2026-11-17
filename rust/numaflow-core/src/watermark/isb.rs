@@ -212,7 +212,7 @@ impl ISBWatermarkState {
         // iterate over all the edges and partitions and check if they are idling by fetching the
         // head idle wmb and comparing it with the tracker's idle state.
         let mut min_wm = i64::MAX;
-        for from_vertex in self.fetcher.from_vertices() {
+        for from_vertex in self.fetcher.upstream_vertices() {
             for partition_idx in self.from_partitions.iter() {
                 // if tracker's offset is none means, that partitions is not idling, we can skip
                 // publishing the head idle wmb.
