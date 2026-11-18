@@ -68,6 +68,12 @@ It's recommended that you always use a fixed version in your real workload.
 An optional property `spec.jetstream.replicas` (defaults to 3) can be specified,
 which gives the total number of nodes.
 
+The replicas can be increased on an existing `InterStepBufferService`, but not decreased. Removing nodes does not
+move the streams that live on them, so the remaining nodes can end up with streams that have no quorum, and the
+pipelines using them stall. The webhook rejects an update that lowers `spec.jetstream.replicas`. If the webhook is
+not installed, the controller keeps the current number of replicas and records a `JetStreamScaleDownNotSupported`
+warning event on the `InterStepBufferService`.
+
 ### Persistence
 
 Following example shows a JetStream `InterStepBufferService` with persistence.
