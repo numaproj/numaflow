@@ -298,7 +298,9 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 	oldBuckets := make(map[string]string)
 	newBuckets := make(map[string]string)
 	for _, v := range existingObjs {
-		for _, b := range v.OwnedBuffers() {
+		// Use the names these buffers were actually created with: a vertex made by a controller from
+		// before edge-owned buffers still has vertex-owned buffers, which this diff replaces.
+		for _, b := range v.ExistingOwnedBuffers() {
 			oldBuffers[b] = b
 		}
 		for _, b := range v.GetFromBuckets() {
@@ -377,7 +379,10 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
 			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
-			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
+			// A vertex from before edge-owned buffers needs the ownership annotation even when its spec
+			// is unchanged, so later reconciles see the buffers the diff above created.
+			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] ||
+				oldObj.GetAnnotations()[dfv1.KeyBufferOwnership] != newObj.GetAnnotations()[dfv1.KeyBufferOwnership] { // need to update
 				originalReplicas := int32(0)
 				if x := oldObj.Spec.Replicas; x != nil {
 					originalReplicas = *x
@@ -392,6 +397,7 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 					originalReplicas = newObj.Spec.Scale.GetMaxReplicas()
 				}
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
+				oldObj.Annotations[dfv1.KeyBufferOwnership] = newObj.GetAnnotations()[dfv1.KeyBufferOwnership]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
 					return fmt.Errorf("failed to update vertex, err: %w", err)
@@ -730,7 +736,8 @@ func buildVertices(pl *dfv1.Pipeline, log *zap.SugaredLogger) map[string]dfv1.Ve
 				Name:      vertexFullName,
 				Labels:    matchLabels,
 				Annotations: map[string]string{
-					dfv1.KeyHash: hash,
+					dfv1.KeyHash:            hash,
+					dfv1.KeyBufferOwnership: dfv1.BufferOwnershipEdge,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),

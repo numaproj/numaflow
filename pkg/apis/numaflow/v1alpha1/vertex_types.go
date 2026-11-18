@@ -473,6 +473,21 @@ func (v Vertex) OwnedBuffers() []string {
 	return v.Spec.OwnedBufferNames(v.Namespace, v.Spec.PipelineName)
 }
 
+// ExistingOwnedBuffers returns the buffers that already exist for this vertex, named the way they
+// were named by the controller that created the vertex.
+//
+// A Vertex created before buffers moved to edges has no KeyBufferOwnership annotation, and its
+// buffers still have the old vertex-owned names. When a newer controller reconciles such a
+// pipeline in place (e.g. after a pause-and-drain upgrade), it has to see those old names here.
+// Otherwise it would compute the new edge-owned names, take them as already existing, never create
+// them, and every vertex pod would wait for them forever.
+func (v Vertex) ExistingOwnedBuffers() []string {
+	if v.GetAnnotations()[KeyBufferOwnership] == BufferOwnershipEdge {
+		return v.OwnedBuffers()
+	}
+	return v.Spec.LegacyOwnedBufferNames(v.Namespace, v.Spec.PipelineName)
+}
+
 // GetFromBuffers returns the buffers the vertex reads from (one set per incoming edge).
 func (v Vertex) GetFromBuffers() []string {
 	return v.Spec.GetFromBufferNames(v.Namespace, v.Spec.PipelineName)
@@ -744,6 +759,20 @@ func (vs VertexSpec) OwnedBufferNames(namespace, pipeline string) []string {
 	}
 	for _, e := range vs.ToEdges {
 		r = append(r, GenerateBufferNames(namespace, pipeline, vs.Name, e.To, e.GetToVertexPartitionCount())...)
+	}
+	return r
+}
+
+// LegacyOwnedBufferNames returns the buffer names that controllers before edge-owned buffers
+// created for this vertex: one per partition, named after the vertex that reads them,
+// "{ns}-{pl}-{vertex}-{i}". Sources read from the external source and own none.
+func (vs VertexSpec) LegacyOwnedBufferNames(namespace, pipeline string) []string {
+	var r []string
+	if vs.IsASource() {
+		return r
+	}
+	for i := 0; i < vs.GetPartitionCount(); i++ {
+		r = append(r, fmt.Sprintf("%s-%s-%s-%d", namespace, pipeline, vs.Name, i))
 	}
 	return r
 }

@@ -25,8 +25,11 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyInstance            = "numaflow.numaproj.io/instance" // instance key of the object
-	KeyHash                = "numaflow.numaproj.io/hash"     // hash of the object
+	KeyInstance = "numaflow.numaproj.io/instance" // instance key of the object
+	KeyHash     = "numaflow.numaproj.io/hash"     // hash of the object
+	// KeyBufferOwnership marks how the ISB buffers of a Vertex are named. Vertices created before buffers
+	// moved to edges don't have it, and their buffers are still named after the vertex that reads them.
+	KeyBufferOwnership     = "numaflow.numaproj.io/buffer-ownership"
 	KeyComponent           = "app.kubernetes.io/component"
 	KeyPartOf              = "app.kubernetes.io/part-of"
 	KeyManagedBy           = "app.kubernetes.io/managed-by"
@@ -101,6 +104,10 @@ const (
 	ControllerVertex          = "vertex-controller"
 	ControllerMonoVertex      = "mono-vertex-controller"
 	ControllerServingPipeline = "serving-pipeline-controller"
+
+	// BufferOwnershipEdge is the KeyBufferOwnership value for a Vertex whose buffers are owned by its
+	// outgoing edges and named "{ns}-{pl}-{from}-{to}-{i}".
+	BufferOwnershipEdge = "edge"
 
 	// ENV vars
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"

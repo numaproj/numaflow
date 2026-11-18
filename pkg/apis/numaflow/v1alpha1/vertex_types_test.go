@@ -95,6 +95,21 @@ func TestOwnedBuffers(t *testing.T) {
 	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
 }
 
+func TestExistingOwnedBuffers(t *testing.T) {
+	// A vertex created before edge-owned buffers has no ownership annotation, and its existing
+	// buffer is named after the vertex itself, the one that reads it.
+	legacy := testVertex.DeepCopy()
+	assert.Equal(t, []string{fmt.Sprintf("%s-%s-%s-0", legacy.Namespace, legacy.Spec.PipelineName, legacy.Spec.Name)}, legacy.ExistingOwnedBuffers())
+
+	// A source never had a vertex-owned buffer.
+	assert.Empty(t, testSrcVertex.DeepCopy().ExistingOwnedBuffers())
+
+	// Once marked, the existing buffers are the edge-owned ones.
+	edge := testVertex.DeepCopy()
+	edge.Annotations = map[string]string{KeyBufferOwnership: BufferOwnershipEdge}
+	assert.Equal(t, edge.OwnedBuffers(), edge.ExistingOwnedBuffers())
+}
+
 func TestOwnedBuffersSource(t *testing.T) {
 	// With edge-owned buffers a source owns its output buffer (src->output).
 	f := testSrcVertex.OwnedBuffers()

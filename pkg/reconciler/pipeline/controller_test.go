@@ -18,6 +18,7 @@ package pipeline
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -395,6 +396,71 @@ func Test_reconcile(t *testing.T) {
 		err = r.client.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(jobs.Items))
+	})
+
+	// A controller upgraded in place (e.g. after a pause-and-drain) reconciles vertices that an older
+	// controller created with vertex-owned buffers. It must create the new edge-owned buffers rather
+	// than take them as already existing, or every vertex pod waits for them forever.
+	t.Run("test reconcile replaces vertex-owned buffers in place", func(t *testing.T) {
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		cl := fake.NewClientBuilder().Build()
+		assert.NoError(t, cl.Create(ctx, testIsbSvc))
+		testObj := testPipeline.DeepCopy()
+		r := fakeReconciler(t, cl)
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testObj.Name)
+		listOpts := &client.ListOptions{Namespace: testNamespace, LabelSelector: selector}
+
+		// Turn the result of a first reconcile into what an older controller left behind: vertices
+		// without the ownership annotation, and no outstanding jobs.
+		_, err := r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		vertices := &dfv1.VertexList{}
+		assert.NoError(t, r.client.List(ctx, vertices, listOpts))
+		for i := range vertices.Items {
+			delete(vertices.Items[i].Annotations, dfv1.KeyBufferOwnership)
+			assert.NoError(t, r.client.Update(ctx, &vertices.Items[i]))
+		}
+		jobs := &batchv1.JobList{}
+		assert.NoError(t, r.client.List(ctx, jobs, listOpts))
+		for i := range jobs.Items {
+			assert.NoError(t, r.client.Delete(ctx, &jobs.Items[i]))
+		}
+
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+
+		jobArgs := func(subCommand string) string {
+			jobs := &batchv1.JobList{}
+			assert.NoError(t, r.client.List(ctx, jobs, listOpts))
+			for _, j := range jobs.Items {
+				args := j.Spec.Template.Spec.Containers[0].Args
+				if args[0] == subCommand {
+					return strings.Join(args, " ")
+				}
+			}
+			return ""
+		}
+		created := jobArgs("isbsvc-create")
+		assert.Contains(t, created, "test-ns-test-pl-input-p1-0")
+		assert.Contains(t, created, "test-ns-test-pl-p1-output-0")
+		deleted := jobArgs("isbsvc-delete")
+		assert.Contains(t, deleted, "test-ns-test-pl-p1-0")
+		assert.Contains(t, deleted, "test-ns-test-pl-output-0")
+		assert.NotContains(t, deleted, "test-ns-test-pl-input-p1-0")
+
+		// The vertices are marked, so the next reconcile sees the new buffers as existing.
+		assert.NoError(t, r.client.List(ctx, vertices, listOpts))
+		for _, v := range vertices.Items {
+			assert.Equal(t, dfv1.BufferOwnershipEdge, v.Annotations[dfv1.KeyBufferOwnership], v.Name)
+		}
+		assert.NoError(t, r.client.List(ctx, jobs, listOpts))
+		jobsBefore := len(jobs.Items)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.NoError(t, r.client.List(ctx, jobs, listOpts))
+		assert.Equal(t, jobsBefore, len(jobs.Items))
 	})
 
 	t.Run("test reconcile deleting", func(t *testing.T) {
