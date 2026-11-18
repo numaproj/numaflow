@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::mark_success;
 use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::merge::RoundRobinReaders;
+use crate::pipeline::isb::merge::MergedReaders;
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -36,7 +36,7 @@ impl<C: NumaflowTypeConfig> PBQBuilder<C> {
     ///
     /// Takes one reader per ingress edge. Buffers are edge-owned, so a reduce join
     /// has a separate physical buffer per source and the pod must drain all of them;
-    /// the readers are merged round-robin into the single downstream stream.
+    /// the readers are merged into the single downstream stream as messages arrive.
     pub(crate) fn new(isb_readers: Vec<ISBReaderOrchestrator<C>>) -> Self {
         Self {
             isb_readers,
@@ -65,13 +65,13 @@ pub(crate) struct PBQ<C: NumaflowTypeConfig> {
 }
 
 impl<C: NumaflowTypeConfig> PBQ<C> {
-    /// Starts every per-edge reader and merges them round-robin.
+    /// Starts every per-edge reader and merges them, taking from whichever is ready.
     ///
     /// Returns the merged message source plus one join handle per reader.
     async fn start_readers(
         isb_readers: Vec<ISBReaderOrchestrator<C>>,
         cancellation_token: CancellationToken,
-    ) -> Result<(RoundRobinReaders, Vec<JoinHandle<Result<()>>>)> {
+    ) -> Result<(MergedReaders, Vec<JoinHandle<Result<()>>>)> {
         if isb_readers.is_empty() {
             return Err(crate::error::Error::Reduce(
                 "PBQ requires at least one ISB reader".to_string(),
@@ -84,7 +84,7 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             streams.push(stream);
             handles.push(handle);
         }
-        Ok((RoundRobinReaders::new(streams), handles))
+        Ok((MergedReaders::new(streams), handles))
     }
 
     /// Waits for every reader task to finish, surfacing the first failure.

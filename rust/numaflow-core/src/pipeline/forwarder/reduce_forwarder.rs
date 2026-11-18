@@ -401,7 +401,7 @@ fn reduce_reader_configs_and_streams(
 ///
 /// Takes one set of reader components per ingress edge. Buffers are edge-owned, so a
 /// reduce join has one buffer per source at this replica's partition; the PBQ merges
-/// those readers round-robin into the single stream that feeds the windower.
+/// those readers into the single stream that feeds the windower.
 async fn run_reduce_forwarder<C>(
     context: &PipelineContext<'_, C>,
     reader_components: Vec<ISBReaderComponents>,
@@ -1813,7 +1813,7 @@ mod reduce_join_tests {
     /// x and y join into z (3 partitions, so 3 reduce pods). Pod i must read
     /// x->z partition i AND y->z partition i, because the writers hash a given key to
     /// the same index on both edges - that co-partitioning is what keeps both sides of
-    /// a key on one pod. The PBQ then merges these readers round-robin.
+    /// a key on one pod. The PBQ then merges these readers.
     #[test]
     fn test_reduce_join_resolves_co_partitioned_streams() {
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9LCJncm91cEJ5Ijp7IndpbmRvdyI6eyJmaXhlZCI6eyJsZW5ndGgiOiI2MHMifX0sImtleWVkIjp0cnVlLCJzdG9yYWdlIjp7InBlcnNpc3RlbnRWb2x1bWVDbGFpbSI6eyJ2b2x1bWVTaXplIjoiMUdpIn19fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInNjYWxlIjp7Im1pbiI6MX0sInBpcGVsaW5lTmFtZSI6ImpwIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwiZnJvbUVkZ2VzIjpbeyJmcm9tIjoieCIsInRvIjoieiIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiUmVkdWNlVURGIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MywidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fSx7ImZyb20iOiJ5IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJSZWR1Y2VVREYiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";

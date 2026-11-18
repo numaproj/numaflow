@@ -8,58 +8,47 @@
 //!
 //! [`ISBReaderOrchestrator`]: crate::pipeline::isb::reader::ISBReaderOrchestrator
 
-use tokio_stream::StreamExt;
+use futures::StreamExt;
+use futures::stream::SelectAll;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::message::MessageHandle;
 
-/// Merges the per-edge ISB reader streams into one sequence, taking one message from
-/// each non-exhausted stream in turn.
+/// Merges the per-edge ISB reader streams into one sequence, yielding a message from
+/// whichever edge has one ready.
 ///
-/// Round-robin gives every edge equal turns, so one fast source can not starve the others:
-/// the downstream stage sees both sides of a join interleaved rather than all of x before
-/// any of y.
+/// The merge must never wait on one particular edge. A slow or idle edge would otherwise
+/// gate every other edge: the fast side of a join backs up behind it, and a source that
+/// produces nothing (an idle edge only gets a WMB control message once its source has a
+/// watermark to report) stops the whole vertex. The backlog that builds up is not just a
+/// throughput problem either. Once it is older than the watermark timeline keeps, its
+/// messages can no longer be given a watermark and reach the reducer behind a watermark
+/// that other edges have moved on, so they are dropped as late.
 ///
-/// A stream that yields `None` is exhausted and dropped from the rotation; the merge ends
-/// when every stream is exhausted. Each `MessageHandle` carries its own ack path back to the
-/// reader that produced it, so merging the data streams does not disturb acking.
+/// Letting a fast edge run ahead is safe for windowing. Every message carries the vertex
+/// watermark, the minimum of the last processed watermark across all edges and partitions,
+/// so a window still does not close until the slowest edge has been read past it.
 ///
-/// Note that [`Self::next`] awaits the current edge rather than polling all edges for
-/// whichever is ready first. For a join that is the intent — wait for the slow source
-/// instead of letting the fast one race ahead — and it does not deadlock on a genuinely
-/// idle edge because an idle partition still emits a WMB control message.
-pub(crate) struct RoundRobinReaders {
-    streams: Vec<ReceiverStream<MessageHandle>>,
-    next: usize,
+/// [`SelectAll`] puts an edge at the back of the queue after it yields, so no edge starves
+/// the others while several are ready, and each edge's own messages stay in order. A
+/// stream that yields `None` is exhausted and dropped. The merge ends when every stream is
+/// exhausted. Each `MessageHandle` carries its own ack path back to the reader that produced
+/// it, so merging the data streams does not disturb acking.
+pub(crate) struct MergedReaders {
+    streams: SelectAll<ReceiverStream<MessageHandle>>,
 }
 
-impl RoundRobinReaders {
+impl MergedReaders {
     pub(crate) fn new(streams: Vec<ReceiverStream<MessageHandle>>) -> Self {
-        Self { streams, next: 0 }
+        Self {
+            streams: futures::stream::select_all(streams),
+        }
     }
 
-    /// Returns the next message, rotating across the live streams. `None` once all
+    /// Returns the next message from any edge that has one ready. `None` once all
     /// streams are exhausted.
     pub(crate) async fn next(&mut self) -> Option<MessageHandle> {
-        while !self.streams.is_empty() {
-            let Some(stream) = self.streams.get_mut(self.next) else {
-                self.next = 0;
-                continue;
-            };
-            match stream.next().await {
-                Some(msg) => {
-                    // Advance so the next call starts at the following edge.
-                    self.next += 1;
-                    return Some(msg);
-                }
-                None => {
-                    // This edge is done; drop it and retry at the same index, which
-                    // now holds the next stream.
-                    self.streams.remove(self.next);
-                }
-            }
-        }
-        None
+        self.streams.next().await
     }
 }
 
@@ -106,35 +95,67 @@ mod tests {
         ReceiverStream::new(rx)
     }
 
-    async fn drain(mut rr: RoundRobinReaders) -> Vec<String> {
+    fn body(h: &MessageHandle) -> String {
+        String::from_utf8(h.message.value.to_vec()).unwrap()
+    }
+
+    async fn drain(mut merged: MergedReaders) -> Vec<String> {
         let mut out = vec![];
-        while let Some(h) = rr.next().await {
-            out.push(String::from_utf8(h.message.value.to_vec()).unwrap());
+        while let Some(h) = merged.next().await {
+            out.push(body(&h));
         }
         out
     }
 
-    /// Two equal-length edges alternate one message at a time.
-    ///
-    /// This is the join case: x and y both feed the pod, and neither should be
-    /// drained ahead of the other.
+    /// The messages from one edge, in the order the merge yielded them.
+    fn from_edge(got: &[String], prefix: char) -> Vec<String> {
+        got.iter()
+            .filter(|b| b.starts_with(prefix))
+            .cloned()
+            .collect()
+    }
+
+    /// An edge that never yields must not block the others. This is the join with an idle
+    /// source: x has data, y's reader is open but has nothing to send.
     #[tokio::test]
-    async fn test_round_robin_alternates_between_edges() {
-        let rr = RoundRobinReaders::new(vec![
+    async fn test_merge_does_not_wait_on_an_idle_edge() {
+        let (_idle_tx, idle_rx) = mpsc::channel::<MessageHandle>(1);
+        let mut merged = MergedReaders::new(vec![
+            ReceiverStream::new(idle_rx),
+            edge_stream(&["x0", "x1", "x2"]),
+        ]);
+        for want in ["x0", "x1", "x2"] {
+            let got = tokio::time::timeout(std::time::Duration::from_secs(1), merged.next())
+                .await
+                .expect("merge blocked on the idle edge");
+            assert_eq!(body(&got.unwrap()), want);
+        }
+    }
+
+    /// While several edges have data, each gets turns, so a fast edge cannot hold back a
+    /// slower one, and each edge's own order is kept.
+    #[tokio::test]
+    async fn test_merge_interleaves_ready_edges_in_order() {
+        let merged = MergedReaders::new(vec![
             edge_stream(&["x0", "x1", "x2"]),
             edge_stream(&["y0", "y1", "y2"]),
         ]);
-        assert_eq!(drain(rr).await, vec!["x0", "y0", "x1", "y1", "x2", "y2"]);
+        let got = drain(merged).await;
+        assert_eq!(from_edge(&got, 'x'), vec!["x0", "x1", "x2"]);
+        assert_eq!(from_edge(&got, 'y'), vec!["y0", "y1", "y2"]);
+        // Neither edge is fully drained before the other starts.
+        let first_y = got.iter().position(|b| b.starts_with('y')).unwrap();
+        assert!(first_y < 3, "y waited for all of x: {got:?}");
     }
 
-    /// A short edge drops out of the rotation and the rest keep draining.
-    ///
-    /// Without removing the exhausted stream the merge would either stall or spin.
+    /// A short edge drops out and the rest keep draining.
     #[tokio::test]
-    async fn test_round_robin_drains_remaining_edges_after_one_ends() {
-        let rr =
-            RoundRobinReaders::new(vec![edge_stream(&["x0"]), edge_stream(&["y0", "y1", "y2"])]);
-        assert_eq!(drain(rr).await, vec!["x0", "y0", "y1", "y2"]);
+    async fn test_merge_drains_remaining_edges_after_one_ends() {
+        let merged =
+            MergedReaders::new(vec![edge_stream(&["x0"]), edge_stream(&["y0", "y1", "y2"])]);
+        let got = drain(merged).await;
+        assert_eq!(from_edge(&got, 'x'), vec!["x0"]);
+        assert_eq!(from_edge(&got, 'y'), vec!["y0", "y1", "y2"]);
     }
 
     /// Every message from every edge is delivered exactly once.
@@ -142,21 +163,21 @@ mod tests {
     /// The regression this guards: reading only the first edge, which would silently
     /// drop the other source's data in a join.
     #[tokio::test]
-    async fn test_round_robin_loses_no_messages() {
-        let rr = RoundRobinReaders::new(vec![
+    async fn test_merge_loses_no_messages() {
+        let merged = MergedReaders::new(vec![
             edge_stream(&["x0", "x1"]),
             edge_stream(&["y0"]),
             edge_stream(&["z0", "z1", "z2"]),
         ]);
-        let mut got = drain(rr).await;
+        let mut got = drain(merged).await;
         got.sort();
         assert_eq!(got, vec!["x0", "x1", "y0", "z0", "z1", "z2"]);
     }
 
     /// A single edge (the non-join case) passes through in order.
     #[tokio::test]
-    async fn test_round_robin_single_edge_is_passthrough() {
-        let rr = RoundRobinReaders::new(vec![edge_stream(&["a", "b", "c"])]);
-        assert_eq!(drain(rr).await, vec!["a", "b", "c"]);
+    async fn test_merge_single_edge_is_passthrough() {
+        let merged = MergedReaders::new(vec![edge_stream(&["a", "b", "c"])]);
+        assert_eq!(drain(merged).await, vec!["a", "b", "c"]);
     }
 }
