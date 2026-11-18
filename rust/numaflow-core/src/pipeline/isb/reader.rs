@@ -723,7 +723,9 @@ impl ISBReaderComponents {
             from_vertex,
             stream,
             config: reader_config,
-            tracker: context.tracker.clone(),
+            // Offsets are only unique within one edge's buffer, so a join's readers must not
+            // share tracker keys.
+            tracker: context.tracker.for_edge(from_vertex),
             batch_size: context.config.batch_size,
             read_timeout: context.config.read_timeout,
             watermark_handle,

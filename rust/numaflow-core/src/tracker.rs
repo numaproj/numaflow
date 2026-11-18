@@ -33,15 +33,21 @@ struct TrackerEntry {
     event_time: DateTime<Utc>,
 }
 
+/// Identifies one ISB buffer a vertex reads from: the vertex on the other end of the ingress edge
+/// and the partition index. Buffers are edge-owned, so a vertex with several ingress edges reads
+/// several buffers that share partition indexes, and whose stream sequences all start at 1. An
+/// offset is only unique within one of these.
+type EdgePartition = (&'static str, u16);
+
 /// TrackerState holds the mutable state of the tracker.
 struct TrackerState {
-    /// entries organized by partition, each partition has its own BTreeMap of offsets
-    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    /// entries organized by (from vertex, partition), each with its own BTreeMap of offsets
+    entries: HashMap<EdgePartition, BTreeMap<Offset, TrackerEntry>>,
 }
 
 /// Head idle WMB offset for each (from vertex, partition). `None` means that partition of that
 /// edge is not idling.
-pub(crate) type IdleOffsetMap = HashMap<(&'static str, u16), Option<i64>>;
+pub(crate) type IdleOffsetMap = HashMap<EdgePartition, Option<i64>>;
 
 impl Drop for TrackerState {
     fn drop(&mut self) {
@@ -114,6 +120,10 @@ pub(crate) struct Tracker {
     idle_offset_map: Arc<RwLock<IdleOffsetMap>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
+    /// The ingress edge (named by its from vertex) this handle tracks offsets for. Empty for an
+    /// unscoped handle, e.g. a source or a MonoVertex, which only ever see one sequence of offsets.
+    /// See [Tracker::for_edge].
+    edge: &'static str,
 }
 
 impl Tracker {
@@ -134,6 +144,7 @@ impl Tracker {
             idle_offset_map,
             serving_callback_handler,
             processed_msg_count: Arc::clone(&processed_msg_count),
+            edge: "",
         };
 
         // spawn a task to log the number of processed messages every second, cln_token is used to
@@ -146,6 +157,24 @@ impl Tracker {
         });
 
         tracker
+    }
+
+    /// Returns a handle to the same tracker that keys the offsets it inserts, updates, and deletes
+    /// by the ingress edge from `from_vertex`. Every reader of a join, and every component that
+    /// touches its messages by offset (e.g. the mapper's serving updates), must use the handle for
+    /// its own edge: two edges' buffers can hand out the same `(sequence, partition)` offset at the
+    /// same time, and an unscoped key would treat the second one as a redelivery of the first.
+    ///
+    /// State is shared, so watermark and idle tracking still see every edge.
+    pub(crate) fn for_edge(&self, from_vertex: &'static str) -> Self {
+        Self {
+            edge: from_vertex,
+            ..self.clone()
+        }
+    }
+
+    fn key(&self, offset: &Offset) -> EdgePartition {
+        (self.edge, offset.partition_idx())
     }
 
     /// Logs the number of processed messages every second.
@@ -204,8 +233,8 @@ impl Tracker {
     /// Inserts a new message into the Tracker with the given offset.
     ///
     /// Returns `Err(Error::DuplicateInflight)` if the offset is already being tracked for this
-    /// partition. Callers use this to detect intra-pod redeliveries and drop them before they
-    /// reach downstream components like UDFs or sinks.
+    /// edge and partition. Callers use this to detect intra-pod redeliveries and drop them before
+    /// they reach downstream components like UDFs or sinks.
     pub(crate) async fn insert(&self, message: &Message) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
@@ -213,9 +242,9 @@ impl Tracker {
             callback_info = Some(message.try_into()?);
         }
 
-        let partition = offset.partition_idx();
+        let key = self.key(&offset);
         let mut state = self.state.write().await;
-        let partition_entries = state.entries.entry(partition).or_default();
+        let partition_entries = state.entries.entry(key).or_default();
         if partition_entries.contains_key(&offset) {
             return Err(Error::DuplicateInflight(offset.to_string()));
         }
@@ -246,9 +275,9 @@ impl Tracker {
             .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
             .collect();
 
-        let partition = offset.partition_idx();
+        let key = self.key(offset);
         let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        let Some(partition_entries) = state.entries.get_mut(&key) else {
             return Ok(());
         };
         let Some(entry) = partition_entries.get_mut(offset) else {
@@ -267,9 +296,9 @@ impl Tracker {
             return Ok(());
         }
 
-        let partition = offset.partition_idx();
+        let key = self.key(&offset);
         let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        let Some(partition_entries) = state.entries.get_mut(&key) else {
             return Ok(());
         };
         let Some(mut entry) = partition_entries.remove(&offset) else {
@@ -293,9 +322,9 @@ impl Tracker {
         }
 
         let response = message_tags.map(|tags| tags.to_vec());
-        let partition = offset.partition_idx();
+        let key = self.key(&offset);
         let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        let Some(partition_entries) = state.entries.get_mut(&key) else {
             return Ok(());
         };
         let Some(entry) = partition_entries.get_mut(&offset) else {
@@ -310,9 +339,9 @@ impl Tracker {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: &Offset) -> Result<()> {
-        let partition = offset.partition_idx();
+        let key = self.key(offset);
         let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        let Some(partition_entries) = state.entries.get_mut(&key) else {
             return Ok(());
         };
         let Some(entry) = partition_entries.remove(offset) else {
@@ -576,6 +605,49 @@ mod tests {
         assert_eq!(idle_offsets.get(&("in", 0)), Some(&None));
         assert_eq!(idle_offsets.get(&("in", 1)), Some(&Some(200)));
         assert_eq!(idle_offsets.get(&("in", 2)), Some(&None));
+    }
+
+    /// Two ingress edges of a join read separate buffers whose sequences both start at 1, so the
+    /// same `(sequence, partition)` offset is in flight on both at once. Each must be tracked on
+    /// its own, while a real redelivery on one edge is still caught.
+    #[tokio::test]
+    async fn test_same_offset_tracked_per_edge() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+        let left = tracker.for_edge("left");
+        let right = tracker.for_edge("right");
+
+        let message = |seq: i64, wm_ms: i64| Message {
+            offset: Offset::Int(IntOffset::new(seq, 0)),
+            watermark: DateTime::from_timestamp_millis(wm_ms),
+            ..Default::default()
+        };
+
+        left.insert(&message(1, 100)).await.unwrap();
+        right
+            .insert(&message(1, 100))
+            .await
+            .expect("same offset from another edge is not a duplicate");
+        assert!(matches!(
+            left.insert(&message(1, 100)).await,
+            Err(Error::DuplicateInflight(_))
+        ));
+
+        // Deleting from one edge must not remove the other edge's entry.
+        let offset = Offset::Int(IntOffset::new(1, 0));
+        left.delete(&offset).await.unwrap();
+        assert!(!tracker.is_empty().await.unwrap());
+        right.delete(&offset).await.unwrap();
+        assert!(tracker.is_empty().await.unwrap());
+
+        // Sequences are not comparable across edges. The left edge's oldest in-flight message has
+        // a lower sequence but a later watermark than the right edge's, and the lowest watermark
+        // must still come from the right edge.
+        left.insert(&message(5, 1_000)).await.unwrap();
+        right.insert(&message(7, 300)).await.unwrap();
+        assert_eq!(
+            tracker.lowest_watermark().await.unwrap(),
+            DateTime::from_timestamp_millis(300).unwrap()
+        );
     }
 
     #[tokio::test]

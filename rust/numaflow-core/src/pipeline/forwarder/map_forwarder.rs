@@ -282,7 +282,8 @@ where
                 context.config.read_timeout,
                 context.config.graceful_shutdown_time,
                 map_vtx_config.clone(),
-                context.tracker.clone(),
+                // Serving updates look messages up by offset, which is only unique per edge.
+                context.tracker.for_edge(from_vertex.name),
                 context.cln_token.clone(),
             )
             .await?;
