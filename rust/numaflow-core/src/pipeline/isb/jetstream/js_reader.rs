@@ -268,6 +268,10 @@ impl ISBReader for JetStreamReader {
         self.stream.name
     }
 
+    fn isb_type(&self) -> &'static str {
+        "jetstream"
+    }
+
     /// Mark message as in progress by sending work in progress ack.
     async fn mark_wip(&self, offset: &Offset) -> Result<()> {
         let msg = self.inflight.get(offset)?;

@@ -163,6 +163,10 @@ impl ISBReader for SimpleReaderAdapter {
         self.inner.name()
     }
 
+    fn isb_type(&self) -> &'static str {
+        "inmemory"
+    }
+
     async fn mark_wip(&self, offset: &Offset) -> crate::Result<()> {
         let simple_offset = offset.into();
         self.inner
@@ -260,6 +264,10 @@ impl ISBWriter for SimpleWriterAdapter {
 
     fn name(&self) -> &'static str {
         self.inner.name()
+    }
+
+    fn isb_type(&self) -> &'static str {
+        "inmemory"
     }
 
     fn is_full(&self) -> bool {

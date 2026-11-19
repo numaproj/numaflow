@@ -69,6 +69,10 @@ pub(crate) trait LocalISBReader: Sync {
     /// Returns the name/identifier of this reader (e.g., stream name).
     fn name(&self) -> &'static str;
 
+    /// Returns the ISB implementation (e.g., `jetstream`), used to label the
+    /// ISB-agnostic metrics.
+    fn isb_type(&self) -> &'static str;
+
     /// Marks a message as work-in-progress to prevent redelivery during long processing.
     ///
     /// This is optional - implementations that don't support WIP can use the default
@@ -178,6 +182,10 @@ pub(crate) trait LocalISBWriter: Sync {
     /// Returns the name/identifier of this writer (e.g., stream name).
     #[allow(dead_code)]
     fn name(&self) -> &'static str;
+
+    /// Returns the ISB implementation (e.g., `jetstream`), used to label the
+    /// ISB-agnostic metrics.
+    fn isb_type(&self) -> &'static str;
 
     /// Returns whether the buffer is full.
     ///

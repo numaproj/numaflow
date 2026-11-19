@@ -469,6 +469,22 @@ impl ISBWriterOrchestrator {
                 partition_name,
             ))
             .observe(write_processing_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .isb
+            .write_time_total
+            .get_or_create(&crate::metrics::isb_metrics_labels(
+                partition_name,
+                self.isb_type(partition_name),
+            ))
+            .observe(write_processing_start.elapsed().as_micros() as f64);
+    }
+
+    /// Returns the ISB implementation of the writer for the stream.
+    fn isb_type(&self, stream_name: &str) -> &'static str {
+        self.writers
+            .get(stream_name)
+            .expect("writer should exist for stream")
+            .isb_type()
     }
 
     /// Resolves all PAFs and returns the offsets for successful writes.
@@ -489,7 +505,11 @@ impl ISBWriterOrchestrator {
                         ?e, stream = ?write_result.stream,
                         "Failed to resolve the future, trying write with retry",
                     );
-                    Self::publish_paf_error_metrics(write_result.stream.name, &e);
+                    Self::publish_paf_error_metrics(
+                        write_result.stream.name,
+                        self.isb_type(write_result.stream.name),
+                        &e,
+                    );
                     // Fallback to write with retry loop
                     let writer = self
                         .writers
@@ -580,7 +600,7 @@ impl ISBWriterOrchestrator {
     }
 
     /// Publishes error metrics for PAF resolution failures.
-    fn publish_paf_error_metrics(stream_name: &str, e: &WriteError) {
+    fn publish_paf_error_metrics(stream_name: &str, isb_type: &str, e: &WriteError) {
         let error_kind = match e {
             WriteError::BufferFull => "buffer_full",
             WriteError::WriteFailed(_) => "write_failed",
@@ -590,6 +610,15 @@ impl ISBWriterOrchestrator {
             .write_error_total
             .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
                 stream_name,
+                error_kind.to_string(),
+            ))
+            .inc();
+        pipeline_metrics()
+            .isb
+            .write_error_total
+            .get_or_create(&crate::metrics::isb_error_metrics_labels(
+                stream_name,
+                isb_type,
                 error_kind.to_string(),
             ))
             .inc();
@@ -1454,6 +1483,56 @@ mod simple_buffer_tests {
         assert_eq!(adapter.pending_count(), 1);
     }
 
+    /// Test: writing to the in-memory ISB, including the PAF failure fallback,
+    /// reports the ISB-agnostic metrics labeled with its ISB type.
+    #[tokio::test]
+    async fn test_inmemory_write_emits_isb_metrics() {
+        use crate::metrics::{isb_error_metrics_labels, isb_metrics_labels};
+
+        let stream_name = "inmemory-isb-metrics";
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, stream_name));
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            stream_name,
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let handle = orchestrator
+            .streaming_write(ReceiverStream::new(rx), cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+        handle.await.unwrap().unwrap();
+
+        let isb = &pipeline_metrics().isb;
+        assert!(
+            isb.write_time_total
+                .get(&isb_metrics_labels(stream_name, "inmemory"))
+                .is_some()
+        );
+        assert!(
+            isb.write_error_total
+                .get(&isb_error_metrics_labels(
+                    stream_name,
+                    "inmemory",
+                    "write_failed".to_string()
+                ))
+                .is_some()
+        );
+    }
+
     /// Test: When resolve fails but is still retrying when cancellation happens,
     /// the message still gets processed correctly.
     ///
@@ -2104,6 +2183,10 @@ mod simple_buffer_tests {
 
         fn name(&self) -> &'static str {
             "always-fail"
+        }
+
+        fn isb_type(&self) -> &'static str {
+            "test"
         }
     }
 

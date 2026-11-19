@@ -168,6 +168,18 @@ const REDUCE_PNF_PROCESS_TIME: &str = "pnf_process_time";
 const REDUCE_WATERMARK_LAG: &str = "watermark_lag";
 const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
 
+// ISB-agnostic metrics, labeled with the ISB type. They replace the
+// isb_jetstream_* names the generic reader and writer emit, which stay for
+// backward compatibility until they are deprecated.
+const ISB_REGISTRY_PREFIX: &str = "isb";
+const ISB_READ_ERROR_TOTAL: &str = "read_error";
+const ISB_WRITE_ERROR_TOTAL: &str = "write_error";
+const ISB_READ_TIME_TOTAL: &str = "read_time_total";
+const ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
+const ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
+const ISB_NACK_TIME_TOTAL: &str = "nack_time_total";
+const ISB_TYPE_LABEL: &str = "isb_type";
+
 // jetstream isb processing times
 const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
 const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
@@ -471,6 +483,8 @@ pub(crate) struct PipelineMetrics {
     // sink forwarder specific metrics
     pub(crate) sink_forwarder: SinkForwarderMetrics,
     pub(crate) jetstream_isb: JetStreamISBMetrics,
+    // ISB-agnostic metrics emitted by the generic ISB reader and writer
+    pub(crate) isb: ISBMetrics,
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
     // reduce specific metrics
     pub(crate) reduce: ReduceMetrics,
@@ -699,6 +713,35 @@ impl SinkForwarderMetrics {
                 Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
                 }),
+        }
+    }
+}
+
+/// ISB-agnostic metrics emitted by the generic ISB reader and writer, labeled
+/// with the buffer and the ISB type (e.g. `jetstream`, `inmemory`).
+pub(crate) struct ISBMetrics {
+    pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) nack_time_total: Family<Vec<(String, String)>, Histogram>,
+}
+
+impl ISBMetrics {
+    pub(crate) fn new() -> Self {
+        let histogram = || {
+            Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10))
+            })
+        };
+        Self {
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_time_total: histogram(),
+            write_time_total: histogram(),
+            ack_time_total: histogram(),
+            nack_time_total: histogram(),
         }
     }
 }
@@ -998,6 +1041,7 @@ impl PipelineMetrics {
             source_forwarder: SourceForwarderMetrics::new(),
             sink_forwarder: SinkForwarderMetrics::new(),
             jetstream_isb: JetStreamISBMetrics::new(),
+            isb: ISBMetrics::new(),
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
             reduce: ReduceMetrics::new(),
         };
@@ -1006,6 +1050,7 @@ impl PipelineMetrics {
         Self::register_source_forwarder_metrics(&metrics, &mut registry);
         Self::register_sink_forwarder_metrics(&metrics, &mut registry);
         Self::register_jetstream_isb_metrics(&metrics, &mut registry);
+        Self::register_isb_metrics(&metrics, &mut registry);
         Self::register_vertex_metrics(&metrics, &mut registry);
         Self::register_reduce_metrics(&metrics, &mut registry);
         metrics
@@ -1216,6 +1261,40 @@ impl PipelineMetrics {
             ON_SUCCESS_SINK_WRITE_PROCESSING_TIME,
             "Processing times of write operations to a on-success sink (100 microseconds to 20 minutes)",
             metrics.sink_forwarder.onsuccess_sink_write_processing_time.clone(),
+        );
+    }
+
+    fn register_isb_metrics(metrics: &Self, registry: &mut Registry) {
+        let isb_registry = registry.sub_registry_with_prefix(ISB_REGISTRY_PREFIX);
+        isb_registry.register(
+            ISB_READ_ERROR_TOTAL,
+            "Total number of ISB read errors",
+            metrics.isb.read_error_total.clone(),
+        );
+        isb_registry.register(
+            ISB_WRITE_ERROR_TOTAL,
+            "Total number of ISB write errors",
+            metrics.isb.write_error_total.clone(),
+        );
+        isb_registry.register(
+            ISB_READ_TIME_TOTAL,
+            "Processing times of ISB read operations (100 microseconds to 2 minutes)",
+            metrics.isb.read_time_total.clone(),
+        );
+        isb_registry.register(
+            ISB_WRITE_TIME_TOTAL,
+            "Processing times of ISB write operations (100 microseconds to 2 minutes)",
+            metrics.isb.write_time_total.clone(),
+        );
+        isb_registry.register(
+            ISB_ACK_TIME_TOTAL,
+            "Processing times of ISB ack operations (100 microseconds to 2 minutes)",
+            metrics.isb.ack_time_total.clone(),
+        );
+        isb_registry.register(
+            ISB_NACK_TIME_TOTAL,
+            "Processing times of ISB nack operations (100 microseconds to 2 minutes)",
+            metrics.isb.nack_time_total.clone(),
         );
     }
 
@@ -1475,6 +1554,25 @@ pub(crate) fn pipeline_critical_error_metric_labels(
     let mut labels = pipeline_metric_labels(vertex_type).clone();
     labels.push((CRITICAL_ERROR_REASON.to_string(), reason.to_string()));
     labels
+}
+
+pub(crate) fn isb_metrics_labels(buffer_name: &str, isb_type: &str) -> Vec<(String, String)> {
+    vec![
+        ("buffer".to_string(), buffer_name.to_string()),
+        (ISB_TYPE_LABEL.to_string(), isb_type.to_string()),
+    ]
+}
+
+pub(crate) fn isb_error_metrics_labels(
+    buffer_name: &str,
+    isb_type: &str,
+    reason: String,
+) -> Vec<(String, String)> {
+    vec![
+        ("buffer".to_string(), buffer_name.to_string()),
+        (ISB_TYPE_LABEL.to_string(), isb_type.to_string()),
+        ("reason".to_string(), reason),
+    ]
 }
 
 pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {
