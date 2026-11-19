@@ -421,26 +421,26 @@ impl ConsumerReaderActor {
                         time::sleep(Duration::from_millis(50)).await; // FIXME: add error metrics. Also, respect the timeout
                         continue;
                     }
+                    if !messages.is_empty() {
+                        return Some(Ok(messages));
+                    }
                     return Some(Err(Error::Pulsar(e)));
                 }
             };
             let offset = PulsarOffset::from(msg.message_id());
+            let publish_time = msg.metadata().publish_time;
             let event_time = msg
                 .metadata()
                 .event_time
-                .unwrap_or(msg.metadata().publish_time);
-            let Some(event_time) = chrono::DateTime::from_timestamp_millis(event_time as i64)
-            else {
-                // This should never happen
-                tracing::error!(
-                    event_time = msg.metadata().event_time,
-                    publish_time = msg.metadata().publish_time,
-                    parsed_event_time = event_time,
-                    "Pulsar message contains invalid event_time/publish_time timestamp"
-                );
-                continue;
-                //FIXME: NACK the message
-            };
+                .and_then(|t| chrono::DateTime::from_timestamp_millis(t as i64))
+                .or_else(|| chrono::DateTime::from_timestamp_millis(publish_time as i64))
+                .unwrap_or_else(|| {
+                    warn!(
+                        event_time = msg.metadata().event_time,
+                        publish_time, "Pulsar message has no valid timestamp, using current time"
+                    );
+                    Utc::now()
+                });
 
             let headers = msg
                 .metadata()
@@ -846,5 +846,94 @@ mod tests {
         source.ack_offsets(vec![*a, *b]).await.unwrap();
         source.nack_offsets(vec![*c]).await.unwrap();
         source.nack_offsets(vec![*c, *d]).await.unwrap();
+    }
+
+    #[cfg(feature = "pulsar-tests")]
+    #[tokio::test]
+    async fn test_invalid_event_time_does_not_block_batch() {
+        let id = uuid::Uuid::new_v4().simple();
+        let topic = format!("persistent://public/default/pulsar_source_{id}");
+        let config = PulsarSourceConfig {
+            pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::parse(
+                "pulsar://localhost:6650",
+            )
+            .unwrap(),
+            topic: topic.clone(),
+            consumer_name: "test".into(),
+            subscription: format!("source_subscription_{id}"),
+            max_unack: 100,
+            dead_letter_policy: None,
+            auth: None,
+            tls: None,
+        };
+        let new_source = || {
+            PulsarSource::new(
+                config.clone(),
+                10,
+                Duration::from_millis(500),
+                0,
+                CancellationToken::new(),
+            )
+        };
+        let source = new_source().await.unwrap();
+
+        let client = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+            .build()
+            .await
+            .unwrap();
+        let mut producer = client
+            .producer()
+            .with_topic(&topic)
+            .with_options(pulsar::producer::ProducerOptions {
+                batch_size: Some(3),
+                ..Default::default()
+            })
+            .build()
+            .await
+            .unwrap();
+        let mut receipts = Vec::new();
+        for i in 0..3u64 {
+            let event_time = if i == 1 {
+                9_000_000_000_000_000
+            } else {
+                1_700_000_000_000
+            };
+            let msg = pulsar::producer::Message {
+                payload: format!("message {i}").into_bytes(),
+                event_time: Some(event_time),
+                ..Default::default()
+            };
+            receipts.push(producer.send_non_blocking(msg).await.unwrap());
+        }
+        for receipt in receipts {
+            receipt.await.unwrap();
+        }
+
+        let mut read = Vec::new();
+        for _ in 0..6 {
+            read.extend(source.read_messages().await.unwrap().unwrap());
+        }
+        assert_eq!(read.len(), 3);
+        assert_eq!(
+            read.iter()
+                .map(|m| m.offset.batch_index)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+
+        source
+            .ack_offsets(read.iter().map(|m| m.offset).collect())
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        drop(source);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let source = new_source().await.unwrap();
+        let mut redelivered = Vec::new();
+        for _ in 0..6 {
+            redelivered.extend(source.read_messages().await.unwrap().unwrap());
+        }
+        assert_eq!(redelivered.len(), 0);
     }
 }
