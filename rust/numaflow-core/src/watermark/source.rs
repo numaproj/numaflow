@@ -672,10 +672,7 @@ mod tests {
                 ])
                 .await;
 
-            let offset = Offset::Int(IntOffset {
-                offset: i,
-                partition_idx: 0,
-            });
+            let offset = Offset::Int(IntOffset::new(i, 0));
             handle
                 .publish_source_isb_watermark(stream.clone(), offset, 0)
                 .await;

@@ -35,8 +35,10 @@ struct TrackerEntry {
 
 /// TrackerState holds the mutable state of the tracker.
 struct TrackerState {
-    /// entries organized by partition, each partition has its own BTreeMap of offsets
-    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    /// entries organized by (buffer, partition), each has its own BTreeMap of offsets.
+    /// The buffer is part of the key because a vertex with several ingress edges reads
+    /// one buffer per edge for the same partition, and their sequences overlap.
+    entries: HashMap<(&'static str, u16), BTreeMap<Offset, TrackerEntry>>,
 }
 
 impl Drop for TrackerState {
@@ -209,7 +211,7 @@ impl Tracker {
             callback_info = Some(message.try_into()?);
         }
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
         if partition_entries.contains_key(&offset) {
@@ -242,7 +244,7 @@ impl Tracker {
             .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
             .collect();
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -263,7 +265,7 @@ impl Tracker {
             return Ok(());
         }
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -289,7 +291,7 @@ impl Tracker {
         }
 
         let response = message_tags.map(|tags| tags.to_vec());
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -306,7 +308,7 @@ impl Tracker {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: &Offset) -> Result<()> {
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -469,6 +471,29 @@ mod tests {
         handle.delete(&message.offset).await.unwrap();
 
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
+    }
+
+    #[tokio::test]
+    async fn test_same_sequence_on_different_buffers_is_not_duplicate() {
+        let handle = Tracker::new(None, CancellationToken::new());
+        let message = |stream: &'static str| Message {
+            offset: Offset::Int(IntOffset::with_stream(1, 0, stream)),
+            ..Default::default()
+        };
+        let from_a = message("ns-pl-a-c-0");
+        let from_b = message("ns-pl-b-c-0");
+
+        handle.insert(&from_a).await.unwrap();
+        handle.insert(&from_b).await.unwrap();
+        assert!(matches!(
+            handle.insert(&from_a).await,
+            Err(Error::DuplicateInflight(_))
+        ));
+
+        handle.delete(&from_a.offset).await.unwrap();
+        assert!(!handle.is_empty().await.unwrap());
+        handle.delete(&from_b.offset).await.unwrap();
+        assert!(handle.is_empty().await.unwrap());
     }
 
     #[cfg(feature = "nats-tests")]

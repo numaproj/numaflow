@@ -577,7 +577,8 @@ mod tests {
             &got.offset,
             Offset::Int(IntOffset {
                 offset: 1,
-                partition_idx: 0
+                partition_idx: 0,
+                ..
             })
         ));
 
@@ -641,7 +642,8 @@ mod tests {
                 &messages[0].offset,
                 Offset::Int(IntOffset {
                     offset: 1,
-                    partition_idx: 0
+                    partition_idx: 0,
+                    ..
                 })
             ),
             "WMB must retain a real broker offset, got {:?}",

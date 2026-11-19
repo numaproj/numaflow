@@ -443,10 +443,7 @@ mod tests {
         let watermark =
             watermark_millis.map(|millis| chrono::DateTime::from_timestamp_millis(millis).unwrap());
         Message {
-            offset: Offset::Int(IntOffset {
-                offset,
-                partition_idx,
-            }),
+            offset: Offset::Int(IntOffset::new(offset, partition_idx)),
             watermark,
             ..Default::default()
         }
@@ -575,10 +572,7 @@ mod tests {
                     vertex: "to_vertex",
                     partition: 0,
                 },
-                Offset::Int(IntOffset {
-                    offset: 1,
-                    partition_idx: 0,
-                }),
+                Offset::Int(IntOffset::new(1, 0)),
             )
             .await;
 
@@ -610,10 +604,7 @@ mod tests {
         }
 
         tracker
-            .delete(&Offset::Int(IntOffset {
-                offset: 1,
-                partition_idx: 0,
-            }))
+            .delete(&Offset::Int(IntOffset::new(1, 0)))
             .await
             .unwrap();
 
@@ -624,10 +615,7 @@ mod tests {
                     vertex: "to_vertex",
                     partition: 0,
                 },
-                Offset::Int(IntOffset {
-                    offset: 2,
-                    partition_idx: 0,
-                }),
+                Offset::Int(IntOffset::new(2, 0)),
             )
             .await;
 
@@ -732,10 +720,7 @@ mod tests {
         let timeout_duration = Duration::from_secs(1);
         let result = tokio::time::timeout(timeout_duration, async {
             for i in 0..10 {
-                let offset = Offset::Int(IntOffset {
-                    offset: i,
-                    partition_idx: 0,
-                });
+                let offset = Offset::Int(IntOffset::new(i, 0));
 
                 // Insert message into tracker
                 let message = create_test_message(i, 0, Some(i * 100));
@@ -748,18 +733,12 @@ mod tests {
                             vertex: "from_vertex",
                             partition: 0,
                         },
-                        Offset::Int(IntOffset {
-                            offset: i,
-                            partition_idx: 0,
-                        }),
+                        Offset::Int(IntOffset::new(i, 0)),
                     )
                     .await;
 
                 let watermark = handle
-                    .fetch_watermark(Offset::Int(IntOffset {
-                        offset: 3,
-                        partition_idx: 0,
-                    }))
+                    .fetch_watermark(Offset::Int(IntOffset::new(3, 0)))
                     .await;
 
                 if watermark.timestamp_millis() != -1 {
@@ -1020,10 +999,7 @@ mod tests {
         let mut fetched_watermark = -1;
         // publish watermark and try fetching to see if something is getting published
         for i in 0..10 {
-            let offset = Offset::Int(IntOffset {
-                offset: i,
-                partition_idx: 0,
-            });
+            let offset = Offset::Int(IntOffset::new(i, 0));
 
             // Insert message into tracker
             let message = create_test_message(i, 0, Some(i * 100));
@@ -1036,10 +1012,7 @@ mod tests {
                         vertex: "from_vertex",
                         partition: 0,
                     },
-                    Offset::Int(IntOffset {
-                        offset: i,
-                        partition_idx: 0,
-                    }),
+                    Offset::Int(IntOffset::new(i, 0)),
                 )
                 .await;
 

@@ -57,9 +57,10 @@ impl JSWrappedMessage {
             )))
         })?;
 
-        let offset = Offset::Int(IntOffset::new(
+        let offset = Offset::Int(IntOffset::with_stream(
             msg_info.stream_sequence as i64,
             self.partition_idx,
+            self.source_stream,
         ));
 
         // Decompress payload in-place before shared proto→Message mapping.
@@ -208,9 +209,10 @@ impl ISBReader for JetStreamReader {
                     "Failed to get message info from JetStream: {e}"
                 )))
             })?;
-            let offset = Offset::Int(IntOffset::new(
+            let offset = Offset::Int(IntOffset::with_stream(
                 info.stream_sequence as i64,
                 self.stream.partition,
+                self.stream.name,
             ));
 
             // Convert to core Message (including decompression) using existing wrapper
