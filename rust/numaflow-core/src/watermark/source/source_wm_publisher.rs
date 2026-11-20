@@ -121,7 +121,8 @@ impl SourceWatermarkPublisher {
             .publish_watermark_with_processor_count(
                 &Stream {
                     name: "source",
-                    vertex: self.source_config.vertex,
+                    to_vertex: self.source_config.vertex,
+                    from_vertex: "",
                     // in source, input partition is considered as a separate processor entity and this
                     // partition represents the isb partition.
                     // Since source has publish/fetch cycle, in the publish we have to associate the
@@ -355,7 +356,8 @@ mod tests {
 
         let stream = Stream {
             name: "edge_stream",
-            vertex: "edge_vertex",
+            to_vertex: "edge_vertex",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -505,7 +507,8 @@ mod tests {
 
         let stream = Stream {
             name: "edge_stream",
-            vertex: "edge_vertex",
+            to_vertex: "edge_vertex",
+            from_vertex: "",
             partition: 0,
         };
 

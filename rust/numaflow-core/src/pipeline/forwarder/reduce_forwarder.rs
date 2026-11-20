@@ -661,7 +661,8 @@ mod tests {
             },
         );
 
-        let input_stream = Stream::new("test_reduce_over_inmemory_isb_input", INPUT_VERTEX, 0);
+        let input_stream = Stream::new("test_reduce_over_inmemory_isb_input", INPUT_VERTEX, 0)
+            .with_from_vertex(INPUT_VERTEX);
         let output_stream = Stream::new("test_reduce_over_inmemory_isb_output", OUTPUT_VERTEX, 0);
         let input_bucket_config = BucketConfig {
             vertex: INPUT_VERTEX,

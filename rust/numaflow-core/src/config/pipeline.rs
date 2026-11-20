@@ -572,7 +572,7 @@ impl PipelineConfig {
                 let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                 let name: &'static str =
                     Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
-                vec![Stream::new(name, to, i)]
+                vec![Stream::new(name, to, i).with_from_vertex(from)]
             } else {
                 (0..partition_count)
                     .map(|i| {
@@ -582,7 +582,7 @@ impl PipelineConfig {
                         let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                         let name: &'static str =
                             Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
-                        Stream::new(name, to, i)
+                        Stream::new(name, to, i).with_from_vertex(from)
                     })
                     .collect()
             };
@@ -625,7 +625,7 @@ impl PipelineConfig {
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
                         Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
+                    Stream::new(name, to, i).with_from_vertex(from)
                 })
                 .collect();
 
@@ -1047,7 +1047,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -1226,7 +1229,10 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
@@ -1286,7 +1292,10 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
@@ -1396,7 +1405,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-in-map-0", "map", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-map-0", "map", 0)
+                            .with_from_vertex("in"),
+                    ],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -1928,8 +1940,8 @@ mod tests {
         };
         // The two sources must not collide on one physical buffer.
         assert_ne!(s1.name, s2.name);
-        assert_eq!(s1.vertex, "map");
-        assert_eq!(s2.vertex, "map");
+        assert_eq!(s1.to_vertex, "map");
+        assert_eq!(s2.to_vertex, "map");
     }
 
     /// An unordered join reads every partition of every ingress edge.

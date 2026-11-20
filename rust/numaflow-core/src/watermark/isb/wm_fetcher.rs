@@ -53,62 +53,74 @@ impl ISBWatermarkFetcher {
         })
     }
 
-    /// Fetches the watermark for the given offset and partition.
-    pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Watermark {
-        // Iterate over all the processor managers and get the smallest watermark. (join case)
-        for (edge, processor_manager) in self.processor_managers.iter() {
-            let mut epoch = i64::MAX;
-            let mut processors_to_delete = Vec::new();
+    /// Fetches the watermark for an offset read from `from_vertex`'s buffer on `partition_idx`.
+    ///
+    /// Buffers are edge-owned, so every incoming edge has its own offset sequence. The offset is
+    /// therefore looked up only in the timelines of `from_vertex`'s processors, and only that
+    /// edge's last processed watermark for the partition is updated. The returned watermark is the
+    /// minimum of the last processed watermarks across all edges and partitions.
+    pub(crate) fn fetch_watermark(
+        &mut self,
+        from_vertex: &str,
+        offset: i64,
+        partition_idx: u16,
+    ) -> Watermark {
+        let processor_manager = self
+            .processor_managers
+            .get(from_vertex)
+            .unwrap_or_else(|| panic!("invalid from vertex {from_vertex}"));
 
-            // iterate over all the processors and get the smallest watermark
-            processor_manager
-                .processors
-                .read()
-                .expect("failed to acquire lock")
-                .iter()
-                .for_each(|(name, processor)| {
-                    // we only need to consider the timeline for the requested partition
-                    if let Some(timeline) = processor.timelines.get(&partition_idx) {
-                        let t = timeline.get_event_time(offset);
-                        if t < epoch {
-                            epoch = t;
-                        }
+        let mut epoch = i64::MAX;
+        let mut processors_to_delete = Vec::new();
+
+        // iterate over all the processors of this edge and get the smallest watermark
+        processor_manager
+            .processors
+            .read()
+            .expect("failed to acquire lock")
+            .iter()
+            .for_each(|(name, processor)| {
+                // we only need to consider the timeline for the requested partition
+                if let Some(timeline) = processor.timelines.get(&partition_idx) {
+                    let t = timeline.get_event_time(offset);
+                    if t < epoch {
+                        epoch = t;
                     }
+                }
 
-                    // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
-                    // the processor (this means we are processing data later than what the stale processor has processed)
-                    if processor.is_deleted() {
-                        // headOffset is used to check whether this pod can be deleted (e.g., dead pod)
-                        let head_offset = processor
-                            .timelines
-                            .values()
-                            .map(|timeline| timeline.get_head_offset())
-                            .max()
-                            .unwrap_or(-1);
+                // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
+                // the processor (this means we are processing data later than what the stale processor has processed)
+                if processor.is_deleted() {
+                    // headOffset is used to check whether this pod can be deleted (e.g., dead pod)
+                    let head_offset = processor
+                        .timelines
+                        .values()
+                        .map(|timeline| timeline.get_head_offset())
+                        .max()
+                        .unwrap_or(-1);
 
-                        if offset > head_offset {
-                            processors_to_delete.push(name.clone());
-                        }
+                    if offset > head_offset {
+                        processors_to_delete.push(name.clone());
                     }
-                });
+                }
+            });
 
-            // delete the processors that are inactive
-            for name in processors_to_delete {
-                processor_manager.delete_processor(&name);
-            }
-
-            // if the epoch is not i64::MAX, update the last processed watermark for this particular edge and the partition
-            // while fetching watermark we need to consider the smallest last processed watermark among all the partitions
-            if epoch != i64::MAX {
-                *self
-                    .last_processed_wm
-                    .get_mut(edge)
-                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    .get_mut(&partition_idx)
-                    .expect("should have partition index") = epoch;
-            }
+        // delete the processors that are inactive
+        for name in processors_to_delete {
+            processor_manager.delete_processor(&name);
         }
-        // now we computed and updated for this partition, we just need to compare across partitions.
+
+        // if the epoch is not i64::MAX, update the last processed watermark for this edge and partition
+        if epoch != i64::MAX {
+            *self
+                .last_processed_wm
+                .get_mut(from_vertex)
+                .unwrap_or_else(|| panic!("invalid vertex {from_vertex}"))
+                .get_mut(&partition_idx)
+                .expect("should have partition index") = epoch;
+        }
+
+        // the watermark is the smallest last processed watermark across all edges and partitions.
         let watermark = self.get_watermark();
 
         // Log summary periodically
@@ -375,7 +387,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_watermark(2, 0);
+        let watermark = fetcher.fetch_watermark("from_vtx", 2, 0);
         assert_eq!(watermark.timestamp_millis(), 100);
     }
 
@@ -525,7 +537,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_watermark(12, 0);
+        let watermark = fetcher.fetch_watermark("from_vtx", 12, 0);
         fetcher.watermark_log_summary(&watermark, 12);
 
         assert_eq!(watermark.timestamp_millis(), 150);
@@ -783,11 +795,11 @@ mod tests {
 
         // Invoke fetch_watermark and verify the result for partition 0, first fetch will be -1 because we have not fetched for other
         // partition (we consider min across the last fetched watermark)
-        let watermark_p0 = fetcher.fetch_watermark(12, 0);
+        let watermark_p0 = fetcher.fetch_watermark("from_vtx", 12, 0);
         assert_eq!(watermark_p0.timestamp_millis(), -1);
 
         // Invoke fetch_watermark and verify the result for partition 1 (we consider min across the last fetch wm for all partitions)
-        let watermark_p1 = fetcher.fetch_watermark(32, 1);
+        let watermark_p1 = fetcher.fetch_watermark("from_vtx", 32, 1);
         assert_eq!(watermark_p1.timestamp_millis(), 150);
     }
 
@@ -1029,13 +1041,101 @@ mod tests {
                 .await
                 .unwrap();
 
-        // Invoke fetch_watermark and verify the result for partition 0
-        let watermark_p0 = fetcher.fetch_watermark(12, 0);
-        assert_eq!(watermark_p0.timestamp_millis(), -1);
+        // edge1 p0 @12 → min(150, 170) = 150, other slots are still -1
+        assert_eq!(
+            fetcher.fetch_watermark("edge1", 12, 0).timestamp_millis(),
+            -1
+        );
+        // edge2 p0 @12 → min(190, 210) = 190
+        assert_eq!(
+            fetcher.fetch_watermark("edge2", 12, 0).timestamp_millis(),
+            -1
+        );
+        // edge1 p1 @32 → min(160, 180) = 160
+        assert_eq!(
+            fetcher.fetch_watermark("edge1", 32, 1).timestamp_millis(),
+            -1
+        );
+        // edge2 p1 @32 → min(200, 220) = 200, all slots set: min(150, 190, 160, 200)
+        assert_eq!(
+            fetcher.fetch_watermark("edge2", 32, 1).timestamp_millis(),
+            150
+        );
+    }
 
-        // Invoke fetch_watermark and verify the result for partition 1
-        let watermark_p1 = fetcher.fetch_watermark(32, 1);
-        assert_eq!(watermark_p1.timestamp_millis(), 150);
+    /// Every edge owns its buffer, so the same offset means different things on different
+    /// edges. A fetch must only consult the timelines of the edge the offset was read from.
+    #[tokio::test]
+    async fn test_fetch_watermark_offset_only_looked_up_on_its_edge() {
+        let make_pm = |name: &'static str, wmbs: &[(i64, i64)]| {
+            let mut processor = Processor::new(Bytes::from(name), Status::Active, &[0], 0);
+            let mut timeline = OffsetTimeline::new(10);
+            for &(watermark, offset) in wmbs {
+                timeline.put(WMB {
+                    watermark,
+                    offset,
+                    idle: false,
+                    partition: 0,
+                    processor_count: None,
+                });
+            }
+            processor.timelines.insert(0, timeline);
+            let mut processors = HashMap::new();
+            processors.insert(Bytes::from(name), processor);
+            ProcessorManager {
+                processors: Arc::new(RwLock::new(processors)),
+                handles: vec![],
+            }
+        };
+
+        // in-one is far ahead in its own offset space, in-two is at low offsets.
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert(
+            "in-one",
+            make_pm("in-one-0", &[(103, 200), (104, 300), (105, 700)]),
+        );
+        processor_managers.insert("in-two", make_pm("in-two-0", &[(103, 80), (104, 120)]));
+
+        let bucket_configs = [
+            BucketConfig {
+                vertex: "in-one",
+                ot_bucket: "in-one_OT",
+                partitions: vec![0],
+                delay: None,
+            },
+            BucketConfig {
+                vertex: "in-two",
+                ot_bucket: "in-two_OT",
+                partitions: vec![0],
+                delay: None,
+            },
+        ];
+        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &bucket_configs)
+            .await
+            .unwrap();
+
+        let slot = |f: &ISBWatermarkFetcher, edge: &str| {
+            f.last_processed_wm
+                .get(edge)
+                .and_then(|p| p.get(&0))
+                .copied()
+        };
+
+        // in-one @250 only moves in-one's slot (103); in-two has not been read yet.
+        let wm = fetcher.fetch_watermark("in-one", 250, 0);
+        assert_eq!(wm.timestamp_millis(), -1);
+        assert_eq!(slot(&fetcher, "in-one"), Some(103));
+        assert_eq!(slot(&fetcher, "in-two"), Some(-1));
+
+        // in-two @125 → 104 from in-two's own timeline, in-one's slot is untouched.
+        let wm = fetcher.fetch_watermark("in-two", 125, 0);
+        assert_eq!(wm.timestamp_millis(), 103);
+        assert_eq!(slot(&fetcher, "in-one"), Some(103));
+        assert_eq!(slot(&fetcher, "in-two"), Some(104));
+
+        // in-one @750 → 105, the result is held back by in-two.
+        let wm = fetcher.fetch_watermark("in-one", 750, 0);
+        assert_eq!(wm.timestamp_millis(), 104);
     }
 
     #[tokio::test]
@@ -1765,7 +1865,7 @@ mod tests {
             .unwrap();
 
         // Fetch with offset=12, which is > deleted processor's head_offset (8).
-        let _wm = fetcher.fetch_watermark(12, 0);
+        let _wm = fetcher.fetch_watermark("from_vtx", 12, 0);
 
         // Verify the deleted processor was removed from the map.
         let map = processors_ref.read().expect("lock");
@@ -1818,7 +1918,7 @@ mod tests {
             .unwrap();
 
         // Fetch with offset=15, which is <= deleted processor's head_offset (20).
-        let _wm = fetcher.fetch_watermark(15, 0);
+        let _wm = fetcher.fetch_watermark("from_vtx", 15, 0);
 
         // Deleted processor should still be in the map.
         let map = processors_ref.read().expect("lock");
@@ -1873,7 +1973,7 @@ mod tests {
         // Active processor: get_event_time(12) -> 300 (offset 10 < 12).
         // InActive processor: get_event_time(12) -> 150 (offset 8 < 12).
         // Minimum = 150, which proves the InActive processor was included.
-        let wm = fetcher.fetch_watermark(12, 0);
+        let wm = fetcher.fetch_watermark("from_vtx", 12, 0);
         assert_eq!(
             wm.timestamp_millis(),
             150,
@@ -1925,7 +2025,7 @@ mod tests {
         // First fetch for partition 0: get_event_time(10) on p0 = 100 (offset 5 < 10).
         // last_processed_wm: {from_vtx: {p0: 100, p1: -1}}
         // get_watermark returns min(-1, 100) = -1.
-        let wm_p0 = fetcher.fetch_watermark(10, 0);
+        let wm_p0 = fetcher.fetch_watermark("from_vtx", 10, 0);
         assert_eq!(
             wm_p0.timestamp_millis(),
             -1,
@@ -1935,7 +2035,7 @@ mod tests {
         // Now fetch for partition 1: get_event_time(10) on p1 = 50 (offset 3 < 10).
         // last_processed_wm: {from_vtx: {p0: 100, p1: 50}}
         // get_watermark returns min(100, 50) = 50.
-        let wm_p1 = fetcher.fetch_watermark(10, 1);
+        let wm_p1 = fetcher.fetch_watermark("from_vtx", 10, 1);
         assert_eq!(
             wm_p1.timestamp_millis(),
             50,
@@ -1945,7 +2045,7 @@ mod tests {
         // Fetch partition 0 again with a higher offset: get_event_time(25) on p0 = 500.
         // last_processed_wm: {from_vtx: {p0: 500, p1: 50}}
         // get_watermark returns min(500, 50) = 50 — p1's stale value constrains it.
-        let wm_p0_again = fetcher.fetch_watermark(25, 0);
+        let wm_p0_again = fetcher.fetch_watermark("from_vtx", 25, 0);
         assert_eq!(
             wm_p0_again.timestamp_millis(),
             50,
@@ -1955,7 +2055,7 @@ mod tests {
         // Fetch partition 1 with a higher offset: get_event_time(20) on p1 = 200.
         // last_processed_wm: {from_vtx: {p0: 500, p1: 200}}
         // get_watermark returns min(500, 200) = 200.
-        let wm_p1_again = fetcher.fetch_watermark(20, 1);
+        let wm_p1_again = fetcher.fetch_watermark("from_vtx", 20, 1);
         assert_eq!(
             wm_p1_again.timestamp_millis(),
             200,

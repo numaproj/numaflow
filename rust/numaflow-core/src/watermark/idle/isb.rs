@@ -104,8 +104,8 @@ impl ISBIdleDetector {
             .expect("Failed to get write lock");
 
         let last_published_wm = write_guard
-            .get_mut(stream.vertex)
-            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
+            .get_mut(stream.to_vertex)
+            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.to_vertex));
 
         last_published_wm
             .get_mut(stream.partition as usize)
@@ -127,7 +127,7 @@ impl ISBIdleDetector {
                 .last_published_wm_state
                 .read()
                 .expect("Failed to get read lock");
-            let last_published_wm = read_guard.get(stream.vertex).expect("Invalid vertex");
+            let last_published_wm = read_guard.get(stream.to_vertex).expect("Invalid vertex");
             last_published_wm
                 .get(stream.partition as usize)
                 .expect("should have partition")
@@ -171,8 +171,8 @@ impl ISBIdleDetector {
             .write()
             .expect("Failed to get write lock");
         let last_published_wm = write_guard
-            .get_mut(stream.vertex)
-            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
+            .get_mut(stream.to_vertex)
+            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.to_vertex));
 
         // setting an offset for wmb-offset means it is idle, and we will do inplace incr of WM for that offset.
         last_published_wm

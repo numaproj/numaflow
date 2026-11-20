@@ -78,11 +78,11 @@ impl ISBWatermarkState {
         }
     }
 
-    /// Fetches the watermark for the given offset
-    fn fetch_watermark(&mut self, offset: IntOffset) -> Watermark {
-        let watermark = self
-            .fetcher
-            .fetch_watermark(offset.offset, offset.partition_idx);
+    /// Fetches the watermark for the given offset read from the given stream.
+    fn fetch_watermark(&mut self, stream: &Stream, offset: IntOffset) -> Watermark {
+        let watermark =
+            self.fetcher
+                .fetch_watermark(stream.from_vertex, offset.offset, stream.partition);
 
         self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
         watermark
@@ -337,7 +337,7 @@ impl ISBWatermarkHandle {
 
     /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
     /// return -1.
-    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
+    pub(crate) async fn fetch_watermark(&self, stream: &Stream, offset: Offset) -> Watermark {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot compute watermark");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
@@ -345,7 +345,7 @@ impl ISBWatermarkHandle {
 
         // Acquire lock, fetch watermark, and release immediately
         let mut state = self.state.lock().await;
-        state.fetch_watermark(offset)
+        state.fetch_watermark(stream, offset)
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
@@ -569,7 +569,8 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "to_vertex",
+                    to_vertex: "to_vertex",
+                    from_vertex: "from_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset::new(1, 0)),
@@ -612,7 +613,8 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "to_vertex",
+                    to_vertex: "to_vertex",
+                    from_vertex: "from_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset::new(2, 0)),
@@ -730,7 +732,8 @@ mod tests {
                     .publish_watermark(
                         Stream {
                             name: "test_stream",
-                            vertex: "from_vertex",
+                            to_vertex: "from_vertex",
+                            from_vertex: "from_vertex",
                             partition: 0,
                         },
                         Offset::Int(IntOffset::new(i, 0)),
@@ -738,7 +741,10 @@ mod tests {
                     .await;
 
                 let watermark = handle
-                    .fetch_watermark(Offset::Int(IntOffset::new(3, 0)))
+                    .fetch_watermark(
+                        &Stream::new("test_stream", "to_vertex", 0).with_from_vertex("from_vertex"),
+                        Offset::Int(IntOffset::new(3, 0)),
+                    )
                     .await;
 
                 if watermark.timestamp_millis() != -1 {
@@ -1009,7 +1015,8 @@ mod tests {
                 .publish_watermark(
                     Stream {
                         name: "test_stream",
-                        vertex: "from_vertex",
+                        to_vertex: "from_vertex",
+                        from_vertex: "from_vertex",
                         partition: 0,
                     },
                     Offset::Int(IntOffset::new(i, 0)),

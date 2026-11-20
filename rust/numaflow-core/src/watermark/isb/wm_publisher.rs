@@ -158,7 +158,7 @@ impl ISBWatermarkPublisher {
     ) {
         let last_state = self
             .last_published_wm
-            .get_mut(stream.vertex)
+            .get_mut(stream.to_vertex)
             .expect("Invalid vertex, no last published watermark state found")
             .get_mut(&stream.partition)
             .expect("should have partition");
@@ -182,7 +182,10 @@ impl ISBWatermarkPublisher {
             return;
         }
 
-        let ot_store = self.ot_stores.get(stream.vertex).expect("Invalid vertex");
+        let ot_store = self
+            .ot_stores
+            .get(stream.to_vertex)
+            .expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
             offset: publish_offset,
@@ -275,13 +278,15 @@ mod tests {
 
         let stream_partition_0 = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
         let stream_partition_1 = Stream {
             name: "v1-1",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 1,
         };
 
@@ -393,13 +398,15 @@ mod tests {
 
         let stream1 = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
         let stream2 = Stream {
             name: "v2-0",
-            vertex: "v2",
+            to_vertex: "v2",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -480,7 +487,8 @@ mod tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -652,7 +660,8 @@ mod simple_kv_tests {
             steps: vec![PublishStep {
                 stream: Stream {
                     name: "v1-0",
-                    vertex: "v1",
+                    to_vertex: "v1",
+                    from_vertex: "",
                     partition: 0,
                 },
                 offset: 1,
@@ -689,7 +698,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -700,7 +710,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 2,
@@ -711,7 +722,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 3,
@@ -750,7 +762,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -762,7 +775,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-1",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 1,
                     },
                     offset: 3,
@@ -809,7 +823,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -820,7 +835,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v2-0",
-                        vertex: "v2",
+                        to_vertex: "v2",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -867,7 +883,8 @@ mod simple_kv_tests {
             steps: vec![PublishStep {
                 stream: Stream {
                     name: "v1-0",
-                    vertex: "v1",
+                    to_vertex: "v1",
+                    from_vertex: "",
                     partition: 0,
                 },
                 offset: 1,
@@ -909,7 +926,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -921,7 +939,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 20,
@@ -959,7 +978,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -971,7 +991,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 5,
@@ -1009,7 +1030,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -1021,7 +1043,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 5,
@@ -1059,7 +1082,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -1070,7 +1094,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -1109,7 +1134,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -1121,7 +1147,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 2,
@@ -1162,7 +1189,8 @@ mod simple_kv_tests {
             steps: vec![PublishStep {
                 stream: Stream {
                     name: "v1-0",
-                    vertex: "v1",
+                    to_vertex: "v1",
+                    from_vertex: "",
                     partition: 0,
                 },
                 offset: 1,
@@ -1198,7 +1226,8 @@ mod simple_kv_tests {
             steps: vec![PublishStep {
                 stream: Stream {
                     name: "v1-0",
-                    vertex: "v1",
+                    to_vertex: "v1",
+                    from_vertex: "",
                     partition: 0,
                 },
                 offset: 1,
@@ -1239,7 +1268,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 10,
@@ -1250,7 +1280,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 20,
@@ -1300,7 +1331,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -1311,7 +1343,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-1",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 1,
                     },
                     offset: 2,
@@ -1322,7 +1355,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v2-0",
-                        vertex: "v2",
+                        to_vertex: "v2",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 3,
@@ -1333,7 +1367,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v2-1",
-                        vertex: "v2",
+                        to_vertex: "v2",
+                        from_vertex: "",
                         partition: 1,
                     },
                     offset: 4,
@@ -1382,7 +1417,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 1,
@@ -1393,7 +1429,8 @@ mod simple_kv_tests {
                 PublishStep {
                     stream: Stream {
                         name: "v1-0",
-                        vertex: "v1",
+                        to_vertex: "v1",
+                        from_vertex: "",
                         partition: 0,
                     },
                     offset: 2,
@@ -1440,7 +1477,8 @@ mod simple_kv_tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -1488,7 +1526,8 @@ mod simple_kv_tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -1522,7 +1561,8 @@ mod simple_kv_tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -1561,7 +1601,8 @@ mod simple_kv_tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -1616,7 +1657,8 @@ mod simple_kv_tests {
 
         let stream = Stream {
             name: "v1-0",
-            vertex: "v1",
+            to_vertex: "v1",
+            from_vertex: "",
             partition: 0,
         };
 

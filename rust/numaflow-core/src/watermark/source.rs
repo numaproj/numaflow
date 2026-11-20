@@ -629,7 +629,8 @@ mod tests {
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream {
                         name: "edge_stream",
-                        vertex: "edge_vertex",
+                        to_vertex: "edge_vertex",
+                        from_vertex: "",
                         partition: 0,
                     }],
                     ..Default::default()
@@ -653,7 +654,8 @@ mod tests {
 
         let stream = Stream {
             name: "edge_stream",
-            vertex: "edge_vertex",
+            to_vertex: "edge_vertex",
+            from_vertex: "",
             partition: 0,
         };
 
@@ -716,7 +718,8 @@ mod tests {
             writer_config: BufferWriterConfig {
                 streams: vec![Stream {
                     name: "edge_stream",
-                    vertex: "edge_vertex",
+                    to_vertex: "edge_vertex",
+                    from_vertex: "",
                     partition: 0,
                 }],
                 ..Default::default()
@@ -753,14 +756,16 @@ mod tests {
                 JetStreamWriter::new(
                     Stream {
                         name: "edge_stream",
-                        vertex: "edge_vertex",
+                        to_vertex: "edge_vertex",
+                        from_vertex: "",
                         partition: 0,
                     },
                     js_context.clone(),
                     BufferWriterConfig {
                         streams: vec![Stream {
                             name: "edge_stream",
-                            vertex: "edge_vertex",
+                            to_vertex: "edge_vertex",
+                            from_vertex: "",
                             partition: 0,
                         }],
                         ..Default::default()
@@ -909,7 +914,8 @@ mod tests {
             writer_config: BufferWriterConfig {
                 streams: vec![Stream {
                     name: "edge_stream",
-                    vertex: "edge_vertex",
+                    to_vertex: "edge_vertex",
+                    from_vertex: "",
                     partition: 0,
                 }],
                 ..Default::default()
@@ -946,14 +952,16 @@ mod tests {
                 JetStreamWriter::new(
                     Stream {
                         name: "edge_stream",
-                        vertex: "edge_vertex",
+                        to_vertex: "edge_vertex",
+                        from_vertex: "",
                         partition: 0,
                     },
                     js_context.clone(),
                     BufferWriterConfig {
                         streams: vec![Stream {
                             name: "edge_stream",
-                            vertex: "edge_vertex",
+                            to_vertex: "edge_vertex",
+                            from_vertex: "",
                             partition: 0,
                         }],
                         ..Default::default()

@@ -528,7 +528,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
             // Enrich message with watermark
             if let Some(wm) = self.watermark.as_mut() {
-                let watermark = wm.fetch_watermark(message.offset.clone()).await;
+                let watermark = wm
+                    .fetch_watermark(&self.stream, message.offset.clone())
+                    .await;
                 message.watermark = Some(watermark);
             }
 
