@@ -128,6 +128,8 @@ pub(crate) struct JetStreamReader {
     inflight: InflightMessages,
     /// interval at which we should send wip ack to avoid redelivery.
     wip_ack_interval: Duration,
+    /// consumer AckWait, after which JetStream redelivers an unacknowledged message.
+    ack_wait: Duration,
 }
 
 impl JetStreamReader {
@@ -150,7 +152,8 @@ impl JetStreamReader {
             .await
             .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get consumer info {e}"))))?;
 
-        let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
+        let ack_wait = consumer_info.config.ack_wait;
+        let ack_wait_seconds = ack_wait.as_secs();
         Ok(Self {
             stream,
             read_consumer: Arc::new(consumer.clone()),
@@ -158,6 +161,7 @@ impl JetStreamReader {
             compression_type: isb_config.map(|c| c.compression.compress_type),
             inflight: InflightMessages::default(),
             wip_ack_interval: Duration::from_secs(ack_wait_seconds / 3), // give 2 chances
+            ack_wait,
         })
     }
 }
@@ -279,6 +283,10 @@ impl ISBReader for JetStreamReader {
 
     fn wip_ack_interval(&self) -> Option<Duration> {
         Some(self.wip_ack_interval)
+    }
+
+    fn ack_wait(&self) -> Option<Duration> {
+        Some(self.ack_wait)
     }
 }
 
@@ -431,6 +439,54 @@ mod tests {
         // pending should be zero
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_ack_wait_comes_from_consumer() {
+        use crate::pipeline::isb::ISBReader;
+
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_ack_wait_from_consumer", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ack_wait: Duration::from_secs(42),
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // The ack/nack retry bound in the reader orchestrator relies on this value.
+        assert_eq!(
+            ISBReader::ack_wait(&js_reader),
+            Some(Duration::from_secs(42))
+        );
+        assert_eq!(
+            ISBReader::wip_ack_interval(&js_reader),
+            Some(Duration::from_secs(14))
+        );
 
         context.delete_stream(stream.name).await.unwrap();
     }
