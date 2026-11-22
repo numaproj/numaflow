@@ -181,15 +181,153 @@ Check the links below to see the examples for different languages.
 
 ###  Explore SDK Examples
 
-For more detailed examples and implementation patterns, check out the official SDK repositories:
+A user-defined sink implements a single handler that receives a batch of messages and returns one response per
+message. The snippets below are trimmed from the log sink example of each SDK: every message is logged and
+acknowledged with an `OK` response. Follow the links for the full examples.
 
-- **[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)**
-- **[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)**
-- **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)**
-- **[Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)**
-- **[Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)**
+=== "Golang"
 
-These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.
+    ```go
+    // logSink is a sinker implementation that logs the input to stdout
+    type logSink struct {
+    }
+
+    func (l *logSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum) sinksdk.Responses {
+        result := sinksdk.ResponsesBuilder()
+        for d := range datumStreamCh {
+            fmt.Println("User Defined Sink:", string(d.Value()))
+            id := d.ID()
+            result = result.Append(sinksdk.ResponseOK(id))
+        }
+        return result
+    }
+
+    func main() {
+        err := sinksdk.NewServer(&logSink{}).Start(context.Background())
+        if err != nil {
+            log.Panic("Failed to start sink function server: ", err)
+        }
+    }
+    ```
+    [View the full example on numaflow-go GitHub](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/log)
+
+=== "Java"
+
+    ```java
+    @Slf4j
+    public class SimpleSink extends Sinker {
+
+        public static void main(String[] args) throws Exception {
+            Server server = new Server(new SimpleSink());
+            server.start();
+            server.awaitTermination();
+        }
+
+        @Override
+        public ResponseList processMessages(DatumIterator datumIterator) {
+            ResponseList.ResponseListBuilder responseListBuilder = ResponseList.newBuilder();
+            while (true) {
+                Datum datum = null;
+                try {
+                    datum = datumIterator.next();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    continue;
+                }
+                // null means the iterator is closed, so we break the loop
+                if (datum == null) {
+                    break;
+                }
+                try {
+                    String msg = new String(datum.getValue());
+                    log.info("Received message: {}, headers - {}", msg, datum.getHeaders());
+                    responseListBuilder.addResponse(Response.responseOK(datum.getId()));
+                } catch (Exception e) {
+                    responseListBuilder.addResponse(Response.responseFailure(
+                            datum.getId(),
+                            e.getMessage()));
+                }
+            }
+            return responseListBuilder.build();
+        }
+    }
+    ```
+    [View the full example on numaflow-java GitHub](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)
+
+=== "Python"
+
+    ```python
+    class UserDefinedSink(Sinker):
+        def handler(self, datums: Iterator[Datum]) -> Responses:
+            responses = Responses()
+            for msg in datums:
+                _LOGGER.info("User Defined Sink %s", msg.value.decode("utf-8"))
+                responses.append(Response.as_success(msg.id))
+            return responses
+
+
+    if __name__ == "__main__":
+        grpc_server = SinkServer(UserDefinedSink())
+        grpc_server.start()
+    ```
+    [View the full example on numaflow-python GitHub](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/log)
+
+=== "Rust"
+
+    ```rust
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        sink::Server::new(Logger).start().await
+    }
+
+    struct Logger;
+
+    #[tonic::async_trait]
+    impl sink::Sinker for Logger {
+        async fn sink(&self, mut input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
+            let mut responses: Vec<Response> = Vec::new();
+
+            while let Some(datum) = input.recv().await {
+                let response = match std::str::from_utf8(&datum.value) {
+                    Ok(v) => {
+                        println!("{}", v);
+                        Response::ok(datum.id)
+                    }
+                    Err(e) => Response::failure(datum.id, format!("Invalid UTF-8 sequence: {}", e)),
+                };
+                responses.push(response);
+            }
+
+            responses
+        }
+    }
+    ```
+    [View the full example on numaflow-rs GitHub](https://github.com/numaproj/numaflow-rs/tree/main/examples/sink-log)
+
+=== "JS/TS"
+
+    ```typescript
+    async function sinkFn(datums: AsyncIterableIterator<sink.Datum>): Promise<sink.Response[]> {
+        let responses: Array<sink.Response> = []
+        for await (let datum of datums) {
+            console.log(`Received datum. id=${datum.id}, keys=${datum.keys}, payload=${datum.getValue().toString()}`)
+            responses.push(sink.Response.ok(datum.id))
+        }
+
+        return responses
+    }
+
+    async function main() {
+        const sinker = new sink.AsyncServer(sinkFn)
+        await sinker.start()
+    }
+
+    main().catch(console.error)
+    ```
+    [View the full example on numaflow-js GitHub](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)
+
+The SDK repositories contain more user-defined sink examples, covering the other response types such as fallback,
+on-success and serve.
 
 ### **Reminder**
 
