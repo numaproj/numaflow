@@ -139,6 +139,7 @@ impl std::str::FromStr for PulsarOffset {
 struct PendingMessage {
     topic: String,
     message_id: MessageIdData,
+    batched: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -188,19 +189,30 @@ impl PendingMessages {
         self.messages.len()
     }
 
-    fn insert(&mut self, offset: PulsarOffset, message: PendingMessage, batch_size: Option<i32>) {
+    fn insert(
+        &mut self,
+        offset: PulsarOffset,
+        mut message: PendingMessage,
+        batch_size: Option<i32>,
+    ) -> bool {
         if offset.batch_index >= 0
             && let Some(size) = batch_size.filter(|&size| size > 1)
         {
-            self.batches
+            let batch = self
+                .batches
                 .entry(EntryKey::from(&offset))
                 .or_insert(BatchEntry {
                     settled: vec![false; size as usize],
                     remaining: size as usize,
                     nacked: false,
                 });
+            if batch.is_settled(&offset) == Some(true) || self.messages.contains_key(&offset) {
+                return false;
+            }
+            message.batched = true;
         }
         self.messages.insert(offset, message);
+        true
     }
 
     fn plan(
@@ -212,6 +224,9 @@ impl PendingMessages {
             return Err(Error::UnknownOffset(*offset));
         };
         let Some(batch) = self.batches.get(&EntryKey::from(offset)) else {
+            if message.batched {
+                return Ok(None);
+            }
             return Ok(Some((message, settlement)));
         };
         match batch.is_settled(offset) {
@@ -247,6 +262,24 @@ impl PendingMessages {
         batch.nacked |= settlement == Settlement::Nack;
         if batch.remaining == 0 {
             self.batches.remove(&key);
+            let first = PulsarOffset {
+                ledger_id: key.ledger_id,
+                entry_id: key.entry_id,
+                partition: key.partition,
+                batch_index: i32::MIN,
+            };
+            let last = PulsarOffset {
+                batch_index: i32::MAX,
+                ..first
+            };
+            let leftovers: Vec<_> = self
+                .messages
+                .range(first..=last)
+                .map(|(offset, _)| *offset)
+                .collect();
+            for offset in leftovers {
+                self.messages.remove(&offset);
+            }
         }
     }
 }
@@ -452,14 +485,17 @@ impl ConsumerReaderActor {
             let message_id = msg.message_id().clone();
 
             // Physical topic (e.g. <topic>-partition-N) that ack/nack must route to.
-            self.pending.insert(
+            if !self.pending.insert(
                 offset,
                 PendingMessage {
                     topic: msg.topic,
                     message_id,
+                    batched: false,
                 },
                 msg.message_id.batch_size,
-            );
+            ) {
+                continue;
+            }
 
             messages.push(PulsarMessage {
                 key,
@@ -622,6 +658,7 @@ mod tests {
                 batch_index: (offset.batch_index >= 0).then_some(offset.batch_index),
                 ..Default::default()
             },
+            batched: false,
         }
     }
 
@@ -752,7 +789,7 @@ mod tests {
         let mut pending = PendingMessages::default();
         let offsets = insert_batch(&mut pending, 1, 2);
 
-        pending.insert(offsets[0], message(&offsets[0]), Some(2));
+        assert!(!pending.insert(offsets[0], message(&offsets[0]), Some(2)));
         pending.settle(&offsets[0], Settlement::Ack);
 
         assert_eq!(
@@ -762,17 +799,17 @@ mod tests {
     }
 
     #[test]
-    fn redelivered_copy_of_settled_message_is_not_counted_twice() {
+    fn redelivered_copy_of_settled_message_is_skipped() {
         let mut pending = PendingMessages::default();
         let offsets = insert_batch(&mut pending, 1, 4);
         pending.settle(&offsets[0], Settlement::Ack);
 
-        pending.insert(offsets[0], message(&offsets[0]), Some(4));
-        for offset in [&offsets[1], &offsets[2], &offsets[0]] {
+        assert!(!pending.insert(offsets[0], message(&offsets[0]), Some(4)));
+        assert_eq!(pending.len(), 3);
+        for offset in [&offsets[1], &offsets[2]] {
             assert_eq!(planned(&pending, offset, Settlement::Ack), None);
             pending.settle(offset, Settlement::Ack);
         }
-        assert_eq!(pending.len(), 1);
 
         assert_eq!(
             planned(&pending, &offsets[3], Settlement::Ack),
@@ -780,6 +817,54 @@ mod tests {
         );
         pending.settle(&offsets[3], Settlement::Ack);
         assert!(pending.batches.is_empty());
+        assert_eq!(pending.len(), 0);
+    }
+
+    #[test]
+    fn redelivery_after_partial_ack_does_not_ack_a_nacked_batch() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+        pending.settle(&offsets[0], Settlement::Ack);
+
+        assert!(!pending.insert(offsets[0], message(&offsets[0]), Some(2)));
+        assert!(!pending.insert(offsets[1], message(&offsets[1]), Some(2)));
+
+        assert_eq!(
+            planned(&pending, &offsets[1], Settlement::Nack),
+            Some(Settlement::Nack)
+        );
+        pending.settle(&offsets[1], Settlement::Nack);
+        assert!(pending.batches.is_empty());
+        assert_eq!(pending.len(), 0);
+        assert!(matches!(
+            pending.plan(&offsets[0], Settlement::Ack),
+            Err(Error::UnknownOffset(_))
+        ));
+    }
+
+    #[test]
+    fn batched_message_without_batch_entry_is_not_sent() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+        pending.batches.clear();
+
+        assert_eq!(planned(&pending, &offsets[0], Settlement::Ack), None);
+        pending.settle(&offsets[0], Settlement::Ack);
+        assert_eq!(pending.len(), 1);
+    }
+
+    #[test]
+    fn completed_batch_drops_leftover_copies() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+        let other = insert_batch(&mut pending, 2, 2);
+        pending.settle(&offsets[0], Settlement::Ack);
+        pending.messages.insert(offsets[0], message(&offsets[0]));
+
+        pending.settle(&offsets[1], Settlement::Ack);
+        assert!(!pending.messages.contains_key(&offsets[0]));
+        assert_eq!(pending.len(), 2);
+        assert!(other.iter().all(|o| pending.messages.contains_key(o)));
     }
 
     #[test]
@@ -935,5 +1020,109 @@ mod tests {
             redelivered.extend(source.read_messages().await.unwrap().unwrap());
         }
         assert_eq!(redelivered.len(), 0);
+    }
+
+    #[cfg(feature = "pulsar-tests")]
+    #[tokio::test]
+    async fn test_redelivered_copies_do_not_ack_a_nacked_batch() {
+        use std::io::{Read, Write};
+        let id = uuid::Uuid::new_v4().simple();
+        let name = format!("pulsar_source_{id}");
+        let topic = format!("persistent://public/default/{name}");
+        let config = PulsarSourceConfig {
+            pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::parse(
+                "pulsar://localhost:6650",
+            )
+            .unwrap(),
+            topic: topic.clone(),
+            consumer_name: "test".into(),
+            subscription: format!("source_subscription_{id}"),
+            max_unack: 100,
+            dead_letter_policy: None,
+            auth: None,
+            tls: None,
+        };
+        let new_source = || {
+            PulsarSource::new(
+                config.clone(),
+                10,
+                Duration::from_millis(500),
+                0,
+                CancellationToken::new(),
+            )
+        };
+        let source = new_source().await.unwrap();
+
+        let client = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+            .build()
+            .await
+            .unwrap();
+        let mut producer = client
+            .producer()
+            .with_topic(&topic)
+            .with_options(pulsar::producer::ProducerOptions {
+                batch_size: Some(3),
+                ..Default::default()
+            })
+            .build()
+            .await
+            .unwrap();
+        let mut receipts = Vec::new();
+        for i in 0..3 {
+            receipts.push(
+                producer
+                    .send_non_blocking(format!("message {i}"))
+                    .await
+                    .unwrap(),
+            );
+        }
+        for receipt in receipts {
+            receipt.await.unwrap();
+        }
+
+        let mut offsets = Vec::new();
+        for _ in 0..6 {
+            let batch = source.read_messages().await.unwrap().unwrap();
+            offsets.extend(batch.into_iter().map(|m| m.offset));
+        }
+        assert_eq!(offsets.len(), 3);
+        source.ack_offsets(vec![offsets[0]]).await.unwrap();
+
+        let mut admin = std::net::TcpStream::connect("localhost:8080").unwrap();
+        write!(
+            admin,
+            "PUT /admin/v2/persistent/public/default/{name}/unload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        let mut response = String::new();
+        admin.read_to_string(&mut response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 204"), "{response}");
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let mut copies = Vec::new();
+        for _ in 0..6 {
+            let batch = source.read_messages().await.unwrap().unwrap();
+            copies.extend(batch.into_iter().map(|m| m.offset));
+        }
+
+        source.nack_offsets(vec![offsets[1]]).await.unwrap();
+        source.ack_offsets(vec![offsets[2]]).await.unwrap();
+        let leftover: Vec<_> = copies
+            .iter()
+            .filter(|o| o.batch_index == 0)
+            .copied()
+            .collect();
+        source.ack_offsets(leftover).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        drop(source);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let source = new_source().await.unwrap();
+        let mut redelivered = Vec::new();
+        for _ in 0..6 {
+            redelivered.extend(source.read_messages().await.unwrap().unwrap());
+        }
+        assert_eq!(copies.len(), 0);
+        assert_eq!(redelivered.len(), 3);
     }
 }
