@@ -57,10 +57,12 @@ fn is_max_payload_exceeded(err: &PublishError) -> bool {
 }
 
 /// Records the max payload exceeded metric if the publish ack failed because the message
-/// exceeds the maximum message size allowed by the stream.
+/// exceeds the maximum message size allowed by the stream. The payload size is logged so that
+/// `stream.maxMsgSize` in the ISB service spec can be tuned based on the observed values.
 fn record_max_payload_exceeded(
     stream_name: &'static str,
     buffer_labels: &MetricLabels,
+    payload_size_bytes: usize,
     err: &PublishError,
 ) {
     if !is_max_payload_exceeded(err) {
@@ -74,6 +76,7 @@ fn record_max_payload_exceeded(
         .inc();
     warn!(
         stream = stream_name,
+        payload_size_bytes,
         ?err,
         "ISB message exceeds the maximum message size of the stream"
     );
@@ -179,13 +182,14 @@ impl JetStreamWriter {
         self.is_full.load(Ordering::Relaxed)
     }
 
-    /// Writes the message to the JetStream ISB and returns a PublishAckFuture.
+    /// Writes the message to the JetStream ISB and returns a PublishAckFuture along with the
+    /// size in bytes of the serialized payload that was published.
     /// Returns an error if the buffer is full or if the operation is cancelled.
     /// The orchestrator is responsible for retry logic and handling buffer full strategies.
     pub(crate) async fn async_write(
         &self,
         message: Message,
-    ) -> std::result::Result<PublishAckFuture, WriteError> {
+    ) -> std::result::Result<(PublishAckFuture, usize), WriteError> {
         // Check if buffer is full (WMB control messages bypass — idle watermark
         // publishing must not stall on soft buffer-full).
         if !matches!(message.typ, MessageType::WMB) && self.is_full() {
@@ -217,6 +221,7 @@ impl JetStreamWriter {
         // (Message -> Bytes) plus submission of the JetStream publish request, and closes
         // before error metrics bookkeeping. Waiting on the returned PAF is handled by the
         // caller and is intentionally outside this span because it measures broker ack latency.
+        let payload_size;
         let publish_result = {
             // Reuse `id` (already computed above for JetStream dedup) so we don't pay a
             // second `message.id.to_string()` on this hot path.
@@ -224,6 +229,7 @@ impl JetStreamWriter {
             let payload: BytesMut = message
                 .try_into()
                 .expect("message serialization should not fail");
+            payload_size = payload.len();
             let mut publish = PublishMessage::build().payload(payload.freeze());
             if !skip_dedup {
                 publish = publish.message_id(&id);
@@ -233,7 +239,7 @@ impl JetStreamWriter {
 
         // Try to publish
         match publish_result {
-            Ok(paf) => Ok(paf),
+            Ok(paf) => Ok((paf, payload_size)),
             Err(e) => {
                 pipeline_metrics()
                     .jetstream_isb
@@ -296,6 +302,7 @@ impl JetStreamWriter {
         // before `paf.await`. The span covers producer-side serialization (Message -> Bytes)
         // plus submission of the JetStream publish request. Waiting on the returned PAF
         // measures broker ack latency, so it is intentionally outside this span.
+        let payload_size;
         let publish_result = {
             // No formatted dedup id is in hand on this path, so let the helper compute it
             // (only when tracing is on — disabled path stays allocation-free).
@@ -303,6 +310,7 @@ impl JetStreamWriter {
             let payload: Bytes = message
                 .try_into()
                 .expect("message serialization should not fail");
+            payload_size = payload.len();
             self.js_ctx.publish(self.stream.name, payload).await
         };
 
@@ -334,7 +342,12 @@ impl JetStreamWriter {
                     }
                 }
                 Err(e) => {
-                    record_max_payload_exceeded(self.stream.name, &self.buffer_labels, &e);
+                    record_max_payload_exceeded(
+                        self.stream.name,
+                        &self.buffer_labels,
+                        payload_size,
+                        &e,
+                    );
                     error!(?e, "awaiting publish ack failed");
                     Err(WriteError::WriteFailed(e.to_string()))
                 }
@@ -461,7 +474,7 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
     ) -> std::result::Result<crate::pipeline::isb::PendingWrite, crate::pipeline::isb::WriteError>
     {
         // Get the PAF from the inherent async_write method
-        let paf = self.async_write(message).await.map_err(|e| match e {
+        let (paf, payload_size) = self.async_write(message).await.map_err(|e| match e {
             WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
             WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
         })?;
@@ -475,7 +488,7 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
         Ok(Box::pin(async move {
             // Await the PAF to get the PublishAck
             let ack = paf.await.map_err(|e| {
-                record_max_payload_exceeded(stream_name, &buffer_labels, &e);
+                record_max_payload_exceeded(stream_name, &buffer_labels, payload_size, &e);
                 crate::pipeline::isb::WriteError::WriteFailed(e.to_string())
             })?;
 
@@ -635,6 +648,99 @@ mod tests {
         );
 
         // Rejected by the stream (10054), so the metric is recorded once.
+        let after = pipeline_metrics()
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&labels)
+            .get();
+        assert_eq!(after, before + 1);
+
+        cln_token.cancel();
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_write_max_payload_exceeded_metric() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let cln_token = CancellationToken::new();
+
+        // Same setup as test_async_write_max_payload_exceeded_metric, but exercises the
+        // synchronous `write` path.
+        let stream = Stream::new("test-write-max-payload-exceeded", "temp", 0);
+        let _ = context.delete_stream(stream.name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 512 * 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let writer = JetStreamWriter::new(
+            stream.clone(),
+            context.clone(),
+            writer_config,
+            None,
+            cln_token.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Wait for background task to update is_full
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        assert!(!writer.is_full());
+
+        let labels = jetstream_isb_metrics_labels(stream.name);
+        let before = pipeline_metrics()
+            .jetstream_isb
+            .max_payload_exceeded_total
+            .get_or_create(&labels)
+            .get();
+
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key_large".to_string()]),
+            tags: None,
+            value: vec![0u8; 768 * 1024].into(),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_large_sync".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let result = writer.write(message).await;
+        assert!(
+            matches!(result, Err(WriteError::WriteFailed(_))),
+            "write should fail since the message exceeds the stream max message size"
+        );
+
         let after = pipeline_metrics()
             .jetstream_isb
             .max_payload_exceeded_total

@@ -17,6 +17,7 @@ package scaling
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -204,6 +205,43 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 				assert.Equal(t, tt.want, got)
 			})
 		}
+	})
+}
+
+func Test_desiredReplicas_overflowGuards(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	s := NewScaler(cl)
+
+	newSource := func(targetSec uint32, readyReplicas uint32) *dfv1.Vertex {
+		src := fakeVertex.DeepCopy()
+		src.Spec.Source = &dfv1.Source{Kafka: &dfv1.KafkaSource{}}
+		src.Spec.Scale.TargetProcessingSeconds = ptr.To[uint32](targetSec)
+		src.Status.ReadyReplicas = readyReplicas
+		return src
+	}
+
+	// Deterministic on all platforms: pending exceeds math.MaxInt32, so the old
+	// int32(pending) cap wrapped to a negative value and clobbered the legitimately
+	// computed desired (~43), leaving the vertex stuck at the maxDesired floor of 1.
+	// desired = round((float64(MaxInt32+1000) / 1e8) / 1 * 2) = round(42.9497) = 43.
+	t.Run("pending exceeds MaxInt32, cap must not wrap negative", func(t *testing.T) {
+		src := newSource(1, 2)
+		got := s.desiredReplicas(context.TODO(), src,
+			[]float64{1e8}, []int64{int64(math.MaxInt32) + 1000},
+			int64(30000), int64(24000), int64(27000))
+		assert.Equal(t, int32(43), got)
+	})
+
+	// Large backlog with a near-zero rate: the raw float64 result (2e11) exceeds
+	// math.MaxInt32 and, without the clamp, the float->int32 cast wraps (to a negative
+	// on amd64), so the vertex fails to scale up. After clamping, desired is capped to
+	// the pending count (1e8) because we never scale to more replicas than messages.
+	t.Run("large backlog, near-zero rate, float cast must not wrap", func(t *testing.T) {
+		src := newSource(1, 2)
+		got := s.desiredReplicas(context.TODO(), src,
+			[]float64{0.001}, []int64{100_000_000},
+			int64(30000), int64(24000), int64(27000))
+		assert.Equal(t, int32(100_000_000), got)
 	})
 }
 
