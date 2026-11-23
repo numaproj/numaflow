@@ -7,6 +7,8 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 
+import { BufferInfo } from "../../../../../types/declarations/pipeline";
+
 import "./style.css";
 
 export interface EdgeDetailsProps {
@@ -16,11 +18,20 @@ export interface EdgeDetailsProps {
   from?: string;
   to?: string;
   watermarks?: (string | number)[];
+  /** The buffers owned by this edge, one per partition. */
+  buffers?: BufferInfo[];
 }
+
+const partitionOf = (bufferName: string) =>
+  bufferName.substring(bufferName.lastIndexOf("-") + 1);
+
+const percent = (value: number) =>
+  isNaN(value) ? "-" : `${(value * 100).toFixed(2)}%`;
 
 export function EdgeDetails({
   edgeId,
   watermarks,
+  buffers,
 }: EdgeDetailsProps) {
   return (
     <Box
@@ -71,6 +82,58 @@ export function EdgeDetails({
                       : `${watermark} (${new Date(
                           Number(watermark)
                         ).toISOString()})`}
+                  </TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <span
+        className="edge-details-header-text"
+        style={{ marginTop: "2.4rem" }}
+      >
+        Buffers
+      </span>
+      <TableContainer
+        sx={{
+          maxHeight: "60rem",
+          backgroundColor: "#FFF",
+          marginTop: "1.6rem",
+        }}
+      >
+        <Table stickyHeader data-testid="edge-buffers">
+          <TableHead>
+            <TableRow>
+              <TableCell>Partition</TableCell>
+              <TableCell>Buffer</TableCell>
+              <TableCell>isFull</TableCell>
+              <TableCell>AckPending</TableCell>
+              <TableCell>Pending</TableCell>
+              <TableCell>Buffer Length</TableCell>
+              <TableCell>Buffer Usage</TableCell>
+              <TableCell>Usage Limit</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(!buffers || !buffers.length) && (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  No buffers found
+                </TableCell>
+              </TableRow>
+            )}
+            {!!buffers &&
+              buffers.map((buffer: BufferInfo) => (
+                <TableRow key={buffer.bufferName}>
+                  <TableCell>{partitionOf(buffer.bufferName)}</TableCell>
+                  <TableCell>{buffer.bufferName}</TableCell>
+                  <TableCell>{buffer.isFull ? "yes" : "no"}</TableCell>
+                  <TableCell>{buffer.ackPendingCount}</TableCell>
+                  <TableCell>{buffer.pendingCount}</TableCell>
+                  <TableCell>{buffer.bufferLength}</TableCell>
+                  <TableCell>{percent(Number(buffer.bufferUsage))}</TableCell>
+                  <TableCell>
+                    {percent(Number(buffer.bufferUsageLimit))}
                   </TableCell>
                 </TableRow>
               ))}

@@ -797,6 +797,7 @@ export default function Graph(props: GraphProps) {
           from: edge?.data?.source || edge.source,
           to: edge?.data?.target || edge.target,
           watermarks: edge?.data?.edgeWatermark?.watermarks,
+          buffers: edge?.data?.buffers,
         },
       };
       if (existingProps === JSON.stringify(updated)) {

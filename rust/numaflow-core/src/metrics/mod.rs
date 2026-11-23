@@ -1653,7 +1653,7 @@ async fn components_status(state: &MetricsState) -> StatusCode {
 pub(crate) enum LagReader<C: crate::typ::NumaflowTypeConfig> {
     Source(Box<Source<C>>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<ISBReaderOrchestrator<C>>), // multiple partitions
+    ISB(ISBReaderOrchestrator<C>), // every buffer the pod reads
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -1764,10 +1764,10 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                     error!("Failed to get pending messages: {:?}", err);
                 }
             },
-            LagReader::ISB(readers) => {
-                for reader in readers {
-                    let reader_name = reader.name();
-                    match fetch_isb_pending(reader).await {
+            LagReader::ISB(reader) => {
+                for (reader_name, pending) in reader.pending().await {
+                    // default to -1(unavailable)
+                    match pending.map(|p| p.map_or(-1, |p| p as i64)) {
                         Ok(pending) => {
                             if last_logged.elapsed().as_secs() >= 60 {
                                 info!(
@@ -1804,13 +1804,6 @@ async fn fetch_source_pending<C: crate::typ::NumaflowTypeConfig>(
     lag_reader: &Source<C>,
 ) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
-    Ok(response)
-}
-
-async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
-    reader: &mut ISBReaderOrchestrator<C>,
-) -> crate::error::Result<i64> {
-    let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
 

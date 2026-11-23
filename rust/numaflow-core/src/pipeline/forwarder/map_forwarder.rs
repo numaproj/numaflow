@@ -24,25 +24,27 @@ use serving::callback::CallbackHandler;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{error, info};
+use tracing::info;
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
-/// and manages the lifecycle of these components.
+/// and manages the lifecycle of these components. The reader reads every buffer of the pod,
+/// and every buffer gets its own mapper; all of them write through the same writer.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
     isb_reader: ISBReaderOrchestrator<C>,
-    mapper: MapHandle,
+    /// one mapper per stream of the reader, in the order of the reader's streams.
+    mappers: Vec<MapHandle>,
     isb_writer: ISBWriterOrchestrator,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
         isb_reader: ISBReaderOrchestrator<C>,
-        mapper: MapHandle,
+        mappers: Vec<MapHandle>,
         isb_writer: ISBWriterOrchestrator,
     ) -> Self {
         Self {
             isb_reader,
-            mapper,
+            mappers,
             isb_writer,
         }
     }
@@ -50,45 +52,36 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
-        let (read_messages_stream, reader_handle) =
+        let (read_messages_streams, reader_handle) =
             self.isb_reader.streaming_read(cln_token.clone()).await?;
 
-        let (mapped_messages_stream, mapper_handle) = self
-            .mapper
-            .streaming_map(read_messages_stream, cln_token.clone(), None)
-            .await?;
+        if read_messages_streams.len() != self.mappers.len() {
+            return Err(Error::Forwarder(format!(
+                "expected one mapper per stream, got {} mappers for {} streams",
+                self.mappers.len(),
+                read_messages_streams.len()
+            )));
+        }
 
-        let writer_handle = self
-            .isb_writer
-            .streaming_write(mapped_messages_stream, cln_token.clone())
-            .await?;
+        let mut handles = Vec::with_capacity(2 * self.mappers.len() + 1);
+        for (read_messages_stream, mapper) in read_messages_streams.into_iter().zip(self.mappers) {
+            let (mapped_messages_stream, mapper_handle) = mapper
+                .streaming_map(read_messages_stream, cln_token.clone(), None)
+                .await?;
 
-        // Join the reader, mapper, and writer. Cancel on panic (JoinError).
-        let (reader_result, mapper_result, writer_result) =
-            tokio::try_join!(reader_handle, mapper_handle, writer_handle).map_err(|e| {
-                error!(
-                    ?e,
-                    "Reader, mapper, or writer task panicked, cancelling token"
-                );
-                cln_token.cancel();
-                Error::Forwarder(format!(
-                    "Error while joining reader, mapper, and writer: {e}"
-                ))
-            })?;
+            let writer_handle = self
+                .isb_writer
+                .clone()
+                .streaming_write(mapped_messages_stream, cln_token.clone())
+                .await?;
 
-        writer_result.inspect_err(|e| {
-            error!(?e, "Error while writing messages");
-        })?;
+            handles.push(mapper_handle);
+            handles.push(writer_handle);
+        }
+        handles.push(reader_handle);
 
-        mapper_result.inspect_err(|e| {
-            error!(?e, "Error while mapping messages");
-        })?;
-
-        reader_result.inspect_err(|e| {
-            error!(?e, "Error while reading messages");
-        })?;
-
-        Ok(())
+        // Join the reader, mappers, and writers. Cancel on panic (JoinError).
+        super::join_component_tasks(handles, &cln_token).await
     }
 }
 
@@ -241,14 +234,14 @@ pub async fn start_map_forwarder(
     Ok(())
 }
 
-/// Starts map forwarder for all the streams across all ingress edges.
+/// Starts the map forwarder for all the streams across all ingress edges.
 ///
 /// Buffers are edge-owned, so a vertex with several ingress edges (a join) reads a
-/// distinct set of buffers per edge. Each (edge, partition) stream gets its own
-/// independent forwarder pipeline, exactly as multiple partitions of a single edge
-/// already did. That independence is what gives a join per-source backpressure: each
-/// reader holds its own `max_ack_pending` semaphore, so a fast source fills and
-/// throttles on its own buffer without stalling the slow one.
+/// distinct set of buffers per edge. One reader orchestrator reads all of them, and each
+/// (edge, partition) stream gets its own mapper, exactly as multiple partitions of a single
+/// edge already did. That independence is what gives a join per-source backpressure: each
+/// stream holds its own `max_ack_pending` semaphore, so a fast source fills and throttles on
+/// its own buffer without stalling the slow one.
 async fn run_all_map_forwarders<C>(
     context: &PipelineContext<'_, C>,
     map_vtx_config: &MapVtxConfig,
@@ -264,20 +257,17 @@ async fn run_all_map_forwarders<C>(
 where
     C: NumaflowTypeConfig,
 {
-    let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
-    let mut mapper_handle = None;
+    // The streams are already filtered based on ordered processing at config creation time
+    let streams = super::reader_streams(from_vertex_config);
 
-    for from_vertex in from_vertex_config {
-        let reader_config = &from_vertex.reader_config;
-        // The streams are already filtered based on ordered processing at config creation time
-        for stream in &reader_config.streams {
-            info!(
-                from_vertex = from_vertex.name,
-                "Creating buffer reader for stream {:?}", stream
-            );
-
-            let mapper = create_components::create_mapper(
+    let mut mappers = Vec::with_capacity(streams.len());
+    for (stream, _) in &streams {
+        info!(
+            from_vertex = stream.from_vertex,
+            "Creating mapper for stream {:?}", stream
+        );
+        mappers.push(
+            create_components::create_mapper(
                 context.config.batch_size,
                 context.config.read_timeout,
                 context.config.graceful_shutdown_time,
@@ -285,74 +275,37 @@ where
                 context.tracker.clone(),
                 context.cln_token.clone(),
             )
-            .await?;
-
-            if mapper_handle.is_none() {
-                mapper_handle = Some(mapper.clone());
-            }
-
-            let reader_components = ISBReaderComponents::new::<C>(
-                stream.clone(),
-                reader_config.clone(),
-                watermark_handle.clone(),
-                context,
-            );
-
-            let (task, reader) = run_map_forwarder_for_stream::<C>(
-                reader_components,
-                mapper,
-                buffer_writer.clone(),
-                rate_limiter.clone(),
-                context.factory(),
-            )
-            .await?;
-
-            forwarder_tasks.push(task);
-            isb_lag_readers.push(reader);
-        }
+            .await?,
+        );
     }
+    let mapper_handle = mappers
+        .first()
+        .cloned()
+        .ok_or_else(|| Error::Config("No stream found for map vertex".to_string()))?;
+
+    let isb_reader = ISBReaderOrchestrator::<C>::from_factory(
+        ISBReaderComponents::new::<C>(watermark_handle, context),
+        streams,
+        context.factory(),
+        rate_limiter,
+    )
+    .await?;
+
+    let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mappers, buffer_writer).await;
+    let cln_token = context.cln_token.clone();
+    let task = AbortOnDropHandle::new(tokio::spawn(
+        async move { forwarder.start(cln_token).await },
+    ));
 
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(isb_lag_readers),
+        LagReader::ISB(isb_reader),
     )
     .await;
     info!("Starting pending reader");
     let pending_reader_task = pending_reader.start(is_mono_vertex()).await;
 
-    Ok((forwarder_tasks, mapper_handle.unwrap(), pending_reader_task))
-}
-
-/// Start a map forwarder for a single stream, returns the task handle and the ISB reader
-/// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C>(
-    reader_components: ISBReaderComponents,
-    mapper: MapHandle,
-    buffer_writer: ISBWriterOrchestrator,
-    rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &dyn ISBFactory,
-) -> Result<(AbortOnDropHandle<Result<()>>, ISBReaderOrchestrator<C>)>
-where
-    C: NumaflowTypeConfig,
-{
-    let cln_token = reader_components.cln_token.clone();
-
-    let isb_reader_impl = isb_factory
-        .create_reader(
-            reader_components.stream.clone(),
-            reader_components.isb_config.as_ref(),
-        )
-        .await?;
-
-    let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
-
-    let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
-
-    let task = AbortOnDropHandle::new(tokio::spawn(
-        async move { forwarder.start(cln_token).await },
-    ));
-    Ok((task, isb_reader))
+    Ok((vec![task], mapper_handle, pending_reader_task))
 }
 
 #[cfg(test)]

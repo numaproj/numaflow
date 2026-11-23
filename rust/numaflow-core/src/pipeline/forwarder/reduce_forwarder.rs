@@ -157,18 +157,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         tracker.clone(),
     );
 
-    // One set of components per ingress edge, all at this replica's partition.
-    let reader_components: Vec<ISBReaderComponents> = reader_configs_and_streams
-        .into_iter()
-        .map(|(reader_config, stream)| {
-            ISBReaderComponents::new::<WithoutRateLimiter>(
-                stream,
-                reader_config.clone(),
-                watermark_handle.clone(),
-                &context,
-            )
-        })
-        .collect();
+    // One reader for the pod, reading every ingress edge at this replica's partition.
+    let reader_components =
+        ISBReaderComponents::new::<WithoutRateLimiter>(watermark_handle.clone(), &context);
 
     let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
@@ -226,8 +217,15 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-        .await?;
+    run_reduce_forwarder::<WithoutRateLimiter>(
+        &context,
+        reader_components,
+        reader_configs_and_streams,
+        reducer,
+        wal,
+        None,
+    )
+    .await?;
 
     info!("Aligned reduce forwarder has stopped successfully");
     Ok(())
@@ -285,18 +283,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         tracker.clone(),
     );
 
-    // One set of components per ingress edge, all at this replica's partition.
-    let reader_components: Vec<ISBReaderComponents> = reader_configs_and_streams
-        .into_iter()
-        .map(|(reader_config, stream)| {
-            ISBReaderComponents::new::<WithoutRateLimiter>(
-                stream,
-                reader_config.clone(),
-                watermark_handle.clone(),
-                &context,
-            )
-        })
-        .collect();
+    // One reader for the pod, reading every ingress edge at this replica's partition.
+    let reader_components =
+        ISBReaderComponents::new::<WithoutRateLimiter>(watermark_handle.clone(), &context);
 
     let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
@@ -353,8 +342,15 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-        .await?;
+    run_reduce_forwarder::<WithoutRateLimiter>(
+        &context,
+        reader_components,
+        reader_configs_and_streams,
+        reducer,
+        wal,
+        None,
+    )
+    .await?;
 
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
@@ -372,7 +368,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 /// silently drop the other source's data.
 fn reduce_reader_configs_and_streams(
     config: &PipelineConfig,
-) -> Result<Vec<(&crate::config::pipeline::isb::BufferReaderConfig, Stream)>> {
+) -> Result<Vec<(Stream, crate::config::pipeline::isb::BufferReaderConfig)>> {
     if config.from_vertex_config.is_empty() {
         return Err(crate::error::Error::Config(
             "No from vertex config found".to_string(),
@@ -390,19 +386,20 @@ fn reduce_reader_configs_and_streams(
                 from_vertex.name
             ))
         })?;
-        result.push((reader_config, stream));
+        result.push((stream, reader_config.clone()));
     }
     Ok(result)
 }
 
 /// Starts reduce forwarder.
 ///
-/// Takes one set of reader components per ingress edge. Buffers are edge-owned, so a
-/// reduce join has one buffer per source at this replica's partition; the PBQ merges
-/// those readers round-robin into the single stream that feeds the windower.
+/// Buffers are edge-owned, so a reduce join has one buffer per source at this replica's
+/// partition. One reader orchestrator reads all of them and merges them round-robin into the
+/// single stream that feeds the windower.
 async fn run_reduce_forwarder<C>(
     context: &PipelineContext<'_, C>,
-    reader_components: Vec<ISBReaderComponents>,
+    reader_components: ISBReaderComponents,
+    streams: Vec<(Stream, crate::config::pipeline::isb::BufferReaderConfig)>,
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
@@ -410,28 +407,23 @@ async fn run_reduce_forwarder<C>(
 where
     C: NumaflowTypeConfig,
 {
-    let mut isb_readers = Vec::with_capacity(reader_components.len());
-    for components in reader_components {
-        let isb_reader_impl = context
-            .factory()
-            .create_reader(components.stream.clone(), components.isb_config.as_ref())
-            .await?;
-
-        isb_readers.push(
-            ISBReaderOrchestrator::<C>::new(components, isb_reader_impl, rate_limiter.clone())
-                .await?,
-        );
-    }
+    let isb_reader = ISBReaderOrchestrator::<C>::from_factory(
+        reader_components,
+        streams,
+        context.factory(),
+        rate_limiter,
+    )
+    .await?;
 
     // Lag is measured across every ingress buffer this pod reads.
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(isb_readers.clone()),
+        LagReader::ISB(isb_reader.clone()),
     )
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(isb_readers);
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader);
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
@@ -1825,7 +1817,7 @@ mod reduce_join_tests {
         assert_eq!(resolved.len(), 2, "one stream per ingress edge");
 
         let replica = *get_vertex_replica();
-        let names: Vec<&str> = resolved.iter().map(|(_, s)| s.name).collect();
+        let names: Vec<&str> = resolved.iter().map(|(s, _)| s.name).collect();
         assert_eq!(
             names,
             vec![
@@ -1835,7 +1827,7 @@ mod reduce_join_tests {
         );
 
         // Same partition index on every edge: that is the co-partitioning contract.
-        for (_, stream) in &resolved {
+        for (stream, _) in &resolved {
             assert_eq!(stream.partition, replica);
         }
     }
@@ -1850,7 +1842,7 @@ mod reduce_join_tests {
 
         let resolved = reduce_reader_configs_and_streams(&config).unwrap();
         assert_eq!(resolved.len(), 1);
-        assert_eq!(resolved.first().unwrap().1.partition, *get_vertex_replica());
+        assert_eq!(resolved.first().unwrap().0.partition, *get_vertex_replica());
     }
 
     /// No ingress edges is still an error.

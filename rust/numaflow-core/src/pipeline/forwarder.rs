@@ -76,6 +76,43 @@ async fn join_forwarder_tasks(
     Ok(())
 }
 
+/// Joins the tasks of one forwarder's components (reader, UDF, writer). Cancels the token if
+/// any of them panics and returns the first error.
+async fn join_component_tasks(
+    handles: Vec<tokio::task::JoinHandle<error::Result<()>>>,
+    cln_token: &CancellationToken,
+) -> error::Result<()> {
+    let results = try_join_all(handles).await.map_err(|e| {
+        log_error!(?e, "A forwarder component task panicked, cancelling token");
+        cln_token.cancel();
+        Error::Forwarder(format!("Error while joining forwarder components: {e}"))
+    })?;
+
+    for result in results {
+        result.inspect_err(|e| log_error!(?e, "Forwarder component failed"))?;
+    }
+    Ok(())
+}
+
+/// Every (stream, reader config) a vertex reads, across all its ingress edges.
+fn reader_streams(
+    from_vertex_config: &[config::pipeline::FromVertexConfig],
+) -> Vec<(
+    config::pipeline::isb::Stream,
+    config::pipeline::isb::BufferReaderConfig,
+)> {
+    from_vertex_config
+        .iter()
+        .flat_map(|from_vertex| {
+            from_vertex
+                .reader_config
+                .streams
+                .iter()
+                .map(|stream| (stream.clone(), from_vertex.reader_config.clone()))
+        })
+        .collect()
+}
+
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
