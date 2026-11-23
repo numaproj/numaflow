@@ -1,6 +1,6 @@
 # Logs View
 
-The **Logs View** lets you inspect container logs for a vertex pod directly in the **Pods View**. After you select a pod and container, the **Container Logs** panel on the right shows logs from that container.
+The **Logs View** lets you inspect container logs for a vertex pod directly in the **[Pods View](./pods-view.md)**. After you select a pod and container, the **Container Logs** panel shows logs from that container.
 
 ---
 
@@ -10,23 +10,23 @@ Navigate to the **Pods View** tab after selecting the vertex.
 
 **Select a Pod**
 
-Select a pod by name from the **Select a pod by name** dropdown, or select a pod by resource using the CPU/Memory heat map.
+Click a pod chip in **Fleet Health**. Use the filters or search to find a pod.
 
 ![Select Pod](../../assets/logs/select-pod.png)
 
 **Select a Container**
 
-Choose a container from the **Select a container** section.
+Choose a container from the **Container** chips. The `numa` container is selected by default.
 
-![Select Container](../../assets/logs/select-container.png)
+![Select Container](../../assets/pods-view/container-chips.png)
 
 **View Logs**
 
-The **Container Logs** panel appears on the right. The header shows the title **Container Logs** and a badge with the short pod/container name (for example, `out-0/numa`). Hover the badge to see the full pod and container name.
+The **Container Logs** panel appears. The header shows the title **Container Logs** and a badge with the short pod/container name (for example, `cat-0/numa`). Hover the badge to see the full pod and container name.
 
 ![Pods View with Container Logs](../../assets/logs/pods-view-logs-overview.png)
 
-While logs are shown, you can still use the left sidebar to review **Container Info** and **Pod Info** (status, CPU, memory, restart count, and related details).
+While logs are shown, you can still review the **Pod Overview** and **Container Overview** cards on the right (status, CPU, memory, restart count, and related details).
 
 ---
 
@@ -70,6 +70,7 @@ Click the **expand** icon in the header to open a larger focused log view. In fo
 
 - **Pod** and **Container** selectors appear at the top of the dialog so you can switch context without closing focus mode.
 - All log toolbar controls remain available.
+- **Copy View** copies a link that reopens the focused logs with the same pod, container, and filters. See [Copy View](./overview.md#copy-view).
 
 While focus mode is open, the inline panel shows **Logs are open in the focused view**.
 

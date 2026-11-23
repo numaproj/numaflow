@@ -102,6 +102,7 @@ Prometheus metrics are categorized into three main types: Histogram, Gauge, and 
         - **metric_name**: The actual name of the metric.
         - **display_name**: A user-friendly name for the metric. Avoid editing this for existing metrics.
         - **metric_description**: A detailed description of the metric, displayed as an info icon next to the metric name in the UI.
+        - **signal**: (Optional) Links the metric to a card in the Pods View [vertex health](./pods-view.md#vertex-health) strip. See [Signal Tags](#signal-tags).
         - **required_filters**: Filters that must be included in the PromQL request body.
         - **dimensions**: Dimensions allow users to drill down into specific components, such as pods or containers, for more granular data.
             - **name**: The name of the dimension (e.g., pod, vertex).
@@ -111,6 +112,26 @@ Prometheus metrics are categorized into three main types: Histogram, Gauge, and 
                 - **expr**: (Optional) Overrides the top-level `expr` for a specific metric and dimension.
 
 This structured configuration ensures flexibility and ease of use when visualizing and analyzing metrics in the Numaflow UI.
+
+### Signal Tags
+
+The [vertex health](./pods-view.md#vertex-health) cards in the Pods View find their metrics by the `signal` field. The default ConfigMap already sets these tags.
+
+| Signal | Used by |
+|--------|---------|
+| `p99` | **Latency** card value. |
+| `stageRead`, `stageTransformer`, `stageUdf`, `stageSink`, `stageWrite`, `stageAck` | **Latency** per-stage breakdown. |
+| `drops`, `nacks`, `fallback` | **Message Outcomes** card. |
+| `critical` | Critical errors in the **Errors** card. |
+
+```yaml
+metrics:
+  - metric_name: forwarder_processing_time_bucket
+    signal: p99
+    display_name: Vertex Processing Time Latency
+```
+
+If no metric has a given signal, the related card shows `Not configured`. If you rename or replace a metric, move its `signal` to the new metric. Only the first metric with a given signal for an object type is used.
 
 ---
 
@@ -250,4 +271,4 @@ Users can select a predefined time range or set a custom time range for their Pr
 
 ## Adding Custom Metrics
 
-To add metrics not provided by Numaflow, follow the configuration patterns described above. For example, you can add a custom metric similar to the `pod_cpu_memory_utilization` pattern [here](#current-configuration).
+To add metrics not provided by Numaflow, follow the configuration patterns described above. For example, you can add a custom metric similar to the `pod_cpu_memory_utilization` pattern [here](#current-configuration-snippet).
