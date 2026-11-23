@@ -4,15 +4,7 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: in-one
-      scale:
-        min: 1
-      # A self data generating source
-      source:
-        generator:
-          rpu: 5
-          duration: 1s
-    - name: in-two
+    - name: in
       scale:
         min: 1
       # A self data generating source
@@ -34,9 +26,7 @@ spec:
       sink:
         log: {}
   edges:
-    - from: in-one
-      to: cat
-    - from: in-two
+    - from: in
       to: cat
     - from: cat
       to: out
