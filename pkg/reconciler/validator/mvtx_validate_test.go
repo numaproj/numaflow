@@ -117,6 +117,20 @@ func TestValidateMonoVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid user-defined source spec")
 	})
 
+	t.Run("test pulsar source prefetch sizes", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		testObj.Spec.Source = &dfv1.Source{Pulsar: &dfv1.PulsarSource{
+			FlowPermits:       ptr.To[uint32](10),
+			ReceiverQueueSize: ptr.To[uint32](10),
+		}}
+		assert.NoError(t, ValidateMonoVertex(testObj))
+
+		testObj.Spec.Source.Pulsar.ReceiverQueueSize = ptr.To[uint32](0)
+		err := ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "'receiverQueueSize' must be greater than 0")
+	})
+
 	t.Run("test no sink", func(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		testObj.Spec.Sink = nil

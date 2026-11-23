@@ -177,6 +177,8 @@ mod tests {
             dead_letter_policy: None,
             auth: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         };
         new_pulsar_source(
             cfg,
@@ -386,6 +388,8 @@ mod tests {
             dead_letter_policy: None,
             auth: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         };
         let mut pulsar = new_pulsar_source(
             cfg,

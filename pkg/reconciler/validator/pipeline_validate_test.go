@@ -248,6 +248,20 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("pulsar source prefetch sizes", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source = &dfv1.Source{Pulsar: &dfv1.PulsarSource{
+			FlowPermits:       ptr.To[uint32](10),
+			ReceiverQueueSize: ptr.To[uint32](10),
+		}}
+		assert.NoError(t, ValidatePipeline(testObj))
+
+		testObj.Spec.Vertices[0].Source.Pulsar.FlowPermits = ptr.To[uint32](0)
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "'flowPermits' must be greater than 0")
+	})
+
 	t.Run("valid cron autoscaling is accepted for source pipeline vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Scale.Cron = &dfv1.CronScheduling{
@@ -1153,6 +1167,35 @@ func Test_validateIdleSource(t *testing.T) {
 	err = validateIdleSource(*testObj)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than or equal to incrementBy`)
+}
+
+func Test_validatePulsarSource(t *testing.T) {
+	zero, ten := uint32(0), uint32(10)
+	tests := []struct {
+		name              string
+		flowPermits       *uint32
+		receiverQueueSize *uint32
+		expectedError     bool
+	}{
+		{name: "not set", expectedError: false},
+		{name: "both set", flowPermits: &ten, receiverQueueSize: &ten, expectedError: false},
+		{name: "zero flow permits", flowPermits: &zero, expectedError: true},
+		{name: "zero receiver queue size", receiverQueueSize: &zero, expectedError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePulsarSource(dfv1.PulsarSource{
+				FlowPermits:       tt.flowPermits,
+				ReceiverQueueSize: tt.receiverQueueSize,
+			})
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func Test_validateHTTPSource(t *testing.T) {

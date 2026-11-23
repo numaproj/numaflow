@@ -95,6 +95,8 @@ mod tests {
                 insecure_skip_verify: false,
                 ca_cert: Some("secret-ca".into()),
             }),
+            flow_permits: None,
+            receiver_queue_size: None,
         };
         for output in [format!("{config:?}"), format!("{config:#?}")] {
             assert!(!output.contains("secret-"));
