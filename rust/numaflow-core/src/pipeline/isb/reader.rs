@@ -59,22 +59,23 @@ pub(crate) struct ISBStreamReader {
 ///
 /// There is one orchestrator per pod, holding one reader per buffer (every ingress edge times
 /// every partition the pod reads), mirroring the
-/// [ISBWriterOrchestrator](crate::pipeline::isb::writer::ISBWriterOrchestrator). Messages are
-/// handed out in one of two ways:
-///  - [Self::streaming_read]: one output per buffer, each buffer read and processed on its own
-///    (map, sink).
+/// [ISBWriterOrchestrator](crate::pipeline::isb::writer::ISBWriterOrchestrator). Like the writer,
+/// it is cheap to clone and every clone shares the same readers, so it can be handed to one
+/// forwarder per stream. Messages are handed out in one of two ways:
+///  - [Self::streaming_read]: the messages of one buffer, read and processed on their own
+///    (map, sink: one forwarder per buffer).
 ///  - [Self::streaming_read_merged]: one output for all the buffers, interleaved round-robin
 ///    (reduce). The watermark of a message is fetched at the moment it is placed on the merged
 ///    output, so the watermarks on the output never go backwards.
 pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
-    workers: Vec<StreamWorker<C>>,
+    workers: Arc<Vec<StreamWorker<C>>>,
     rate_limiter: Option<C::RateLimiter>,
 }
 
 impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
     fn clone(&self) -> Self {
         Self {
-            workers: self.workers.clone(),
+            workers: Arc::clone(&self.workers),
             rate_limiter: self.rate_limiter.clone(),
         }
     }
@@ -96,7 +97,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             .map(|reader| StreamWorker::new(&components, reader, rate_limiter.clone()))
             .collect();
         Ok(Self {
-            workers,
+            workers: Arc::new(workers),
             rate_limiter,
         })
     }
@@ -122,34 +123,49 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         Self::new(components, readers, rate_limiter).await
     }
 
-    /// Reads every stream on its own. Returns one output per stream, in the order the streams
-    /// were given, and a JoinHandle for monitoring errors.
+    /// The streams read by this orchestrator, in the order they were given.
+    pub(crate) fn streams(&self) -> impl Iterator<Item = &Stream> {
+        self.workers.iter().map(|w| &w.stream)
+    }
+
+    /// Reads one stream on its own. Returns its messages and a JoinHandle for monitoring errors.
+    /// Call it once per stream; every call starts a new reader loop for that stream.
+    ///
+    /// The rate limiter is shared by all the streams, so it is not shut down here; call
+    /// [Self::shutdown] once every stream has stopped.
     pub(crate) async fn streaming_read(
-        self,
+        &self,
+        stream: &Stream,
         cancel: CancellationToken,
-    ) -> Result<(Vec<ReceiverStream<MessageHandle>>, JoinHandle<Result<()>>)> {
-        let mut outputs = Vec::with_capacity(self.workers.len());
-        let mut handles = Vec::with_capacity(self.workers.len());
-        for worker in self.workers {
-            let (tx, rx) = mpsc::channel::<MessageHandle>(worker.batch_size);
-            handles.push(tokio::spawn(worker.run(tx, cancel.clone())));
-            outputs.push(ReceiverStream::new(rx));
-        }
+    ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
+        let worker = self
+            .workers
+            .iter()
+            .find(|w| w.stream.name == stream.name)
+            .cloned()
+            .ok_or_else(|| {
+                Error::ISB(ISBError::Other(format!(
+                    "stream {} is not read by this orchestrator",
+                    stream.name
+                )))
+            })?;
+        let (tx, rx) = mpsc::channel::<MessageHandle>(worker.batch_size);
+        let handle = tokio::spawn(worker.run(tx, cancel));
+        Ok((ReceiverStream::new(rx), handle))
+    }
 
-        let rate_limiter = self.rate_limiter;
-        let handle = tokio::spawn(async move {
-            let result = join_reader_tasks(handles).await;
-            shutdown_rate_limiter(rate_limiter.as_ref()).await?;
-            result
-        });
-
-        Ok((outputs, handle))
+    /// Shuts down the rate limiter if configured. Call it once every stream read with
+    /// [Self::streaming_read] has stopped.
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        shutdown_rate_limiter(self.rate_limiter.as_ref()).await
     }
 
     /// Reads every stream and merges them round-robin into one output. Each stream is fetched
     /// on its own, but the watermark of a message is fetched (and the message tracked) only when
     /// it is placed on the output, so the order the watermarks are fetched in is the order the
     /// messages are consumed in. Returns the output and a JoinHandle for monitoring errors.
+    ///
+    /// It reads every stream, so it also shuts down the rate limiter once they have all stopped.
     pub(crate) async fn streaming_read_merged(
         self,
         cancel: CancellationToken,
@@ -159,7 +175,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
         let mut fetch_handles = Vec::with_capacity(self.workers.len());
         let mut lanes = Vec::with_capacity(self.workers.len());
-        for worker in self.workers {
+        for worker in self.workers.iter().cloned() {
             // one fetched batch is buffered per stream while the previous one is being emitted
             let (batch_tx, batch_rx) = mpsc::channel::<FetchedBatch>(1);
             fetch_handles.push(tokio::spawn(
@@ -193,7 +209,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     /// Returns the pending count of every stream, keyed by the reader name.
     pub(crate) async fn pending(&self) -> Vec<(&'static str, Result<Option<usize>>)> {
         let mut pending = Vec::with_capacity(self.workers.len());
-        for worker in &self.workers {
+        for worker in self.workers.iter() {
             pending.push((worker.reader_name, worker.reader.pending().await));
         }
         pending
@@ -1123,11 +1139,11 @@ mod tests {
             .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
+        let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(reader_cancel_token.clone())
+            .streaming_read(&read_stream, reader_cancel_token.clone())
             .await
             .unwrap();
-        let mut js_reader_rx = js_reader_rx.remove(0);
 
         let mut offsets = vec![];
         for i in 0..10 {
@@ -1243,11 +1259,11 @@ mod tests {
             .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
+        let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(reader_cancel_token.clone())
+            .streaming_read(&read_stream, reader_cancel_token.clone())
             .await
             .unwrap();
-        let mut js_reader_rx = js_reader_rx.remove(0);
 
         let mut offsets = vec![];
         // write 5 messages
@@ -1383,11 +1399,11 @@ mod tests {
             .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
+        let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(reader_cancel_token.clone())
+            .streaming_read(&read_stream, reader_cancel_token.clone())
             .await
             .unwrap();
-        let mut js_reader_rx = js_reader_rx.remove(0);
 
         let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
         compressed
@@ -1958,8 +1974,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read all 5 messages
         let mut received = Vec::new();
@@ -2000,8 +2019,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Despite fetch failures, we should eventually get messages
         let mut received = Vec::new();
@@ -2039,8 +2061,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read both messages
         let msg1 = rx.next().await.expect("Should receive first message");
@@ -2162,8 +2187,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read message
         let msg = rx.next().await.expect("Should receive message");
@@ -2194,8 +2222,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 1, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read message first time
         let msg1 = rx.next().await.expect("Should receive message first time");
@@ -2240,8 +2271,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read all messages but don't ack yet
         let mut messages = Vec::new();
@@ -2282,8 +2316,11 @@ mod simplebuffer_tests {
         // batch_size=1 means we acquire 1 permit per fetch iteration
         let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 1, 3).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read 3 messages (should work)
         let mut inflight = Vec::new();
@@ -2332,8 +2369,11 @@ mod simplebuffer_tests {
 
         let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Read all messages
         let mut messages = Vec::new();
@@ -2522,8 +2562,11 @@ mod duplicate_inflight_tests {
         .await
         .unwrap();
 
-        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
-        let mut rx = rx.remove(0);
+        let read_stream = orchestrator.streams().next().cloned().unwrap();
+        let (mut rx, handle) = orchestrator
+            .streaming_read(&read_stream, cancel.clone())
+            .await
+            .unwrap();
 
         // Only two distinct offsets should be forwarded; the duplicate must be filtered.
         let first = tokio::time::timeout(Duration::from_secs(1), rx.next())
