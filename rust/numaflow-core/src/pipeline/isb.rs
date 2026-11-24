@@ -82,6 +82,16 @@ pub(crate) trait LocalISBReader: Sync {
     fn wip_ack_interval(&self) -> Option<Duration> {
         None
     }
+
+    /// Returns how long the ISB waits for an ack before it redelivers the message, if the ISB
+    /// redelivers unacknowledged messages on its own (e.g. the JetStream consumer's AckWait).
+    ///
+    /// The reader uses it to bound ack/nack retries: past this point the ISB has redelivered the
+    /// message, so giving up on the old delivery is safe under at-least-once. Returns `None` when
+    /// there is no such redelivery, in which case ack/nack retries are not time-bounded.
+    fn ack_wait(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// Error types for ISB write operations.

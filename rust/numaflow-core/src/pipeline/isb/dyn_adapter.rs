@@ -34,6 +34,7 @@ pub(crate) trait DynISBReader: Send + Sync {
     fn name(&self) -> &'static str;
     fn mark_wip<'a>(&'a self, offset: &'a Offset) -> BoxFuture<'a, Result<()>>;
     fn wip_ack_interval(&self) -> Option<Duration>;
+    fn ack_wait(&self) -> Option<Duration>;
 }
 
 impl<T: ISBReader> DynISBReader for T {
@@ -61,6 +62,10 @@ impl<T: ISBReader> DynISBReader for T {
     }
     fn wip_ack_interval(&self) -> Option<Duration> {
         ISBReader::wip_ack_interval(self)
+    }
+
+    fn ack_wait(&self) -> Option<Duration> {
+        ISBReader::ack_wait(self)
     }
 }
 
