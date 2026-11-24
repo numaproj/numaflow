@@ -675,6 +675,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	status, err := getIsbServiceStatus(isbsvc)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbsvcName, ns, err.Error()))
+		return
 	}
 
 	resp := NewISBService(status, isbsvc)
