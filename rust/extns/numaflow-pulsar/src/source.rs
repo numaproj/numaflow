@@ -230,7 +230,10 @@ impl PendingMessages {
             return Ok(Some((message, settlement)));
         };
         match batch.is_settled(offset) {
-            None => return Ok(Some((message, settlement))),
+            None => {
+                warn!(%offset, batch_size = batch.settled.len(), "Pulsar batch index past the batch size, holding the ack");
+                return Ok(None);
+            }
             Some(true) => return Ok(None),
             Some(false) if batch.remaining > 1 => return Ok(None),
             Some(false) => {}
@@ -868,6 +871,18 @@ mod tests {
     }
 
     #[test]
+    fn batch_index_past_batch_size_is_not_sent() {
+        let mut pending = PendingMessages::default();
+        let offsets = insert_batch(&mut pending, 1, 2);
+        let past = offset(1, 5);
+        pending.insert(past, message(&past), Some(2));
+
+        assert_eq!(planned(&pending, &past, Settlement::Ack), None);
+        pending.settle(&past, Settlement::Ack);
+        assert_eq!(planned(&pending, &offsets[0], Settlement::Ack), None);
+    }
+
+    #[test]
     fn unknown_offset_is_an_error() {
         let pending = PendingMessages::default();
         let result = pending.plan(&offset(1, 0), Settlement::Ack);
@@ -1099,20 +1114,34 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 204"), "{response}");
         tokio::time::sleep(Duration::from_secs(3)).await;
 
-        let mut copies = Vec::new();
-        for _ in 0..6 {
+        let mut marker_producer = client.producer().with_topic(&topic).build().await.unwrap();
+        marker_producer
+            .send_non_blocking("marker".to_string())
+            .await
+            .unwrap()
+            .await
+            .unwrap();
+
+        let mut read_after_unload = Vec::new();
+        for _ in 0..20 {
             let batch = source.read_messages().await.unwrap().unwrap();
-            copies.extend(batch.into_iter().map(|m| m.offset));
+            read_after_unload.extend(batch.into_iter().map(|m| m.offset));
+            if read_after_unload
+                .iter()
+                .any(|o| EntryKey::from(o) != EntryKey::from(&offsets[0]))
+            {
+                break;
+            }
         }
+        let (copies, marker): (Vec<_>, Vec<_>) = read_after_unload
+            .into_iter()
+            .partition(|o| EntryKey::from(o) == EntryKey::from(&offsets[0]));
+        assert_eq!(marker.len(), 1);
+        assert_eq!(copies.len(), 0);
 
         source.nack_offsets(vec![offsets[1]]).await.unwrap();
         source.ack_offsets(vec![offsets[2]]).await.unwrap();
-        let leftover: Vec<_> = copies
-            .iter()
-            .filter(|o| o.batch_index == 0)
-            .copied()
-            .collect();
-        source.ack_offsets(leftover).await.unwrap();
+        source.ack_offsets(marker).await.unwrap();
         tokio::time::sleep(Duration::from_secs(1)).await;
         drop(source);
         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -1122,7 +1151,6 @@ mod tests {
         for _ in 0..6 {
             redelivered.extend(source.read_messages().await.unwrap().unwrap());
         }
-        assert_eq!(copies.len(), 0);
         assert_eq!(redelivered.len(), 3);
     }
 }
