@@ -421,19 +421,20 @@ fn update_udf_drop_metric(is_mono_vertex: bool) {
     update_udf_drop_metric_by_n(is_mono_vertex, 1);
 }
 
-fn update_udf_process_time_metric(is_mono_vertex: bool) {
+fn update_udf_process_time_metric(is_mono_vertex: bool, start: Instant) {
+    let elapsed_micros = start.elapsed().as_micros() as f64;
     if is_mono_vertex {
         monovertex_metrics()
             .udf
             .time
             .get_or_create(mvtx_forward_metric_labels())
-            .observe(Instant::now().elapsed().as_micros() as f64);
+            .observe(elapsed_micros);
     } else {
         pipeline_metrics()
             .forwarder
             .udf_processing_time
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .observe(Instant::now().elapsed().as_micros() as f64);
+            .observe(elapsed_micros);
     }
 }
 
@@ -1182,18 +1183,64 @@ mod tests {
         );
     }
 
+    /// Returns the (sum, count) of a histogram family across all label sets.
+    fn histogram_sum_count(
+        family: &prometheus_client::metrics::family::Family<
+            Vec<(String, String)>,
+            prometheus_client::metrics::histogram::Histogram,
+        >,
+    ) -> (f64, u64) {
+        let mut registry = prometheus_client::registry::Registry::default();
+        registry.register("h", "test histogram", family.clone());
+        let mut buffer = String::new();
+        prometheus_client::encoding::text::encode(&mut buffer, &registry).unwrap();
+
+        let (mut sum, mut count) = (0.0, 0);
+        for line in buffer.lines() {
+            let value = line.rsplit(' ').next().unwrap_or_default();
+            if line.starts_with("h_sum") {
+                sum += value.parse::<f64>().unwrap();
+            } else if line.starts_with("h_count") {
+                count += value.parse::<u64>().unwrap();
+            }
+        }
+        (sum, count)
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_update_udf_process_time_metric_mono_vertex() {
-        // Currently only ensuring that this should not panic
-        update_udf_process_time_metric(true);
+        let family = &monovertex_metrics().udf.time;
+        let (sum_before, count_before) = histogram_sum_count(family);
+
+        let start = Instant::now() - Duration::from_millis(5);
+        update_udf_process_time_metric(true, start);
+
+        let (sum_after, count_after) = histogram_sum_count(family);
+        assert_eq!(count_after, count_before + 1);
+        assert!(
+            sum_after - sum_before >= 5_000.0,
+            "expected at least 5000µs to be observed, got {}",
+            sum_after - sum_before
+        );
     }
 
     #[test]
     #[serial_test::serial]
     fn test_update_udf_process_time_metric_pipeline() {
-        // Currently only ensuring that this should not panic
-        update_udf_process_time_metric(false);
+        let family = &pipeline_metrics().forwarder.udf_processing_time;
+        let (sum_before, count_before) = histogram_sum_count(family);
+
+        let start = Instant::now() - Duration::from_millis(5);
+        update_udf_process_time_metric(false, start);
+
+        let (sum_after, count_after) = histogram_sum_count(family);
+        assert_eq!(count_after, count_before + 1);
+        assert!(
+            sum_after - sum_before >= 5_000.0,
+            "expected at least 5000µs to be observed, got {}",
+            sum_after - sum_before
+        );
     }
 
     #[test]

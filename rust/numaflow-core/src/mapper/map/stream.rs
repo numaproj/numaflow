@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -88,6 +89,7 @@ impl MapStreamTask {
             let mut parent_info = initial_parent_info.clone();
             update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
+            let attempt_start = Instant::now();
             // Call the UDF and get receiver for raw results
             let mut receiver = self
                 .mapper
@@ -177,6 +179,7 @@ impl MapStreamTask {
             }
 
             if !failed_message {
+                update_udf_process_time_metric(self.shared_ctx.is_mono_vertex, attempt_start);
                 break;
             }
 
@@ -331,7 +334,6 @@ impl UserDefinedStreamMap {
         // once we get eot, we can drop the sender to let the callee
         // know that we are done sending responses
         if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-            update_udf_process_time_metric(is_mono_vertex());
             return Ok(());
         }
 
