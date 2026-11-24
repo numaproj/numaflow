@@ -1,7 +1,6 @@
 use super::{
     ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_drop_metric_by_n,
-    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_metric,
+    update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
 };
 use crate::config::components::sink::RetryConfig;
 use crate::config::is_mono_vertex;
@@ -328,7 +327,6 @@ impl UserDefinedBatchMap {
                             );
                             return;
                         }
-                        update_udf_process_time_metric(is_mono_vertex());
                         // Let the in-flight batch return now that its EOT has been consumed.
                         if let Some(eot_tx) = eot_tx {
                             let _ = eot_tx.send(());
