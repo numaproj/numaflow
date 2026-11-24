@@ -377,3 +377,64 @@ func getEvents(recorder record.EventRecorder) []string {
 	}
 	return events
 }
+
+func TestJetStreamInstallPreventsScaleDown(t *testing.T) {
+	ctx := context.TODO()
+	cl := fake.NewClientBuilder().Build()
+	kubeClient := k8sfake.NewSimpleClientset()
+	newInstaller := func(replicas int32) *jetStreamInstaller {
+		isbSvc := testJetStreamIsbSvc.DeepCopy()
+		isbSvc.Spec.JetStream.Replicas = &replicas
+		return &jetStreamInstaller{
+			client:     cl,
+			kubeClient: kubeClient,
+			isbSvc:     isbSvc,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			labels:     testLabels,
+			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
+		}
+	}
+	getReplicas := func(t *testing.T) (int32, string) {
+		t.Helper()
+		sts := &appv1.StatefulSet{}
+		err := cl.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: generateJetStreamStatefulSetName(testJetStreamIsbSvc)}, sts)
+		assert.NoError(t, err)
+		cm := &corev1.ConfigMap{}
+		err = cl.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: generateJetStreamConfigMapName(testJetStreamIsbSvc)}, cm)
+		assert.NoError(t, err)
+		return *sts.Spec.Replicas, cm.Data[dfv1.JetStreamConfigMapKey]
+	}
+
+	_, err := newInstaller(5).Install(ctx)
+	assert.NoError(t, err)
+	replicas, _ := getReplicas(t)
+	assert.Equal(t, int32(5), replicas)
+	// Secrets are created with the controller-runtime client but looked up with the kube client,
+	// which are separate fakes here, so mirror them for the following installs.
+	for _, name := range []string{generateJetStreamServerSecretName(testJetStreamIsbSvc), generateJetStreamClientAuthSecretName(testJetStreamIsbSvc)} {
+		secret := &corev1.Secret{}
+		assert.NoError(t, cl.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, secret))
+		_, err := kubeClient.CoreV1().Secrets(testNamespace).Create(ctx, secret, metav1.CreateOptions{})
+		assert.NoError(t, err)
+	}
+
+	t.Run("scale down is ignored", func(t *testing.T) {
+		i := newInstaller(3)
+		_, err := i.Install(ctx)
+		assert.NoError(t, err)
+		replicas, conf := getReplicas(t)
+		assert.Equal(t, int32(5), replicas)
+		// the cluster routes must still list all 5 nodes
+		assert.Contains(t, conf, generateJetStreamStatefulSetName(testJetStreamIsbSvc)+"-4.")
+		assert.True(t, i.isbSvc.Status.IsReady())
+		assert.Contains(t, getEvents(i.recorder), "Warning JetStreamScaleDownNotSupported Scaling down JetStream ISB Service from 5 to 3 replicas is not supported, keeping 5 replicas")
+	})
+
+	t.Run("scale up is applied", func(t *testing.T) {
+		_, err := newInstaller(7).Install(ctx)
+		assert.NoError(t, err)
+		replicas, _ := getReplicas(t)
+		assert.Equal(t, int32(7), replicas)
+	})
+}
