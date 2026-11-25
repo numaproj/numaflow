@@ -15,6 +15,7 @@ members = [
     "extns/numaflow-nats",
     "extns/numaflow-kafka",
     "extns/numaflow-http",
+    "extns/numaflow-ros2",
     # generated
     "numaflow-pb",
     "numaflow-models",
@@ -76,6 +77,7 @@ numaflow-nats = { path = "extns/numaflow-nats" }
 numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }
+numaflow-ros2 = { path = "extns/numaflow-ros2" }
 numaflow-throttling = { path = "numaflow-throttling" }
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.17"

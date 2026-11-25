@@ -15,6 +15,8 @@ use numaflow_nats::NatsAuth;
 use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
 use numaflow_nats::nats::NatsSourceConfig;
 use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
+#[cfg(feature = "ros2")]
+use numaflow_ros2::source::Ros2SourceConfig;
 use numaflow_shared::redacted_url::RedactedUrl;
 use numaflow_sqs::source::SqsSourceConfig;
 use tracing::warn;
@@ -108,6 +110,8 @@ pub(crate) enum SourceType {
     Kafka(Box<KafkaSourceConfig>),
     Http(numaflow_http::HttpSourceConfig),
     Nats(NatsSourceConfig),
+    #[cfg(feature = "ros2")]
+    Ros2(Ros2SourceConfig),
 }
 
 impl TryFrom<Box<GeneratorSource>> for SourceType {
@@ -394,6 +398,53 @@ impl TryFrom<Box<numaflow_models::models::NatsSource>> for SourceType {
     }
 }
 
+impl TryFrom<Box<numaflow_models::models::Ros2Source>> for SourceType {
+    type Error = Error;
+    fn try_from(
+        value: Box<numaflow_models::models::Ros2Source>,
+    ) -> std::result::Result<Self, Self::Error> {
+        if value.topic.trim().is_empty() {
+            return Err(Error::Config("ROS 2 source: 'topic' must not be empty".into()));
+        }
+        if value.msg_type.trim().is_empty() {
+            return Err(Error::Config(
+                "ROS 2 source: 'msgType' must not be empty (e.g. 'std_msgs/msg/String')".into(),
+            ));
+        }
+        #[cfg(not(feature = "ros2"))]
+        {
+            let _ = value;
+            return Err(Error::Config(
+                "ROS 2 source: numaflow-core was compiled without the 'ros2' feature; \
+                 rebuild with --features ros2"
+                    .into(),
+            ));
+        }
+        #[cfg(feature = "ros2")]
+        {
+            let ros2_config = Ros2SourceConfig {
+                topic: value.topic,
+                msg_type: value.msg_type,
+                node_name: value
+                    .node_name
+                    .unwrap_or_else(|| "numaflow_source".to_string()),
+                namespace: value.namespace.unwrap_or_default(),
+                read_timeout: value
+                    .read_timeout_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64))
+                    .unwrap_or_else(|| std::time::Duration::from_millis(1000)),
+                batch_size: value.batch_size.unwrap_or(500) as usize,
+                channel_capacity: value.channel_capacity.unwrap_or(256) as usize,
+                silence_warn_after: value
+                    .silence_warn_after_ms
+                    .filter(|&ms| ms > 0)
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
+            };
+            Ok(SourceType::Ros2(ros2_config))
+        }
+    }
+}
+
 impl TryFrom<Box<numaflow_models::models::KafkaSource>> for SourceType {
     type Error = Error;
     fn try_from(
@@ -466,6 +517,11 @@ impl TryFrom<SourceSpec> for SourceType {
 
         if let Some(nats) = source.spec.nats.take() {
             return nats.try_into();
+        }
+
+        #[cfg(any(feature = "ros2", not(feature = "ros2")))]
+        if let Some(ros2) = source.spec.ros2.take() {
+            return ros2.try_into();
         }
 
         if let Some(kafka) = source.spec.kafka.take() {

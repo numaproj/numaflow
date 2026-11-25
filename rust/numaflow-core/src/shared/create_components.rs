@@ -29,6 +29,8 @@ use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
 use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
+#[cfg(feature = "ros2")]
+use crate::source::ros2::new_ros2_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::tracker::Tracker;
@@ -552,6 +554,24 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 batch_size,
                 concurrency,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
+                tracker,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+                cln_token,
+                rate_limiter,
+                streaming,
+            )
+            .await)
+        }
+
+        #[cfg(feature = "ros2")]
+        SourceType::Ros2(ros2_config) => {
+            let ros2 = new_ros2_source(ros2_config.clone(), cln_token.clone()).await?;
+            Ok(Source::new(
+                batch_size,
+                concurrency,
+                source::SourceType::Ros2(ros2),
                 tracker,
                 source_config.read_ahead,
                 transformer,

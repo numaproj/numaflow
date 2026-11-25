@@ -27,6 +27,8 @@ use numaflow_nats::jetstream::JetstreamSource;
 use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
+#[cfg(feature = "ros2")]
+use numaflow_ros2::source::Ros2Source;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::collections::HashMap;
@@ -65,6 +67,8 @@ pub(crate) mod sqs;
 
 pub(crate) mod http;
 pub(crate) mod kafka;
+#[cfg(feature = "ros2")]
+pub(crate) mod ros2;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
@@ -144,6 +148,8 @@ pub(crate) enum SourceType {
     Kafka(KafkaSource),
     Http(CoreHttpSource),
     Nats(NatsSource),
+    #[cfg(feature = "ros2")]
+    Ros2(Ros2Source),
 }
 
 enum ActorMessage {
@@ -362,6 +368,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         http_source.clone(),
                         http_source.clone(),
                         http_source,
+                    );
+                    actor.run().await;
+                });
+            }
+            #[cfg(feature = "ros2")]
+            SourceType::Ros2(ros2_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        ros2_source.clone(),
+                        ros2_source.clone(),
+                        ros2_source,
                     );
                     actor.run().await;
                 });

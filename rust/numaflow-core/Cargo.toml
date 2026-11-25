@@ -8,8 +8,10 @@ nats-tests = []
 pulsar-tests = []
 sqs-tests = []
 kafka-tests = []
+ros2 = ["dep:numaflow-ros2", "numaflow-ros2/ros2"]
+ros2-tests = ["ros2", "numaflow-ros2/ros2-tests"]
 global-state-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "global-state-tests"]
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "ros2-tests", "global-state-tests"]
 
 [lints]
 workspace = true
@@ -28,6 +30,7 @@ numaflow-nats.workspace = true
 numaflow-kafka.workspace = true
 numaflow-http.workspace = true
 numaflow-sqs.workspace = true
+numaflow-ros2 = { workspace = true, optional = true }
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
 numaflow-shared.workspace = true
