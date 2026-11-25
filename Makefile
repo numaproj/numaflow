@@ -178,9 +178,11 @@ endif
 ui-build:
 	./hack/build-ui.sh
 
+# jest sizes its worker pool from the host CPU count, not the pod's cgroup limit
+UI_TEST_MAX_WORKERS ?= 4
 .PHONY: ui-test
 ui-test: ui-build
-	./hack/test-ui.sh
+	UI_TEST_MAX_WORKERS=$(UI_TEST_MAX_WORKERS) ./hack/test-ui.sh
 
 # Optional knobs for `image` / `image-dev` (defaults preserve CI / release behavior).
 SKIP_CLEAN ?= false
