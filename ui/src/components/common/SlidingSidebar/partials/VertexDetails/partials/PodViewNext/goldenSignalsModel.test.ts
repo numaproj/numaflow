@@ -304,7 +304,7 @@ describe("buildVertexHealth", () => {
         value: "P99 1.0 ms",
         detail: "slowest stage: sink P99 900 µs",
         stages: [
-          { name: "read", value: "10 µs" },
+          { name: "read (incl. wait)", value: "10 µs" },
           { name: "sink", value: "900 µs" },
         ],
         stagesNote: undefined,
@@ -326,16 +326,36 @@ describe("buildVertexHealth", () => {
     );
   });
 
-  it("explains batch time that the stages do not account for", () => {
+  it("explains batch time that is mostly read wait and does not blame read", () => {
     const latency = card(
       buildVertexHealth(
-        input({ series: { p99: [4_290_000], stageRead: [600], stageSink: [1900], stageAck: [100] } })
+        input({ series: { p99: [1_004_000], stageRead: [1_001_000], stageSink: [1900], stageAck: [100] } })
       ),
       "latency"
     );
+    expect(latency.detail).toBe("slowest stage: sink P99 1.9 ms");
     expect(latency.stagesNote).toBe(
-      "Stages add up to 2.6 ms; the rest of the batch time is spent waiting for messages."
+      "Most of the batch time is waiting up to the read timeout for a batch to fill, not processing."
     );
+  });
+
+  it("names the configured read timeout in the wait note", () => {
+    const latency = card(
+      buildVertexHealth(input({ readTimeout: "1s", series: { p99: [1_004_000], stageRead: [1_001_000] } })),
+      "latency"
+    );
+    expect(latency.detail).toBe("Processing time per batch, including waiting for a batch to fill");
+    expect(latency.stagesNote).toBe(
+      "Most of the batch time is waiting up to 1s for a batch to fill, not processing."
+    );
+  });
+
+  it("omits the wait note when read is a small part of the batch time", () => {
+    const latency = card(
+      buildVertexHealth(input({ series: { p99: [4_290_000], stageRead: [600], stageSink: [1900] } })),
+      "latency"
+    );
+    expect(latency.stagesNote).toBeUndefined();
   });
 
   it("applies latency trend thresholds", () => {

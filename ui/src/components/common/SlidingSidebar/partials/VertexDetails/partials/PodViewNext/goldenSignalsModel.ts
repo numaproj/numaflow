@@ -53,7 +53,7 @@ export const CRITICAL_ERROR_WINDOW = "10m";
 export const MESSAGE_OUTCOME_WINDOW = "10m";
 
 const STAGE_LABELS: Partial<Record<SignalQueryKey, string>> = {
-  stageRead: "read",
+  stageRead: "read (incl. wait)",
   stageTransformer: "transformer",
   stageUdf: "UDF",
   stageSink: "sink",
@@ -400,6 +400,8 @@ export interface VertexHealthInput {
   scale?: { min?: number; max?: number };
   fleetItems: PodFleetItem[];
   recentErrorCount?: number;
+  /** Explicit `limits.readTimeout` from the vertex or MonoVertex spec, if set. */
+  readTimeout?: string;
 }
 
 const UNAVAILABLE = "Metrics unavailable";
@@ -447,19 +449,20 @@ function latencyCard(input: VertexHealthInput): HealthCard {
     .filter((key) => input.queries?.[key])
     .map((key) => ({ name: STAGE_LABELS[key] as string, micros: latest(input.series[key]) }))
     .filter((stage): stage is { name: string; micros: number } => stage.micros !== undefined);
-  const slowest = slowestStage(stages);
+  const readStage = stages.find((stage) => stage.name === STAGE_LABELS.stageRead);
+  // Read time includes waiting for a batch to fill, so it is not a processing bottleneck.
+  const slowest = slowestStage(stages.filter((stage) => stage !== readStage));
   const trend = trendVsAverage(p99);
   const tone: SignalTone =
     trend !== undefined && trend > 1 ? "critical" : trend !== undefined && trend > 0.25 ? "warn" : "ok";
   const detail = [
     slowest
       ? `slowest stage: ${slowest.name} P99 ${formatMicros(slowest.micros)}`
-      : "Processing time per batch",
+      : "Processing time per batch, including waiting for a batch to fill",
     formatTrend(trend, "vs 30m avg"),
   ]
     .filter(Boolean)
     .join(" · ");
-  const stageTotal = stages.reduce((sum, stage) => sum + stage.micros, 0);
   return {
     ...base,
     value: `P99 ${formatMicros(current)}`,
@@ -467,10 +470,11 @@ function latencyCard(input: VertexHealthInput): HealthCard {
     tone,
     sparkline: toSparkline(p99),
     stages: stages.map((stage) => ({ name: stage.name, value: formatMicros(stage.micros) })),
-    // Batch processing time includes waiting for the source to fill a batch, which no stage measures.
+    // Read and batch timers start at the same instant, so comparing them is valid. Stage P99s are
+    // not summed: percentiles do not add, and some stages are timed per message, others per batch.
     stagesNote:
-      stages.length && stageTotal < current / 2
-        ? `Stages add up to ${formatMicros(stageTotal)}; the rest of the batch time is spent waiting for messages.`
+      readStage && readStage.micros >= current / 2
+        ? `Most of the batch time is waiting up to ${input.readTimeout ?? "the read timeout"} for a batch to fill, not processing.`
         : undefined,
     inspect,
   };

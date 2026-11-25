@@ -12,10 +12,10 @@ const cards: HealthCard[] = [
     tone: "ok",
     sparkline: [10, 20, 30, 40, 50, 60, 70, 100],
     stages: [
-      { name: "read", value: "12 ms" },
+      { name: "read (incl. wait)", value: "12 ms" },
       { name: "sink", value: "3.10 s" },
     ],
-    stagesNote: "Stages add up to 3.11 s; the rest of the batch time is spent waiting for messages.",
+    stagesNote: "Most of the batch time is waiting up to 1s for a batch to fill, not processing.",
     inspect: { kind: "metrics", metric: "monovtx_processing_time_bucket" },
   },
   {
@@ -139,7 +139,7 @@ describe("VertexHealthStrip", () => {
     const stages = await screen.findByTestId("vertex-health-stages");
     expect(stages).toHaveTextContent("P99 by stage");
     expect(stages).toHaveTextContent("sink3.10 s");
-    expect(stages).toHaveTextContent("waiting for messages");
+    expect(stages).toHaveTextContent("waiting up to 1s for a batch to fill");
   });
 
   it("shows all message outcome types and their explanations on the loss card", async () => {
