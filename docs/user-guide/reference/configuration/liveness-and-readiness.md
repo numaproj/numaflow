@@ -8,7 +8,22 @@
 - `successThreshold`
 - `failureThreshold`
 
-Here is an example for `Pipeline` customization, similar configuration can be applied to containers including `udf`, `udsource`, `transformer`, `udsink` and `fb-udsink`.
+A field you leave unset keeps the built-in value. `successThreshold` is left unset, so Kubernetes uses `1`.
+
+The `numa` container has both probes:
+
+| Probe | `initialDelaySeconds` | `periodSeconds` | `timeoutSeconds` | `failureThreshold` |
+| --- | --- | --- | --- | --- |
+| readiness | 5 | 10 | 30 | 6 |
+| liveness | 20 | 60 | 30 | 5 |
+
+User-defined containers have a liveness probe only:
+
+| `initialDelaySeconds` | `periodSeconds` | `timeoutSeconds` | `failureThreshold` |
+| --- | --- | --- | --- |
+| 30 | 60 | 30 | 5 |
+
+Here is an example for `Pipeline` customization, similar configuration can be applied to containers including `udf`, `udsource`, `transformer`, `udsink`, `fb-udsink` and `ons-udsink`.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -110,7 +125,7 @@ spec:
       udsink:
         container:
           image: my-sink:latest
-          # # For Fallback Sink
+          # For Fallback Sink
           livenessProbe:
             initialDelaySeconds: 40
             failureThreshold: 5
@@ -138,7 +153,7 @@ spec:
     - name: my-reduce
       containerTemplate: # For "numa" container
         startupProbe:
-          initialDelaySeconds: 0
+          initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 60 # Allow up to 10 minutes to start
 ```
@@ -147,7 +162,7 @@ The same configuration is available on `MonoVertex`, and via a
 [Vertex Template](./pipeline-customization.md#vertices) to apply it to every vertex in a pipeline.
 
 A `startupProbe` is deliberately not offered on the user-defined containers (`udf`, `udsource`,
-`transformer`, `udsink` and `fb-udsink`). Those run as sidecars, and their probe endpoint
+`transformer`, `udsink`, `fb-udsink` and `ons-udsink`). Those run as sidecars, and their probe endpoint
 `/sidecar-livez` is served by the `numa` container, which Kubernetes does not start until every
 sidecar reports started. A startup probe on a sidecar would therefore gate itself on an endpoint
 that cannot exist yet, and the pod would never start. Use the liveness settings above for those
