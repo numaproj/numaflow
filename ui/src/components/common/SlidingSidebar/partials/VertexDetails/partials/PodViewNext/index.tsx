@@ -124,6 +124,7 @@ export function PodViewNext(props: PodViewNextProps) {
         scale: vertexSpec?.scale,
         fleetItems,
         recentErrorCount,
+        readTimeout: vertexSpec?.limits?.readTimeout,
       }),
     [
       buffers,
