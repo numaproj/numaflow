@@ -618,6 +618,22 @@ func validateSource(source dfv1.Source) error {
 		}
 	}
 
+	if source.Pulsar != nil {
+		if err := validatePulsarSource(*source.Pulsar); err != nil {
+			return fmt.Errorf("invalid Pulsar source: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func validatePulsarSource(pulsar dfv1.PulsarSource) error {
+	if pulsar.FlowPermits != nil && *pulsar.FlowPermits == 0 {
+		return fmt.Errorf("'flowPermits' must be greater than 0")
+	}
+	if pulsar.ReceiverQueueSize != nil && *pulsar.ReceiverQueueSize == 0 {
+		return fmt.Errorf("'receiverQueueSize' must be greater than 0")
+	}
 	return nil
 }
 

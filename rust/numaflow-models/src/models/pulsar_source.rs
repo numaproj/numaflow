@@ -24,9 +24,15 @@ pub struct PulsarSource {
     pub consumer_name: String,
     #[serde(rename = "deadLetterPolicy", skip_serializing_if = "Option::is_none")]
     pub dead_letter_policy: Option<Box<crate::models::PulsarDeadLetterPolicy>>,
+    /// Number of messages the consumer asks the broker for at a time (flow permits), per partition. Defaults to readBatchSize.
+    #[serde(rename = "flowPermits", skip_serializing_if = "Option::is_none")]
+    pub flow_permits: Option<i64>,
     /// Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
     #[serde(rename = "maxUnack", skip_serializing_if = "Option::is_none")]
     pub max_unack: Option<i64>,
+    /// Max number of messages the consumer buffers in memory before they are read, per partition. Defaults to readBatchSize.
+    #[serde(rename = "receiverQueueSize", skip_serializing_if = "Option::is_none")]
+    pub receiver_queue_size: Option<i64>,
     #[serde(rename = "serverAddr")]
     pub server_addr: String,
     #[serde(rename = "subscriptionName")]
@@ -48,7 +54,9 @@ impl PulsarSource {
             auth: None,
             consumer_name,
             dead_letter_policy: None,
+            flow_permits: None,
             max_unack: None,
+            receiver_queue_size: None,
             server_addr,
             subscription_name,
             tls: None,

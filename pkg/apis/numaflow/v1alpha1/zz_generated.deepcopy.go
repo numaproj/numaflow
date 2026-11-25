@@ -2328,6 +2328,16 @@ func (in *PulsarSource) DeepCopyInto(out *PulsarSource) {
 		*out = new(TLS)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.FlowPermits != nil {
+		in, out := &in.FlowPermits, &out.FlowPermits
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ReceiverQueueSize != nil {
+		in, out := &in.ReceiverQueueSize, &out.ReceiverQueueSize
+		*out = new(uint32)
+		**out = **in
+	}
 	return
 }
 

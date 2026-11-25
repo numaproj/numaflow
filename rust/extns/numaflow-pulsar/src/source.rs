@@ -53,6 +53,8 @@ pub struct PulsarSourceConfig {
     /// `insecure_skip_verify`: When true, skip TLS server verification entirely. Prefer setting
     /// `ca_cert` instead; this is only for testing against untrusted setups.
     pub tls: Option<TlsConfig>,
+    pub flow_permits: Option<u32>,
+    pub receiver_queue_size: Option<u32>,
 }
 
 enum ConsumerActorMessage {
@@ -141,6 +143,14 @@ struct PendingMessage {
     message_id: MessageIdData,
 }
 
+fn prefetch_sizes(config: &PulsarSourceConfig, batch_size: usize) -> (u32, u32) {
+    let default_size = u32::try_from(batch_size).unwrap_or(u32::MAX).max(1);
+    (
+        config.flow_permits.unwrap_or(default_size),
+        config.receiver_queue_size.unwrap_or(default_size),
+    )
+}
+
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
@@ -153,12 +163,14 @@ impl ConsumerReaderActor {
     async fn start(
         config: PulsarSourceConfig,
         handler_rx: mpsc::Receiver<ConsumerActorMessage>,
+        batch_size: usize,
         cancel_token: CancellationToken,
     ) -> Result<()> {
         info!(
             addr = ?config.pulsar_server_addr,
             "Pulsar connection details"
         );
+        let (flow_permits, receiver_queue_size) = prefetch_sizes(&config, batch_size);
 
         // NOTE: `with_allow_insecure_connection()` has historically had no effect against
         // rustls (see https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912),
@@ -201,13 +213,18 @@ impl ConsumerReaderActor {
             .await
             .map_err(|e| format!("Creating Pulsar client connection: {e:?}"))?;
 
+        let options = ConsumerOptions::default()
+            .durable(true)
+            .with_receiver_queue_size(receiver_queue_size);
+
         let mut builder = pulsar
             .consumer()
+            .with_batch_size(flow_permits)
             .with_topic(&config.topic)
             .with_consumer_name(&config.consumer_name)
             .with_subscription_type(SubType::Shared)
             .with_subscription(&config.subscription)
-            .with_options(ConsumerOptions::default().durable(true));
+            .with_options(options);
 
         if let Some(policy) = &config.dead_letter_policy {
             builder = builder.with_dead_letter_policy(DeadLetterPolicy {
@@ -450,7 +467,7 @@ impl PulsarSource {
         cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        ConsumerReaderActor::start(config, rx, cancel_token).await?;
+        ConsumerReaderActor::start(config, rx, batch_size, cancel_token).await?;
         Ok(Self {
             actor_tx: tx,
             batch_size,
@@ -534,6 +551,8 @@ mod tests {
                 dead_letter_policy: None,
                 auth: None,
                 tls: None,
+                flow_permits: None,
+                receiver_queue_size: None,
             },
             10,
             Duration::from_millis(500),
@@ -573,5 +592,108 @@ mod tests {
         source.ack_offsets(vec![*a, *b]).await.unwrap();
         source.nack_offsets(vec![*c]).await.unwrap();
         source.nack_offsets(vec![*c, *d]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_small_prefetch_sizes_still_deliver_everything() {
+        for (flow_permits, receiver_queue_size, batch_size) in
+            [(Some(2), Some(2), 10), (None, None, 1)]
+        {
+            let id = uuid::Uuid::new_v4().simple();
+            let topic = format!("persistent://public/default/pulsar_source_{id}");
+            let source = PulsarSource::new(
+                PulsarSourceConfig {
+                    pulsar_server_addr: numaflow_shared::redacted_url::RedactedUrl::parse(
+                        "pulsar://localhost:6650",
+                    )
+                    .unwrap(),
+                    topic: topic.clone(),
+                    consumer_name: "test".into(),
+                    subscription: format!("source_subscription_{id}"),
+                    max_unack: 100,
+                    dead_letter_policy: None,
+                    auth: None,
+                    tls: None,
+                    flow_permits,
+                    receiver_queue_size,
+                },
+                batch_size,
+                Duration::from_millis(200),
+                0,
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+
+            let client = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+                .build()
+                .await
+                .unwrap();
+            let mut producer = client.producer().with_topic(&topic).build().await.unwrap();
+            let mut receipts = Vec::new();
+            for i in 0..30 {
+                receipts.push(
+                    producer
+                        .send_non_blocking(format!("message {i}"))
+                        .await
+                        .unwrap(),
+                );
+            }
+            for receipt in receipts {
+                receipt.await.unwrap();
+            }
+
+            let mut payloads = std::collections::HashSet::new();
+            for _ in 0..200 {
+                if payloads.len() == 30 {
+                    break;
+                }
+                let batch = source.read_messages().await.unwrap().unwrap();
+                assert!(batch.len() <= batch_size);
+                source
+                    .ack_offsets(batch.iter().map(|m| m.offset).collect())
+                    .await
+                    .unwrap();
+                payloads.extend(batch.into_iter().map(|m| m.payload));
+            }
+            assert_eq!(payloads.len(), 30);
+        }
+    }
+}
+
+#[cfg(test)]
+mod prefetch_tests {
+    use super::*;
+
+    fn config(flow_permits: Option<u32>, receiver_queue_size: Option<u32>) -> PulsarSourceConfig {
+        PulsarSourceConfig {
+            pulsar_server_addr: RedactedUrl::parse("pulsar://localhost:6650").unwrap(),
+            topic: "topic".into(),
+            consumer_name: "consumer".into(),
+            subscription: "subscription".into(),
+            max_unack: 1000,
+            dead_letter_policy: None,
+            auth: None,
+            tls: None,
+            flow_permits,
+            receiver_queue_size,
+        }
+    }
+
+    #[test]
+    fn prefetch_sizes_default_to_batch_size() {
+        assert_eq!(prefetch_sizes(&config(None, None), 500), (500, 500));
+        assert_eq!(prefetch_sizes(&config(Some(50), None), 500), (50, 500));
+        assert_eq!(prefetch_sizes(&config(None, Some(20)), 500), (500, 20));
+        assert_eq!(prefetch_sizes(&config(Some(50), Some(20)), 500), (50, 20));
+    }
+
+    #[test]
+    fn prefetch_sizes_stay_in_range() {
+        assert_eq!(prefetch_sizes(&config(None, None), 0), (1, 1));
+        assert_eq!(
+            prefetch_sizes(&config(None, None), usize::MAX),
+            (u32::MAX, u32::MAX)
+        );
     }
 }

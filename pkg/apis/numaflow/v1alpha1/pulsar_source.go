@@ -32,4 +32,12 @@ type PulsarSource struct {
 	// a client certificate.
 	// +optional
 	TLS *TLS `json:"tls,omitempty" protobuf:"bytes,8,opt,name=tls"`
+
+	// Number of messages the consumer asks the broker for at a time (flow permits), per partition. Defaults to readBatchSize.
+	// +optional
+	FlowPermits *uint32 `json:"flowPermits,omitempty" protobuf:"varint,9,opt,name=flowPermits"`
+
+	// Max number of messages the consumer buffers in memory before they are read, per partition. Defaults to readBatchSize.
+	// +optional
+	ReceiverQueueSize *uint32 `json:"receiverQueueSize,omitempty" protobuf:"varint,10,opt,name=receiverQueueSize"`
 }

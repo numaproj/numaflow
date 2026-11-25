@@ -21897,8 +21897,18 @@
           "description": "Consumer level dead letter policy.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarDeadLetterPolicy"
         },
+        "flowPermits": {
+          "description": "Number of messages the consumer asks the broker for at a time (flow permits), per partition. Defaults to readBatchSize.",
+          "type": "integer",
+          "format": "int64"
+        },
         "maxUnack": {
           "description": "Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "receiverQueueSize": {
+          "description": "Max number of messages the consumer buffers in memory before they are read, per partition. Defaults to readBatchSize.",
           "type": "integer",
           "format": "int64"
         },

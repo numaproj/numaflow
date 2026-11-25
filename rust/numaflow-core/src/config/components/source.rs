@@ -149,6 +149,19 @@ impl TryFrom<Box<GeneratorSource>> for SourceType {
     }
 }
 
+fn pulsar_size(field: &str, value: Option<i64>) -> Result<Option<u32>> {
+    value
+        .map(|v| {
+            u32::try_from(v).ok().filter(|&v| v > 0).ok_or_else(|| {
+                Error::Config(format!(
+                    "Pulsar '{field}' must be between 1 and {}, got {v}",
+                    u32::MAX
+                ))
+            })
+        })
+        .transpose()
+}
+
 impl TryFrom<Box<PulsarSource>> for SourceType {
     type Error = Error;
     fn try_from(value: Box<PulsarSource>) -> Result<Self> {
@@ -173,6 +186,8 @@ impl TryFrom<Box<PulsarSource>> for SourceType {
             max_unack: value.max_unack.unwrap_or(1000) as usize,
             auth,
             tls,
+            flow_permits: pulsar_size("flowPermits", value.flow_permits)?,
+            receiver_queue_size: pulsar_size("receiverQueueSize", value.receiver_queue_size)?,
         };
         Ok(SourceType::Pulsar(pulsar_config))
     }
@@ -889,6 +904,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source);
@@ -931,6 +948,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_auth);
@@ -988,6 +1007,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
@@ -1040,6 +1061,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1078,6 +1101,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1109,6 +1134,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1146,6 +1173,8 @@ mod pulsar_source_tests {
             max_unack: Some(1000),
             dead_letter_policy: None,
             tls: None,
+            flow_permits: None,
+            receiver_queue_size: None,
         });
 
         let result = SourceType::try_from(invalid_pulsar_source);
@@ -1155,6 +1184,45 @@ mod pulsar_source_tests {
             err.to_string()
                 .contains("Failed to get username secret from volume")
         );
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_prefetch_size() {
+        let source = |flow_permits, receiver_queue_size| {
+            Box::new(PulsarSource {
+                auth: None,
+                consumer_name: "test-consumer".to_string(),
+                server_addr: "pulsar://localhost:6650".to_string(),
+                subscription_name: "test-subscription".to_string(),
+                topic: "test-topic".to_string(),
+                max_unack: None,
+                dead_letter_policy: None,
+                tls: None,
+                flow_permits,
+                receiver_queue_size,
+            })
+        };
+
+        let Ok(SourceType::Pulsar(config)) = SourceType::try_from(source(Some(50), Some(20)))
+        else {
+            panic!("Expected SourceType::Pulsar");
+        };
+        assert_eq!(config.flow_permits, Some(50));
+        assert_eq!(config.receiver_queue_size, Some(20));
+
+        let Ok(SourceType::Pulsar(config)) = SourceType::try_from(source(None, None)) else {
+            panic!("Expected SourceType::Pulsar");
+        };
+        assert_eq!(config.flow_permits, None);
+        assert_eq!(config.receiver_queue_size, None);
+
+        for (flow_permits, receiver_queue_size) in [
+            (Some(0), None),
+            (None, Some(-1)),
+            (Some(i64::from(u32::MAX) + 1), None),
+        ] {
+            assert!(SourceType::try_from(source(flow_permits, receiver_queue_size)).is_err());
+        }
     }
 }
 

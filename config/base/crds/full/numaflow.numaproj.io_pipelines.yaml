@@ -11566,7 +11566,13 @@ spec:
                               - maxRedelivery
                               - topic
                               type: object
+                            flowPermits:
+                              format: int32
+                              type: integer
                             maxUnack:
+                              format: int32
+                              type: integer
+                            receiverQueueSize:
                               format: int32
                               type: integer
                             serverAddr:

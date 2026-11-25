@@ -4635,6 +4635,20 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
 						},
 					},
+					"flowPermits": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Number of messages the consumer asks the broker for at a time (flow permits), per partition. Defaults to readBatchSize.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"receiverQueueSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Max number of messages the consumer buffers in memory before they are read, per partition. Defaults to readBatchSize.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 				Required: []string{"serverAddr", "topic", "consumerName", "subscriptionName"},
 			},

@@ -79,6 +79,31 @@ supported for Pulsar, unlike the [Kafka source](../sources/kafka.md)'s `tls`
 block - the underlying Pulsar client does not currently support presenting a
 client certificate to the broker.
 
+## Prefetch size
+
+The Pulsar consumer asks the broker for `flowPermits` messages at a time and buffers up to
+`receiverQueueSize` messages in memory before they are read. Both default to `readBatchSize`
+(500 if not set). With large messages or slow UDFs you can lower them to use less memory in the
+`numa` container, or raise them for more throughput.
+
+Both limits apply per partition, so the `numa` container can hold about
+`partitions x (flowPermits + receiverQueueSize)` prefetched messages, plus the batch it is
+processing. The broker sends a batched entry as a whole, so an entry from a batching producer
+can go over these limits. Very small values (for example 1) lower throughput because
+the consumer asks the broker for more messages more often. To keep fewer messages in flight
+overall, also lower `readBatchSize`.
+
+```yaml
+source:
+  pulsar:
+    serverAddr: "pulsar://broker.example.com:6650"
+    consumerName: my_consumer
+    topic: my_topic
+    subscriptionName: my_subscription
+    flowPermits: 100 # Optional, defaults to readBatchSize.
+    receiverQueueSize: 100 # Optional, defaults to readBatchSize.
+```
+
 ## Autoscaling
 
 Pending messages are the subscription backlog reported by the Pulsar broker. When

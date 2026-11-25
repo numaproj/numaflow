@@ -9982,6 +9982,46 @@ currently support presenting a client certificate.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>flowPermits</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of messages the consumer asks the broker for at a time (flow
+permits), per partition. Defaults to readBatchSize.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>receiverQueueSize</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Max number of messages the consumer buffers in memory before they are
+read, per partition. Defaults to readBatchSize.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

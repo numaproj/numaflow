@@ -1593,6 +1593,14 @@ message PulsarSource {
   // a client certificate.
   // +optional
   optional TLS tls = 8;
+
+  // Number of messages the consumer asks the broker for at a time (flow permits), per partition. Defaults to readBatchSize.
+  // +optional
+  optional uint32 flowPermits = 9;
+
+  // Max number of messages the consumer buffers in memory before they are read, per partition. Defaults to readBatchSize.
+  // +optional
+  optional uint32 receiverQueueSize = 10;
 }
 
 message RateLimit {

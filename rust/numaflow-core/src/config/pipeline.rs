@@ -1286,6 +1286,8 @@ mod tests {
                         dead_letter_policy: None,
                         auth: None,
                         tls: None,
+                        flow_permits: None,
+                        receiver_queue_size: None,
                     }),
                 },
                 transformer_config: None,
