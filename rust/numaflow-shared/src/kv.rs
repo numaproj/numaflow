@@ -53,6 +53,22 @@ pub struct KVEntry {
 /// Type alias for the watch stream.
 pub type KVWatchStream = Pin<Box<dyn Stream<Item = KVEntry> + Send>>;
 
+/// Outcome of a compare-and-set [`KVStore::put_if`].
+///
+/// Under at-least-once delivery a losing writer is an *expected* outcome,
+/// so a conflict is modelled as a value. Only genuine transport/store 
+/// failures surface as `Err(KVError)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CasResult {
+    /// The write committed. Carries the new revision of the key.
+    Committed(u64),
+    /// The precondition did not hold: for a create (`expected_revision == None`)
+    /// the key already existed; for an update (`expected_revision == Some(rev)`)
+    /// the key's current revision was not `rev`. Nothing was written. Re-read the
+    /// key with [`KVStore::get_with_revision`] and retry against the fresh revision.
+    Conflict,
+}
+
 /// KVStor defines a generic key-value store interface.
 /// It provides basic CRUD operations plus a watch capability
 /// for observing changes to the store.
@@ -87,6 +103,39 @@ pub trait KVStore: Send + Sync {
     /// * `Ok(Some(value))` - If the key exists
     /// * `Ok(None)` - If the key does not exist
     async fn get(&self, key: &str) -> Result<Option<Bytes>, KVError>;
+
+    /// Get the value for a key together with its current revision.
+    ///
+    /// The revision is the compare-and-set token consumed by [`Self::put_if`].
+    ///
+    /// # Returns
+    /// * `Ok(Some((value, revision)))` - If the key currently holds a value
+    /// * `Ok(None)` - If the key does not exist (or its latest entry is a delete/purge)
+    async fn get_with_revision(&self, key: &str) -> Result<Option<(Bytes, u64)>, KVError>;
+
+    /// Conditionally write a value using an optimistic compare-and-set on the key's
+    /// revision. This is the primitive that makes concurrent, at-least-once writers
+    /// safe: only one writer racing on the same revision commits; the rest observe a
+    /// [`CasResult::Conflict`] and retry against a fresh revision.
+    ///
+    /// # Arguments
+    /// * `key` - The key to write
+    /// * `value` - The value to store
+    /// * `expected_revision` -
+    ///   * `None` — *create*: commit only if the key does not yet exist.
+    ///   * `Some(rev)` — *update*: commit only if the key's current revision is exactly `rev`
+    ///     (as returned by [`Self::get_with_revision`]).
+    ///
+    /// # Returns
+    /// * `Ok(CasResult::Committed(new_revision))` - The write was applied
+    /// * `Ok(CasResult::Conflict)` - The precondition did not hold; nothing was written
+    /// * `Err(KVError)` - A genuine store/transport failure
+    async fn put_if(
+        &self,
+        key: &str,
+        value: Bytes,
+        expected_revision: Option<u64>,
+    ) -> Result<CasResult, KVError>;
 
     /// Get the store name/identifier.
     ///

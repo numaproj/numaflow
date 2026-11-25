@@ -2,9 +2,9 @@
 //!
 //! This module provides a JetStream-backed implementation of [`KVStore`].
 
-use super::{KVEntry, KVError, KVStore, KVStoreFactory, KVWatchOp, KVWatchStream};
+use super::{CasResult, KVEntry, KVError, KVStore, KVStoreFactory, KVWatchOp, KVWatchStream};
 use crate::isb::jetstream::JetstreamWatcher;
-use async_nats::jetstream::kv::{Entry, Store};
+use async_nats::jetstream::kv::{CreateErrorKind, Entry, Operation, Store, UpdateErrorKind};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt, TryStreamExt};
@@ -105,6 +105,44 @@ impl KVStore for JetstreamKVStore {
             .get(key)
             .await
             .map_err(|e| Box::new(e) as KVError)
+    }
+
+    async fn get_with_revision(&self, key: &str) -> Result<Option<(Bytes, u64)>, KVError> {
+        // `entry` returns the latest entry regardless of operation; a deleted or
+        // purged key has a tombstone entry, which we surface as absent to match `get`.
+        match self
+            .store
+            .entry(key)
+            .await
+            .map_err(|e| Box::new(e) as KVError)?
+        {
+            Some(entry) if entry.operation == Operation::Put => {
+                Ok(Some((entry.value, entry.revision)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    async fn put_if(
+        &self,
+        key: &str,
+        value: Bytes,
+        expected_revision: Option<u64>,
+    ) -> Result<CasResult, KVError> {
+        match expected_revision {
+            // create: commit only if the key does not exist.
+            None => match self.store.create(key, value).await {
+                Ok(revision) => Ok(CasResult::Committed(revision)),
+                Err(e) if e.kind() == CreateErrorKind::AlreadyExists => Ok(CasResult::Conflict),
+                Err(e) => Err(Box::new(e) as KVError),
+            },
+            // update: commit only if the key's current revision is exactly `rev`.
+            Some(rev) => match self.store.update(key, value, rev).await {
+                Ok(revision) => Ok(CasResult::Committed(revision)),
+                Err(e) if e.kind() == UpdateErrorKind::WrongLastRevision => Ok(CasResult::Conflict),
+                Err(e) => Err(Box::new(e) as KVError),
+            },
+        }
     }
 
     fn name(&self) -> &str {
@@ -334,6 +372,79 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(kv_store.name(), bucket_name);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_get_with_revision() {
+        let bucket_name = "test-kv-get-rev";
+        let (js, store) = setup_test_kv(bucket_name).await;
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // Absent key -> None.
+        assert_eq!(kv_store.get_with_revision("k").await.unwrap(), None);
+
+        // Put, then read back value + revision.
+        kv_store.put("k", Bytes::from("v1")).await.unwrap();
+        let (value, rev) = kv_store.get_with_revision("k").await.unwrap().unwrap();
+        assert_eq!(value, Bytes::from("v1"));
+
+        // Overwrite advances the revision.
+        kv_store.put("k", Bytes::from("v2")).await.unwrap();
+        let (value, rev2) = kv_store.get_with_revision("k").await.unwrap().unwrap();
+        assert_eq!(value, Bytes::from("v2"));
+        assert!(rev2 > rev);
+
+        // Deleted key surfaces as absent.
+        kv_store.delete("k").await.unwrap();
+        assert_eq!(kv_store.get_with_revision("k").await.unwrap(), None);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_put_if_create_and_update() {
+        let bucket_name = "test-kv-put-if";
+        let (js, store) = setup_test_kv(bucket_name).await;
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // create on an absent key commits.
+        let rev = match kv_store.put_if("k", Bytes::from("v1"), None).await.unwrap() {
+            CasResult::Committed(rev) => rev,
+            CasResult::Conflict => panic!("expected create to commit"),
+        };
+
+        // create on an existing key conflicts and does not overwrite.
+        assert_eq!(
+            kv_store.put_if("k", Bytes::from("v2"), None).await.unwrap(),
+            CasResult::Conflict
+        );
+        assert_eq!(kv_store.get("k").await.unwrap(), Some(Bytes::from("v1")));
+
+        // update against the current revision commits.
+        let new_rev = match kv_store
+            .put_if("k", Bytes::from("v2"), Some(rev))
+            .await
+            .unwrap()
+        {
+            CasResult::Committed(new_rev) => new_rev,
+            CasResult::Conflict => panic!("expected update to commit"),
+        };
+        assert!(new_rev > rev);
+        assert_eq!(kv_store.get("k").await.unwrap(), Some(Bytes::from("v2")));
+
+        // update against a stale revision conflicts and does not overwrite.
+        assert_eq!(
+            kv_store
+                .put_if("k", Bytes::from("v3"), Some(rev))
+                .await
+                .unwrap(),
+            CasResult::Conflict
+        );
+        assert_eq!(kv_store.get("k").await.unwrap(), Some(Bytes::from("v2")));
 
         cleanup_test_kv(&js, bucket_name).await;
     }
