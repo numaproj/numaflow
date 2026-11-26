@@ -1,0 +1,24 @@
+[package]
+name = "numaflow-ros2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+backoff.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-util.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+r2r = { version = "0.9", optional = true }
+
+[features]
+# Enable this feature when ROS 2 is installed and sourced on the build host.
+# Integration tests also require this feature.
+ros2 = ["dep:r2r"]
+ros2-tests = ["ros2"]
+all-tests = ["ros2-tests"]
+
+[lints]
+workspace = true
