@@ -8,12 +8,6 @@ In this guide, we will simulate a panic in a transformer and demonstrate how the
 
 ---
 
-## High-Level Architecture
-
-![High-Level Architecture](../../assets/errors/errors-architecture.png)
-
----
-
 ## Simulating an Error in the Transformer
 
 To simulate an error, we will introduce a panic in the Go SDK for the transformer by modifying the `Transform` function. You can find the relevant code [here](https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/assign_event_time/main.go).

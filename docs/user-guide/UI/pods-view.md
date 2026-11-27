@@ -34,7 +34,7 @@ Hover over a card to see the breakdown. For example, **Latency** shows the P99 o
 
 ![Health card breakdown](../../assets/pods-view/health-card-hover.png)
 
-> **Note**: The Latency, Message Outcomes, and critical error values come from Prometheus. If Prometheus is not configured, these cards show `Metrics unavailable`. If no metric has the required `signal` in the metrics proxy config, the card shows `Not configured`. See [Signal tags](./metrics-tab.md#signal-tags).
+> **Note**: The Latency, Message Outcomes, and critical error values come from Prometheus. If Prometheus is not configured, these cards show `Metrics unavailable`. If no metric has the required `signal` in the metrics proxy config, the card shows `Not configured`. The **Errors** card still reports pod health, restarts, and errors from the Kubernetes API; only its critical errors row shows `Metrics unavailable` or `Not configured`. See [Signal tags](./metrics-tab.md#signal-tags).
 
 ---
 
@@ -76,8 +76,6 @@ Allows users to select a container within a pod to view its [overview](#containe
 - Quickly access the logs of a specific container within a pod by selecting it.
 - Refer to the [Logs View](./logs.md) section for a detailed explanation of log features.
 
-![Pod inspector](../../assets/pods-view/pod-inspector.png)
-
 ### Pod Overview
 
 Provides detailed information about the selected pod, including:
@@ -100,6 +98,8 @@ Provides detailed information about the selected pod, including:
     - This field is populated in cases such as pod scheduling issues, eviction, termination, or node-related problems.
 - **Message**: A human-readable message providing additional details about the pod's condition (if applicable).
     - This field is populated in scenarios like pod scheduling issues, eviction, termination, or node-related problems.
+
+![Pod inspector](../../assets/pods-view/pod-inspector.png)
 
 ### Container Overview
 
@@ -125,6 +125,6 @@ If Prometheus is configured, click a CPU or memory value to open its usage chart
 
 ## Metrics Tab
 
-- The **[Metrics](./metrics-tab.md)** tab sits next to **Pods View** in the vertex details panel.
+- The **Metrics** tab sits next to **Pods View** in the vertex details panel.
 - Switch to **Metrics** to view Prometheus charts for the selected vertex or MonoVertex.
 - For details, refer to the [Metrics Tab](./metrics-tab.md) guide.
