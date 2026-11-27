@@ -469,6 +469,13 @@ impl ISBWriterOrchestrator {
                 partition_name,
             ))
             .observe(write_processing_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .isb
+            .write_time_total
+            .get_or_create(&crate::metrics::jetstream_isb_metrics_labels(
+                partition_name,
+            ))
+            .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
     /// Resolves all PAFs and returns the offsets for successful writes.
@@ -587,6 +594,14 @@ impl ISBWriterOrchestrator {
         };
         pipeline_metrics()
             .jetstream_isb
+            .write_error_total
+            .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
+                stream_name,
+                error_kind.to_string(),
+            ))
+            .inc();
+        pipeline_metrics()
+            .isb
             .write_error_total
             .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
                 stream_name,
@@ -1452,6 +1467,55 @@ mod simple_buffer_tests {
 
         handle.await.unwrap().unwrap();
         assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: writing to the in-memory ISB, including the PAF failure fallback,
+    /// reports the ISB-agnostic metrics.
+    #[tokio::test]
+    async fn test_inmemory_write_emits_isb_metrics() {
+        use crate::metrics::{jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels};
+
+        let stream_name = "inmemory-isb-metrics";
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, stream_name));
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            stream_name,
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let handle = orchestrator
+            .streaming_write(ReceiverStream::new(rx), cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+        handle.await.unwrap().unwrap();
+
+        let isb = &pipeline_metrics().isb;
+        assert!(
+            isb.write_time_total
+                .get(&jetstream_isb_metrics_labels(stream_name))
+                .is_some()
+        );
+        assert!(
+            isb.write_error_total
+                .get(&jetstream_isb_error_metrics_labels(
+                    stream_name,
+                    "write_failed".to_string()
+                ))
+                .is_some()
+        );
     }
 
     /// Test: When resolve fails but is still retrying when cancellation happens,

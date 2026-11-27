@@ -155,6 +155,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                         .read_time_total
                         .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
                         .observe(start.elapsed().as_micros() as f64);
+                    pipeline_metrics()
+                        .isb
+                        .read_time_total
+                        .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                        .observe(start.elapsed().as_micros() as f64);
 
                     // Handle idle watermarks
                     self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
@@ -361,6 +366,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             .get_or_create(&jetstream_isb_metrics_labels(stream_name))
             .observe(ack_start.elapsed().as_micros() as f64);
         pipeline_metrics()
+            .isb
+            .ack_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(ack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
             .forwarder
             .ack_processing_time
             .get_or_create(labels)
@@ -375,6 +385,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     fn publish_nack_metrics(stream_name: &'static str, labels: &MetricLabels, nack_start: Instant) {
         pipeline_metrics()
             .jetstream_isb
+            .nack_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(nack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .isb
             .nack_time_total
             .get_or_create(&jetstream_isb_metrics_labels(stream_name))
             .observe(nack_start.elapsed().as_micros() as f64);
@@ -449,6 +464,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 Err(e) => {
                     pipeline_metrics()
                         .jetstream_isb
+                        .read_error_total
+                        .get_or_create(&jetstream_isb_error_metrics_labels(
+                            self.stream.name,
+                            e.to_string(),
+                        ))
+                        .inc();
+                    pipeline_metrics()
+                        .isb
                         .read_error_total
                         .get_or_create(&jetstream_isb_error_metrics_labels(
                             self.stream.name,
@@ -1691,6 +1714,37 @@ mod simplebuffer_tests {
         // Cancel and verify clean shutdown
         cancel.cancel();
         handle.await.unwrap().unwrap();
+    }
+
+    /// Test: reading from and acking on the in-memory ISB reports the
+    /// ISB-agnostic metrics.
+    #[tokio::test]
+    async fn test_inmemory_read_emits_isb_metrics() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        for _ in 0..3 {
+            let msg = rx.next().await.expect("should receive message");
+            mark_success!(msg);
+        }
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty after acks");
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+
+        // create_orchestrator reads the "test-stream" stream
+        let labels = jetstream_isb_metrics_labels("test-stream");
+        let isb = &pipeline_metrics().isb;
+        assert!(isb.read_time_total.get(&labels).is_some());
+        assert!(isb.ack_time_total.get(&labels).is_some());
     }
 
     /// Test: fetch errors are handled gracefully and reading continues
