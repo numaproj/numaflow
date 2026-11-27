@@ -168,9 +168,9 @@ const REDUCE_PNF_PROCESS_TIME: &str = "pnf_process_time";
 const REDUCE_WATERMARK_LAG: &str = "watermark_lag";
 const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
 
-// ISB-agnostic metrics, labeled with the ISB type. They replace the
-// isb_jetstream_* names the generic reader and writer emit, which stay for
-// backward compatibility until they are deprecated.
+// ISB-agnostic metrics emitted by the generic ISB reader and writer. They
+// replace the isb_jetstream_* names, which stay for backward compatibility
+// until they are deprecated.
 const ISB_REGISTRY_PREFIX: &str = "isb";
 const ISB_READ_ERROR_TOTAL: &str = "read_error";
 const ISB_WRITE_ERROR_TOTAL: &str = "write_error";
@@ -178,7 +178,6 @@ const ISB_READ_TIME_TOTAL: &str = "read_time_total";
 const ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
 const ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
 const ISB_NACK_TIME_TOTAL: &str = "nack_time_total";
-const ISB_TYPE_LABEL: &str = "isb_type";
 
 // jetstream isb processing times
 const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
@@ -718,7 +717,7 @@ impl SinkForwarderMetrics {
 }
 
 /// ISB-agnostic metrics emitted by the generic ISB reader and writer, labeled
-/// with the buffer and the ISB type (e.g. `jetstream`, `inmemory`).
+/// with the buffer.
 pub(crate) struct ISBMetrics {
     pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
@@ -1554,25 +1553,6 @@ pub(crate) fn pipeline_critical_error_metric_labels(
     let mut labels = pipeline_metric_labels(vertex_type).clone();
     labels.push((CRITICAL_ERROR_REASON.to_string(), reason.to_string()));
     labels
-}
-
-pub(crate) fn isb_metrics_labels(buffer_name: &str, isb_type: &str) -> Vec<(String, String)> {
-    vec![
-        ("buffer".to_string(), buffer_name.to_string()),
-        (ISB_TYPE_LABEL.to_string(), isb_type.to_string()),
-    ]
-}
-
-pub(crate) fn isb_error_metrics_labels(
-    buffer_name: &str,
-    isb_type: &str,
-    reason: String,
-) -> Vec<(String, String)> {
-    vec![
-        ("buffer".to_string(), buffer_name.to_string()),
-        (ISB_TYPE_LABEL.to_string(), isb_type.to_string()),
-        ("reason".to_string(), reason),
-    ]
 }
 
 pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {

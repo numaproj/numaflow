@@ -472,19 +472,10 @@ impl ISBWriterOrchestrator {
         pipeline_metrics()
             .isb
             .write_time_total
-            .get_or_create(&crate::metrics::isb_metrics_labels(
+            .get_or_create(&crate::metrics::jetstream_isb_metrics_labels(
                 partition_name,
-                self.isb_type(partition_name),
             ))
             .observe(write_processing_start.elapsed().as_micros() as f64);
-    }
-
-    /// Returns the ISB implementation of the writer for the stream.
-    fn isb_type(&self, stream_name: &str) -> &'static str {
-        self.writers
-            .get(stream_name)
-            .expect("writer should exist for stream")
-            .isb_type()
     }
 
     /// Resolves all PAFs and returns the offsets for successful writes.
@@ -505,11 +496,7 @@ impl ISBWriterOrchestrator {
                         ?e, stream = ?write_result.stream,
                         "Failed to resolve the future, trying write with retry",
                     );
-                    Self::publish_paf_error_metrics(
-                        write_result.stream.name,
-                        self.isb_type(write_result.stream.name),
-                        &e,
-                    );
+                    Self::publish_paf_error_metrics(write_result.stream.name, &e);
                     // Fallback to write with retry loop
                     let writer = self
                         .writers
@@ -600,7 +587,7 @@ impl ISBWriterOrchestrator {
     }
 
     /// Publishes error metrics for PAF resolution failures.
-    fn publish_paf_error_metrics(stream_name: &str, isb_type: &str, e: &WriteError) {
+    fn publish_paf_error_metrics(stream_name: &str, e: &WriteError) {
         let error_kind = match e {
             WriteError::BufferFull => "buffer_full",
             WriteError::WriteFailed(_) => "write_failed",
@@ -616,9 +603,8 @@ impl ISBWriterOrchestrator {
         pipeline_metrics()
             .isb
             .write_error_total
-            .get_or_create(&crate::metrics::isb_error_metrics_labels(
+            .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
                 stream_name,
-                isb_type,
                 error_kind.to_string(),
             ))
             .inc();
@@ -1484,10 +1470,10 @@ mod simple_buffer_tests {
     }
 
     /// Test: writing to the in-memory ISB, including the PAF failure fallback,
-    /// reports the ISB-agnostic metrics labeled with its ISB type.
+    /// reports the ISB-agnostic metrics.
     #[tokio::test]
     async fn test_inmemory_write_emits_isb_metrics() {
-        use crate::metrics::{isb_error_metrics_labels, isb_metrics_labels};
+        use crate::metrics::{jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels};
 
         let stream_name = "inmemory-isb-metrics";
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, stream_name));
@@ -1519,14 +1505,13 @@ mod simple_buffer_tests {
         let isb = &pipeline_metrics().isb;
         assert!(
             isb.write_time_total
-                .get(&isb_metrics_labels(stream_name, "inmemory"))
+                .get(&jetstream_isb_metrics_labels(stream_name))
                 .is_some()
         );
         assert!(
             isb.write_error_total
-                .get(&isb_error_metrics_labels(
+                .get(&jetstream_isb_error_metrics_labels(
                     stream_name,
-                    "inmemory",
                     "write_failed".to_string()
                 ))
                 .is_some()
@@ -2183,10 +2168,6 @@ mod simple_buffer_tests {
 
         fn name(&self) -> &'static str {
             "always-fail"
-        }
-
-        fn isb_type(&self) -> &'static str {
-            "test"
         }
     }
 

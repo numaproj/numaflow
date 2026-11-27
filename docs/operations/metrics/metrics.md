@@ -157,16 +157,16 @@ These metrics are emitted by MonoVertex pods. All MonoVertex metrics use the fol
 
 ## ISB Metrics
 
-These metrics are emitted by pipeline vertex pods for Inter-Step Buffer operations, whichever ISB implementation backs the buffer. The `isb_type` label names it (for example `jetstream`).
+These metrics are emitted by pipeline vertex pods for Inter-Step Buffer operations, whichever ISB implementation backs the buffer.
 
-| Metric name               | Metric type | Labels                                                          | Description                                          |
-|---------------------------|-------------|-----------------------------------------------------------------|------------------------------------------------------|
-| `isb_read_error_total`    | Counter     | `buffer=<buffer-name>`, `isb_type=<isb-type>`, `reason=<reason>` | Total number of ISB read errors                      |
-| `isb_write_error_total`   | Counter     | `buffer=<buffer-name>`, `isb_type=<isb-type>`, `reason=<reason>` | Total number of ISB write errors                     |
-| `isb_read_time_total`     | Histogram   | `buffer=<buffer-name>`, `isb_type=<isb-type>`                    | Processing times of ISB read operations, in microseconds  |
-| `isb_write_time_total`    | Histogram   | `buffer=<buffer-name>`, `isb_type=<isb-type>`                    | Processing times of ISB write operations, in microseconds |
-| `isb_ack_time_total`      | Histogram   | `buffer=<buffer-name>`, `isb_type=<isb-type>`                    | Processing times of ISB ack operations, in microseconds   |
-| `isb_nack_time_total`     | Histogram   | `buffer=<buffer-name>`, `isb_type=<isb-type>`                    | Processing times of ISB nack operations, in microseconds  |
+| Metric name             | Metric type | Labels                                    | Description                                               |
+|-------------------------|-------------|-------------------------------------------|-----------------------------------------------------------|
+| `isb_read_error_total`  | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of ISB read errors                           |
+| `isb_write_error_total` | Counter     | `buffer=<buffer-name>`, `reason=<reason>` | Total number of ISB write errors                          |
+| `isb_read_time_total`   | Histogram   | `buffer=<buffer-name>`                    | Processing times of ISB read operations, in microseconds  |
+| `isb_write_time_total`  | Histogram   | `buffer=<buffer-name>`                    | Processing times of ISB write operations, in microseconds |
+| `isb_ack_time_total`    | Histogram   | `buffer=<buffer-name>`                    | Processing times of ISB ack operations, in microseconds   |
+| `isb_nack_time_total`   | Histogram   | `buffer=<buffer-name>`                    | Processing times of ISB nack operations, in microseconds  |
 
 ## ISB Metrics (NATS JetStream)
 
