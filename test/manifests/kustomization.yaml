@@ -57,6 +57,7 @@ patches:
         name: numaflow-cmd-params-config
       data:
         controller.leader.election.disabled: "true"
+        server.disable.auth: "true"
 
 namespace: numaflow-system
 
