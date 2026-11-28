@@ -182,72 +182,70 @@ impl ISBWatermarkFetcher {
         if epoch < i64::MAX { Some(epoch) } else { None }
     }
 
-    /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
-    /// processors for the specified partition, but only if all active processors are idle for that
-    /// partition.
-    pub(crate) fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
-        let mut min_wmb: Option<WMB> = None;
+    /// Fetches the head idle WMB of one edge for the given partition. Returns the minimum idle WMB
+    /// across the edge's active processors, but only if all of them are idle for that partition.
+    ///
+    /// Call it only once the reader of that edge has drained its buffer. An idle head means the
+    /// upstream has stopped writing, not that this reader has read everything it wrote: an upstream
+    /// blocked on a full buffer is marked idle while the buffer still holds a backlog. So an edge is
+    /// never treated as idle because some other edge into the same partition read nothing.
+    ///
+    /// The edge is marked as processed up to the idle watermark, so that [Self::get_watermark] can
+    /// move past it once every other edge has caught up too.
+    pub(crate) fn fetch_head_idle_wmb(
+        &mut self,
+        from_vertex: &str,
+        partition_idx: u16,
+    ) -> Option<WMB> {
+        let processor_manager = self
+            .processor_managers
+            .get(from_vertex)
+            .unwrap_or_else(|| panic!("invalid from vertex {from_vertex}"));
 
-        for (edge, processor_manager) in &self.processor_managers {
-            let mut edge_min_wmb: Option<WMB> = None;
-
+        let mut edge_min_wmb: Option<WMB> = None;
+        {
             let processors = processor_manager
                 .processors
                 .read()
                 .expect("failed to acquire lock");
 
-            let active_processors = processors
-                .values()
-                .filter(|processor| processor.is_active());
-
-            for processor in active_processors {
-                // Only check the timeline for the requested partition
-                if let Some(timeline) = processor.timelines.get(&partition_idx)
-                    && let Some(head_wmb) = timeline.get_head_wmb()
-                    && head_wmb.idle
-                {
-                    // Track the minimum WMB for this edge
-                    match edge_min_wmb {
-                        None => edge_min_wmb = Some(head_wmb),
-                        Some(current_min) => {
-                            if head_wmb.watermark < current_min.watermark {
-                                edge_min_wmb = Some(head_wmb);
-                            }
-                        }
-                    }
-                } else {
-                    // If any of the processors are not idling, we can return none
+            for processor in processors.values().filter(|p| p.is_active()) {
+                let Some(head_wmb) = processor
+                    .timelines
+                    .get(&partition_idx)
+                    .and_then(|timeline| timeline.get_head_wmb())
+                    .filter(|wmb| wmb.idle)
+                else {
+                    // one processor still writing is enough for the edge not to be idle
                     return None;
-                }
-            }
-
-            // Update the last processed watermark for this edge and partition if we found a valid WMB
-            if let Some(wmb) = edge_min_wmb {
-                *self
-                    .last_processed_wm
-                    .get_mut(edge)
-                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    .get_mut(&partition_idx)
-                    .unwrap_or_else(|| panic!("should have partition index {partition_idx}")) =
-                    wmb.watermark;
-
-                // Track the overall minimum WMB across all edges
-                match min_wmb {
-                    None => min_wmb = Some(wmb),
-                    Some(current_min) => {
-                        if wmb.watermark < current_min.watermark {
-                            min_wmb = Some(wmb);
-                        }
-                    }
+                };
+                if edge_min_wmb.is_none_or(|min| head_wmb.watermark < min.watermark) {
+                    edge_min_wmb = Some(head_wmb);
                 }
             }
         }
 
-        min_wmb
+        let wmb = edge_min_wmb?;
+        *self
+            .last_processed_wm
+            .get_mut(from_vertex)
+            .unwrap_or_else(|| panic!("invalid vertex {from_vertex}"))
+            .get_mut(&partition_idx)
+            .unwrap_or_else(|| panic!("should have partition index {partition_idx}")) =
+            wmb.watermark;
+        Some(wmb)
     }
 
-    /// returns the smallest last processed watermark among all the partitions
-    fn get_watermark(&self) -> Watermark {
+    /// Every (edge, partition) this fetcher tracks.
+    pub(crate) fn edge_partitions(&self) -> Vec<(&'static str, u16)> {
+        self.last_processed_wm
+            .iter()
+            .flat_map(|(edge, partitions)| partitions.keys().map(move |p| (*edge, *p)))
+            .collect()
+    }
+
+    /// Returns the smallest last processed watermark across every edge and partition.
+    pub(crate) fn get_watermark(&self) -> Watermark {
         let mut min_wm = i64::MAX;
         for wm in self.last_processed_wm.values() {
             for &w in wm.values() {
@@ -1189,7 +1187,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_wmb and verify the result
-        let wmb = fetcher.fetch_head_idle_wmb(0);
+        let wmb = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(wmb.is_some());
         let wmb = wmb.unwrap();
         assert_eq!(wmb.watermark, 200);
@@ -1249,7 +1247,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_wmb and verify the result (should be None because not all are idle)
-        let wmb = fetcher.fetch_head_idle_wmb(0);
+        let wmb = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(wmb.is_none());
     }
 
@@ -1333,7 +1331,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_wmb and verify the result (should be None because not all are idle)
-        let wmb = fetcher.fetch_head_idle_wmb(0);
+        let wmb = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(wmb.is_none());
     }
 
@@ -1420,7 +1418,7 @@ mod tests {
 
         // Invoke fetch_head_idle_wmb and verify the result (should return the minimum watermark WMB)
         // The head WMBs are: processor1=200, processor2=180, so minimum is 180
-        let wmb = fetcher.fetch_head_idle_wmb(0);
+        let wmb = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(wmb.is_some());
         let wmb = wmb.unwrap();
         assert_eq!(wmb.watermark, 180); // Should be the minimum between head WMBs
@@ -2063,8 +2061,8 @@ mod tests {
         );
     }
 
-    /// With two edges, fetch_head_idle_wmb should return the minimum idle WMB across
-    /// both edges, but only if ALL active processors in ALL edges are idle.
+    /// With two edges, each edge's idle WMB is fetched on its own. Once both edges are idle, the
+    /// min across them is the lower idle watermark.
     #[tokio::test]
     async fn test_fetch_head_idle_wmb_two_edges_all_idle() {
         // Edge 1: one processor, idle, head wm=200.
@@ -2110,18 +2108,28 @@ mod tests {
             .await
             .unwrap();
 
-        let result = fetcher.fetch_head_idle_wmb(0);
-        assert!(result.is_some(), "all processors idle across both edges");
-        let wmb_result = result.unwrap();
+        let edge1 = fetcher
+            .fetch_head_idle_wmb("edge1", 0)
+            .expect("edge1 is idle");
+        assert_eq!(edge1.watermark, 200);
+        // edge2 has not been looked at yet, so the min is still held back by it.
+        assert_eq!(fetcher.get_watermark().timestamp_millis(), -1);
+
+        let edge2 = fetcher
+            .fetch_head_idle_wmb("edge2", 0)
+            .expect("edge2 is idle");
+        assert_eq!(edge2.watermark, 150);
+        assert!(edge2.idle);
         assert_eq!(
-            wmb_result.watermark, 150,
-            "should return min idle WMB across edges"
+            fetcher.get_watermark().timestamp_millis(),
+            150,
+            "min across both idle edges"
         );
-        assert!(wmb_result.idle);
     }
 
-    /// With two edges, if one edge has a non-idle processor, fetch_head_idle_wmb
-    /// should return None.
+    /// An idle edge must not make another edge into the same partition look idle. The busy edge
+    /// still holds the min back: this is what keeps a reduce join from closing windows while the
+    /// fast side still has a backlog to read.
     #[tokio::test]
     async fn test_fetch_head_idle_wmb_two_edges_one_not_idle() {
         // Edge 1: one processor, idle.
@@ -2167,10 +2175,23 @@ mod tests {
             .await
             .unwrap();
 
-        let result = fetcher.fetch_head_idle_wmb(0);
-        assert!(
-            result.is_none(),
-            "should be None when any processor across any edge is not idle"
+        // edge1's own read came back empty and its upstream is idle.
+        let edge1 = fetcher.fetch_head_idle_wmb("edge1", 0);
+        assert_eq!(edge1.map(|w| w.watermark), Some(200));
+
+        // edge2's upstream is still writing, so it is not idle.
+        assert!(fetcher.fetch_head_idle_wmb("edge2", 0).is_none());
+
+        // edge2 has processed nothing yet, so the min stays at -1 instead of jumping to edge1's
+        // idle watermark.
+        assert_eq!(fetcher.get_watermark().timestamp_millis(), -1);
+
+        // edge2 reads a message (offset 6 > the WMB at offset 5, so event time 150).
+        let wm = fetcher.fetch_watermark("edge2", 6, 0);
+        assert_eq!(
+            wm.timestamp_millis(),
+            150,
+            "held back by edge2, not edge1's idle 200"
         );
     }
 
@@ -2223,7 +2244,7 @@ mod tests {
             .unwrap();
 
         // Only the Active processor is considered. It's idle, so we should get a result.
-        let result = fetcher.fetch_head_idle_wmb(0);
+        let result = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(
             result.is_some(),
             "deleted/inactive processors should be excluded; only active idle processor remains"
@@ -2271,7 +2292,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = fetcher.fetch_head_idle_wmb(0);
+        let result = fetcher.fetch_head_idle_wmb("from_vtx", 0);
         assert!(
             result.is_none(),
             "an active non-idle processor should block the idle result"

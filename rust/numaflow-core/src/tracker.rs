@@ -102,14 +102,19 @@ impl TryFrom<&Message> for ServingCallbackInfo {
     }
 }
 
+/// Idle head WMB offset of every (from vertex, partition) the reader consumes; None means it is
+/// not idle.
+type IdleOffsets = HashMap<(&'static str, u16), Option<i64>>;
+
 /// TrackerHandle provides an interface to interact with the Tracker.
 /// It allows inserting, updating, deleting, and discarding tracked messages.
 #[derive(Clone)]
 pub(crate) struct Tracker {
     state: Arc<RwLock<TrackerState>>,
-    /// tracks whether the source is currently idle (not reading any data)
-    /// if it's set to none, it means the source is not idle.
-    idle_offset_map: Arc<RwLock<HashMap<u16, Option<i64>>>>,
+    /// tracks whether each (from vertex, partition) the reader consumes is idle (its buffer read
+    /// nothing). If it's set to none, it means it is not idle. Keyed by the edge as well as the
+    /// partition, because every edge into a partition has its own buffer.
+    idle_offset_map: Arc<RwLock<IdleOffsets>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
 }
@@ -368,17 +373,19 @@ impl Tracker {
     /// can monotonically increase for the same Head MWB offset.
     pub(crate) async fn set_idle_offset(
         &self,
+        from_vertex: &'static str,
         partition_idx: u16,
         idle_offset: Option<i64>,
     ) -> Result<()> {
         let mut idle_map = self.idle_offset_map.write().await;
-        idle_map.insert(partition_idx, idle_offset);
+        idle_map.insert((from_vertex, partition_idx), idle_offset);
         Ok(())
     }
 
-    /// Gets the idle wmb status of the tracker. It returns a map of partition index to the idle offset.
-    /// This idle offset is compared against the newly fetch Head WMB as part of the optimistic locking.
-    pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
+    /// Gets the idle wmb status of the tracker. It returns a map of (from vertex, partition) to the
+    /// idle offset. This idle offset is compared against the newly fetch Head WMB as part of the
+    /// optimistic locking.
+    pub(crate) async fn get_idle_offset(&self) -> Result<IdleOffsets> {
         let idle_map = self.idle_offset_map.read().await;
         Ok(idle_map.clone())
     }
@@ -580,20 +587,23 @@ mod tests {
         let handle = Tracker::new(None, CancellationToken::new());
         assert_eq!(handle.get_idle_offset().await.unwrap(), HashMap::new());
 
-        handle.set_idle_offset(0, Some(100)).await.unwrap();
-        handle.set_idle_offset(1, Some(200)).await.unwrap();
-        handle.set_idle_offset(2, None).await.unwrap();
+        handle.set_idle_offset("in", 0, Some(100)).await.unwrap();
+        handle.set_idle_offset("in", 1, Some(200)).await.unwrap();
+        handle.set_idle_offset("in", 2, None).await.unwrap();
+        // a second edge into the same partition has its own idle state
+        handle.set_idle_offset("other", 0, None).await.unwrap();
 
         let idle_offsets = handle.get_idle_offset().await.unwrap();
-        assert_eq!(idle_offsets.get(&0), Some(&Some(100)));
-        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
-        assert_eq!(idle_offsets.get(&2), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 0)), Some(&Some(100)));
+        assert_eq!(idle_offsets.get(&("in", 1)), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&("in", 2)), Some(&None));
+        assert_eq!(idle_offsets.get(&("other", 0)), Some(&None));
 
-        handle.set_idle_offset(0, None).await.unwrap();
+        handle.set_idle_offset("in", 0, None).await.unwrap();
         let idle_offsets = handle.get_idle_offset().await.unwrap();
-        assert_eq!(idle_offsets.get(&0), Some(&None));
-        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
-        assert_eq!(idle_offsets.get(&2), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 0)), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 1)), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&("in", 2)), Some(&None));
     }
 
     #[tokio::test]

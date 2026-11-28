@@ -135,7 +135,6 @@ pub async fn start_sink_forwarder(
         &cln_token,
         None,
         tracker.clone(),
-        from_partitions.clone(),
     )
     .await?;
 

@@ -158,7 +158,6 @@ pub async fn start_map_forwarder(
         &cln_token,
         None,
         tracker.clone(),
-        from_partitions.clone(),
     )
     .await?;
 

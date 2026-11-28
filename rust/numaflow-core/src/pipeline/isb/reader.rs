@@ -629,38 +629,46 @@ impl<C: NumaflowTypeConfig> StreamWorker<C> {
     }
 
     /// Handles idle watermarks for the given batch.
+    ///
+    /// Only this stream's own empty read says its edge is idle. The idle watermark handed to the
+    /// reducer is the min across every edge, so an edge that still has a backlog holds it back.
     async fn handle_idle_watermarks(
         &mut self,
         batch_is_empty: bool,
         tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
-        if batch_is_empty {
-            if let Some(wm) = self.watermark.as_mut() {
-                let idle_wmb = wm.fetch_head_idle_wmb(self.stream.partition).await;
-                match idle_wmb {
-                    Some(wmb) => {
-                        self.tracker
-                            .set_idle_offset(self.stream.partition, Some(wmb.offset))
-                            .await?;
-                        Self::create_and_write_wmb_message_for_reduce(
-                            &self.vertex_type,
-                            self.stream.partition,
-                            wmb,
-                            tx,
-                        )
-                        .await?;
-                    }
-                    None => {
-                        self.tracker
-                            .set_idle_offset(self.stream.partition, None)
-                            .await?;
-                    }
+        let (from_vertex, partition) = (self.stream.from_vertex, self.stream.partition);
+        if !batch_is_empty {
+            return self
+                .tracker
+                .set_idle_offset(from_vertex, partition, None)
+                .await;
+        }
+        let Some(wm) = self.watermark.as_mut() else {
+            return Ok(());
+        };
+
+        match wm.fetch_head_idle_wmb(&self.stream).await {
+            Some(wmb) => {
+                self.tracker
+                    .set_idle_offset(from_vertex, partition, Some(wmb.offset))
+                    .await?;
+                // -1 means some edge has not been read yet, nothing to tell the reducer.
+                if wmb.watermark >= 0 {
+                    Self::create_and_write_wmb_message_for_reduce(
+                        &self.vertex_type,
+                        partition,
+                        wmb,
+                        tx,
+                    )
+                    .await?;
                 }
             }
-        } else {
-            self.tracker
-                .set_idle_offset(self.stream.partition, None)
-                .await?;
+            None => {
+                self.tracker
+                    .set_idle_offset(from_vertex, partition, None)
+                    .await?;
+            }
         }
         Ok(())
     }
@@ -2632,7 +2640,6 @@ mod multi_stream_read_tests {
             cancel.clone(),
             None,
             tracker.clone(),
-            vec![0],
         )
         .await
         .unwrap();

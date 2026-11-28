@@ -144,7 +144,6 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker.clone(),
-        vec![*get_vertex_replica()], // reduce consumes one partition, the same index on every ingress edge
     )
     .await?;
 
@@ -270,7 +269,6 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker.clone(),
-        vec![*get_vertex_replica()], // reduce consumes one partition, the same index on every ingress edge
     )
     .await?;
 
