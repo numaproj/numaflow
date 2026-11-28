@@ -56,7 +56,7 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(&self.stream, cln_token.clone())
+            .streaming_read(std::slice::from_ref(&self.stream), cln_token.clone())
             .await?;
 
         let sink_writer_handle = self

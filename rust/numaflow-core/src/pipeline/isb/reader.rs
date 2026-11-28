@@ -2,7 +2,6 @@
 //! assigning watermark to the messages and starts tracking them using the tracker and also listens
 //! for ack/nack from the tracker and performs the ack/nack to the ISB.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,20 +52,13 @@ pub(crate) struct ISBStreamReader {
     pub(crate) reader: ISBReaderRef,
 }
 
-/// ISBReaderOrchestrator reads every ISB buffer a pod consumes, assigns watermark to the messages,
+/// ISBReaderOrchestrator reads the ISB buffers of a pod, assigns watermark to the messages,
 /// starts tracking them using the tracker and also listens for ack/nack from the tracker and
 /// performs the ack/nack to the ISB.
 ///
-/// There is one orchestrator per pod, holding one reader per buffer (every ingress edge times
-/// every partition the pod reads), mirroring the
-/// [ISBWriterOrchestrator](crate::pipeline::isb::writer::ISBWriterOrchestrator). Like the writer,
-/// it is cheap to clone and every clone shares the same readers, so it can be handed to one
-/// forwarder per stream. Messages are handed out in one of two ways:
-///  - [Self::streaming_read]: the messages of one buffer, read and processed on their own
-///    (map, sink: one forwarder per buffer).
-///  - [Self::streaming_read_merged]: one output for all the buffers, interleaved round-robin
-///    (reduce). The watermark of a message is fetched at the moment it is placed on the merged
-///    output, so the watermarks on the output never go backwards.
+/// A pod has one orchestrator holding a reader for every buffer it consumes (every ingress edge
+/// times every partition). The readers are shared, so a clone can be handed to every component
+/// that reads, and each of them picks the streams it wants with [Self::streaming_read].
 pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     workers: Arc<Vec<StreamWorker<C>>>,
     rate_limiter: Option<C::RateLimiter>,
@@ -128,82 +120,60 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         self.workers.iter().map(|w| &w.stream)
     }
 
-    /// Reads one stream on its own. Returns its messages and a JoinHandle for monitoring errors.
-    /// Call it once per stream; every call starts a new reader loop for that stream.
+    /// Reads the given streams into one output until cancelled. Returns the output and a
+    /// JoinHandle for monitoring errors.
+    ///
+    /// Map and sink process every buffer on its own, so they read one stream per call. Reduce
+    /// needs every buffer in the same reducer, so it reads all of them in one call. The fetches
+    /// of the streams overlap, but their messages are handed downstream from a single task, and
+    /// the watermark of a message is fetched just before it is handed over. The fetcher takes the
+    /// min across every stream, so the watermarks on the output never go backwards.
     ///
     /// The rate limiter is shared by all the streams, so it is not shut down here; call
-    /// [Self::shutdown] once every stream has stopped.
+    /// [Self::shutdown] once every read has stopped.
     pub(crate) async fn streaming_read(
         &self,
-        stream: &Stream,
+        streams: &[Stream],
         cancel: CancellationToken,
     ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
-        let worker = self
-            .workers
-            .iter()
-            .find(|w| w.stream.name == stream.name)
-            .cloned()
-            .ok_or_else(|| {
-                Error::ISB(ISBError::Other(format!(
-                    "stream {} is not read by this orchestrator",
-                    stream.name
-                )))
-            })?;
-        let (tx, rx) = mpsc::channel::<MessageHandle>(worker.batch_size);
-        let handle = tokio::spawn(worker.run(tx, cancel));
-        Ok((ReceiverStream::new(rx), handle))
-    }
-
-    /// Shuts down the rate limiter if configured. Call it once every stream read with
-    /// [Self::streaming_read] has stopped.
-    pub(crate) async fn shutdown(&self) -> Result<()> {
-        shutdown_rate_limiter(self.rate_limiter.as_ref()).await
-    }
-
-    /// Reads every stream and merges them round-robin into one output. Each stream is fetched
-    /// on its own, but the watermark of a message is fetched (and the message tracked) only when
-    /// it is placed on the output, so the order the watermarks are fetched in is the order the
-    /// messages are consumed in. Returns the output and a JoinHandle for monitoring errors.
-    ///
-    /// It reads every stream, so it also shuts down the rate limiter once they have all stopped.
-    pub(crate) async fn streaming_read_merged(
-        self,
-        cancel: CancellationToken,
-    ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
-        let capacity = self.workers.iter().map(|w| w.batch_size).max().unwrap_or(1);
-        let (tx, rx) = mpsc::channel::<MessageHandle>(capacity);
-
-        let mut fetch_handles = Vec::with_capacity(self.workers.len());
-        let mut lanes = Vec::with_capacity(self.workers.len());
-        for worker in self.workers.iter().cloned() {
-            // one fetched batch is buffered per stream while the previous one is being emitted
-            let (batch_tx, batch_rx) = mpsc::channel::<FetchedBatch>(1);
-            fetch_handles.push(tokio::spawn(
-                worker.clone().run_fetch(batch_tx, cancel.clone()),
-            ));
-            lanes.push(Lane {
-                worker,
-                batches: batch_rx,
-                current: None,
-            });
+        let mut workers = Vec::with_capacity(streams.len());
+        for stream in streams {
+            let worker = self
+                .workers
+                .iter()
+                .find(|w| w.stream.name == stream.name)
+                .cloned()
+                .ok_or_else(|| {
+                    Error::ISB(ISBError::Other(format!(
+                        "stream {} is not read by this orchestrator",
+                        stream.name
+                    )))
+                })?;
+            workers.push(worker);
+        }
+        if workers.is_empty() {
+            return Err(Error::ISB(ISBError::Other(
+                "streaming_read requires at least one stream".to_string(),
+            )));
         }
 
-        let rate_limiter = self.rate_limiter;
-        let handle =
-            tokio::spawn(async move {
-                let emit_result = emit_merged(lanes, tx, cancel.clone()).await.inspect_err(|e| {
-                error!(
-                    ?e,
-                    "ISBReaderOrchestrator merge encountered a critical error, cancelling token"
-                );
-                cancel.cancel();
-            });
-                let fetch_result = join_reader_tasks(fetch_handles).await;
-                shutdown_rate_limiter(rate_limiter.as_ref()).await?;
-                emit_result.and(fetch_result)
-            });
-
+        let capacity = workers.iter().map(|w| w.batch_size).max().unwrap_or(1);
+        let (tx, rx) = mpsc::channel::<MessageHandle>(capacity);
+        let handle = tokio::spawn(read_streams(workers, tx, cancel));
         Ok((ReceiverStream::new(rx), handle))
+    }
+
+    /// Shuts down the rate limiter if configured. Call it once every read has stopped.
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        if let Some(rl) = &self.rate_limiter {
+            info!("ISBReaderOrchestrator is shutting down, shutting down rate limiter");
+            rl.shutdown().await.map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to shutdown rate limiter: {e}"
+                )))
+            })?;
+        }
+        Ok(())
     }
 
     /// Returns the pending count of every stream, keyed by the reader name.
@@ -216,113 +186,69 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     }
 }
 
-/// Waits for every reader task, returning the first failure.
-async fn join_reader_tasks(handles: Vec<JoinHandle<Result<()>>>) -> Result<()> {
-    let mut result = Ok(());
-    for handle in handles {
-        let task_result = handle.await.unwrap_or_else(|e| {
-            Err(Error::ISB(ISBError::Other(format!(
-                "ISB reader task panicked: {e}"
-            ))))
-        });
-        if result.is_ok() {
-            result = task_result;
-        }
-    }
-    result
-}
-
-/// Shuts down the rate limiter if configured.
-async fn shutdown_rate_limiter<R: RateLimiter>(rate_limiter: Option<&R>) -> Result<()> {
-    if let Some(rl) = rate_limiter {
-        info!("ISBReaderOrchestrator is shutting down, shutting down rate limiter");
-        rl.shutdown().await.map_err(|e| {
-            Error::ISB(ISBError::Other(format!(
-                "Failed to shutdown rate limiter: {e}"
-            )))
-        })?;
-    }
-    Ok(())
-}
-
-/// A batch fetched from a stream, waiting to be placed on the merged output.
-struct FetchedBatch {
-    messages: VecDeque<Message>,
-    permits: OwnedSemaphorePermit,
-    start: Instant,
-}
-
-/// The state of one stream in the merged read.
-struct Lane<C: NumaflowTypeConfig> {
-    worker: StreamWorker<C>,
-    batches: mpsc::Receiver<FetchedBatch>,
-    current: Option<FetchedBatch>,
-}
-
-/// Places the messages of every lane on `tx`, one message per lane in turn. A lane whose fetch
-/// came back empty handles its idle watermark and yields its turn. Returns when every lane is
-/// exhausted or the output is closed.
-async fn emit_merged<C: NumaflowTypeConfig>(
-    mut lanes: Vec<Lane<C>>,
+/// Reads the given streams and places their messages on `tx` until cancelled.
+///
+/// Every round fetches a batch from all the streams at once and then hands the batches downstream
+/// one after the other. A round lasts as long as its slowest fetch, which is bounded by the read
+/// timeout once the permits are acquired.
+async fn read_streams<C: NumaflowTypeConfig>(
+    mut workers: Vec<StreamWorker<C>>,
     tx: mpsc::Sender<MessageHandle>,
     cancel: CancellationToken,
 ) -> Result<()> {
-    let mut next = 0;
-    while !lanes.is_empty() {
-        if next >= lanes.len() {
-            next = 0;
-        }
-        let Some(lane) = lanes.get_mut(next) else {
-            next = 0;
-            continue;
-        };
+    // Every buffer gets its own permits, so the inflight limit of one buffer does not eat into
+    // another's. See `BufferReaderConfig::max_ack_pending`.
+    let semaphores: Vec<Arc<Semaphore>> = workers
+        .iter()
+        .map(|w| Arc::new(Semaphore::new(w.max_ack_pending)))
+        .collect();
 
-        if lane.current.is_none() {
-            match lane.batches.recv().await {
-                Some(batch) => {
-                    lane.worker
-                        .handle_idle_watermarks(batch.messages.is_empty(), &tx)
+    let result = async {
+        'read: loop {
+            // cancel is only honored here since the reader is the first block in the chain.
+            if cancel.is_cancelled() {
+                break;
+            }
+
+            let batches = futures::future::try_join_all(
+                workers
+                    .iter()
+                    .zip(&semaphores)
+                    .map(|(worker, semaphore)| worker.acquire_and_fetch(semaphore)),
+            )
+            .await?;
+
+            for (worker, (batch, mut permits, start)) in workers.iter_mut().zip(batches) {
+                worker.handle_idle_watermarks(batch.is_empty(), &tx).await?;
+
+                for message in batch {
+                    let sent = worker
+                        .process_message(message, &tx, &mut permits, cancel.clone(), start)
                         .await?;
-                    if batch.messages.is_empty() {
-                        next += 1;
-                        continue;
+                    // downstream is gone, nothing left to read for.
+                    if !sent {
+                        break 'read;
                     }
-                    lane.current = Some(batch);
                 }
-                None => {
-                    // this stream is done, the next stream now sits at the same index.
-                    lanes.remove(next);
-                    continue;
-                }
+
+                worker.publish_read_processing_time(start);
             }
         }
 
-        let Some(batch) = lane.current.as_mut() else {
-            continue;
-        };
-        if let Some(message) = batch.messages.pop_front() {
-            let sent = lane
-                .worker
-                .process_message(
-                    message,
-                    &tx,
-                    &mut batch.permits,
-                    cancel.clone(),
-                    batch.start,
-                )
-                .await?;
-            if !sent {
-                return Ok(());
-            }
+        for (worker, semaphore) in workers.iter().zip(semaphores) {
+            worker.cleanup_on_shutdown(semaphore).await?;
         }
-        if batch.messages.is_empty() {
-            lane.worker.publish_read_processing_time(batch.start);
-            // dropping the batch releases the permits of messages that were never emitted.
-            lane.current = None;
-        }
-        next += 1;
+        Ok(())
     }
-    Ok(())
+    .await;
+
+    result.inspect_err(|e| {
+        error!(
+            ?e,
+            "ISBReaderOrchestrator encountered a critical error, cancelling token"
+        );
+        cancel.cancel();
+    })
 }
 
 /// StreamWorker reads one ISB buffer on behalf of the [ISBReaderOrchestrator].
@@ -389,98 +315,6 @@ impl<C: NumaflowTypeConfig> StreamWorker<C> {
             rate_limiter,
             metric_labels: Arc::new(labels),
         }
-    }
-
-    /// Reads this stream and places its messages on `tx` until cancelled.
-    async fn run(
-        mut self,
-        tx: mpsc::Sender<MessageHandle>,
-        cancel: CancellationToken,
-    ) -> Result<()> {
-        // One semaphore per reader, i.e. per buffer. This is intentionally not shared
-        // across a vertex's readers: see `BufferReaderConfig::max_ack_pending`.
-        let semaphore = Arc::new(Semaphore::new(self.max_ack_pending));
-
-        let result = async {
-            loop {
-                // stop reading if the token is cancelled. cancel is only honored here since it is
-                // the first block in the chain.
-                if cancel.is_cancelled() {
-                    break;
-                }
-
-                let (batch, mut permits, start) = self.acquire_and_fetch(&semaphore).await?;
-
-                // Handle idle watermarks
-                self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
-
-                // Process each message in the batch
-                for message in batch {
-                    if !self
-                        .process_message(message, &tx, &mut permits, cancel.clone(), start)
-                        .await?
-                    {
-                        break;
-                    }
-                }
-
-                self.publish_read_processing_time(start);
-            }
-
-            // Cleanup on shutdown
-            self.cleanup_on_shutdown(semaphore).await
-        }
-        .await;
-
-        result.inspect_err(|e| {
-            error!(
-                ?e,
-                "ISBReaderOrchestrator encountered a critical error, cancelling token"
-            );
-            cancel.cancel();
-        })
-    }
-
-    /// Fetches batches from this stream and hands them to `batches` until cancelled. Used by the
-    /// merged read, where the messages are processed by [emit_merged].
-    async fn run_fetch(
-        self,
-        batches: mpsc::Sender<FetchedBatch>,
-        cancel: CancellationToken,
-    ) -> Result<()> {
-        let semaphore = Arc::new(Semaphore::new(self.max_ack_pending));
-
-        let result = async {
-            loop {
-                if cancel.is_cancelled() {
-                    break;
-                }
-
-                let (batch, permits, start) = self.acquire_and_fetch(&semaphore).await?;
-                let batch = FetchedBatch {
-                    messages: batch.into(),
-                    permits,
-                    start,
-                };
-                if batches.send(batch).await.is_err() {
-                    break;
-                }
-            }
-
-            // Close the lane before waiting for the inflight messages, so that the merge can
-            // drain (or drop) what is still buffered and release its permits.
-            drop(batches);
-            self.cleanup_on_shutdown(semaphore).await
-        }
-        .await;
-
-        result.inspect_err(|e| {
-            error!(
-                ?e,
-                "ISBReaderOrchestrator encountered a critical error, cancelling token"
-            );
-            cancel.cancel();
-        })
     }
 
     /// Acquires the permits for a batch and fetches it.
@@ -1141,7 +975,10 @@ mod tests {
         let reader_cancel_token = CancellationToken::new();
         let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(&read_stream, reader_cancel_token.clone())
+            .streaming_read(
+                std::slice::from_ref(&read_stream),
+                reader_cancel_token.clone(),
+            )
             .await
             .unwrap();
 
@@ -1261,7 +1098,10 @@ mod tests {
         let reader_cancel_token = CancellationToken::new();
         let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(&read_stream, reader_cancel_token.clone())
+            .streaming_read(
+                std::slice::from_ref(&read_stream),
+                reader_cancel_token.clone(),
+            )
             .await
             .unwrap();
 
@@ -1401,7 +1241,10 @@ mod tests {
         let reader_cancel_token = CancellationToken::new();
         let read_stream = isb_reader.streams().next().cloned().unwrap();
         let (mut js_reader_rx, js_reader_task) = isb_reader
-            .streaming_read(&read_stream, reader_cancel_token.clone())
+            .streaming_read(
+                std::slice::from_ref(&read_stream),
+                reader_cancel_token.clone(),
+            )
             .await
             .unwrap();
 
@@ -1976,7 +1819,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2021,7 +1864,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2063,7 +1906,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2189,7 +2032,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2224,7 +2067,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2273,7 +2116,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2318,7 +2161,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2371,7 +2214,7 @@ mod simplebuffer_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2564,7 +2407,7 @@ mod duplicate_inflight_tests {
 
         let read_stream = orchestrator.streams().next().cloned().unwrap();
         let (mut rx, handle) = orchestrator
-            .streaming_read(&read_stream, cancel.clone())
+            .streaming_read(std::slice::from_ref(&read_stream), cancel.clone())
             .await
             .unwrap();
 
@@ -2622,7 +2465,7 @@ mod duplicate_inflight_tests {
 
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
-mod merged_read_tests {
+mod multi_stream_read_tests {
     use super::*;
     use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
@@ -2708,11 +2551,11 @@ mod merged_read_tests {
         }
     }
 
-    /// The two sides of a reduce join are read from separate buffers. The merged output must
+    /// The two sides of a reduce join are read from separate buffers. The single output must
     /// carry watermarks that never go backwards, and no message may come after a watermark
     /// greater than its event time (the reducer would drop it as late).
     #[tokio::test]
-    async fn merged_read_watermarks_never_go_backwards() {
+    async fn multi_stream_read_watermarks_never_go_backwards() {
         let cancel = CancellationToken::new();
         let factory = InMemoryFactory::new();
         let tracker = Tracker::new(None, cancel.clone());
@@ -2835,8 +2678,9 @@ mod merged_read_tests {
         .await
         .unwrap();
 
+        let streams: Vec<Stream> = orchestrator.streams().cloned().collect();
         let (mut rx, handle) = orchestrator
-            .streaming_read_merged(cancel.clone())
+            .streaming_read(&streams, cancel.clone())
             .await
             .unwrap();
 
@@ -2858,8 +2702,8 @@ mod merged_read_tests {
         while received.values().sum::<usize>() < in_one_ets.len() + in_two_ets.len() {
             let read = tokio::time::timeout(Duration::from_secs(5), rx.next())
                 .await
-                .expect("timed out waiting for merged messages")
-                .expect("merged stream ended early");
+                .expect("timed out waiting for messages")
+                .expect("stream ended early");
             let message = read.message().clone();
             if message.typ != MessageType::Data {
                 continue;
@@ -2908,9 +2752,9 @@ mod merged_read_tests {
             .unwrap();
     }
 
-    /// An edge with no data must not stall the merge: the other edge keeps flowing.
+    /// An edge with no data must not stall the read: the other edge keeps flowing.
     #[tokio::test]
-    async fn merged_read_does_not_block_on_an_empty_stream() {
+    async fn multi_stream_read_does_not_block_on_an_empty_stream() {
         let cancel = CancellationToken::new();
         let factory = InMemoryFactory::new();
         let tracker = Tracker::new(None, cancel.clone());
@@ -2958,16 +2802,17 @@ mod merged_read_tests {
         .await
         .unwrap();
 
+        let streams: Vec<Stream> = orchestrator.streams().cloned().collect();
         let (mut rx, handle) = orchestrator
-            .streaming_read_merged(cancel.clone())
+            .streaming_read(&streams, cancel.clone())
             .await
             .unwrap();
 
         for _ in 0..10 {
             let read = tokio::time::timeout(Duration::from_secs(2), rx.next())
                 .await
-                .expect("merge stalled on the empty stream")
-                .expect("merged stream ended early");
+                .expect("read stalled on the empty stream")
+                .expect("stream ended early");
             assert_eq!(read.message().offset.stream(), busy.name);
             mark_success!(read);
         }

@@ -58,7 +58,7 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .isb_reader
-            .streaming_read(&self.stream, cln_token.clone())
+            .streaming_read(std::slice::from_ref(&self.stream), cln_token.clone())
             .await?;
 
         let (mapped_messages_stream, mapper_handle) = self

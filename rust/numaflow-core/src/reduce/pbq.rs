@@ -1,4 +1,5 @@
 use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
+use crate::config::pipeline::isb::Stream;
 use crate::error::Result;
 use crate::mark_success;
 use crate::message::{Message, MessageType};
@@ -34,9 +35,8 @@ pub(crate) struct PBQBuilder<C: NumaflowTypeConfig> {
 impl<C: NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
     ///
-    /// The reader reads every ingress edge of the pod. Buffers are edge-owned, so a reduce
-    /// join has a separate physical buffer per source and the pod must drain all of them;
-    /// the reader merges them round-robin into the single downstream stream.
+    /// Buffers are edge-owned, so a reduce join has a separate buffer per source. All of them
+    /// feed the same reducer, so the PBQ reads every stream of the reader in one read.
     pub(crate) fn new(isb_reader: ISBReaderOrchestrator<C>) -> Self {
         Self {
             isb_reader,
@@ -65,12 +65,16 @@ pub(crate) struct PBQ<C: NumaflowTypeConfig> {
 }
 
 impl<C: NumaflowTypeConfig> PBQ<C> {
-    /// Waits for the reader task to finish.
-    async fn join_reader(handle: JoinHandle<Result<()>>) -> Result<()> {
+    /// Waits for the reader task to finish and then shuts the reader down.
+    async fn join_reader(
+        isb_reader: &ISBReaderOrchestrator<C>,
+        handle: JoinHandle<Result<()>>,
+    ) -> Result<()> {
         handle
             .await
             .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
-            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
+        isb_reader.shutdown().await
     }
 
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
@@ -152,8 +156,9 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         // After replaying the unprocessed data, start reading the new set of messages from ISB
         // and also persist them in WAL.
         let (wal_tx, wal_rx) = mpsc::channel(100);
+        let streams: Vec<Stream> = isb_reader.streams().cloned().collect();
         let (mut isb_stream, isb_handle) = isb_reader
-            .streaming_read_merged(cancellation_token.clone())
+            .streaming_read(&streams, cancellation_token.clone())
             .await?;
 
         let wal_handle = wal
@@ -191,7 +196,7 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             }
         }
 
-        Self::join_reader(isb_handle).await?;
+        Self::join_reader(&isb_reader, isb_handle).await?;
 
         // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
@@ -216,8 +221,10 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
-        let (mut isb_stream, isb_handle) =
-            isb_reader.streaming_read_merged(cancellation_token).await?;
+        let streams: Vec<Stream> = isb_reader.streams().cloned().collect();
+        let (mut isb_stream, isb_handle) = isb_reader
+            .streaming_read(&streams, cancellation_token)
+            .await?;
 
         // Process messages from ISB stream
         while let Some(read_msg) = isb_stream.next().await {
@@ -241,7 +248,7 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         }
 
         // Wait for the ISB reader tasks to complete
-        Self::join_reader(isb_handle).await?;
+        Self::join_reader(&isb_reader, isb_handle).await?;
 
         Ok(())
     }
