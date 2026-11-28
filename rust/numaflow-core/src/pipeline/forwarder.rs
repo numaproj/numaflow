@@ -76,6 +76,25 @@ async fn join_forwarder_tasks(
     Ok(())
 }
 
+/// Every (stream, reader config) a vertex reads, across all its ingress edges.
+fn reader_streams(
+    from_vertex_config: &[config::pipeline::FromVertexConfig],
+) -> Vec<(
+    config::pipeline::isb::Stream,
+    config::pipeline::isb::BufferReaderConfig,
+)> {
+    from_vertex_config
+        .iter()
+        .flat_map(|from_vertex| {
+            from_vertex
+                .reader_config
+                .streams
+                .iter()
+                .map(|stream| (stream.clone(), from_vertex.reader_config.clone()))
+        })
+        .collect()
+}
+
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,

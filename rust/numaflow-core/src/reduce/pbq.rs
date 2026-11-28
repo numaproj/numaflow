@@ -1,4 +1,5 @@
 use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
+use crate::config::pipeline::isb::Stream;
 use crate::error::Result;
 use crate::mark_success;
 use crate::message::{Message, MessageType};
@@ -33,6 +34,9 @@ pub(crate) struct PBQBuilder<C: NumaflowTypeConfig> {
 
 impl<C: NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
+    ///
+    /// Buffers are edge-owned, so a reduce join has a separate buffer per source. All of them
+    /// feed the same reducer, so the PBQ reads every stream of the reader in one read.
     pub(crate) fn new(isb_reader: ISBReaderOrchestrator<C>) -> Self {
         Self {
             isb_reader,
@@ -61,6 +65,18 @@ pub(crate) struct PBQ<C: NumaflowTypeConfig> {
 }
 
 impl<C: NumaflowTypeConfig> PBQ<C> {
+    /// Waits for the reader task to finish and then shuts the reader down.
+    async fn join_reader(
+        isb_reader: &ISBReaderOrchestrator<C>,
+        handle: JoinHandle<Result<()>>,
+    ) -> Result<()> {
+        handle
+            .await
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
+        isb_reader.shutdown().await
+    }
+
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         self,
@@ -140,8 +156,9 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         // After replaying the unprocessed data, start reading the new set of messages from ISB
         // and also persist them in WAL.
         let (wal_tx, wal_rx) = mpsc::channel(100);
+        let streams: Vec<Stream> = isb_reader.streams().cloned().collect();
         let (mut isb_stream, isb_handle) = isb_reader
-            .streaming_read(cancellation_token.clone())
+            .streaming_read(&streams, cancellation_token.clone())
             .await?;
 
         let wal_handle = wal
@@ -179,10 +196,7 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             }
         }
 
-        isb_handle
-            .await
-            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
-            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
+        Self::join_reader(&isb_reader, isb_handle).await?;
 
         // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
@@ -207,7 +221,10 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
-        let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
+        let streams: Vec<Stream> = isb_reader.streams().cloned().collect();
+        let (mut isb_stream, isb_handle) = isb_reader
+            .streaming_read(&streams, cancellation_token)
+            .await?;
 
         // Process messages from ISB stream
         while let Some(read_msg) = isb_stream.next().await {
@@ -230,11 +247,8 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             mark_success!(read_msg);
         }
 
-        // Wait for the ISB reader task to complete
-        isb_handle
-            .await
-            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
-            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
+        // Wait for the ISB reader tasks to complete
+        Self::join_reader(&isb_reader, isb_handle).await?;
 
         Ok(())
     }
@@ -243,10 +257,12 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio_stream::StreamExt;
+
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, MessageID, Offset};
     use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-    use crate::pipeline::isb::reader::ISBReaderOrchestrator;
+    use crate::pipeline::isb::reader::{ISBReaderOrchestrator, ISBStreamReader};
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::compactor::WindowKind;
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
@@ -301,17 +317,14 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-            cln_token: CancellationToken::new(),
         };
         let js_reader = JetStreamReader::new(
-            reader_components.stream.clone(),
+            stream.clone(),
             context.clone(),
             reader_components.isb_config.clone(),
         )
@@ -321,7 +334,11 @@ mod tests {
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
             ISBReaderOrchestrator::new(
                 reader_components,
-                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                vec![ISBStreamReader {
+                    stream: stream.clone(),
+                    config: buf_reader_config,
+                    reader: Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                }],
                 None,
             )
             .await
@@ -437,17 +454,14 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-            cln_token: CancellationToken::new(),
         };
         let js_reader = JetStreamReader::new(
-            reader_components.stream.clone(),
+            stream.clone(),
             context.clone(),
             reader_components.isb_config.clone(),
         )
@@ -457,7 +471,11 @@ mod tests {
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
             ISBReaderOrchestrator::new(
                 reader_components,
-                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                vec![ISBStreamReader {
+                    stream: stream.clone(),
+                    config: buf_reader_config,
+                    reader: Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                }],
                 None,
             )
             .await
@@ -676,17 +694,14 @@ mod tests {
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-            cln_token: CancellationToken::new(),
         };
         let js_reader = JetStreamReader::new(
-            reader_components.stream.clone(),
+            stream.clone(),
             context.clone(),
             reader_components.isb_config.clone(),
         )
@@ -696,7 +711,11 @@ mod tests {
         let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
             ISBReaderOrchestrator::new(
                 reader_components,
-                Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                vec![ISBStreamReader {
+                    stream: stream.clone(),
+                    config: buf_reader_config,
+                    reader: Arc::new(js_reader) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                }],
                 None,
             )
             .await

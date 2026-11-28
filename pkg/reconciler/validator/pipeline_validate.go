@@ -179,6 +179,66 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateBufferNameLength(*pl); err != nil {
+		return err
+	}
+
+	if err := validateUniqueBufferNames(*pl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateUniqueBufferNames rejects a pipeline in which two edges generate the same
+// buffer name or the same watermark bucket name. Both join the vertex names with "-",
+// and vertex names can contain "-", so edges such as "a" -> "b-c" and "a-b" -> "c"
+// would otherwise silently share one JetStream stream and mix their data. Buffers and
+// buckets are separate JetStream resources, so each is only checked against its own kind.
+func validateUniqueBufferNames(pl dfv1.Pipeline) error {
+	bufferOwners := make(map[string]dfv1.Edge)
+	bucketOwners := make(map[string]dfv1.Edge)
+	claim := func(owners map[string]dfv1.Edge, kind, name string, e dfv1.Edge) error {
+		if other, ok := owners[name]; ok {
+			return fmt.Errorf("edges %q -> %q and %q -> %q both generate the %s name %q; rename a vertex so the names differ", other.From, other.To, e.From, e.To, kind, name)
+		}
+		owners[name] = e
+		return nil
+	}
+	for _, e := range pl.ListAllEdges() {
+		for _, b := range dfv1.GenerateBufferNames(pl.Namespace, pl.Name, e.From, e.To, pl.NumOfPartitions(e.To)) {
+			if err := claim(bufferOwners, "buffer", b, e); err != nil {
+				return err
+			}
+		}
+		if err := claim(bucketOwners, "watermark bucket", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateBufferNameLength rejects a pipeline whose edges would generate an ISB
+// buffer name longer than the NATS limit. A buffer name is used verbatim as the
+// JetStream stream name and durable consumer name, so an over-long name fails at
+// buffer-creation time with an opaque NATS error; catching it at admission points
+// at the offending edge instead. Edge-owned names embed both vertex names, so this
+// is reachable with long-but-individually-valid namespace, pipeline, and vertex
+// names.
+func validateBufferNameLength(pl dfv1.Pipeline) error {
+	for _, e := range pl.ListAllEdges() {
+		// Partition index only grows the name by a digit or two; the highest index
+		// is the longest, so checking it covers every partition of the edge.
+		// NumOfPartitions returns 0 for an unknown vertex, so floor the index at 0.
+		lastPartition := pl.NumOfPartitions(e.To) - 1
+		if lastPartition < 0 {
+			lastPartition = 0
+		}
+		name := dfv1.GenerateBufferName(pl.Namespace, pl.Name, e.From, e.To, lastPartition)
+		if len(name) > dfv1.MaxBufferNameLength {
+			return fmt.Errorf("the generated buffer name %q for edge %q -> %q is %d characters, over the max limit of %d; shorten the namespace, pipeline, or vertex names", name, e.From, e.To, len(name), dfv1.MaxBufferNameLength)
+		}
+	}
 	return nil
 }
 

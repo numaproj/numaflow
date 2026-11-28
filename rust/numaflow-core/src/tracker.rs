@@ -35,8 +35,10 @@ struct TrackerEntry {
 
 /// TrackerState holds the mutable state of the tracker.
 struct TrackerState {
-    /// entries organized by partition, each partition has its own BTreeMap of offsets
-    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    /// entries organized by (buffer, partition), each has its own BTreeMap of offsets.
+    /// The buffer is part of the key because a vertex with several ingress edges reads
+    /// one buffer per edge for the same partition, and their sequences overlap.
+    entries: HashMap<(&'static str, u16), BTreeMap<Offset, TrackerEntry>>,
 }
 
 impl Drop for TrackerState {
@@ -100,14 +102,19 @@ impl TryFrom<&Message> for ServingCallbackInfo {
     }
 }
 
+/// Idle head WMB offset of every (from vertex, partition) the reader consumes; None means it is
+/// not idle.
+type IdleOffsets = HashMap<(&'static str, u16), Option<i64>>;
+
 /// TrackerHandle provides an interface to interact with the Tracker.
 /// It allows inserting, updating, deleting, and discarding tracked messages.
 #[derive(Clone)]
 pub(crate) struct Tracker {
     state: Arc<RwLock<TrackerState>>,
-    /// tracks whether the source is currently idle (not reading any data)
-    /// if it's set to none, it means the source is not idle.
-    idle_offset_map: Arc<RwLock<HashMap<u16, Option<i64>>>>,
+    /// tracks whether each (from vertex, partition) the reader consumes is idle (its buffer read
+    /// nothing). If it's set to none, it means it is not idle. Keyed by the edge as well as the
+    /// partition, because every edge into a partition has its own buffer.
+    idle_offset_map: Arc<RwLock<IdleOffsets>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
 }
@@ -209,7 +216,7 @@ impl Tracker {
             callback_info = Some(message.try_into()?);
         }
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
         if partition_entries.contains_key(&offset) {
@@ -242,7 +249,7 @@ impl Tracker {
             .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
             .collect();
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -263,7 +270,7 @@ impl Tracker {
             return Ok(());
         }
 
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -289,7 +296,7 @@ impl Tracker {
         }
 
         let response = message_tags.map(|tags| tags.to_vec());
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -306,7 +313,7 @@ impl Tracker {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: &Offset) -> Result<()> {
-        let partition = offset.partition_idx();
+        let partition = (offset.stream(), offset.partition_idx());
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -366,17 +373,19 @@ impl Tracker {
     /// can monotonically increase for the same Head MWB offset.
     pub(crate) async fn set_idle_offset(
         &self,
+        from_vertex: &'static str,
         partition_idx: u16,
         idle_offset: Option<i64>,
     ) -> Result<()> {
         let mut idle_map = self.idle_offset_map.write().await;
-        idle_map.insert(partition_idx, idle_offset);
+        idle_map.insert((from_vertex, partition_idx), idle_offset);
         Ok(())
     }
 
-    /// Gets the idle wmb status of the tracker. It returns a map of partition index to the idle offset.
-    /// This idle offset is compared against the newly fetch Head WMB as part of the optimistic locking.
-    pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
+    /// Gets the idle wmb status of the tracker. It returns a map of (from vertex, partition) to the
+    /// idle offset. This idle offset is compared against the newly fetch Head WMB as part of the
+    /// optimistic locking.
+    pub(crate) async fn get_idle_offset(&self) -> Result<IdleOffsets> {
         let idle_map = self.idle_offset_map.read().await;
         Ok(idle_map.clone())
     }
@@ -471,6 +480,29 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
+    #[tokio::test]
+    async fn test_same_sequence_on_different_buffers_is_not_duplicate() {
+        let handle = Tracker::new(None, CancellationToken::new());
+        let message = |stream: &'static str| Message {
+            offset: Offset::Int(IntOffset::with_stream(1, 0, stream)),
+            ..Default::default()
+        };
+        let from_a = message("ns-pl-a-c-0");
+        let from_b = message("ns-pl-b-c-0");
+
+        handle.insert(&from_a).await.unwrap();
+        handle.insert(&from_b).await.unwrap();
+        assert!(matches!(
+            handle.insert(&from_a).await,
+            Err(Error::DuplicateInflight(_))
+        ));
+
+        handle.delete(&from_a.offset).await.unwrap();
+        assert!(!handle.is_empty().await.unwrap());
+        handle.delete(&from_b.offset).await.unwrap();
+        assert!(handle.is_empty().await.unwrap());
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
@@ -555,20 +587,23 @@ mod tests {
         let handle = Tracker::new(None, CancellationToken::new());
         assert_eq!(handle.get_idle_offset().await.unwrap(), HashMap::new());
 
-        handle.set_idle_offset(0, Some(100)).await.unwrap();
-        handle.set_idle_offset(1, Some(200)).await.unwrap();
-        handle.set_idle_offset(2, None).await.unwrap();
+        handle.set_idle_offset("in", 0, Some(100)).await.unwrap();
+        handle.set_idle_offset("in", 1, Some(200)).await.unwrap();
+        handle.set_idle_offset("in", 2, None).await.unwrap();
+        // a second edge into the same partition has its own idle state
+        handle.set_idle_offset("other", 0, None).await.unwrap();
 
         let idle_offsets = handle.get_idle_offset().await.unwrap();
-        assert_eq!(idle_offsets.get(&0), Some(&Some(100)));
-        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
-        assert_eq!(idle_offsets.get(&2), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 0)), Some(&Some(100)));
+        assert_eq!(idle_offsets.get(&("in", 1)), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&("in", 2)), Some(&None));
+        assert_eq!(idle_offsets.get(&("other", 0)), Some(&None));
 
-        handle.set_idle_offset(0, None).await.unwrap();
+        handle.set_idle_offset("in", 0, None).await.unwrap();
         let idle_offsets = handle.get_idle_offset().await.unwrap();
-        assert_eq!(idle_offsets.get(&0), Some(&None));
-        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
-        assert_eq!(idle_offsets.get(&2), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 0)), Some(&None));
+        assert_eq!(idle_offsets.get(&("in", 1)), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&("in", 2)), Some(&None));
     }
 
     #[tokio::test]

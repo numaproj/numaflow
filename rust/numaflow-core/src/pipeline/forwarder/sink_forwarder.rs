@@ -1,6 +1,6 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::isb::BufferReaderConfig;
-use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig};
+use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig, ServingStoreType, SinkVtxConfig};
 use crate::error::Error;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
@@ -29,19 +29,24 @@ use tokio_util::task::AbortOnDropHandle;
 use tracing::{error, info};
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
-/// and manages the lifecycle of these components.
+/// and manages the lifecycle of these components. There is one sink forwarder per stream; they
+/// all share the pod's reader orchestrator.
 pub(crate) struct SinkForwarder<C: crate::typ::NumaflowTypeConfig> {
     jetstream_reader: ISBReaderOrchestrator<C>,
+    /// The stream of the reader this forwarder reads.
+    stream: Stream,
     sink_writer: SinkWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
     pub(crate) async fn new(
         jetstream_reader: ISBReaderOrchestrator<C>,
+        stream: Stream,
         sink_writer: SinkWriter,
     ) -> Self {
         Self {
             jetstream_reader,
+            stream,
             sink_writer,
         }
     }
@@ -51,7 +56,7 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(cln_token.clone())
+            .streaming_read(std::slice::from_ref(&self.stream), cln_token.clone())
             .await?;
 
         let sink_writer_handle = self
@@ -100,17 +105,26 @@ pub async fn start_sink_forwarder(
         None
     };
 
-    let from_vertex_config = config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?;
+    if config.from_vertex_config.is_empty() {
+        return Err(Error::Config("No from vertex config found".to_string()));
+    }
 
-    let reader_config = &from_vertex_config.reader_config;
-
-    // Extract partition indices from the streams in the reader config
+    // Extract partition indices from the streams in the reader configs
     // When ordered processing is enabled, this will contain only the replica's partition
     // When disabled, this will contain all partitions
-    let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
+    // Buffers are edge-owned, so a sink with several ingress edges has one set of
+    // partitioned streams per edge; every edge of a vertex resolves to the same
+    // partition count, so dedupe the indices across edges.
+    let from_partitions: Vec<u16> = {
+        let mut p: Vec<u16> = config
+            .from_vertex_config
+            .iter()
+            .flat_map(|f| f.reader_config.streams.iter().map(|s| s.partition))
+            .collect();
+        p.sort_unstable();
+        p.dedup();
+        p
+    };
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     // Sink is terminal — no ISB writers; idle detector gets an empty map.
@@ -121,7 +135,6 @@ pub async fn start_sink_forwarder(
         &cln_token,
         None,
         tracker.clone(),
-        from_partitions.clone(),
     )
     .await?;
 
@@ -159,7 +172,7 @@ pub async fn start_sink_forwarder(
                 run_all_sink_forwarders::<WithRedisRateLimiter>(
                     &context,
                     &sink,
-                    reader_config,
+                    &config.from_vertex_config,
                     watermark_handle.clone(),
                     serving_store,
                     Some(redis_config.throttling_config),
@@ -180,7 +193,7 @@ pub async fn start_sink_forwarder(
                 run_all_sink_forwarders::<WithInMemoryRateLimiter>(
                     &context,
                     &sink,
-                    reader_config,
+                    &config.from_vertex_config,
                     watermark_handle.clone(),
                     serving_store,
                     Some(in_mem_config.throttling_config),
@@ -198,7 +211,7 @@ pub async fn start_sink_forwarder(
             run_all_sink_forwarders::<WithoutRateLimiter>(
                 &context,
                 &sink,
-                reader_config,
+                &config.from_vertex_config,
                 watermark_handle.clone(),
                 serving_store,
                 None,
@@ -222,11 +235,19 @@ pub async fn start_sink_forwarder(
     Ok(())
 }
 
-/// Starts sink forwarder for all the streams.
+/// Starts a sink forwarder for every stream across all ingress edges.
+///
+/// Buffers are edge-owned, so a sink with several ingress edges reads a distinct set
+/// of buffers per edge. One reader orchestrator reads all of them, and each (edge, partition)
+/// stream gets its own forwarder (reader, sink writer), exactly as multiple partitions of a
+/// single edge already did.
+///
+/// Returns a single task that finishes once every forwarder has stopped and the shared reader
+/// has been shut down.
 async fn run_all_sink_forwarders<C>(
     context: &PipelineContext<'_, C>,
     sink: &SinkVtxConfig,
-    reader_config: &BufferReaderConfig,
+    from_vertex_config: &[FromVertexConfig],
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     serving_store: Option<ServingStore>,
     rate_limiter: Option<C::RateLimiter>,
@@ -238,15 +259,21 @@ async fn run_all_sink_forwarders<C>(
 where
     C: NumaflowTypeConfig,
 {
-    let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
-    let mut first_sink_writer = None;
-
     // The streams are already filtered based on ordered processing at config creation time
-    for stream in &reader_config.streams {
+    let isb_reader = ISBReaderOrchestrator::<C>::from_factory(
+        ISBReaderComponents::new::<C>(watermark_handle, context),
+        super::reader_streams(from_vertex_config),
+        context.factory(),
+        rate_limiter,
+    )
+    .await?;
+
+    let mut forwarder_tasks = vec![];
+    let mut first_sink_writer = None;
+    for stream in isb_reader.streams() {
         info!(
-            "Creating sink writer and buffer reader for stream {:?}",
-            stream
+            from_vertex = stream.from_vertex,
+            "Creating sink forwarder for stream {:?}", stream
         );
 
         let sink_writer = create_components::create_sink_writer(
@@ -265,72 +292,38 @@ where
             first_sink_writer = Some(sink_writer.clone());
         }
 
-        let reader_components = ISBReaderComponents::new::<C>(
-            stream.clone(),
-            reader_config.clone(),
-            watermark_handle.clone(),
-            context,
-        );
-
-        let (task, reader) = run_sink_forwarder_for_stream::<C>(
-            reader_components,
-            sink_writer,
-            rate_limiter.clone(),
-            context.factory(),
-        )
-        .await?;
-
-        forwarder_tasks.push(task);
-        isb_lag_readers.push(reader);
+        let forwarder =
+            SinkForwarder::<C>::new(isb_reader.clone(), stream.clone(), sink_writer).await;
+        let cln_token = context.cln_token.clone();
+        forwarder_tasks.push(AbortOnDropHandle::new(tokio::spawn(async move {
+            forwarder.start(cln_token).await
+        })));
     }
+    let first_sink_writer = first_sink_writer
+        .ok_or_else(|| Error::Config("No stream found for sink vertex".to_string()))?;
 
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(isb_lag_readers),
+        LagReader::ISB(isb_reader.clone()),
     )
     .await;
     let pending_reader_task = pending_reader.start(is_mono_vertex()).await;
 
-    Ok((
-        forwarder_tasks,
-        first_sink_writer.expect("one sink writer is expected"),
-        pending_reader_task,
-    ))
-}
+    // every forwarder has stopped before the reader shuts down what they share
+    let cln_token = context.cln_token.clone();
+    let task = AbortOnDropHandle::new(tokio::spawn(async move {
+        let result = super::join_forwarder_tasks(forwarder_tasks, &cln_token).await;
+        isb_reader.shutdown().await?;
+        result
+    }));
 
-/// Starts sink forwarder for a single stream.
-async fn run_sink_forwarder_for_stream<C>(
-    reader_components: ISBReaderComponents,
-    sink_writer: SinkWriter,
-    rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &dyn ISBFactory,
-) -> Result<(AbortOnDropHandle<Result<()>>, ISBReaderOrchestrator<C>)>
-where
-    C: NumaflowTypeConfig,
-{
-    let cln_token = reader_components.cln_token.clone();
-
-    let isb_reader_impl = isb_factory
-        .create_reader(
-            reader_components.stream.clone(),
-            reader_components.isb_config.as_ref(),
-        )
-        .await?;
-
-    let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
-
-    let forwarder = SinkForwarder::<C>::new(isb_reader.clone(), sink_writer).await;
-
-    let task = AbortOnDropHandle::new(tokio::spawn(
-        async move { forwarder.start(cln_token).await },
-    ));
-    Ok((task, isb_reader))
+    Ok((vec![task], first_sink_writer, pending_reader_task))
 }
 
 #[cfg(test)]
 mod simple_buffer_tests {
     use super::*;
+    use crate::pipeline::isb::reader::ISBStreamReader;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -457,26 +450,33 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
-            stream: input_stream,
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size,
             read_timeout: Duration::from_millis(500),
             watermark_handle: None,
             isb_config: None,
-            cln_token: cln_token.clone(),
         };
 
         let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
             reader_components,
-            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            vec![ISBStreamReader {
+                stream: input_stream,
+                config: buf_reader_config,
+                reader: Arc::new(input_adapter.reader())
+                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            }],
             None,
         )
         .await
         .unwrap();
 
         // Create and start the SinkForwarder
-        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
+        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(
+            isb_reader.clone(),
+            isb_reader.streams().next().cloned().unwrap(),
+            sink_writer,
+        )
+        .await;
 
         let forwarder_cln = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
@@ -586,26 +586,32 @@ mod simple_buffer_tests {
 
             let reader_components = ISBReaderComponents {
                 vertex_type: "Sink".to_string(),
-                stream: input_stream.clone(),
-                config: buf_reader_config.clone(),
                 tracker: tracker.clone(),
                 batch_size,
                 read_timeout: Duration::from_millis(500),
                 watermark_handle: None,
                 isb_config: None,
-                cln_token: cln_token.clone(),
             };
 
             let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
                 reader_components,
-                Arc::new(input_adapters.get(i).unwrap().reader())
-                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                vec![ISBStreamReader {
+                    stream: input_stream.clone(),
+                    config: buf_reader_config.clone(),
+                    reader: Arc::new(input_adapters.get(i).unwrap().reader())
+                        as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+                }],
                 None,
             )
             .await
             .unwrap();
 
-            let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
+            let forwarder = SinkForwarder::<WithSimpleBuffer>::new(
+                isb_reader.clone(),
+                isb_reader.streams().next().cloned().unwrap(),
+                sink_writer,
+            )
+            .await;
 
             let forwarder_cln = cln_token.clone();
             let handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
@@ -714,26 +720,33 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
-            stream: input_stream,
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size,
             read_timeout: Duration::from_millis(500),
             watermark_handle: None,
             isb_config: None,
-            cln_token: cln_token.clone(),
         };
 
         let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
             reader_components,
-            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            vec![ISBStreamReader {
+                stream: input_stream,
+                config: buf_reader_config,
+                reader: Arc::new(input_adapter.reader())
+                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            }],
             None,
         )
         .await
         .unwrap();
 
         // Create and start the SinkForwarder
-        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
+        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(
+            isb_reader.clone(),
+            isb_reader.streams().next().cloned().unwrap(),
+            sink_writer,
+        )
+        .await;
 
         let forwarder_cln = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
@@ -817,26 +830,33 @@ mod simple_buffer_tests {
 
         let reader_components = ISBReaderComponents {
             vertex_type: "Sink".to_string(),
-            stream: input_stream,
-            config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size,
             read_timeout: Duration::from_millis(500),
             watermark_handle: None,
             isb_config: None,
-            cln_token: cln_token.clone(),
         };
 
         let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
             reader_components,
-            Arc::new(input_adapter.reader()) as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            vec![ISBStreamReader {
+                stream: input_stream,
+                config: buf_reader_config,
+                reader: Arc::new(input_adapter.reader())
+                    as crate::pipeline::isb::dyn_adapter::ISBReaderRef,
+            }],
             None,
         )
         .await
         .unwrap();
 
         // Create and start the SinkForwarder
-        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(isb_reader, sink_writer).await;
+        let forwarder = SinkForwarder::<WithSimpleBuffer>::new(
+            isb_reader.clone(),
+            isb_reader.streams().next().cloned().unwrap(),
+            sink_writer,
+        )
+        .await;
 
         let forwarder_cln = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });

@@ -128,10 +128,13 @@ impl From<&SimpleOffset> for Offset {
 /// Keep field mapping in sync with `js_reader.rs` / [`message_from_isb_proto`].
 /// Unlike JetStream, WMB messages retain their real broker offset (required for
 /// orchestrator ack at `reader.rs`). Decode failure returns `Err` (not dropped).
-fn convert_message(read_msg: ReadMessage) -> crate::Result<Message> {
-    let offset = Offset::Int(IntOffset::new(
+/// `stream` is the name of the buffer the message was read from; offsets of different buffers
+/// share the same sequence space, so the tracker needs it to tell them apart.
+fn convert_message(read_msg: ReadMessage, stream: &'static str) -> crate::Result<Message> {
+    let offset = Offset::Int(IntOffset::with_stream(
         read_msg.offset.sequence,
         read_msg.offset.partition_idx,
+        stream,
     ));
     let proto = numaflow_pb::objects::isb::Message::decode(read_msg.payload)
         .map_err(|e| Error::Proto(e.to_string()))?;
@@ -141,7 +144,10 @@ fn convert_message(read_msg: ReadMessage) -> crate::Result<Message> {
 impl ISBReader for SimpleReaderAdapter {
     async fn fetch(&self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
         let msgs = self.inner.fetch(max, timeout).await.map_err(Error::from)?;
-        msgs.into_iter().map(convert_message).collect()
+        let stream = self.inner.name();
+        msgs.into_iter()
+            .map(|msg| convert_message(msg, stream))
+            .collect()
     }
 
     async fn ack(&self, offset: &Offset) -> crate::Result<()> {
@@ -577,7 +583,8 @@ mod tests {
             &got.offset,
             Offset::Int(IntOffset {
                 offset: 1,
-                partition_idx: 0
+                partition_idx: 0,
+                ..
             })
         ));
 
@@ -641,7 +648,8 @@ mod tests {
                 &messages[0].offset,
                 Offset::Int(IntOffset {
                     offset: 1,
-                    partition_idx: 0
+                    partition_idx: 0,
+                    ..
                 })
             ),
             "WMB must retain a real broker offset, got {:?}",

@@ -368,6 +368,14 @@ impl Offset {
             Offset::String(offset) => offset.partition_idx,
         }
     }
+
+    /// ISB buffer the offset belongs to, empty if it is not an ISB offset.
+    pub(crate) fn stream(&self) -> &'static str {
+        match self {
+            Offset::Int(offset) => offset.stream,
+            Offset::String(_) => "",
+        }
+    }
 }
 
 impl fmt::Display for Offset {
@@ -461,6 +469,11 @@ impl Message {
 pub(crate) struct IntOffset {
     pub(crate) offset: i64,
     pub(crate) partition_idx: u16,
+    /// Name of the ISB buffer the offset belongs to (empty when not read from an ISB).
+    /// Sequences are only unique within one buffer, and a vertex with several ingress edges
+    /// reads several buffers for the same partition, so the buffer is part of the identity.
+    #[serde(skip)]
+    pub(crate) stream: &'static str,
 }
 
 impl IntOffset {
@@ -468,6 +481,15 @@ impl IntOffset {
         Self {
             offset: seq,
             partition_idx,
+            stream: "",
+        }
+    }
+
+    pub(crate) fn with_stream(seq: i64, partition_idx: u16, stream: &'static str) -> Self {
+        Self {
+            offset: seq,
+            partition_idx,
+            stream,
         }
     }
 }

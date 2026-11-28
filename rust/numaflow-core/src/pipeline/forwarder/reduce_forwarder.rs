@@ -2,6 +2,7 @@ use crate::config::components::reduce::{
     AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
     UnalignedWindowType,
 };
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::{PipelineConfig, ReduceVtxConfig};
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{
@@ -143,24 +144,10 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker.clone(),
-        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // reduce pod always reads from a single stream (pod per partition)
-    let stream = reader_config
-        .streams
-        .get(*get_vertex_replica() as usize)
-        .cloned()
-        .ok_or_else(|| {
-            crate::error::Error::Config("No stream found for reduce vertex".to_string())
-        })?;
+    let reader_configs_and_streams = reduce_reader_configs_and_streams(&config)?;
 
     let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
@@ -169,12 +156,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter>(
-        stream,
-        reader_config.clone(),
-        watermark_handle.clone(),
-        &context,
-    );
+    // One reader for the pod, reading every ingress edge at this replica's partition.
+    let reader_components =
+        ISBReaderComponents::new::<WithoutRateLimiter>(watermark_handle.clone(), &context);
 
     let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
@@ -207,7 +191,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             .clone()
             .map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
-                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
+                partitions: vec![*get_vertex_replica()], // reduce reads a single partition index, on every ingress edge
             }),
     );
 
@@ -232,8 +216,15 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-        .await?;
+    run_reduce_forwarder::<WithoutRateLimiter>(
+        &context,
+        reader_components,
+        reader_configs_and_streams,
+        reducer,
+        wal,
+        None,
+    )
+    .await?;
 
     info!("Aligned reduce forwarder has stopped successfully");
     Ok(())
@@ -278,24 +269,10 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker.clone(),
-        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // reduce pod always reads from a single stream (pod per partition)
-    let stream = reader_config
-        .streams
-        .get(*get_vertex_replica() as usize)
-        .cloned()
-        .ok_or_else(|| {
-            crate::error::Error::Config("No stream found for reduce vertex".to_string())
-        })?;
+    let reader_configs_and_streams = reduce_reader_configs_and_streams(&config)?;
 
     let context = PipelineContext::<WithoutRateLimiter>::new(
         cln_token.clone(),
@@ -304,12 +281,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter>(
-        stream,
-        reader_config.clone(),
-        watermark_handle.clone(),
-        &context,
-    );
+    // One reader for the pod, reading every ingress edge at this replica's partition.
+    let reader_components =
+        ISBReaderComponents::new::<WithoutRateLimiter>(watermark_handle.clone(), &context);
 
     let writer_components: ISBWriterOrchestratorComponents = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
@@ -341,7 +315,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             .clone()
             .map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
-                partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
+                partitions: vec![*get_vertex_replica()], // reduce reads a single partition index, on every ingress edge
             }),
     );
 
@@ -366,17 +340,63 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-        .await?;
+    run_reduce_forwarder::<WithoutRateLimiter>(
+        &context,
+        reader_components,
+        reader_configs_and_streams,
+        reducer,
+        wal,
+        None,
+    )
+    .await?;
 
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
 }
 
+/// Resolves the ingress streams a reduce pod reads: one per incoming edge, all at the
+/// partition matching this pod's replica id.
+///
+/// A reduce pod owns exactly one partition index so that a given key is drained by
+/// exactly one pod. The writers hash by key into the same partition count on every
+/// ingress edge, so key `k` lands on index `i` of *every* edge. With edge-owned
+/// buffers each edge has its own physical buffer, so pod `i` of a join `x,y -> z`
+/// must read both `x->z` partition `i` and `y->z` partition `i` — that is what keeps
+/// both sides of a key together on one pod. Reading only the first edge would
+/// silently drop the other source's data.
+fn reduce_reader_configs_and_streams(
+    config: &PipelineConfig,
+) -> Result<Vec<(Stream, crate::config::pipeline::isb::BufferReaderConfig)>> {
+    if config.from_vertex_config.is_empty() {
+        return Err(crate::error::Error::Config(
+            "No from vertex config found".to_string(),
+        ));
+    }
+
+    let replica = *get_vertex_replica() as usize;
+    let mut result = Vec::with_capacity(config.from_vertex_config.len());
+    for from_vertex in &config.from_vertex_config {
+        let reader_config = &from_vertex.reader_config;
+        // reduce pod always reads a single partition per edge (pod per partition)
+        let stream = reader_config.streams.get(replica).cloned().ok_or_else(|| {
+            crate::error::Error::Config(format!(
+                "No stream found for reduce vertex on edge {} at partition {replica}",
+                from_vertex.name
+            ))
+        })?;
+        result.push((stream, reader_config.clone()));
+    }
+    Ok(result)
+}
+
 /// Starts reduce forwarder.
+///
+/// Buffers are edge-owned, so a reduce join has one buffer per source at this replica's
+/// partition. All of them are read into the single stream that feeds the windower.
 async fn run_reduce_forwarder<C>(
     context: &PipelineContext<'_, C>,
     reader_components: ISBReaderComponents,
+    streams: Vec<(Stream, crate::config::pipeline::isb::BufferReaderConfig)>,
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
@@ -384,21 +404,18 @@ async fn run_reduce_forwarder<C>(
 where
     C: NumaflowTypeConfig,
 {
-    let isb_reader_impl = context
-        .factory()
-        .create_reader(
-            reader_components.stream.clone(),
-            reader_components.isb_config.as_ref(),
-        )
-        .await?;
+    let isb_reader = ISBReaderOrchestrator::<C>::from_factory(
+        reader_components,
+        streams,
+        context.factory(),
+        rate_limiter,
+    )
+    .await?;
 
-    let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
-
-    // Create lag reader with the single buffer reader (reduce only reads from one stream)
+    // Lag is measured across every ingress buffer this pod reads.
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(vec![isb_reader.clone()]),
+        LagReader::ISB(isb_reader.clone()),
     )
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
@@ -633,7 +650,8 @@ mod tests {
             },
         );
 
-        let input_stream = Stream::new("test_reduce_over_inmemory_isb_input", INPUT_VERTEX, 0);
+        let input_stream = Stream::new("test_reduce_over_inmemory_isb_input", INPUT_VERTEX, 0)
+            .with_from_vertex(INPUT_VERTEX);
         let output_stream = Stream::new("test_reduce_over_inmemory_isb_output", OUTPUT_VERTEX, 0);
         let input_bucket_config = BucketConfig {
             vertex: INPUT_VERTEX,
@@ -1237,7 +1255,10 @@ mod tests {
         let js_context = jetstream::new(nats_client);
 
         // Create input and output streams
-        let input_stream = Stream::new("test_unaligned_reduce_forwarder_input", "test", 0);
+        // from_vertex must match the from bucket config ("input-vertex") so the fetcher finds the
+        // upstream timelines for offsets read from this stream.
+        let input_stream = Stream::new("test_unaligned_reduce_forwarder_input", "test", 0)
+            .with_from_vertex("input-vertex");
         let output_stream = Stream::new("test_unaligned_reduce_forwarder_output", "test", 0);
         let ot_bucket = "test_unaligned_reduce_forwarder_ot";
         let hb_bucket = "test_unaligned_reduce_forwarder_hb";
@@ -1768,5 +1789,70 @@ mod tests {
 
         // Clean up
         fs::remove_file(&fence_file_path).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod reduce_join_tests {
+    use super::*;
+    use crate::config::pipeline::PipelineConfig;
+
+    /// A reduce join resolves to one stream per ingress edge, all at this pod's
+    /// partition index.
+    ///
+    /// x and y join into z (3 partitions, so 3 reduce pods). Pod i must read
+    /// x->z partition i AND y->z partition i, because the writers hash a given key to
+    /// the same index on both edges - that co-partitioning is what keeps both sides of
+    /// a key on one pod. The PBQ then reads both into one stream.
+    #[test]
+    fn test_reduce_join_resolves_co_partitioned_streams() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9LCJncm91cEJ5Ijp7IndpbmRvdyI6eyJmaXhlZCI6eyJsZW5ndGgiOiI2MHMifX0sImtleWVkIjp0cnVlLCJzdG9yYWdlIjp7InBlcnNpc3RlbnRWb2x1bWVDbGFpbSI6eyJ2b2x1bWVTaXplIjoiMUdpIn19fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInNjYWxlIjp7Im1pbiI6MX0sInBpcGVsaW5lTmFtZSI6ImpwIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwiZnJvbUVkZ2VzIjpbeyJmcm9tIjoieCIsInRvIjoieiIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiUmVkdWNlVURGIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MywidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fSx7ImZyb20iOiJ5IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJSZWR1Y2VVREYiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        // A reduce join is accepted, not rejected.
+        let resolved = reduce_reader_configs_and_streams(&config)
+            .expect("reduce join should resolve one stream per ingress edge");
+
+        assert_eq!(resolved.len(), 2, "one stream per ingress edge");
+
+        let replica = *get_vertex_replica();
+        let names: Vec<&str> = resolved.iter().map(|(s, _)| s.name).collect();
+        assert_eq!(
+            names,
+            vec![
+                format!("default-jp-x-z-{replica}").as_str(),
+                format!("default-jp-y-z-{replica}").as_str(),
+            ]
+        );
+
+        // Same partition index on every edge: that is the co-partitioning contract.
+        for (stream, _) in &resolved {
+            assert_eq!(stream.partition, replica);
+        }
+    }
+
+    /// A single-edge reduce still resolves exactly one stream.
+    #[test]
+    fn test_reduce_single_edge_resolves_one_stream() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9LCJncm91cEJ5Ijp7IndpbmRvdyI6eyJmaXhlZCI6eyJsZW5ndGgiOiI2MHMifX0sImtleWVkIjp0cnVlLCJzdG9yYWdlIjp7InBlcnNpc3RlbnRWb2x1bWVDbGFpbSI6eyJ2b2x1bWVTaXplIjoiMUdpIn19fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInNjYWxlIjp7Im1pbiI6MX0sInBpcGVsaW5lTmFtZSI6ImpwIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwiZnJvbUVkZ2VzIjpbeyJmcm9tIjoieCIsInRvIjoieiIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiUmVkdWNlVURGIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MywidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fSx7ImZyb20iOiJ5IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJSZWR1Y2VVREYiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let mut config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+        config.from_vertex_config.truncate(1);
+
+        let resolved = reduce_reader_configs_and_streams(&config).unwrap();
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved.first().unwrap().0.partition, *get_vertex_replica());
+    }
+
+    /// No ingress edges is still an error.
+    #[test]
+    fn test_reduce_requires_an_ingress_edge() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9LCJncm91cEJ5Ijp7IndpbmRvdyI6eyJmaXhlZCI6eyJsZW5ndGgiOiI2MHMifX0sImtleWVkIjp0cnVlLCJzdG9yYWdlIjp7InBlcnNpc3RlbnRWb2x1bWVDbGFpbSI6eyJ2b2x1bWVTaXplIjoiMUdpIn19fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInNjYWxlIjp7Im1pbiI6MX0sInBpcGVsaW5lTmFtZSI6ImpwIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwiZnJvbUVkZ2VzIjpbeyJmcm9tIjoieCIsInRvIjoieiIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiUmVkdWNlVURGIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MywidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fSx7ImZyb20iOiJ5IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJSZWR1Y2VVREYiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let mut config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+        config.from_vertex_config.clear();
+
+        assert!(reduce_reader_configs_and_streams(&config).is_err());
     }
 }

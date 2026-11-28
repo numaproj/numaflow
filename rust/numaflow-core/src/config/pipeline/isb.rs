@@ -26,7 +26,11 @@ pub(crate) mod jetstream {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Stream {
     pub(crate) name: &'static str,
-    pub(crate) vertex: &'static str,
+    /// Vertex at the receiving end of the edge.
+    pub(crate) to_vertex: &'static str,
+    /// Vertex at the sending end of the edge. Every edge owns its buffer, so this tells which
+    /// upstream vertex's offset timelines describe offsets read from this stream.
+    pub(crate) from_vertex: &'static str,
     pub(crate) partition: u16,
 }
 
@@ -34,19 +38,27 @@ impl Default for Stream {
     fn default() -> Self {
         Stream {
             name: "",
-            vertex: "",
+            to_vertex: "",
+            from_vertex: "",
             partition: DEFAULT_PARTITION_IDX,
         }
     }
 }
 
 impl Stream {
-    pub(crate) fn new(name: &'static str, vertex: &'static str, partition: u16) -> Self {
+    pub(crate) fn new(name: &'static str, to_vertex: &'static str, partition: u16) -> Self {
         Stream {
             name,
-            vertex,
+            to_vertex,
+            from_vertex: "",
             partition,
         }
+    }
+
+    /// Sets the vertex at the sending end of the edge.
+    pub(crate) fn with_from_vertex(mut self, from_vertex: &'static str) -> Self {
+        self.from_vertex = from_vertex;
+        self
     }
 }
 
@@ -107,6 +119,11 @@ impl Display for BufferFullStrategy {
 pub(crate) struct BufferReaderConfig {
     pub(crate) streams: Vec<Stream>,
     pub(crate) wip_ack_interval: Duration,
+    /// Cap on read-but-unacked messages for a *single* buffer, sourced from the vertex's
+    /// `concurrency` limit. Each ISB reader enforces this with its own semaphore, so a
+    /// vertex's total in-flight ceiling is this value times the number of buffers the pod
+    /// reads. See the construction site in `config/pipeline.rs` for why the budget is
+    /// per-buffer rather than shared.
     pub(crate) max_ack_pending: usize,
 }
 

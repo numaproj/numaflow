@@ -557,24 +557,32 @@ impl PipelineConfig {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
             let from_partition_count = edge.from_vertex_partition_count.unwrap_or_default() as u16;
 
+            // Buffers are edge-owned, so the stream name embeds both ends of the edge
+            // ({ns}-{pl}-{from}-{to}-{i}) and each source of a join reads its own
+            // physical buffer. This must match the Go controller's GenerateBufferName,
+            // which is what actually creates the streams.
+            //
             // If ordered processing is enabled, only create the stream for the partition matching replica ID
             // Otherwise, create streams for all partitions
             let streams: Vec<Stream> = if ordered_processing_enabled {
                 let i = *replica;
                 let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
                 let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                let from: &'static str = Box::leak(edge.from.clone().into_boxed_str());
                 let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
-                let name: &'static str = Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                vec![Stream::new(name, to, i)]
+                let name: &'static str =
+                    Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
+                vec![Stream::new(name, to, i).with_from_vertex(from)]
             } else {
                 (0..partition_count)
                     .map(|i| {
                         let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
                         let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                        let from: &'static str = Box::leak(edge.from.clone().into_boxed_str());
                         let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                         let name: &'static str =
-                            Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                        Stream::new(name, to, i)
+                            Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
+                        Stream::new(name, to, i).with_from_vertex(from)
                     })
                     .collect()
             };
@@ -583,9 +591,20 @@ impl PipelineConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
-                    // Cap inflight messages on this ISB reader to the vertex's `concurrency`. The
-                    // reader holds a semaphore of this size so that, even with read-ahead, we never
-                    // have more than `concurrency + read_batch_size` messages in flight.
+                    // `concurrency` is a per-buffer cap, not a per-vertex one. Each reader
+                    // holds its own semaphore of this size, so with read-ahead a single
+                    // buffer never exceeds `concurrency + read_batch_size` in flight.
+                    //
+                    // A vertex reading B buffers therefore allows up to B times that. B is
+                    // the number of (ingress edge, partition) pairs this pod reads: 1 for a
+                    // single-edge ordered/reduce replica, one per ingress edge for a join,
+                    // and edges times partitions for an unordered map/sink pod. This is
+                    // deliberate — per-buffer budgets keep the sources of a join
+                    // independent, and ordered processing relies on it (the controller
+                    // forces `concurrency: 1` to mean one in-flight message *per
+                    // partition*, since ordering is only guaranteed within a partition).
+                    // Do not collapse these into one shared semaphore: edges would contend
+                    // for permits and the loser would stall.
                     max_ack_pending: concurrency,
                     ..Default::default()
                 },
@@ -601,10 +620,12 @@ impl PipelineConfig {
                 .map(|i| {
                     let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
                     let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    // For an outgoing edge the "from" end is this vertex itself.
+                    let from: &'static str = Box::leak(edge.from.clone().into_boxed_str());
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
-                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
+                        Box::leak(format!("{ns}-{pl}-{from}-{to}-{i}").into_boxed_str());
+                    Stream::new(name, to, i).with_from_vertex(from)
                 })
                 .collect();
 
@@ -1026,7 +1047,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -1205,7 +1229,10 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
@@ -1265,7 +1292,10 @@ mod tests {
                 name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-out-0", "out", 0)
+                            .with_from_vertex("in"),
+                    ],
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
@@ -1375,7 +1405,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in",
                 reader_config: BufferReaderConfig {
-                    streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
+                    streams: vec![
+                        Stream::new("default-simple-pipeline-in-map-0", "map", 0)
+                            .with_from_vertex("in"),
+                    ],
                     wip_ack_interval: Duration::from_secs(1),
                     ..Default::default()
                 },
@@ -1576,7 +1609,10 @@ mod tests {
                 "Sink without ordered flag",
                 "",
                 false,
-                vec![0, 1, 2], // All partitions when ordered processing is disabled
+                // One partition per reader stream on this edge (toVertexPartitionCount=1 in the
+                // fixture below), not one per the from-vertex's own partition count (3) — the
+                // sink only ever reads a single stream from "in" here.
+                vec![0],
             ),
         ];
 
@@ -1822,5 +1858,185 @@ mod tests {
                 .contains("Unsupported ISB service type 'pulsar'"),
             "unexpected error: {err}"
         );
+    }
+
+    /// Pins the ISB buffer/stream name format.
+    ///
+    /// This format is a cross-language contract: the Go controller creates the
+    /// buffers (see GenerateBufferName in pkg/apis/numaflow/v1alpha1/vertex_types.go)
+    /// and this config derives the JetStream stream names the pod reads and writes.
+    /// If the two ever disagree, the controller creates buffers that no pod touches
+    /// and the pipeline hangs at startup with no error. There is an equivalent
+    /// assertion on the Go side; change both together or not at all.
+    #[test]
+    fn test_isb_stream_name_format() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiam9pbi1waXBlbGluZS1tYXAiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJtYXAiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoiam9pbi1waXBlbGluZSIsImludGVyU3RlcEJ1ZmZlclNlcnZpY2VOYW1lIjoiIiwicmVwbGljYXMiOjAsImZyb21FZGdlcyI6W3siZnJvbSI6InMxIiwidG8iOiJtYXAiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX0seyJmcm9tIjoiczIiLCJ0byI6Im1hcCIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiTWFwIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        // {namespace}-{pipeline}-{from}-{to}-{partition}
+        let names: Vec<&str> = config
+            .from_vertex_config
+            .iter()
+            .flat_map(|f| f.reader_config.streams.iter().map(|s| s.name))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "default-join-pipeline-s1-map-0",
+                "default-join-pipeline-s2-map-0"
+            ]
+        );
+    }
+
+    /// The ordered-processing read path must use the same edge-owned name.
+    ///
+    /// Ordered processing takes a separate branch that builds only the stream for the
+    /// replica's partition. It is easy to rename the unordered branch and miss this
+    /// one, which would leave an ordered pipeline reading a buffer the controller
+    /// never created.
+    #[test]
+    fn test_isb_stream_name_format_ordered_processing() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoib3JkZXJlZC1waXBlbGluZS1tYXAiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJtYXAiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoib3JkZXJlZC1waXBlbGluZSIsImludGVyU3RlcEJ1ZmZlclNlcnZpY2VOYW1lIjoiIiwicmVwbGljYXMiOjAsImZyb21FZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJtYXAiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjMsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9LCJvcmRlcmVkIjp7ImVuYWJsZWQiOnRydWV9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        let from_cfg = config.from_vertex_config.first().unwrap();
+        // Only the replica's partition, but named for the edge.
+        assert_eq!(from_cfg.reader_config.streams.len(), 1);
+        assert_eq!(
+            from_cfg.reader_config.streams.first().unwrap().name,
+            "default-ordered-pipeline-in-map-0"
+        );
+    }
+
+    /// A join must read from every ingress edge's buffer.
+    ///
+    /// Before buffers were edge-owned, both sources of a join wrote into one shared
+    /// buffer named for the destination, so reading the first ingress edge happened
+    /// to read both sources' data. Now each edge has its own physical buffer, so
+    /// anything that looks at only the first edge silently drops every other source.
+    /// This guards the config layer; the forwarders iterate all of these entries.
+    #[test]
+    fn test_join_has_a_distinct_buffer_per_ingress_edge() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiam9pbi1waXBlbGluZS1tYXAiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJtYXAiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoiam9pbi1waXBlbGluZSIsImludGVyU3RlcEJ1ZmZlclNlcnZpY2VOYW1lIjoiIiwicmVwbGljYXMiOjAsImZyb21FZGdlcyI6W3siZnJvbSI6InMxIiwidG8iOiJtYXAiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX0seyJmcm9tIjoiczIiLCJ0byI6Im1hcCIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiTWFwIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        // Two sources => two ingress edges, each with its own buffer.
+        assert_eq!(config.from_vertex_config.len(), 2);
+        let [e1, e2] = config.from_vertex_config.as_slice() else {
+            panic!("expected two ingress edges");
+        };
+        assert_eq!(e1.name, "s1");
+        assert_eq!(e2.name, "s2");
+
+        let [s1] = e1.reader_config.streams.as_slice() else {
+            panic!("s1 should have one stream");
+        };
+        let [s2] = e2.reader_config.streams.as_slice() else {
+            panic!("s2 should have one stream");
+        };
+        // The two sources must not collide on one physical buffer.
+        assert_ne!(s1.name, s2.name);
+        assert_eq!(s1.to_vertex, "map");
+        assert_eq!(s2.to_vertex, "map");
+    }
+
+    /// An unordered join reads every partition of every ingress edge.
+    ///
+    /// x and y both join into z, which has 3 partitions, so there are 3+3=6 physical
+    /// buffers. The forwarder spawns one independent reader per (edge, partition), so
+    /// this count is also the number of forwarders. Reading fewer would strand data
+    /// in whichever buffers went unread.
+    #[test]
+    fn test_unordered_join_reads_every_partition_of_every_edge() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoianAiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJ4IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19LHsiZnJvbSI6InkiLCJ0byI6InoiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjMsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert!(!config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 2);
+
+        let [x_edge, y_edge] = config.from_vertex_config.as_slice() else {
+            panic!("expected two ingress edges");
+        };
+        let x: Vec<&str> = x_edge
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.name)
+            .collect();
+        let y: Vec<&str> = y_edge
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.name)
+            .collect();
+
+        assert_eq!(
+            x,
+            vec!["default-jp-x-z-0", "default-jp-x-z-1", "default-jp-x-z-2"]
+        );
+        assert_eq!(
+            y,
+            vec!["default-jp-y-z-0", "default-jp-y-z-1", "default-jp-y-z-2"]
+        );
+
+        // 3 partitions x 2 ingress edges = 6 readers/forwarders.
+        let total: usize = config
+            .from_vertex_config
+            .iter()
+            .map(|f| f.reader_config.streams.len())
+            .sum();
+        assert_eq!(total, 6);
+    }
+
+    /// An ordered join is co-partitioned: replica i reads partition i of every edge.
+    ///
+    /// The writers hash by key into the same number of partitions on every ingress
+    /// edge, so a given key lands on index i of both x->z and y->z. Replica i must
+    /// therefore read x_i AND y_i - and nothing else - for both sides of a key to be
+    /// processed by one pod. Reading a partition other than the replica's would send
+    /// the same key to two pods; reading only one edge would drop the other side.
+    ///
+    /// This asserts the replica-0 pod. NUMAFLOW_REPLICA is a process-wide OnceLock so
+    /// a single test process only observes one replica; the shared partition index is
+    /// what makes the pairing hold for every replica.
+    #[test]
+    fn test_ordered_join_is_co_partitioned_per_replica() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoiaiIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6InoiLCJ1ZGYiOnsiY29udGFpbmVyIjp7InRlbXBsYXRlIjoiZGVmYXVsdCJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwicGlwZWxpbmVOYW1lIjoianAiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJ4IiwidG8iOiJ6IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjozLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19LHsiZnJvbSI6InkiLCJ0byI6InoiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInRvVmVydGV4VHlwZSI6Ik1hcCIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjMsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9LCJvcmRlcmVkIjp7ImVuYWJsZWQiOnRydWV9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 2);
+
+        let replica = config.replica;
+        for from_vertex in &config.from_vertex_config {
+            let streams = &from_vertex.reader_config.streams;
+            // Exactly one partition per edge: this replica's.
+            assert_eq!(
+                streams.len(),
+                1,
+                "edge {} should read one stream",
+                from_vertex.name
+            );
+            let stream = streams.first().unwrap();
+            assert_eq!(stream.partition, replica);
+            assert_eq!(
+                stream.name,
+                format!("default-jp-{}-z-{}", from_vertex.name, replica)
+            );
+        }
+
+        // Both sides of the join, same partition index: x_i and y_i on one pod.
+        let partitions: Vec<u16> = config
+            .from_vertex_config
+            .iter()
+            .map(|f| f.reader_config.streams.first().unwrap().partition)
+            .collect();
+        assert_eq!(partitions, vec![replica, replica]);
     }
 }

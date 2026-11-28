@@ -1,7 +1,7 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::PipelineConfig;
-use crate::config::pipeline::isb::BufferReaderConfig;
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::{FromVertexConfig, PipelineConfig};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::metrics::{
@@ -28,9 +28,12 @@ use tokio_util::task::AbortOnDropHandle;
 use tracing::{error, info};
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
-/// and manages the lifecycle of these components.
+/// and manages the lifecycle of these components. There is one map forwarder per stream; they
+/// all share the pod's reader and writer orchestrators.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
     isb_reader: ISBReaderOrchestrator<C>,
+    /// The stream of the reader this forwarder reads.
+    stream: Stream,
     mapper: MapHandle,
     isb_writer: ISBWriterOrchestrator,
 }
@@ -38,11 +41,13 @@ pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
         isb_reader: ISBReaderOrchestrator<C>,
+        stream: Stream,
         mapper: MapHandle,
         isb_writer: ISBWriterOrchestrator,
     ) -> Self {
         Self {
             isb_reader,
+            stream,
             mapper,
             isb_writer,
         }
@@ -51,8 +56,10 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
-        let (read_messages_stream, reader_handle) =
-            self.isb_reader.streaming_read(cln_token.clone()).await?;
+        let (read_messages_stream, reader_handle) = self
+            .isb_reader
+            .streaming_read(std::slice::from_ref(&self.stream), cln_token.clone())
+            .await?;
 
         let (mapped_messages_stream, mapper_handle) = self
             .mapper
@@ -113,17 +120,26 @@ pub async fn start_map_forwarder(
         None
     };
 
-    let from_vertex_config = config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?;
+    if config.from_vertex_config.is_empty() {
+        return Err(Error::Config("No from vertex config found".to_string()));
+    }
 
-    let reader_config = &from_vertex_config.reader_config;
-
-    // Extract partition indices from the streams in the reader config
+    // Extract partition indices from the streams in the reader configs
     // When ordered processing is enabled, this will contain only the replica's partition
     // When disabled, this will contain all partitions
-    let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
+    // Buffers are edge-owned, so a vertex with several ingress edges (a join) has one
+    // set of partitioned streams per edge; every edge of a vertex resolves to the same
+    // partition count, so dedupe the indices across edges.
+    let from_partitions: Vec<u16> = {
+        let mut p: Vec<u16> = config
+            .from_vertex_config
+            .iter()
+            .flat_map(|f| f.reader_config.streams.iter().map(|s| s.partition))
+            .collect();
+        p.sort_unstable();
+        p.dedup();
+        p
+    };
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
 
@@ -142,7 +158,6 @@ pub async fn start_map_forwarder(
         &cln_token,
         None,
         tracker.clone(),
-        from_partitions.clone(),
     )
     .await?;
 
@@ -171,7 +186,7 @@ pub async fn start_map_forwarder(
             run_all_map_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &map_vtx_config,
-                reader_config,
+                &config.from_vertex_config,
                 buffer_writer.clone(),
                 watermark_handle.clone(),
                 Some(redis_config.throttling_config),
@@ -191,7 +206,7 @@ pub async fn start_map_forwarder(
             run_all_map_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &map_vtx_config,
-                reader_config,
+                &config.from_vertex_config,
                 buffer_writer.clone(),
                 watermark_handle.clone(),
                 Some(in_mem_config.throttling_config),
@@ -209,7 +224,7 @@ pub async fn start_map_forwarder(
         run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
-            reader_config,
+            &config.from_vertex_config,
             buffer_writer,
             watermark_handle.clone(),
             None,
@@ -233,11 +248,21 @@ pub async fn start_map_forwarder(
     Ok(())
 }
 
-/// Starts map forwarder for all the streams.
+/// Starts a map forwarder for every stream across all ingress edges.
+///
+/// Buffers are edge-owned, so a vertex with several ingress edges (a join) reads a
+/// distinct set of buffers per edge. One reader orchestrator reads all of them, and each
+/// (edge, partition) stream gets its own forwarder (reader, mapper, writer), exactly as
+/// multiple partitions of a single edge already did. That independence is what gives a join
+/// per-source backpressure: each stream holds its own `max_ack_pending` semaphore, so a fast
+/// source fills and throttles on its own buffer without stalling the slow one.
+///
+/// Returns a single task that finishes once every forwarder has stopped and the shared reader
+/// has been shut down.
 async fn run_all_map_forwarders<C>(
     context: &PipelineContext<'_, C>,
     map_vtx_config: &MapVtxConfig,
-    reader_config: &BufferReaderConfig,
+    from_vertex_config: &[FromVertexConfig],
     buffer_writer: ISBWriterOrchestrator,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
@@ -249,13 +274,22 @@ async fn run_all_map_forwarders<C>(
 where
     C: NumaflowTypeConfig,
 {
-    let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
-    let mut mapper_handle = None;
-
     // The streams are already filtered based on ordered processing at config creation time
-    for stream in &reader_config.streams {
-        info!("Creating buffer reader for stream {:?}", stream);
+    let isb_reader = ISBReaderOrchestrator::<C>::from_factory(
+        ISBReaderComponents::new::<C>(watermark_handle, context),
+        super::reader_streams(from_vertex_config),
+        context.factory(),
+        rate_limiter,
+    )
+    .await?;
+
+    let mut forwarder_tasks = vec![];
+    let mut mapper_handle = None;
+    for stream in isb_reader.streams() {
+        info!(
+            from_vertex = stream.from_vertex,
+            "Creating map forwarder for stream {:?}", stream
+        );
 
         let mapper = create_components::create_mapper(
             context.config.batch_size,
@@ -271,67 +305,38 @@ where
             mapper_handle = Some(mapper.clone());
         }
 
-        let reader_components = ISBReaderComponents::new::<C>(
+        let forwarder = MapForwarder::<C>::new(
+            isb_reader.clone(),
             stream.clone(),
-            reader_config.clone(),
-            watermark_handle.clone(),
-            context,
-        );
-
-        let (task, reader) = run_map_forwarder_for_stream::<C>(
-            reader_components,
             mapper,
             buffer_writer.clone(),
-            rate_limiter.clone(),
-            context.factory(),
         )
-        .await?;
-
-        forwarder_tasks.push(task);
-        isb_lag_readers.push(reader);
+        .await;
+        let cln_token = context.cln_token.clone();
+        forwarder_tasks.push(AbortOnDropHandle::new(tokio::spawn(async move {
+            forwarder.start(cln_token).await
+        })));
     }
+    let mapper_handle =
+        mapper_handle.ok_or_else(|| Error::Config("No stream found for map vertex".to_string()))?;
 
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(isb_lag_readers),
+        LagReader::ISB(isb_reader.clone()),
     )
     .await;
     info!("Starting pending reader");
     let pending_reader_task = pending_reader.start(is_mono_vertex()).await;
 
-    Ok((forwarder_tasks, mapper_handle.unwrap(), pending_reader_task))
-}
+    // every forwarder has stopped before the reader shuts down what they share
+    let cln_token = context.cln_token.clone();
+    let task = AbortOnDropHandle::new(tokio::spawn(async move {
+        let result = super::join_forwarder_tasks(forwarder_tasks, &cln_token).await;
+        isb_reader.shutdown().await?;
+        result
+    }));
 
-/// Start a map forwarder for a single stream, returns the task handle and the ISB reader
-/// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C>(
-    reader_components: ISBReaderComponents,
-    mapper: MapHandle,
-    buffer_writer: ISBWriterOrchestrator,
-    rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &dyn ISBFactory,
-) -> Result<(AbortOnDropHandle<Result<()>>, ISBReaderOrchestrator<C>)>
-where
-    C: NumaflowTypeConfig,
-{
-    let cln_token = reader_components.cln_token.clone();
-
-    let isb_reader_impl = isb_factory
-        .create_reader(
-            reader_components.stream.clone(),
-            reader_components.isb_config.as_ref(),
-        )
-        .await?;
-
-    let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
-
-    let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
-
-    let task = AbortOnDropHandle::new(tokio::spawn(
-        async move { forwarder.start(cln_token).await },
-    ));
-    Ok((task, isb_reader))
+    Ok((vec![task], mapper_handle, pending_reader_task))
 }
 
 #[cfg(test)]

@@ -74,7 +74,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(200).Body().Contains("buffers")
 
 	HTTPExpect(s.T(), "https://localhost:1234").
-		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))).
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "p1", 0))).
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
@@ -100,7 +100,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 2, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "p1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
@@ -202,11 +202,11 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")))
 
 	// If messages were sent to different partitions
-	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="buffer-full"} 1`
-	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="buffer-full"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-in-out-0",reason="buffer-full"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-in-out-1",reason="buffer-full"} 1`
 	// If messages were sent to the same partition
-	expectedDropMetricThree := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="buffer-full"} 2`
-	expectedDropMetricFour := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="buffer-full"} 2`
+	expectedDropMetricThree := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-in-out-0",reason="buffer-full"} 2`
+	expectedDropMetricFour := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-in-out-1",reason="buffer-full"} 2`
 	// wait for the drop metric to be updated, time out after 10 seconds.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)
@@ -252,7 +252,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 8, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "input", "cat1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

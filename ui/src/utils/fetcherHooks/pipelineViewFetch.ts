@@ -12,6 +12,9 @@ import {
   VertexMetrics,
 } from "../../types/declarations/pipeline";
 
+/** Id of the edge from `from` to `to`, as used for graph edges and edge watermarks. */
+const edgeKey = (from: string, to: string) => `${from}-${to}`;
+
 export const usePipelineViewFetch = (
   namespaceId: string | undefined,
   pipelineId: string | undefined,
@@ -442,6 +445,29 @@ export const usePipelineViewFetch = (
     setPipelineDetails();
   }, [setPipelineDetails]);
 
+  // Buffers are owned by an edge and named {ns}-{pl}-{from}-{to}-{partition}. Group them
+  // by edge, matching against the spec's edges so vertex names containing "-" stay
+  // unambiguous.
+  const edgeBuffers = useMemo(() => {
+    const byEdge = new Map<string, BufferInfo[]>();
+    spec?.edges?.forEach((edge: any) => {
+      const prefix = `${ns_pl}${edge?.from}-${edge?.to}-`;
+      const matched = (buffers || [])
+        .filter(
+          (buffer) =>
+            buffer?.bufferName?.startsWith(prefix) &&
+            /^\d+$/.test(buffer.bufferName.substring(prefix.length))
+        )
+        .sort(
+          (a, b) =>
+            Number(a.bufferName.substring(prefix.length)) -
+            Number(b.bufferName.substring(prefix.length))
+        );
+      byEdge.set(edgeKey(edge?.from, edge?.to), matched);
+    });
+    return byEdge;
+  }, [spec, buffers, ns_pl]);
+
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
     if (spec?.vertices && buffers && vertexPods && vertexMetrics) {
@@ -468,13 +494,13 @@ export const usePipelineViewFetch = (
         newNode.data.vertexMetrics = vertexMetrics.has(vertex?.name)
           ? vertexMetrics.get(vertex?.name)
           : null;
+        // A vertex reads the buffers of all its incoming edges.
         newNode.data.buffers = [];
-        buffers?.forEach((buffer) => {
-          const sidx = ns_pl.length;
-          const eidx = buffer?.bufferName?.lastIndexOf("-");
-          const bufferName = buffer?.bufferName?.substring(sidx, eidx);
-          if (vertex?.name === bufferName) {
-            newNode?.data?.buffers.push(buffer);
+        spec?.edges?.forEach((edge: any) => {
+          if (edge?.to === vertex?.name) {
+            newNode.data.buffers.push(
+              ...(edgeBuffers.get(edgeKey(edge?.from, edge?.to)) || [])
+            );
           }
         });
         if (newNode.data.buffers.length === 0) newNode.data.buffers = null;
@@ -516,7 +542,7 @@ export const usePipelineViewFetch = (
     return newVertices;
   }, [
     spec,
-    buffers,
+    edgeBuffers,
     vertexPods,
     vertexMetrics,
     ns_pl,
@@ -528,38 +554,26 @@ export const usePipelineViewFetch = (
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (spec?.edges && buffers && edgeWatermark) {
-      // Edge hover shows a compact target-buffer summary. These counts are
-      // aggregated by the destination vertex buffer, not by the individual edge.
+      // Buffers are owned by the edge ({ns}-{pl}-{from}-{to}-{partition}), so the
+      // counts shown on an edge are the sum over that edge's own partitions.
       const edgePendingLabel = new Map();
       const edgeAckPendingLabel = new Map();
       const edgeIsFull = new Map();
 
-      buffers.forEach((buffer) => {
-        const sidx = ns_pl.length;
-        const eidx = buffer?.bufferName?.lastIndexOf("-");
-        const id = buffer?.bufferName?.substring(sidx, eidx);
-        
-        // Initialize or accumulate pending count
-        if (edgePendingLabel.get(id) === undefined) {
+      edgeBuffers.forEach((edgeBufferList, id) => {
+        let pending = 0;
+        let ackPending = 0;
+        let isFull = false;
+        edgeBufferList.forEach((buffer) => {
           const pendingCount = Number(buffer?.pendingCount);
           const ackPendingCount = Number(buffer?.ackPendingCount);
-          edgePendingLabel.set(id, isNaN(pendingCount) ? 0 : pendingCount);
-          edgeAckPendingLabel.set(id, isNaN(ackPendingCount) ? 0 : ackPendingCount);
-          edgeIsFull.set(id, buffer?.isFull);
-        } else {
-          const pendingCount = Number(buffer?.pendingCount);
-          const ackPendingCount = Number(buffer?.ackPendingCount);
-          edgePendingLabel.set(
-            id,
-            edgePendingLabel.get(id) + (isNaN(pendingCount) ? 0 : pendingCount)
-          );
-          edgeAckPendingLabel.set(
-            id,
-            edgeAckPendingLabel.get(id) + (isNaN(ackPendingCount) ? 0 : ackPendingCount)
-          );
-          if (buffer?.isFull === true && buffer?.isFull !== edgeIsFull.get(id))
-            edgeIsFull.set(id, buffer.isFull);
-        }
+          pending += isNaN(pendingCount) ? 0 : pendingCount;
+          ackPending += isNaN(ackPendingCount) ? 0 : ackPendingCount;
+          isFull = isFull || buffer?.isFull === true;
+        });
+        edgePendingLabel.set(id, pending);
+        edgeAckPendingLabel.set(id, ackPending);
+        edgeIsFull.set(id, isFull);
       });
 
       spec.edges.forEach((edge: any) => {
@@ -568,7 +582,7 @@ export const usePipelineViewFetch = (
           type: MarkerType.Arrow,
           width: 15,
           height: 15,
-          color: edgeIsFull.get(edge?.to) ? "#DB334D" : "#8D9096",
+          color: edgeIsFull.get(id) ? "#DB334D" : "#8D9096",
         };
         const pipelineEdge = {
           id,
@@ -576,9 +590,10 @@ export const usePipelineViewFetch = (
           target: edge?.to,
           data: {
             conditions: edge?.conditions,
-            pendingLabel: edgePendingLabel.get(edge?.to),
-            ackPendingLabel: edgeAckPendingLabel.get(edge?.to),
-            isFull: edgeIsFull.get(edge?.to),
+            pendingLabel: edgePendingLabel.get(id),
+            ackPendingLabel: edgeAckPendingLabel.get(id),
+            isFull: edgeIsFull.get(id),
+            buffers: edgeBuffers.get(id) || [],
             source: edge?.from,
             target: edge?.to,
             fwdEdge: fwdEdges.has(id),
@@ -657,8 +672,8 @@ export const usePipelineViewFetch = (
   }, [
     spec,
     buffers,
+    edgeBuffers,
     edgeWatermark,
-    ns_pl,
     backEdges,
     selfEdges,
     fwdEdges,

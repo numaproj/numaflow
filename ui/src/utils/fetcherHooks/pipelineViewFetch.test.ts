@@ -76,7 +76,7 @@ describe("Custom Pipeline hook", () => {
         data: [
           {
             pipeline: "simple-pipeline",
-            bufferName: "default-simple-pipeline-cat-0",
+            bufferName: "default-simple-pipeline-in-cat-0",
             pendingCount: 0,
             ackPendingCount: 5,
             totalMessages: 5,
@@ -87,7 +87,7 @@ describe("Custom Pipeline hook", () => {
           },
           {
             pipeline: "simple-pipeline",
-            bufferName: "default-simple-pipeline-out-0",
+            bufferName: "default-simple-pipeline-cat-out-0",
             pendingCount: 0,
             ackPendingCount: 0,
             totalMessages: 0,
@@ -232,7 +232,8 @@ describe("Custom Pipeline hook", () => {
     expect(mockedFetch).toBeCalledTimes(6);
   });
 
-  it("uses target buffer aggregates for fan-in edge hover counts", async () => {
+  // Buffers are edge-owned: {ns}-{pl}-{from}-{to}-{partition}.
+  it("aggregates the buffers of each edge for fan-in edge hover counts", async () => {
     const okJson = (payload: any) => ({
       ok: true,
       json: jest.fn().mockResolvedValue(payload),
@@ -266,7 +267,18 @@ describe("Custom Pipeline hook", () => {
             data: [
               {
                 pipeline: "fan-in-pipeline",
-                bufferName: "default-fan-in-pipeline-cat-0",
+                bufferName: "default-fan-in-pipeline-in-a-cat-1",
+                pendingCount: 3,
+                ackPendingCount: 1,
+                totalMessages: 4,
+                bufferLength: 30000,
+                bufferUsageLimit: 0.8,
+                bufferUsage: 0.5,
+                isFull: false,
+              },
+              {
+                pipeline: "fan-in-pipeline",
+                bufferName: "default-fan-in-pipeline-in-a-cat-0",
                 pendingCount: 7,
                 ackPendingCount: 2,
                 totalMessages: 9,
@@ -274,6 +286,17 @@ describe("Custom Pipeline hook", () => {
                 bufferUsageLimit: 0.8,
                 bufferUsage: 0.5,
                 isFull: false,
+              },
+              {
+                pipeline: "fan-in-pipeline",
+                bufferName: "default-fan-in-pipeline-in-b-cat-0",
+                pendingCount: 4,
+                ackPendingCount: 5,
+                totalMessages: 9,
+                bufferLength: 30000,
+                bufferUsageLimit: 0.8,
+                bufferUsage: 0.5,
+                isFull: true,
               },
             ],
           }) as any
@@ -324,8 +347,45 @@ describe("Custom Pipeline hook", () => {
         ackPendingLabel: edge.data?.ackPendingLabel,
       }))
     ).toEqual([
-      { id: "in-a-cat", pendingLabel: 7, ackPendingLabel: 2 },
-      { id: "in-b-cat", pendingLabel: 7, ackPendingLabel: 2 },
+      { id: "in-a-cat", pendingLabel: 10, ackPendingLabel: 3 },
+      { id: "in-b-cat", pendingLabel: 4, ackPendingLabel: 5 },
+    ]);
+
+    // each edge carries its own buffers, sorted by partition
+    expect(
+      result.current.edges.map((edge) => ({
+        id: edge.id,
+        isFull: edge.data?.isFull,
+        buffers: (edge.data?.buffers as { bufferName: string }[] | undefined)?.map(
+          (b) => b.bufferName
+        ),
+      }))
+    ).toEqual([
+      {
+        id: "in-a-cat",
+        isFull: false,
+        buffers: [
+          "default-fan-in-pipeline-in-a-cat-0",
+          "default-fan-in-pipeline-in-a-cat-1",
+        ],
+      },
+      {
+        id: "in-b-cat",
+        isFull: true,
+        buffers: ["default-fan-in-pipeline-in-b-cat-0"],
+      },
+    ]);
+
+    // the vertex reads the buffers of all its incoming edges
+    const cat = result.current.vertices.find((v) => v.id === "cat");
+    expect(
+      (cat?.data?.buffers as { bufferName: string }[] | undefined)
+        ?.map((b) => b.bufferName)
+        .sort()
+    ).toEqual([
+      "default-fan-in-pipeline-in-a-cat-0",
+      "default-fan-in-pipeline-in-a-cat-1",
+      "default-fan-in-pipeline-in-b-cat-0",
     ]);
   });
 
